@@ -23,6 +23,7 @@ fn accepts_positive_examples() {
         "examples/condition.ref",
         "examples/extern.ref",
         "examples/classic-syntax.ref",
+        "examples/extern-equivalence.ref",
     ] {
         let output = check_file(path);
 
@@ -48,6 +49,7 @@ fn rejects_negative_examples() {
         "examples/bad-duplicate-extern.ref",
         "examples/bad-variable-kind-conflict.ref",
         "examples/bad-condition-unbound-variable.ref",
+        "examples/bad-missing-entry.ref",
     ] {
         let output = check_file(path);
 
@@ -181,6 +183,18 @@ fn reports_line_and_column_for_condition_unbound_variable() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("semantic error at 2:5: unbound variable `e.Missing` in result expression"),
+        "unexpected stderr:\n{stderr}"
+    );
+}
+
+#[test]
+fn reports_line_and_column_for_missing_entry_error() {
+    let output = check_file("examples/bad-missing-entry.ref");
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("semantic error at 1:1: program has no $ENTRY function"),
         "unexpected stderr:\n{stderr}"
     );
 }

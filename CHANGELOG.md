@@ -15,3 +15,5 @@
   aligned runtime dispatch with Classic identifier equivalence.
 - Expanded semantic CLI golden diagnostics for duplicate definitions,
   duplicate declarations, variable kind conflicts, and condition input binding.
+- Added missing-entry CLI diagnostics and a positive extern/call equivalence
+  example for Milestone 3 coverage.

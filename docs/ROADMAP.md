@@ -46,12 +46,13 @@ Completed so far:
 - CLI golden diagnostics for duplicate functions, duplicate declarations,
   variable kind conflicts, unbound condition inputs, unresolved calls, multiple
   entries, and pattern calls.
+- CLI golden diagnostic for missing `$ENTRY`.
+- Positive semantic example for extern/call Classic identifier equivalence.
 
 Remaining before completion:
 
-- Missing-entry CLI diagnostic coverage.
-- Positive semantic examples for declaration/call equivalence.
-- Runtime/semantic consistency checks for more declaration edge cases.
+- Final semantic-rule audit against the language scope document.
+- Any remaining runtime/semantic consistency edge case found by that audit.
 
 ## Milestone 4: Runtime And Interpreter
 

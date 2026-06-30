@@ -95,7 +95,7 @@ The project starts with a robust bootstrap front end written in Rust and grows t
 | Parser (`refal-syntax`) | ✅ Milestone 2 complete — functions, declarations, calls, conditions, brackets, separators |
 | CLI (`check`, `dump-ast`, `run`) | 🔶 Initial |
 | Semantic checker (`refal-semantics`) | 🔶 Milestone 3 in progress — entry points, duplicate entries, declarations, bindings, frontend legality |
-| Diagnostics with source positions | 🔶 Initial — frontend golden cases covered |
+| Diagnostics with source positions | 🔶 Initial — frontend and semantic golden cases covered |
 | Golden test suite | ✅ Milestone 2 frontend coverage complete |
 | Runtime identifier dispatch | ✅ Classic name equivalence aligned with semantic checker |
 | Core Refal lowering | 🔷 Planned |
