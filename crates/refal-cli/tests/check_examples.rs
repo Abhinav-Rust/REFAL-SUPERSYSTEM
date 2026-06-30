@@ -8,6 +8,13 @@ fn workspace_path(path: &str) -> String {
     format!("{}/../../{}", env!("CARGO_MANIFEST_DIR"), path)
 }
 
+fn check_file(path: &str) -> std::process::Output {
+    Command::new(refal_bin())
+        .args(["check", &workspace_path(path)])
+        .output()
+        .expect("run refal binary")
+}
+
 #[test]
 fn accepts_positive_examples() {
     for path in [
@@ -17,10 +24,7 @@ fn accepts_positive_examples() {
         "examples/extern.ref",
         "examples/classic-syntax.ref",
     ] {
-        let output = Command::new(refal_bin())
-            .args(["check", &workspace_path(path)])
-            .output()
-            .expect("run refal binary");
+        let output = check_file(path);
 
         assert!(
             output.status.success(),
@@ -40,11 +44,12 @@ fn rejects_negative_examples() {
         "examples/bad-malformed-real.ref",
         "examples/bad-call-in-pattern.ref",
         "examples/bad-multiple-entry.ref",
+        "examples/bad-duplicate-function.ref",
+        "examples/bad-duplicate-extern.ref",
+        "examples/bad-variable-kind-conflict.ref",
+        "examples/bad-condition-unbound-variable.ref",
     ] {
-        let output = Command::new(refal_bin())
-            .args(["check", &workspace_path(path)])
-            .output()
-            .expect("run refal binary");
+        let output = check_file(path);
 
         assert!(
             !output.status.success(),
@@ -122,15 +127,60 @@ fn reports_line_and_column_for_multiple_entry_error() {
 
 #[test]
 fn reports_line_and_column_for_semantic_error() {
-    let output = Command::new(refal_bin())
-        .args(["check", &workspace_path("examples/bad-unresolved-call.ref")])
-        .output()
-        .expect("run refal binary");
+    let output = check_file("examples/bad-unresolved-call.ref");
 
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("semantic error at 2:5: unresolved function call `Missing`"),
+        "unexpected stderr:\n{stderr}"
+    );
+}
+
+#[test]
+fn reports_line_and_column_for_duplicate_function_error() {
+    let output = check_file("examples/bad-duplicate-function.ref");
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("semantic error at 9:1: duplicate function or declaration `FOO_BAR`"),
+        "unexpected stderr:\n{stderr}"
+    );
+}
+
+#[test]
+fn reports_line_and_column_for_duplicate_extern_error() {
+    let output = check_file("examples/bad-duplicate-extern.ref");
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("semantic error at 2:1: duplicate function or declaration `Prout`"),
+        "unexpected stderr:\n{stderr}"
+    );
+}
+
+#[test]
+fn reports_line_and_column_for_variable_kind_conflict() {
+    let output = check_file("examples/bad-variable-kind-conflict.ref");
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("semantic error at 2:7: variable `X` is already bound as `s.X`"),
+        "unexpected stderr:\n{stderr}"
+    );
+}
+
+#[test]
+fn reports_line_and_column_for_condition_unbound_variable() {
+    let output = check_file("examples/bad-condition-unbound-variable.ref");
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("semantic error at 2:5: unbound variable `e.Missing` in result expression"),
         "unexpected stderr:\n{stderr}"
     );
 }

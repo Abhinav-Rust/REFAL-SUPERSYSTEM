@@ -43,12 +43,15 @@ Completed so far:
 - Result-variable binding checks.
 - Condition-introduced binding checks.
 - Pattern call rejection.
+- CLI golden diagnostics for duplicate functions, duplicate declarations,
+  variable kind conflicts, unbound condition inputs, unresolved calls, multiple
+  entries, and pattern calls.
 
 Remaining before completion:
 
-- Broader semantic golden fixtures.
-- Runtime/semantic consistency checks for more identifier and declaration edge cases.
-- Clearer diagnostic coverage for every semantic rule.
+- Missing-entry CLI diagnostic coverage.
+- Positive semantic examples for declaration/call equivalence.
+- Runtime/semantic consistency checks for more declaration edge cases.
 
 ## Milestone 4: Runtime And Interpreter
 

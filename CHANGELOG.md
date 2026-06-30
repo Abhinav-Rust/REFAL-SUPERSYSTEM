@@ -13,3 +13,5 @@
   identifier, quoted literal, malformed number, pattern-call, and CLI golden tests.
 - Advanced Milestone 3 semantic checking with duplicate `$ENTRY` diagnostics and
   aligned runtime dispatch with Classic identifier equivalence.
+- Expanded semantic CLI golden diagnostics for duplicate definitions,
+  duplicate declarations, variable kind conflicts, and condition input binding.
