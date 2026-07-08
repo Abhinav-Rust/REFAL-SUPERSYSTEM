@@ -94,7 +94,7 @@ The project starts with a robust bootstrap front end written in Rust and grows t
 | Lexer (`refal-syntax`) | ✅ Milestone 2 complete — classic quotes, comments, real numbers, identifiers, variables |
 | Parser (`refal-syntax`) | ✅ Milestone 2 complete — functions, declarations, calls, conditions, brackets, separators |
 | CLI (`check`, `dump-ast`, `run`) | 🔶 Initial — help output, diagnostics, runtime input, and result printing covered |
-| Semantic checker (`refal-semantics`) | 🔶 Milestone 3 in progress — entry points, duplicate entries, declarations, bindings, frontend legality |
+| Semantic checker (`refal-semantics`) | 🔶 Milestone 3 in progress — entry points, duplicate entries, declarations, bindings, frontend/runtime legality |
 | Diagnostics with source positions | 🔶 Initial — frontend and semantic golden cases covered |
 | Golden test suite | ✅ Milestone 2 frontend coverage complete |
 | Runtime identifier dispatch | ✅ Classic name equivalence aligned with semantic checker |
@@ -180,8 +180,8 @@ The CLI and interpreter are at an initial stage. Not all Refal-5 programs will e
 For `run`, each extra command-line argument is passed to `$ENTRY` as a structural
 bracket term containing that argument's characters. A non-empty final expression
 is printed after any captured `Prout` output. The bootstrap runtime currently
-implements `Prout`; other declared external functions are accepted by `check`,
-but `run` reports them as unimplemented runtime externals.
+implements `Prout`; calls to other declared external functions are rejected by
+`check` until the runtime implements them.
 
 ---
 

@@ -4,6 +4,8 @@
 
 - Added `cargo clippy --all-targets -- -D warnings` to CI and documented the
   full local verification gate in the README.
+- Added semantic diagnostics for calls to declared external functions that the
+  bootstrap runtime does not implement yet.
 - Reset repository around a clean compiler architecture.
 - Added initial Rust workspace for bootstrap compiler infrastructure.
 - Added AST, lexer, parser, CLI, examples, and public project documentation.

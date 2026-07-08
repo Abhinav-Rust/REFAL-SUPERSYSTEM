@@ -85,6 +85,7 @@ fn rejects_negative_examples() {
         "examples/bad-condition-unbound-variable.ref",
         "examples/bad-missing-entry.ref",
         "examples/bad-empty-function.ref",
+        "examples/runtime-unimplemented-extern.ref",
     ] {
         let output = check_file(path);
 
@@ -283,10 +284,10 @@ fn runs_program_with_command_line_input_and_prints_result() {
 }
 
 #[test]
-fn reports_declared_but_unimplemented_external_at_runtime() {
+fn reports_declared_but_unimplemented_external_during_check() {
     let output = Command::new(refal_bin())
         .args([
-            "run",
+            "check",
             &workspace_path("examples/runtime-unimplemented-extern.ref"),
         ])
         .output()
@@ -296,7 +297,7 @@ fn reports_declared_but_unimplemented_external_at_runtime() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains(
-            "runtime error: external function `Card` is declared but not implemented by the runtime"
+            "semantic error at 4:5: external function `Card` is declared but not implemented by the bootstrap runtime"
         ),
         "unexpected stderr:\n{stderr}"
     );

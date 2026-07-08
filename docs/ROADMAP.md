@@ -47,9 +47,11 @@ Completed so far:
 - Condition-introduced binding checks.
 - Pattern call rejection.
 - Empty function-body rejection.
+- Unsupported bootstrap external-call rejection.
 - CLI golden diagnostics for duplicate functions, duplicate declarations,
   variable kind conflicts, unbound condition inputs, unresolved calls, multiple
-  entries, empty function bodies, and pattern calls.
+  entries, empty function bodies, unsupported bootstrap externals, and pattern
+  calls.
 - CLI golden diagnostic for missing `$ENTRY`.
 - Positive semantic example for extern/call Classic identifier equivalence.
 

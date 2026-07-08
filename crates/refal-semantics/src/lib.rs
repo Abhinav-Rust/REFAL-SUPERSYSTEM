@@ -4,6 +4,8 @@ use std::collections::{HashMap, HashSet};
 
 use refal_ast::{DeclarationKind, Item, Program, Span, Term, TermKind, VariableKind, Visibility};
 
+const SUPPORTED_RUNTIME_EXTERNS: &[&str] = &["PROUT"];
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Diagnostic {
     pub message: String,
@@ -120,6 +122,15 @@ impl Checker {
                         && !self.externs.contains_key(&canonical)
                     {
                         self.push(format!("unresolved function call `{name}`"), term.span);
+                    } else if self.externs.contains_key(&canonical)
+                        && !is_supported_runtime_extern(&canonical)
+                    {
+                        self.push(
+                            format!(
+                                "external function `{name}` is declared but not implemented by the bootstrap runtime"
+                            ),
+                            term.span,
+                        );
                     }
                     self.check_expression_terms(args);
                 }
@@ -246,6 +257,10 @@ fn canonical_name(name: &str) -> String {
             }
         })
         .collect()
+}
+
+fn is_supported_runtime_extern(canonical_name: &str) -> bool {
+    SUPPORTED_RUNTIME_EXTERNS.contains(&canonical_name)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -530,6 +545,46 @@ mod tests {
             == &Diagnostic {
                 message: "function `Go` has no sentences".to_string(),
                 span: Span { start: 0, end: 7 }
+            }));
+    }
+
+    #[test]
+    fn rejects_call_to_unsupported_external_function() {
+        let call_span = Span { start: 20, end: 26 };
+        let program = Program {
+            items: vec![
+                Item::Declaration(refal_ast::Declaration {
+                    kind: DeclarationKind::Extern,
+                    names: vec!["Card".to_string()],
+                    span: empty_span(),
+                }),
+                Item::Function(Function {
+                    name: "Go".to_string(),
+                    visibility: Visibility::Entry,
+                    sentences: vec![Sentence {
+                        pattern: vec![],
+                        conditions: vec![],
+                        result: vec![Term {
+                            kind: TermKind::Call {
+                                name: "Card".to_string(),
+                                args: vec![],
+                            },
+                            span: call_span,
+                        }],
+                        span: empty_span(),
+                    }],
+                    span: empty_span(),
+                }),
+            ],
+        };
+
+        let diagnostics = check_program(&program).unwrap_err();
+
+        assert!(diagnostics.iter().any(|diagnostic| diagnostic
+            == &Diagnostic {
+                message: "external function `Card` is declared but not implemented by the bootstrap runtime"
+                    .to_string(),
+                span: call_span
             }));
     }
 }
