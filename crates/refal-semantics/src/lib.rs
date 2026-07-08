@@ -180,7 +180,7 @@ impl Checker {
                             format!(
                                 "variable `{}` is already bound as `{}.{}`",
                                 variable.name,
-                                existing.kind.as_refal_prefix(),
+                                existing.kind.refal_prefix(),
                                 variable.name
                             ),
                             term.span,
@@ -217,7 +217,7 @@ impl Checker {
                         self.push(
                             format!(
                                 "unbound variable `{}.{}` in result expression",
-                                variable.kind.as_refal_prefix(),
+                                variable.kind.refal_prefix(),
                                 variable.name
                             ),
                             term.span,
@@ -255,11 +255,11 @@ struct VariableKey {
 }
 
 trait VariableKindDisplay {
-    fn as_refal_prefix(self) -> char;
+    fn refal_prefix(self) -> char;
 }
 
 impl VariableKindDisplay for VariableKind {
-    fn as_refal_prefix(self) -> char {
+    fn refal_prefix(self) -> char {
         match self {
             VariableKind::Symbol => 's',
             VariableKind::Term => 't',

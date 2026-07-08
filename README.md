@@ -88,7 +88,7 @@ The project starts with a robust bootstrap front end written in Rust and grows t
 | Rust bootstrap workspace | ✅ Complete |
 | Clean repository structure | ✅ Complete |
 | Public documentation baseline | ✅ Complete |
-| CI pipeline | ✅ Complete |
+| CI pipeline | ✅ Complete — format, lint, and test gates |
 | MIT license | ✅ Complete |
 | AST model (`refal-ast`) | 🔶 Initial |
 | Lexer (`refal-syntax`) | ✅ Milestone 2 complete — classic quotes, comments, real numbers, identifiers, variables |
@@ -120,7 +120,7 @@ REFAL-5-COMPILER/
 │   ├── FRONTEND-COVERAGE.md  # Lexer/parser coverage matrix
 │   ├── LANGUAGE-SCOPE.md # What dialect features are in scope
 │   └── CLEANROOM.md      # Clean-room authorship policy
-├── .github/workflows/    # CI (cargo test on every push)
+├── .github/workflows/    # CI (format, lint, and test gates)
 ├── CONTRIBUTING.md
 ├── CHANGELOG.md
 └── LICENSE-MIT
@@ -141,6 +141,14 @@ cargo build
 Run the test suite:
 
 ```sh
+cargo test
+```
+
+Run the full local verification gate used by CI:
+
+```sh
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 

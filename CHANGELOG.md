@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added `cargo clippy --all-targets -- -D warnings` to CI and documented the
+  full local verification gate in the README.
 - Reset repository around a clean compiler architecture.
 - Added initial Rust workspace for bootstrap compiler infrastructure.
 - Added AST, lexer, parser, CLI, examples, and public project documentation.
