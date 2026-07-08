@@ -83,24 +83,26 @@ The project starts with a robust bootstrap front end written in Rust and grows t
 
 **Milestones 1, 2, and 3 are complete.** Work is moving into Milestone 4 runtime and interpreter completeness, with the frontend completion contract tracked in the [Classic Refal-5 frontend coverage matrix](docs/FRONTEND-COVERAGE.md) and the semantic completion audit recorded in [SEMANTIC-AUDIT.md](docs/SEMANTIC-AUDIT.md). See the full [Roadmap](docs/ROADMAP.md) for planned milestones.
 
-| Component | Status |
-|---|---|
-| Rust bootstrap workspace | ✅ Complete |
-| Clean repository structure | ✅ Complete |
-| Public documentation baseline | ✅ Complete |
-| CI pipeline | ✅ Complete — format, lint, and test gates |
-| MIT license | ✅ Complete |
-| AST model (`refal-ast`) | 🔶 Initial |
-| Lexer (`refal-syntax`) | ✅ Milestone 2 complete — classic quotes, comments, real numbers, identifiers, variables |
-| Parser (`refal-syntax`) | ✅ Milestone 2 complete — functions, declarations, calls, conditions, brackets, separators |
-| CLI (`check`, `dump-ast`, `run`) | 🔶 Initial — help output, diagnostics, runtime input, and result printing covered |
-| Semantic checker (`refal-semantics`) | ✅ Milestone 3 complete — entry points, duplicate entries, declarations, bindings, frontend/runtime legality |
-| Diagnostics with source positions | 🔶 Initial — frontend and semantic golden cases covered |
-| Golden test suite | ✅ Milestone 2 frontend coverage complete |
-| Runtime identifier dispatch | ✅ Classic name equivalence aligned with semantic checker |
-| Runtime conformance examples | 🔶 Initial — output, CLI input, extern equivalence, and conditions covered |
-| Core Refal lowering | 🔷 Planned |
-| Native backend / code generation | 🔷 Planned for later milestones |
+| # | Milestone | Status | Current Evidence |
+|---|---|---|---|
+| 1 | Public-grade foundation | ✅ Complete | Rust workspace, repository layout, README, clean-room policy, MIT license, and CI baseline |
+| 2 | Classic Refal-5 front end | ✅ Complete | Lexer/parser coverage for Classic syntax, source spans, diagnostics, examples, and golden tests |
+| 3 | Semantic checker | ✅ Complete | Entry validation, declarations, Classic name equivalence, call checks, variable binding, condition legality, and semantic audit |
+| 4 | Runtime and interpreter | 🔶 Active | Object-expression runtime, `s.`, `t.`, `e.` matching, backtracking, repeated variables, conditions, `Prout`, CLI input, and runtime conformance examples |
+| 5 | Core Refal lowering | 🔷 Planned | Normalize checked Refal into documented Core Refal with stable formatting and source maps |
+| 6 | Production backend | 🔷 Planned | Generate practical executable code and prove backend output against interpreter behavior |
+| 7 | Self-hosting track | 🔷 Later | Rebuild selected compiler components in Refal after the production toolchain is stable |
+
+### Current Component Map
+
+| Component | Milestone | Status |
+|---|---:|---|
+| `refal-ast` | 1-4 | 🔶 Initial model, sufficient for frontend, semantic checks, and bootstrap runtime |
+| `refal-syntax` | 2 | ✅ Complete for the current Classic Refal-5 frontend scope |
+| `refal-semantics` | 3 | ✅ Complete for the current frontend/runtime legality scope |
+| `refal-runtime` | 4 | 🔶 Active implementation |
+| `refal-cli` | 1-4 | 🔶 Usable bootstrap CLI: `check`, `dump-ast`, `run`, help output, diagnostics, and runtime examples |
+| CI and quality gates | 1+ | ✅ `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and `cargo test` |
 
 ---
 

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Reworked the README project status section into a milestone-ordered progress
+  tracker with a separate component map.
 - Added `cargo clippy --all-targets -- -D warnings` to CI and documented the
   full local verification gate in the README.
 - Added semantic diagnostics for calls to declared external functions that the
