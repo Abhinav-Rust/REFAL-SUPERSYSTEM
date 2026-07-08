@@ -6,6 +6,8 @@
   full local verification gate in the README.
 - Added semantic diagnostics for calls to declared external functions that the
   bootstrap runtime does not implement yet.
+- Completed the Milestone 3 semantic audit and marked semantic checking
+  complete for the current frontend scope.
 - Reset repository around a clean compiler architecture.
 - Added initial Rust workspace for bootstrap compiler infrastructure.
 - Added AST, lexer, parser, CLI, examples, and public project documentation.

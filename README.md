@@ -81,7 +81,7 @@ The project starts with a robust bootstrap front end written in Rust and grows t
 
 ## Project Status
 
-**Milestones 1 and 2 are complete.** Work is moving into Milestone 3 semantic checking, with the frontend completion contract tracked in the [Classic Refal-5 frontend coverage matrix](docs/FRONTEND-COVERAGE.md). See the full [Roadmap](docs/ROADMAP.md) for planned milestones.
+**Milestones 1, 2, and 3 are complete.** Work is moving into Milestone 4 runtime and interpreter completeness, with the frontend completion contract tracked in the [Classic Refal-5 frontend coverage matrix](docs/FRONTEND-COVERAGE.md) and the semantic completion audit recorded in [SEMANTIC-AUDIT.md](docs/SEMANTIC-AUDIT.md). See the full [Roadmap](docs/ROADMAP.md) for planned milestones.
 
 | Component | Status |
 |---|---|
@@ -94,7 +94,7 @@ The project starts with a robust bootstrap front end written in Rust and grows t
 | Lexer (`refal-syntax`) | ✅ Milestone 2 complete — classic quotes, comments, real numbers, identifiers, variables |
 | Parser (`refal-syntax`) | ✅ Milestone 2 complete — functions, declarations, calls, conditions, brackets, separators |
 | CLI (`check`, `dump-ast`, `run`) | 🔶 Initial — help output, diagnostics, runtime input, and result printing covered |
-| Semantic checker (`refal-semantics`) | 🔶 Milestone 3 in progress — entry points, duplicate entries, declarations, bindings, frontend/runtime legality |
+| Semantic checker (`refal-semantics`) | ✅ Milestone 3 complete — entry points, duplicate entries, declarations, bindings, frontend/runtime legality |
 | Diagnostics with source positions | 🔶 Initial — frontend and semantic golden cases covered |
 | Golden test suite | ✅ Milestone 2 frontend coverage complete |
 | Runtime identifier dispatch | ✅ Classic name equivalence aligned with semantic checker |
@@ -191,6 +191,7 @@ implements `Prout`; calls to other declared external functions are rejected by
 |---|---|
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Crate design and compiler pipeline |
 | [ROADMAP.md](docs/ROADMAP.md) | Milestone plan and completion criteria |
+| [SEMANTIC-AUDIT.md](docs/SEMANTIC-AUDIT.md) | Milestone 3 semantic completion audit |
 | [PRODUCTION-COMPLETION.md](docs/PRODUCTION-COMPLETION.md) | Definition of the first production-grade release |
 | [FRONTEND-COVERAGE.md](docs/FRONTEND-COVERAGE.md) | Lexer/parser coverage tracking |
 | [LANGUAGE-SCOPE.md](docs/LANGUAGE-SCOPE.md) | Dialect features in and out of scope |

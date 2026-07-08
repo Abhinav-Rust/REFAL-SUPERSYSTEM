@@ -36,7 +36,8 @@ Status: **Complete**. Completion is governed by
 - Condition checks.
 - Clear diagnostics.
 
-Status: **In progress**.
+Status: **Complete**. Completion is recorded in
+[`SEMANTIC-AUDIT.md`](SEMANTIC-AUDIT.md).
 
 Completed so far:
 
@@ -55,11 +56,6 @@ Completed so far:
 - CLI golden diagnostic for missing `$ENTRY`.
 - Positive semantic example for extern/call Classic identifier equivalence.
 
-Remaining before completion:
-
-- Final semantic-rule audit against the language scope document.
-- Any remaining runtime/semantic consistency edge case found by that audit.
-
 ## Milestone 4: Runtime And Interpreter
 
 - Object-expression runtime.
@@ -68,7 +64,7 @@ Remaining before completion:
 - Built-in functions.
 - Executable interpreter mode.
 
-Status: **Partial implementation; paused until Milestones 2 and 3 are complete**.
+Status: **Partial implementation; active next milestone**.
 
 ## Milestone 5: Core Refal Lowering
 
