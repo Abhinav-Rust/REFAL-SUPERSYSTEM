@@ -21,7 +21,7 @@ Refal’s computational model is deceptively powerful. A Refal program is a set 
 
 **Classic Refal-5** is the most widely documented dialect, defined by Sergei Romanenko’s specification. It is the dialect this compiler targets. The ideas behind Refal also gave Turchin the foundation for **SUPERCOMPILATION** — a powerful program transformation technique in which an interpreter symbolically drives its own execution, folding repeated configurations into loops and eliminating entire layers of abstraction at compile time. **SUPERCOMPILATION** remains an active area of research in program optimisation and partial evaluation. Despite Refal’s age, its core ideas are as relevant as ever: symbolic pattern matching is the right tool for a broad class of problems in language processing, AI, theorem proving, and formal verification. 
 
-This project exists to make Refal-5 accessible to a modern developer with a modern toolchain — not as a museum piece, but as a practical programming tool.
+**This project exists to make Refal-5 accessible to a modern developer with a modern toolchain — not as a museum piece, but as a practical programming tool.**
 
 ---
 
@@ -93,7 +93,7 @@ The project starts with a robust bootstrap front end written in Rust and grows t
 | AST model (`refal-ast`) | 🔶 Initial |
 | Lexer (`refal-syntax`) | ✅ Milestone 2 complete — classic quotes, comments, real numbers, identifiers, variables |
 | Parser (`refal-syntax`) | ✅ Milestone 2 complete — functions, declarations, calls, conditions, brackets, separators |
-| CLI (`check`, `dump-ast`, `run`) | 🔶 Initial |
+| CLI (`check`, `dump-ast`, `run`) | 🔶 Initial — help output, diagnostics, runtime input, and result printing covered |
 | Semantic checker (`refal-semantics`) | 🔶 Milestone 3 in progress — entry points, duplicate entries, declarations, bindings, frontend legality |
 | Diagnostics with source positions | 🔶 Initial — frontend and semantic golden cases covered |
 | Golden test suite | ✅ Milestone 2 frontend coverage complete |
@@ -151,6 +151,9 @@ cargo test
 The CLI is in early development. The following commands are available:
 
 ```sh
+# Print command help
+cargo run -p refal -- --help
+
 # Check a .ref file for syntax and semantic errors
 cargo run -p refal -- check examples/hello.ref
 
@@ -159,9 +162,18 @@ cargo run -p refal -- dump-ast examples/hello.ref
 
 # Run a .ref program (interpreter — initial stage)
 cargo run -p refal -- run examples/hello.ref
+
+# Pass command-line text into the $ENTRY expression
+cargo run -p refal -- run examples/identity.ref "Hello Refal"
 ```
 
 The CLI and interpreter are at an initial stage. Not all Refal-5 programs will execute correctly yet. See the [frontend coverage matrix](docs/FRONTEND-COVERAGE.md) for what is currently supported.
+
+For `run`, each extra command-line argument is passed to `$ENTRY` as a structural
+bracket term containing that argument's characters. A non-empty final expression
+is printed after any captured `Prout` output. The bootstrap runtime currently
+implements `Prout`; other declared external functions are accepted by `check`,
+but `run` reports them as unimplemented runtime externals.
 
 ---
 
@@ -171,6 +183,7 @@ The CLI and interpreter are at an initial stage. Not all Refal-5 programs will e
 |---|---|
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Crate design and compiler pipeline |
 | [ROADMAP.md](docs/ROADMAP.md) | Milestone plan and completion criteria |
+| [PRODUCTION-COMPLETION.md](docs/PRODUCTION-COMPLETION.md) | Definition of the first production-grade release |
 | [FRONTEND-COVERAGE.md](docs/FRONTEND-COVERAGE.md) | Lexer/parser coverage tracking |
 | [LANGUAGE-SCOPE.md](docs/LANGUAGE-SCOPE.md) | Dialect features in and out of scope |
 | [CLEANROOM.md](docs/CLEANROOM.md) | Clean-room authorship policy |

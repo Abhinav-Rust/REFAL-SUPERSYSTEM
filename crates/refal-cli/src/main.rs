@@ -7,13 +7,22 @@ use refal_syntax::{Lexer, Parser};
 fn main() {
     let mut args = env::args().skip(1);
     let Some(command) = args.next() else {
-        eprintln!("Usage: refal <check|dump-ast|run> <file.ref>");
+        print_usage();
         process::exit(2);
     };
+
+    if command == "-h" || command == "--help" || command == "help" {
+        print_usage();
+        return;
+    }
+
     let Some(path) = args.next() else {
-        eprintln!("missing input file");
+        eprintln!("missing input file for `{command}`");
+        eprintln!();
+        print_usage();
         process::exit(2);
     };
+    let input_args: Vec<String> = args.collect();
 
     let source = match fs::read_to_string(&path) {
         Ok(source) => source,
@@ -64,24 +73,49 @@ fn main() {
     match command.as_str() {
         "check" => println!("{path}: check ok"),
         "dump-ast" => println!("{program:#?}"),
-        "run" => run_program(&program),
+        "run" => run_program(&program, &input_args),
         other => {
             eprintln!("unknown command `{other}`");
+            eprintln!();
+            print_usage();
             process::exit(2);
         }
     }
 }
 
-fn run_program(program: &refal_ast::Program) {
+fn print_usage() {
+    eprintln!("Usage: refal <command> <file.ref> [args...]");
+    eprintln!();
+    eprintln!("Commands:");
+    eprintln!("  check      Check a Refal source file for syntax and semantic errors");
+    eprintln!("  dump-ast   Print the parsed AST");
+    eprintln!("  run        Run a Refal source file with the bootstrap interpreter");
+}
+
+fn run_program(program: &refal_ast::Program, input_args: &[String]) {
     let evaluator = Evaluator::new(program);
-    if let Err(error) = evaluator.evaluate_entry(&[]) {
-        eprintln!("runtime error: {error}");
-        process::exit(1);
-    }
+    let input = args_to_values(input_args);
+    let result = match evaluator.evaluate_entry(&input) {
+        Ok(result) => result,
+        Err(error) => {
+            eprintln!("runtime error: {error}");
+            process::exit(1);
+        }
+    };
 
     for expression in evaluator.captured_output() {
         println!("{}", render_values(&expression));
     }
+
+    if !result.is_empty() {
+        println!("{}", render_values(&result));
+    }
+}
+
+fn args_to_values(args: &[String]) -> Vec<Value> {
+    args.iter()
+        .map(|arg| Value::Bracket(arg.chars().map(Value::Char).collect()))
+        .collect()
 }
 
 fn render_values(values: &[Value]) -> String {

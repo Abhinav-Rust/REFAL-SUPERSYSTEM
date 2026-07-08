@@ -46,6 +46,13 @@ impl Checker {
                         self.functions.insert(name, function.span);
                     }
 
+                    if function.sentences.is_empty() {
+                        self.push(
+                            format!("function `{}` has no sentences", function.name),
+                            function.span,
+                        );
+                    }
+
                     if function.visibility == Visibility::Entry {
                         if self.entry.is_some() {
                             self.push(
@@ -504,5 +511,25 @@ mod tests {
     #[test]
     fn canonicalizes_classic_identifier_spelling() {
         assert_eq!(canonical_name("Foo_Bar"), canonical_name("fOO-bAR"));
+    }
+
+    #[test]
+    fn rejects_empty_function_body() {
+        let program = Program {
+            items: vec![Item::Function(Function {
+                name: "Go".to_string(),
+                visibility: Visibility::Entry,
+                sentences: vec![],
+                span: Span { start: 0, end: 7 },
+            })],
+        };
+
+        let diagnostics = check_program(&program).unwrap_err();
+
+        assert!(diagnostics.iter().any(|diagnostic| diagnostic
+            == &Diagnostic {
+                message: "function `Go` has no sentences".to_string(),
+                span: Span { start: 0, end: 7 }
+            }));
     }
 }

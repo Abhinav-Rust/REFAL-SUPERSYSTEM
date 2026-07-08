@@ -2,6 +2,9 @@
 
 The roadmap is intentionally practical. The compiler must become useful for real programs, not merely demonstrate a few parser tricks.
 
+The first production-grade completion target is defined in
+[`PRODUCTION-COMPLETION.md`](PRODUCTION-COMPLETION.md).
+
 ## Milestone 1: Public-Grade Foundation
 
 Status: **Complete**.
@@ -43,9 +46,10 @@ Completed so far:
 - Result-variable binding checks.
 - Condition-introduced binding checks.
 - Pattern call rejection.
+- Empty function-body rejection.
 - CLI golden diagnostics for duplicate functions, duplicate declarations,
   variable kind conflicts, unbound condition inputs, unresolved calls, multiple
-  entries, and pattern calls.
+  entries, empty function bodies, and pattern calls.
 - CLI golden diagnostic for missing `$ENTRY`.
 - Positive semantic example for extern/call Classic identifier equivalence.
 

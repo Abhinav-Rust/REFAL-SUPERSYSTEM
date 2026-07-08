@@ -14,6 +14,7 @@ use crate::matcher::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EvalError {
     FunctionNotFound(String),
+    ExternalFunctionNotImplemented(String),
     NoMatchingSentence(String),
     UnboundVariable(String),
     Match(MatchError),
@@ -23,6 +24,12 @@ impl fmt::Display for EvalError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::FunctionNotFound(name) => write!(formatter, "function `{name}` was not found"),
+            Self::ExternalFunctionNotImplemented(name) => {
+                write!(
+                    formatter,
+                    "external function `{name}` is declared but not implemented by the runtime"
+                )
+            }
             Self::NoMatchingSentence(name) => {
                 write!(formatter, "no sentence matched in function `{name}`")
             }
@@ -41,6 +48,7 @@ impl std::error::Error for EvalError {}
 
 pub struct Evaluator<'a> {
     functions: HashMap<String, &'a Function>,
+    externs: HashMap<String, String>,
     output: RefCell<Vec<Vec<Value>>>,
 }
 
@@ -54,9 +62,19 @@ impl<'a> Evaluator<'a> {
                 Item::Declaration(_) => None,
             })
             .collect();
+        let externs = program
+            .items
+            .iter()
+            .flat_map(|item| match item {
+                Item::Declaration(declaration) => declaration.names.iter(),
+                Item::Function(_) => [].iter(),
+            })
+            .map(|name| (canonical_name(name), name.clone()))
+            .collect();
 
         Self {
             functions,
+            externs,
             output: RefCell::new(Vec::new()),
         }
     }
@@ -84,6 +102,11 @@ impl<'a> Evaluator<'a> {
 
         let canonical = canonical_name(name);
         let Some(function) = self.functions.get(&canonical) else {
+            if let Some(extern_name) = self.externs.get(&canonical) {
+                return Err(EvalError::ExternalFunctionNotImplemented(
+                    extern_name.to_string(),
+                ));
+            }
             return Err(EvalError::FunctionNotFound(name.to_string()));
         };
 
@@ -359,6 +382,34 @@ mod tests {
             vec![]
         );
         assert_eq!(evaluator.captured_output(), vec![vec![Value::Char('A')]]);
+    }
+
+    #[test]
+    fn reports_unimplemented_external_function() {
+        let entry = Sentence {
+            pattern: vec![],
+            conditions: vec![],
+            result: vec![call("Card", vec![])],
+            span: span(),
+        };
+        let program = Program {
+            items: vec![
+                Item::Declaration(refal_ast::Declaration {
+                    kind: refal_ast::DeclarationKind::Extern,
+                    names: vec!["Card".to_string()],
+                    span: span(),
+                }),
+                Item::Function(function("Go", Visibility::Entry, vec![entry])),
+            ],
+        };
+        let evaluator = Evaluator::new(&program);
+
+        assert_eq!(
+            evaluator.evaluate_entry(&[]),
+            Err(EvalError::ExternalFunctionNotImplemented(
+                "Card".to_string()
+            ))
+        );
     }
 
     #[test]

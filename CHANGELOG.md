@@ -17,3 +17,10 @@
   duplicate declarations, variable kind conflicts, and condition input binding.
 - Added missing-entry CLI diagnostics and a positive extern/call equivalence
   example for Milestone 3 coverage.
+- Added the production completion contract and semantic diagnostics for empty
+  function bodies.
+- Extended `refal run` to pass command-line text into `$ENTRY` and print a
+  non-empty final expression.
+- Added explicit CLI help output and usage diagnostics for missing input files.
+- Distinguished declared-but-unimplemented external functions from missing
+  functions in runtime errors.

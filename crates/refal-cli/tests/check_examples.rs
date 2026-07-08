@@ -16,6 +16,40 @@ fn check_file(path: &str) -> std::process::Output {
 }
 
 #[test]
+fn prints_help_without_requiring_input_file() {
+    let output = Command::new(refal_bin())
+        .arg("--help")
+        .output()
+        .expect("run refal binary");
+
+    assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Usage: refal <command> <file.ref> [args...]"),
+        "unexpected stderr:\n{stderr}"
+    );
+}
+
+#[test]
+fn reports_usage_for_missing_input_file() {
+    let output = Command::new(refal_bin())
+        .arg("check")
+        .output()
+        .expect("run refal binary");
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("missing input file for `check`"),
+        "unexpected stderr:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("Usage: refal <command> <file.ref> [args...]"),
+        "unexpected stderr:\n{stderr}"
+    );
+}
+
+#[test]
 fn accepts_positive_examples() {
     for path in [
         "examples/identity.ref",
@@ -50,6 +84,7 @@ fn rejects_negative_examples() {
         "examples/bad-variable-kind-conflict.ref",
         "examples/bad-condition-unbound-variable.ref",
         "examples/bad-missing-entry.ref",
+        "examples/bad-empty-function.ref",
     ] {
         let output = check_file(path);
 
@@ -200,6 +235,18 @@ fn reports_line_and_column_for_missing_entry_error() {
 }
 
 #[test]
+fn reports_line_and_column_for_empty_function_error() {
+    let output = check_file("examples/bad-empty-function.ref");
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("semantic error at 1:1: function `Go` has no sentences"),
+        "unexpected stderr:\n{stderr}"
+    );
+}
+
+#[test]
 fn runs_program_and_prints_prout_output() {
     let output = Command::new(refal_bin())
         .args(["run", &workspace_path("examples/hello.ref")])
@@ -213,4 +260,44 @@ fn runs_program_and_prints_prout_output() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert_eq!(String::from_utf8_lossy(&output.stdout), "Hello, Refal\n");
+}
+
+#[test]
+fn runs_program_with_command_line_input_and_prints_result() {
+    let output = Command::new(refal_bin())
+        .args([
+            "run",
+            &workspace_path("examples/identity.ref"),
+            "Hello Refal",
+        ])
+        .output()
+        .expect("run refal binary");
+
+    assert!(
+        output.status.success(),
+        "run should pass\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "Hello Refal\n");
+}
+
+#[test]
+fn reports_declared_but_unimplemented_external_at_runtime() {
+    let output = Command::new(refal_bin())
+        .args([
+            "run",
+            &workspace_path("examples/runtime-unimplemented-extern.ref"),
+        ])
+        .output()
+        .expect("run refal binary");
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains(
+            "runtime error: external function `Card` is declared but not implemented by the runtime"
+        ),
+        "unexpected stderr:\n{stderr}"
+    );
 }
