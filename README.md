@@ -25,6 +25,32 @@ Refal’s computational model is deceptively powerful. A Refal program is a set 
 
 ---
 
+## Why Refal Still Matters in 2026
+
+It is easy to file a 1960s language under "historical curiosity." Refal resists that filing. Most languages that survive from that era survive as artifacts you study; Refal survives as a *tool you reach for*, because the problem it solves — transforming structured symbolic data according to explicit, checkable rules — has only grown more central to software, not less.
+
+A few reasons this matters to developers today, regardless of background:
+
+- **Rewriting is the actual substrate of a huge amount of modern software.** Compilers, linters, code formatters, macro systems, template engines, query planners, protocol translators, and refactoring tools are all, underneath, pattern-matching-and-rewriting engines wearing different clothes. Most languages make you *simulate* rewriting with recursion, visitors, and ad-hoc tree-walking. Refal makes rewriting the primitive itself. Learning it sharpens how you see and design every one of those systems, even if you never write a line of Refal in production.
+- **No garbage collection, no hidden runtime magic.** Refal's list-based data model was chosen deliberately for simplicity and predictability. In an industry increasingly worried about supply-chain trust and reproducible builds, a small, auditable, deterministic core is a feature, not a limitation.
+- **It teaches precise thinking about structure.** Refal's typed pattern variables (`s.`, `t.`, `e.`) force you to be exact about what shape of data you're matching — a single symbol, a single term, or an arbitrary-length expression. That discipline transfers directly to schema design, AST work, and any domain involving nested, tree-like data (which, in 2026, is most of them).
+- **Supercompilation is not a museum piece either.** Turchin's supercompilation — symbolically driving a program's own execution to fold repeated states and strip away abstraction at compile time — is an active line of research in program specialization and partial evaluation, and its core idea (drive-then-fold over symbolic execution traces) is quietly reappearing in newer optimization and verification tooling.
+
+## Refal in the Age of AI
+
+Large language models are extraordinary at *generating* structure — code, tool calls, JSON, plans — but they are probabilistic by construction. They cannot, on their own, *guarantee* that a piece of generated structure obeys a rule, terminates, or is even well-formed. That gap between "an LLM produced something plausible" and "a system can verify it is correct" is one of the central engineering problems of building reliable AI systems in 2026, and it is exactly the gap a deterministic rewriting engine is built to close.
+
+This is where Refal's design turns out to be unexpectedly well-suited to the current moment, rather than in spite of its age:
+
+- **LLM outputs are symbolic expressions.** Tool calls, function-call arguments, ASTs, and structured JSON payloads are all, at bottom, nested symbolic terms — precisely the data shape Refal's `e.`/`t.`/`s.` pattern matching was designed to consume. A Refal-style rewriting layer can sit downstream of an LLM and deterministically check, normalize, or reject generated structure, with every accepted or rejected case traceable to a named rule rather than a black-box score.
+- **Neuro-symbolic architectures are the direction the field is moving.** There's growing industry interest in pairing LLMs with deterministic verifiers, constrained decoders, and symbolic guardrails — using the model for generation and reasoning, and a separate, auditable rule-based layer for correctness and safety checks. Refal is a natural implementation substrate for that verifier layer: small, deterministic, side-effect-explicit, and easy to reason about function-by-function.
+- **Auditability matters more as AI autonomy grows.** As more code and infrastructure gets generated or modified by AI agents, teams need a way to check that generated output actually satisfies a contract — not just that it "looks right" to another model. A rewriting engine gives you exactly that: every transformation traces back to a rule you can point to, read, and test in isolation, which is a very different guarantee than another layer of probabilistic scoring.
+- **Metaprogramming was Refal's original purpose.** It was built to write compilers and transform programs. That is precisely the job description of the tooling now being built *around* AI coding agents — normalizing generated code, rewriting between intermediate representations, and enforcing structural invariants on machine-written output.
+
+None of this requires believing Refal will become mainstream infrastructure at frontier labs. It requires noticing that the shape of the problem — verifying and transforming symbolic structure that a probabilistic system produced — is exactly the shape of problem Refal was built to solve six decades before anyone needed it for this reason. That is the case for learning it now: not nostalgia, but timing.
+
+---
+
 ## A Taste of Refal
 
 Below is a valid Refal-5 program. The `$ENTRY Go` function is the program’s entry point. `Prout` is a built-in that prints a character string.
