@@ -15,6 +15,13 @@ fn check_file(path: &str) -> std::process::Output {
         .expect("run refal binary")
 }
 
+fn run_file(path: &str, args: &[&str]) -> std::process::Output {
+    let mut command = Command::new(refal_bin());
+    command.args(["run", &workspace_path(path)]);
+    command.args(args);
+    command.output().expect("run refal binary")
+}
+
 #[test]
 fn prints_help_without_requiring_input_file() {
     let output = Command::new(refal_bin())
@@ -58,6 +65,7 @@ fn accepts_positive_examples() {
         "examples/extern.ref",
         "examples/classic-syntax.ref",
         "examples/extern-equivalence.ref",
+        "examples/runtime-condition.ref",
     ] {
         let output = check_file(path);
 
@@ -249,10 +257,7 @@ fn reports_line_and_column_for_empty_function_error() {
 
 #[test]
 fn runs_program_and_prints_prout_output() {
-    let output = Command::new(refal_bin())
-        .args(["run", &workspace_path("examples/hello.ref")])
-        .output()
-        .expect("run refal binary");
+    let output = run_file("examples/hello.ref", &[]);
 
     assert!(
         output.status.success(),
@@ -265,14 +270,7 @@ fn runs_program_and_prints_prout_output() {
 
 #[test]
 fn runs_program_with_command_line_input_and_prints_result() {
-    let output = Command::new(refal_bin())
-        .args([
-            "run",
-            &workspace_path("examples/identity.ref"),
-            "Hello Refal",
-        ])
-        .output()
-        .expect("run refal binary");
+    let output = run_file("examples/identity.ref", &["Hello Refal"]);
 
     assert!(
         output.status.success(),
@@ -281,6 +279,30 @@ fn runs_program_with_command_line_input_and_prints_result() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert_eq!(String::from_utf8_lossy(&output.stdout), "Hello Refal\n");
+}
+
+#[test]
+fn runs_runtime_conformance_examples() {
+    for (path, args, expected_stdout) in [
+        ("examples/hello.ref", &[] as &[&str], "Hello, Refal\n"),
+        (
+            "examples/identity.ref",
+            &["Hello Refal"] as &[&str],
+            "Hello Refal\n",
+        ),
+        ("examples/extern-equivalence.ref", &[] as &[&str], "Equiv\n"),
+        ("examples/runtime-condition.ref", &[] as &[&str], "Y\n"),
+    ] {
+        let output = run_file(path, args);
+
+        assert!(
+            output.status.success(),
+            "{path} should run\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(String::from_utf8_lossy(&output.stdout), expected_stdout);
+    }
 }
 
 #[test]

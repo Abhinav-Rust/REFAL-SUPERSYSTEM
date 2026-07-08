@@ -98,6 +98,7 @@ The project starts with a robust bootstrap front end written in Rust and grows t
 | Diagnostics with source positions | 🔶 Initial — frontend and semantic golden cases covered |
 | Golden test suite | ✅ Milestone 2 frontend coverage complete |
 | Runtime identifier dispatch | ✅ Classic name equivalence aligned with semantic checker |
+| Runtime conformance examples | 🔶 Initial — output, CLI input, extern equivalence, and conditions covered |
 | Core Refal lowering | 🔷 Planned |
 | Native backend / code generation | 🔷 Planned for later milestones |
 
@@ -173,6 +174,9 @@ cargo run -p refal -- run examples/hello.ref
 
 # Pass command-line text into the $ENTRY expression
 cargo run -p refal -- run examples/identity.ref "Hello Refal"
+
+# Run a condition-matching interpreter smoke test
+cargo run -p refal -- run examples/runtime-condition.ref
 ```
 
 The CLI and interpreter are at an initial stage. Not all Refal-5 programs will execute correctly yet. See the [frontend coverage matrix](docs/FRONTEND-COVERAGE.md) for what is currently supported.

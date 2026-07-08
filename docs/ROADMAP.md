@@ -63,8 +63,22 @@ Completed so far:
 - Backtracking and rollback.
 - Built-in functions.
 - Executable interpreter mode.
+- CLI conformance examples for runtime behavior.
 
 Status: **Partial implementation; active next milestone**.
+
+Completed so far:
+
+- Object-expression value model.
+- `s.`, `t.`, and `e.` matcher with backtracking.
+- Repeated-variable equality checks.
+- Sentence dispatch with fallback to later sentences.
+- Result expression evaluation and nested function calls.
+- Condition evaluation with rollback to later sentences.
+- `Prout` built-in output capture.
+- Classic identifier equivalence for functions and built-ins.
+- CLI runtime conformance examples for output, command-line input, external
+  spelling equivalence, and conditions.
 
 ## Milestone 5: Core Refal Lowering
 

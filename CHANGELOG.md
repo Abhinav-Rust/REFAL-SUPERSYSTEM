@@ -8,6 +8,8 @@
   bootstrap runtime does not implement yet.
 - Completed the Milestone 3 semantic audit and marked semantic checking
   complete for the current frontend scope.
+- Started Milestone 4 runtime conformance coverage and aligned built-in
+  dispatch with Classic identifier equivalence.
 - Reset repository around a clean compiler architecture.
 - Added initial Rust workspace for bootstrap compiler infrastructure.
 - Added AST, lexer, parser, CLI, examples, and public project documentation.

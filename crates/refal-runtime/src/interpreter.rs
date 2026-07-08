@@ -130,8 +130,8 @@ impl<'a> Evaluator<'a> {
         name: &str,
         args: &[Value],
     ) -> Option<Result<Vec<Value>, EvalError>> {
-        match name {
-            "Prout" => {
+        match canonical_name(name).as_str() {
+            "PROUT" => {
                 self.output.borrow_mut().push(args.to_vec());
                 Some(Ok(Vec::new()))
             }
