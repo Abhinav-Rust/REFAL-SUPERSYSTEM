@@ -35,7 +35,6 @@ The first production release is complete when all of the following are true:
 These items are valuable, but they are not required for the first production
 release:
 
-- Self-hosting compiler components written in Refal.
 - Multiple production backends.
 - Advanced optimization passes.
 - IDE/LSP integration.
@@ -44,7 +43,8 @@ release:
 
 ## Current Completion Estimate
 
-The project is currently past the bootstrap/frontend phase and in semantic and
-runtime hardening. A realistic estimate remains about 38-40% of the first
-production release, with the largest remaining work in runtime completeness,
-Core Refal lowering, backend generation, and conformance testing.
+The project is currently past the bootstrap/frontend phase and in runtime
+hardening. Against the repository's Refal-first completion target, a realistic
+estimate is about 42%. The largest remaining work is runtime completeness, Core
+Refal lowering, backend generation, conformance testing, and self-hosted
+compiler components written in Refal.
