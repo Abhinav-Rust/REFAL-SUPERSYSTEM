@@ -1,0 +1,5 @@
+$EXTERN Prout, Type;
+
+$ENTRY Go {
+  = <Prout <Type 'A'>>;
+}

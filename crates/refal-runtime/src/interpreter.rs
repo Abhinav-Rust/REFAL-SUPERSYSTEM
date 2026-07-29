@@ -188,6 +188,7 @@ impl<'a> Evaluator<'a> {
             "ORD" => Some(Ok(ord(args))),
             "NUMB" => Some(numb(args)),
             "SYMB" => Some(symb(args)),
+            "TYPE" => Some(Ok(type_of(args))),
             _ => None,
         }
     }
@@ -381,6 +382,27 @@ fn normalize_macrodigit(digits: &str) -> String {
     } else {
         normalized.to_string()
     }
+}
+
+fn type_of(args: &[Value]) -> Vec<Value> {
+    let tag = match args.first() {
+        None => '*',
+        Some(Value::Bracket(_)) => 'B',
+        Some(Value::Identifier(_)) => 'F',
+        Some(Value::Number(number)) if is_real_number(number) => 'R',
+        Some(Value::Number(_)) => 'N',
+        Some(Value::Char(ch)) if ch.is_ascii_alphabetic() => 'L',
+        Some(Value::Char(ch)) if ch.is_ascii_digit() => 'D',
+        Some(Value::Char(_)) => 'O',
+    };
+
+    let mut result = vec![Value::Char(tag)];
+    result.extend_from_slice(args);
+    result
+}
+
+fn is_real_number(number: &str) -> bool {
+    number.contains('.') || number.contains('E')
 }
 
 fn eval_symbol(symbol: &Symbol) -> Value {
@@ -697,6 +719,23 @@ mod tests {
         assert_eq!(
             symb(&[Value::Number("00042".to_string())]).unwrap(),
             vec![Value::Char('4'), Value::Char('2')]
+        );
+    }
+
+    #[test]
+    fn classifies_the_first_refal_object_without_consuming_the_expression() {
+        assert_eq!(type_of(&[]), vec![Value::Char('*')]);
+        assert_eq!(
+            type_of(&[Value::Char('A'), Value::Char('!')]),
+            vec![Value::Char('L'), Value::Char('A'), Value::Char('!')]
+        );
+        assert_eq!(
+            type_of(&[Value::Number("2.5".to_string())]),
+            vec![Value::Char('R'), Value::Number("2.5".to_string())]
+        );
+        assert_eq!(
+            type_of(&[Value::Bracket(vec![Value::Char('x')])]),
+            vec![Value::Char('B'), Value::Bracket(vec![Value::Char('x')])]
         );
     }
 

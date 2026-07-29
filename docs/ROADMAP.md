@@ -81,6 +81,8 @@ Completed so far:
 - `Ord` and `Chr` built-ins for character-code transformations.
 - `Numb` and `Symb` built-ins for arbitrary-length decimal character-string
   conversion.
+- `Type` built-in for inspecting the first object's Classic Refal category
+  without consuming the expression.
 - Classic identifier equivalence for functions and built-ins.
 - CLI runtime conformance examples for output, command-line input, external
   spelling equivalence, and conditions.

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added `Type` bootstrap runtime built-in with category-classification
+  conformance coverage.
 - Added `Numb` and `Symb` bootstrap runtime built-ins with decimal conversion
   conformance coverage.
 - Added `Ord` and `Chr` bootstrap runtime built-ins with character-code

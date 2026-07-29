@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use refal_ast::{DeclarationKind, Item, Program, Span, Term, TermKind, VariableKind, Visibility};
 
 const SUPPORTED_RUNTIME_EXTERNS: &[&str] = &[
-    "CHR", "EXPLODE", "IMPLODE", "NUMB", "ORD", "PRINT", "PROUT", "SYMB",
+    "CHR", "EXPLODE", "IMPLODE", "NUMB", "ORD", "PRINT", "PROUT", "SYMB", "TYPE",
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]

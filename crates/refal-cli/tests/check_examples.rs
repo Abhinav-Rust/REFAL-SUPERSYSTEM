@@ -75,6 +75,7 @@ fn accepts_positive_examples() {
         "examples/runtime-symbol-builtins.ref",
         "examples/runtime-character-codes.ref",
         "examples/runtime-number-builtins.ref",
+        "examples/runtime-type.ref",
     ] {
         let output = check_file(path);
 
@@ -417,6 +418,7 @@ fn runs_runtime_conformance_examples() {
             &[] as &[&str],
             "42\n",
         ),
+        ("examples/runtime-type.ref", &[] as &[&str], "LA\n"),
     ] {
         let output = run_file(path, args);
 
