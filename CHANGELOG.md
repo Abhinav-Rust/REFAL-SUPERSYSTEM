@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added condition-aware expression backtracking to the bootstrap interpreter.
 - Added a configurable runtime recursion-depth guard and regression test.
 - Added a CLI conformance example for matching structural bracket input.
 - Added a recursive runtime conformance example and made Refal-authored
