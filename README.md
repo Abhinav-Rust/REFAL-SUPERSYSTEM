@@ -116,17 +116,19 @@ The project starts with a robust bootstrap front end written in Rust and grows t
 
 ## Project Status
 
-**Milestones 1, 2, and 3 are complete.** Work is moving into Milestone 4 runtime and interpreter completeness, with the frontend completion contract tracked in the [Classic Refal-5 frontend coverage matrix](docs/FRONTEND-COVERAGE.md) and the semantic completion audit recorded in [SEMANTIC-AUDIT.md](docs/SEMANTIC-AUDIT.md). See the full [Roadmap](docs/ROADMAP.md) for planned milestones.
+**Current completion estimate: about 42% of the first production-grade toolchain.** Milestones 1, 2, and 3 are complete. Milestones 4 and 5 have working bootstrap implementations but remain incomplete; Milestone 6 (a production backend) and Milestone 7 (verified self-hosting) have not started. This repository is therefore a usable **bootstrap frontend, checker, interpreter, and source normalizer**—not yet a production compiler that emits executable code, and not yet self-hosting.
+
+Active work is runtime/interpreter hardening and Core Refal lowering. The frontend completion contract is tracked in the [Classic Refal-5 frontend coverage matrix](docs/FRONTEND-COVERAGE.md), the semantic completion audit is recorded in [SEMANTIC-AUDIT.md](docs/SEMANTIC-AUDIT.md), and the full milestone plan is in the [Roadmap](docs/ROADMAP.md). The definition of the first production release is in [PRODUCTION-COMPLETION.md](docs/PRODUCTION-COMPLETION.md).
 
 | # | Milestone | Status | Current Evidence |
 |---|---|---|---|
 | 1 | Public-grade foundation | ✅ Complete | Rust workspace, repository layout, README, clean-room policy, MIT license, and CI baseline |
 | 2 | Classic Refal-5 front end | ✅ Complete | Lexer/parser coverage for Classic syntax, source spans, diagnostics, examples, and golden tests |
 | 3 | Semantic checker | ✅ Complete | Entry validation, declarations, Classic name equivalence, call checks, variable binding, condition legality, and semantic audit |
-| 4 | Runtime and interpreter | 🔶 Active | Object-expression runtime, `s.`, `t.`, `e.` matching, backtracking, repeated variables, conditions, `Prout`, CLI input, recursion-depth protection, condition-aware backtracking, and runtime conformance examples |
-| 5 | Core Refal lowering | 🔶 Active | Normalized source-mapped Core Refal model, deterministic round-trip-safe formatting, and `lower` CLI command; backend-oriented IR remains |
-| 6 | Production backend | 🔷 Planned | Generate practical executable code and prove backend output against interpreter behavior |
-| 7 | Self-hosting track | 🔷 Later | Rebuild selected compiler components in Refal after the production toolchain is stable |
+| 4 | Runtime and interpreter | 🔶 Active / partial | Object-expression runtime, `s.`, `t.`, `e.` matching, backtracking, repeated variables, conditions, `Prout`, CLI input, recursion-depth protection, condition-aware backtracking, and runtime conformance examples |
+| 5 | Core Refal lowering | 🔶 Active / partial | Normalized source-mapped Core Refal model, deterministic round-trip-safe formatting, and `lower` CLI command; backend-oriented IR remains |
+| 6 | Production backend | ⬜ Not started | Generate practical executable code and prove backend output against interpreter behavior |
+| 7 | Self-hosting track | ⬜ Not started | Rebuild selected compiler components in Refal after the production toolchain is stable |
 
 ### Current Component Map
 
@@ -136,7 +138,7 @@ The project starts with a robust bootstrap front end written in Rust and grows t
 | `refal-syntax` | 2 | ✅ Complete for the current Classic Refal-5 frontend scope |
 | `refal-semantics` | 3 | ✅ Complete for the current frontend/runtime legality scope |
 | `refal-runtime` | 4 | 🔶 Active implementation |
-| `refal-core` | 5 | 🔶 Source-mapped normalized Core Refal model and round-trip-safe deterministic formatter |
+| `refal-core` | 5 | 🔶 Source-mapped normalized Core Refal model and round-trip-safe deterministic formatter; not yet a backend IR |
 | `refal-cli` | 1-5 | 🔶 Usable bootstrap CLI: `check`, `dump-ast`, `lower`, `run`, help output, diagnostics, and runtime examples |
 | CI and quality gates | 1+ | ✅ `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and `cargo test` |
 
