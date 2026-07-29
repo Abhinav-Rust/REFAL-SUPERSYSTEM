@@ -82,6 +82,8 @@ Completed so far:
 - CLI runtime conformance example for recursive expression transformation.
 - CLI runtime conformance example for matching and unwrapping a structural
   bracket supplied through the command line.
+- Configurable recursion-depth guard with a diagnostic instead of uncontrolled
+  host-process stack exhaustion.
 
 ## Milestone 5: Core Refal Lowering
 
