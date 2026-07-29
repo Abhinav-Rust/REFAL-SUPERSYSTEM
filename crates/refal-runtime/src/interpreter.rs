@@ -8,7 +8,8 @@ use refal_ast::{Condition, Function, Item, Program, Symbol, Term, TermKind, Vari
 
 use crate::Value;
 use crate::matcher::{
-    Bindings, MatchError, VariableKey, match_pattern, match_pattern_with_bindings,
+    Bindings, MatchError, VariableKey, match_pattern_candidates,
+    match_pattern_with_bindings_candidates,
 };
 
 const DEFAULT_MAX_CALL_DEPTH: usize = 1_024;
@@ -142,14 +143,14 @@ impl<'a> Evaluator<'a> {
         };
 
         for sentence in &function.sentences {
-            match match_pattern(&sentence.pattern, args) {
-                Ok(bindings) => {
-                    match self.eval_conditions(&sentence.conditions, bindings, call_depth) {
-                        Ok(bindings) => {
+            match match_pattern_candidates(&sentence.pattern, args) {
+                Ok(pattern_candidates) => {
+                    for bindings in pattern_candidates {
+                        let condition_candidates =
+                            self.eval_conditions(&sentence.conditions, bindings, call_depth)?;
+                        if let Some(bindings) = condition_candidates.into_iter().next() {
                             return self.eval_terms(&sentence.result, &bindings, call_depth);
                         }
-                        Err(EvalError::Match(MatchError::NoMatch)) => continue,
-                        Err(error) => return Err(error),
                     }
                 }
                 Err(MatchError::NoMatch) => continue,
@@ -177,16 +178,31 @@ impl<'a> Evaluator<'a> {
     fn eval_conditions(
         &self,
         conditions: &[Condition],
-        mut bindings: Bindings,
+        bindings: Bindings,
         call_depth: usize,
-    ) -> Result<Bindings, EvalError> {
+    ) -> Result<Vec<Bindings>, EvalError> {
+        let mut candidates = vec![bindings];
         for condition in conditions {
-            let condition_value = self.eval_terms(&condition.result, &bindings, call_depth)?;
-            bindings = match_pattern_with_bindings(&condition.pattern, &condition_value, bindings)
-                .map_err(EvalError::Match)?;
+            let mut next_candidates = Vec::new();
+            for bindings in candidates {
+                let condition_value = self.eval_terms(&condition.result, &bindings, call_depth)?;
+                match match_pattern_with_bindings_candidates(
+                    &condition.pattern,
+                    &condition_value,
+                    bindings,
+                ) {
+                    Ok(matches) => next_candidates.extend(matches),
+                    Err(MatchError::NoMatch) => {}
+                    Err(error) => return Err(EvalError::Match(error)),
+                }
+            }
+            candidates = next_candidates;
+            if candidates.is_empty() {
+                break;
+            }
         }
 
-        Ok(bindings)
+        Ok(candidates)
     }
 
     fn eval_terms(
