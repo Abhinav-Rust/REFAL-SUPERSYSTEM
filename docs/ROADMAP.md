@@ -78,6 +78,7 @@ Completed so far:
 - `Prout` built-in output capture.
 - `Print`, `Explode`, and `Implode` built-ins with Classic-compatible output
   and identifier conversion behavior.
+- `Ord` and `Chr` built-ins for character-code transformations.
 - Classic identifier equivalence for functions and built-ins.
 - CLI runtime conformance examples for output, command-line input, external
   spelling equivalence, and conditions.

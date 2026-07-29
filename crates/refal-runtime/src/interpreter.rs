@@ -184,6 +184,8 @@ impl<'a> Evaluator<'a> {
             }
             "EXPLODE" => Some(explode(args)),
             "IMPLODE" => Some(implode(args)),
+            "CHR" => Some(Ok(chr(args))),
+            "ORD" => Some(Ok(ord(args))),
             _ => None,
         }
     }
@@ -301,6 +303,28 @@ fn is_classic_identifier(identifier: &str) -> bool {
     first.is_ascii_uppercase()
         && identifier.chars().count() <= 15
         && chars.all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-'))
+}
+
+fn chr(args: &[Value]) -> Vec<Value> {
+    args.iter()
+        .map(|value| match value {
+            Value::Number(number) => number
+                .parse::<i64>()
+                .ok()
+                .map(|number| Value::Char(number.rem_euclid(256) as u8 as char))
+                .unwrap_or_else(|| value.clone()),
+            Value::Char(_) | Value::Identifier(_) | Value::Bracket(_) => value.clone(),
+        })
+        .collect()
+}
+
+fn ord(args: &[Value]) -> Vec<Value> {
+    args.iter()
+        .map(|value| match value {
+            Value::Char(ch) => Value::Number((*ch as u32).to_string()),
+            Value::Identifier(_) | Value::Number(_) | Value::Bracket(_) => value.clone(),
+        })
+        .collect()
 }
 
 fn eval_symbol(symbol: &Symbol) -> Value {
@@ -585,6 +609,25 @@ mod tests {
                 Value::Number("0".to_string()),
                 Value::Char('1'),
                 Value::Char('x')
+            ]
+        );
+    }
+
+    #[test]
+    fn converts_between_characters_and_character_codes() {
+        assert_eq!(
+            chr(&[
+                Value::Number("65".to_string()),
+                Value::Number("321".to_string()),
+                Value::Char('!'),
+            ]),
+            vec![Value::Char('A'), Value::Char('A'), Value::Char('!')]
+        );
+        assert_eq!(
+            ord(&[Value::Char('A'), Value::Identifier("Name".to_string())]),
+            vec![
+                Value::Number("65".to_string()),
+                Value::Identifier("Name".to_string())
             ]
         );
     }

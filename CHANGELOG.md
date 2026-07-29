@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added `Ord` and `Chr` bootstrap runtime built-ins with character-code
+  conformance coverage.
 - Added `Print`, `Explode`, and `Implode` bootstrap runtime built-ins with CLI
   conformance coverage.
 - Added `refal lower --output` for writing normalized Core Refal to a file.

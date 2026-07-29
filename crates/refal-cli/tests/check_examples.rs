@@ -73,6 +73,7 @@ fn accepts_positive_examples() {
         "examples/runtime-bracket.ref",
         "examples/runtime-condition-backtracking.ref",
         "examples/runtime-symbol-builtins.ref",
+        "examples/runtime-character-codes.ref",
     ] {
         let output = check_file(path);
 
@@ -404,6 +405,11 @@ fn runs_runtime_conformance_examples() {
             "examples/runtime-symbol-builtins.ref",
             &[] as &[&str],
             "Hello\n!\nWorld\n!\n",
+        ),
+        (
+            "examples/runtime-character-codes.ref",
+            &[] as &[&str],
+            "AZ\n",
         ),
     ] {
         let output = run_file(path, args);
