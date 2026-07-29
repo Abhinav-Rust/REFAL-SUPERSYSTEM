@@ -84,6 +84,8 @@ Completed so far:
   bracket supplied through the command line.
 - Configurable recursion-depth guard with a diagnostic instead of uncontrolled
   host-process stack exhaustion.
+- Condition-aware expression backtracking: later valid expression splits are
+  considered when an earlier split fails a sentence condition.
 
 ## Milestone 5: Core Refal Lowering
 
