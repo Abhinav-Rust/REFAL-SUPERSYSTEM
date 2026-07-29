@@ -1,0 +1,10 @@
+$EXTERN Prout;
+
+$ENTRY Go {
+  = <Prout <Reverse 'abc'>>;
+}
+
+Reverse {
+  = ;
+  s.Head e.Tail = <Reverse e.Tail> s.Head;
+}
