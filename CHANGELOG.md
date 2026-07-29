@@ -2,11 +2,15 @@
 
 ## Unreleased
 
+- Started Core Refal lowering with a source-mapped normalized representation,
+  deterministic formatter, and `refal lower` CLI command.
 - Added condition-aware expression backtracking to the bootstrap interpreter.
 - Added a configurable runtime recursion-depth guard and regression test.
 - Added a CLI conformance example for matching structural bracket input.
 - Added a recursive runtime conformance example and made Refal-authored
   self-hosting part of the project's 100% completion target.
+- Added a README section explaining Refal's modern relevance for compiler
+  tooling, symbolic transformation, and AI-adjacent deterministic systems.
 - Reworked the README project status section into a milestone-ordered progress
   tracker with a separate component map.
 - Added `cargo clippy --all-targets -- -D warnings` to CI and documented the

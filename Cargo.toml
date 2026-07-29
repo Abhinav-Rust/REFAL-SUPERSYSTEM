@@ -4,6 +4,7 @@ members = [
     "crates/refal-syntax",
     "crates/refal-semantics",
     "crates/refal-runtime",
+    "crates/refal-core",
     "crates/refal-cli"
 ]
 resolver = "2"

@@ -93,6 +93,17 @@ Completed so far:
 - Preserve source maps for diagnostics.
 - Emit stable formatted Refal/Core Refal output.
 
+Status: **Partial implementation; active next milestone**.
+
+Completed so far:
+
+- Source-mapped `refal-core` representation for declarations, functions,
+  sentences, conditions, and terms.
+- Deterministic normalized Core Refal formatter.
+- `refal lower <file.ref>` command, which runs syntax and semantic validation
+  before emitting normalized source.
+- Unit and CLI coverage for lowering and formatting.
+
 ## Milestone 6: Production Backend
 
 - Lower Core Refal to compiler IR.

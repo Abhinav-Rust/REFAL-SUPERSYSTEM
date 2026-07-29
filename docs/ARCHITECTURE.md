@@ -47,7 +47,10 @@ The runtime model will implement:
 
 ## Stage D: Compiler IR
 
-The front end will lower parsed Refal into an explicit intermediate representation suitable for optimization and code generation.
+The front end lowers checked Refal into `refal-core`, an explicit intermediate
+representation with source spans retained on every lowered construct. The
+initial Core Refal formatter provides stable normalized source through
+`refal lower`; later work will add backend-oriented control-flow and data IR.
 
 ## Stage E: Backends
 
@@ -69,6 +72,9 @@ crates/refal-ast
 
 crates/refal-syntax
   Lexing and parsing.
+
+crates/refal-core
+  Source-mapped Core Refal representation and deterministic formatter.
 
 crates/refal-cli
   User-facing command-line interface.

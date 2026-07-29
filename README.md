@@ -25,29 +25,38 @@ Refal’s computational model is deceptively powerful. A Refal program is a set 
 
 ---
 
-## Why Refal Still Matters in 2026
+## Why Refal Still Matters In 2026
 
-It is easy to file a 1960s language under "historical curiosity." Refal resists that filing. Most languages that survive from that era survive as artifacts you study; Refal survives as a *tool you reach for*, because the problem it solves — transforming structured symbolic data according to explicit, checkable rules — has only grown more central to software, not less.
+Modern software is full of structured symbolic data: source code, syntax trees,
+configuration formats, protocols, logs, proof terms, model traces, prompts,
+tool-call plans, and generated programs. Most mainstream languages can process
+that data, but they usually make developers build the matching, traversal, and
+rewriting machinery by hand. Refal puts those operations at the centre of the
+language.
 
-A few reasons this matters to developers today, regardless of background:
+That makes Refal valuable to developers from many backgrounds:
 
-- **Rewriting is the actual substrate of a huge amount of modern software.** Compilers, linters, code formatters, macro systems, template engines, query planners, protocol translators, and refactoring tools are all, underneath, pattern-matching-and-rewriting engines wearing different clothes. Most languages make you *simulate* rewriting with recursion, visitors, and ad-hoc tree-walking. Refal makes rewriting the primitive itself. Learning it sharpens how you see and design every one of those systems, even if you never write a line of Refal in production.
-- **No garbage collection, no hidden runtime magic.** Refal's list-based data model was chosen deliberately for simplicity and predictability. In an industry increasingly worried about supply-chain trust and reproducible builds, a small, auditable, deterministic core is a feature, not a limitation.
-- **It teaches precise thinking about structure.** Refal's typed pattern variables (`s.`, `t.`, `e.`) force you to be exact about what shape of data you're matching — a single symbol, a single term, or an arbitrary-length expression. That discipline transfers directly to schema design, AST work, and any domain involving nested, tree-like data (which, in 2026, is most of them).
-- **Supercompilation is not a museum piece either.** Turchin's supercompilation — symbolically driving a program's own execution to fold repeated states and strip away abstraction at compile time — is an active line of research in program specialization and partial evaluation, and its core idea (drive-then-fold over symbolic execution traces) is quietly reappearing in newer optimization and verification tooling.
+- **Compiler and tooling engineers** can express source-to-source
+  transformations, normalisation passes, interpreters, and optimisers directly
+  as rewrite rules.
+- **Backend and systems developers** can use Refal-style pipelines to reduce
+  complex symbolic states into simpler executable forms.
+- **Language researchers and formal-methods developers** get a compact model
+  for equational reasoning, term rewriting, partial evaluation, and
+  supercompilation.
+- **AI and automation developers** can use Refal as a deterministic symbolic
+  layer around probabilistic systems: parsing model outputs, validating
+  tool-call structures, rewriting plans, transforming generated code, checking
+  rule-based constraints, or building explainable post-processing pipelines.
+- **Application developers** working with DSLs, templates, workflows, and
+  structured business rules can describe transformations declaratively instead
+  of burying them in ad hoc string manipulation.
 
-## Refal in the Age of AI
-
-Large language models are extraordinary at *generating* structure — code, tool calls, JSON, plans — but they are probabilistic by construction. They cannot, on their own, *guarantee* that a piece of generated structure obeys a rule, terminates, or is even well-formed. That gap between "an LLM produced something plausible" and "a system can verify it is correct" is one of the central engineering problems of building reliable AI systems in 2026, and it is exactly the gap a deterministic rewriting engine is built to close.
-
-This is where Refal's design turns out to be unexpectedly well-suited to the current moment, rather than in spite of its age:
-
-- **LLM outputs are symbolic expressions.** Tool calls, function-call arguments, ASTs, and structured JSON payloads are all, at bottom, nested symbolic terms — precisely the data shape Refal's `e.`/`t.`/`s.` pattern matching was designed to consume. A Refal-style rewriting layer can sit downstream of an LLM and deterministically check, normalize, or reject generated structure, with every accepted or rejected case traceable to a named rule rather than a black-box score.
-- **Neuro-symbolic architectures are the direction the field is moving.** There's growing industry interest in pairing LLMs with deterministic verifiers, constrained decoders, and symbolic guardrails — using the model for generation and reasoning, and a separate, auditable rule-based layer for correctness and safety checks. Refal is a natural implementation substrate for that verifier layer: small, deterministic, side-effect-explicit, and easy to reason about function-by-function.
-- **Auditability matters more as AI autonomy grows.** As more code and infrastructure gets generated or modified by AI agents, teams need a way to check that generated output actually satisfies a contract — not just that it "looks right" to another model. A rewriting engine gives you exactly that: every transformation traces back to a rule you can point to, read, and test in isolation, which is a very different guarantee than another layer of probabilistic scoring.
-- **Metaprogramming was Refal's original purpose.** It was built to write compilers and transform programs. That is precisely the job description of the tooling now being built *around* AI coding agents — normalizing generated code, rewriting between intermediate representations, and enforcing structural invariants on machine-written output.
-
-None of this requires believing Refal will become mainstream infrastructure at frontier labs. It requires noticing that the shape of the problem — verifying and transforming symbolic structure that a probabilistic system produced — is exactly the shape of problem Refal was built to solve six decades before anyone needed it for this reason. That is the case for learning it now: not nostalgia, but timing.
+In the current AI era, this distinction matters. Neural models are powerful at
+generation and pattern discovery, but production systems still need reliable
+symbolic checks, deterministic transformations, auditable rules, and safe
+execution boundaries. Refal is not a replacement for machine learning; it is a
+complementary tool for the exact, inspectable part of intelligent software.
 
 ---
 
@@ -115,7 +124,7 @@ The project starts with a robust bootstrap front end written in Rust and grows t
 | 2 | Classic Refal-5 front end | ✅ Complete | Lexer/parser coverage for Classic syntax, source spans, diagnostics, examples, and golden tests |
 | 3 | Semantic checker | ✅ Complete | Entry validation, declarations, Classic name equivalence, call checks, variable binding, condition legality, and semantic audit |
 | 4 | Runtime and interpreter | 🔶 Active | Object-expression runtime, `s.`, `t.`, `e.` matching, backtracking, repeated variables, conditions, `Prout`, CLI input, recursion-depth protection, condition-aware backtracking, and runtime conformance examples |
-| 5 | Core Refal lowering | 🔷 Planned | Normalize checked Refal into documented Core Refal with stable formatting and source maps |
+| 5 | Core Refal lowering | 🔶 Active | Normalized source-mapped Core Refal model, deterministic formatting, and `lower` CLI command; backend-oriented IR remains |
 | 6 | Production backend | 🔷 Planned | Generate practical executable code and prove backend output against interpreter behavior |
 | 7 | Self-hosting track | 🔷 Later | Rebuild selected compiler components in Refal after the production toolchain is stable |
 
@@ -127,7 +136,8 @@ The project starts with a robust bootstrap front end written in Rust and grows t
 | `refal-syntax` | 2 | ✅ Complete for the current Classic Refal-5 frontend scope |
 | `refal-semantics` | 3 | ✅ Complete for the current frontend/runtime legality scope |
 | `refal-runtime` | 4 | 🔶 Active implementation |
-| `refal-cli` | 1-4 | 🔶 Usable bootstrap CLI: `check`, `dump-ast`, `run`, help output, diagnostics, and runtime examples |
+| `refal-core` | 5 | 🔶 Source-mapped normalized Core Refal model and deterministic formatter |
+| `refal-cli` | 1-5 | 🔶 Usable bootstrap CLI: `check`, `dump-ast`, `lower`, `run`, help output, diagnostics, and runtime examples |
 | CI and quality gates | 1+ | ✅ `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and `cargo test` |
 
 ---
@@ -141,7 +151,8 @@ REFAL-5-COMPILER/
 │   ├── refal-syntax/     # Lexer and parser
 │   ├── refal-semantics/  # Semantic checker
 │   ├── refal-runtime/    # Runtime support layer
-│   └── refal-cli/        # Command-line interface (check, dump-ast, run)
+│   ├── refal-core/       # Normalized Core Refal representation and formatter
+│   └── refal-cli/        # Command-line interface (check, dump-ast, lower, run)
 ├── examples/             # Sample .ref programs
 ├── docs/
 │   ├── ARCHITECTURE.md   # Crate structure and design decisions
@@ -197,6 +208,9 @@ cargo run -p refal -- check examples/hello.ref
 # Dump the parsed AST in a human-readable format
 cargo run -p refal -- dump-ast examples/hello.ref
 
+# Lower checked source into normalized Core Refal text
+cargo run -p refal -- lower examples/hello.ref
+
 # Run a .ref program (interpreter — initial stage)
 cargo run -p refal -- run examples/hello.ref
 
@@ -205,9 +219,6 @@ cargo run -p refal -- run examples/identity.ref "Hello Refal"
 
 # Run a condition-matching interpreter smoke test
 cargo run -p refal -- run examples/runtime-condition.ref
-
-# Match and unwrap a structural bracket passed from the command line
-cargo run -p refal -- run examples/runtime-bracket.ref Bracket
 ```
 
 The CLI and interpreter are at an initial stage. Not all Refal-5 programs will execute correctly yet. See the [frontend coverage matrix](docs/FRONTEND-COVERAGE.md) for what is currently supported.

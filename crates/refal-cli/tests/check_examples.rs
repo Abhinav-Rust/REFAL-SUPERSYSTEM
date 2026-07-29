@@ -284,6 +284,25 @@ fn runs_program_with_command_line_input_and_prints_result() {
 }
 
 #[test]
+fn lowers_checked_source_to_normalized_core_refal() {
+    let output = Command::new(refal_bin())
+        .args(["lower", &workspace_path("examples/hello.ref")])
+        .output()
+        .expect("run refal binary");
+
+    assert!(
+        output.status.success(),
+        "lower should pass\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "$EXTERN Prout;\n\n$ENTRY Go {\n  = <Prout 'H' 'e' 'l' 'l' 'o' ',' ' ' 'R' 'e' 'f' 'a' 'l'>;\n}\n\n"
+    );
+}
+
+#[test]
 fn runs_runtime_conformance_examples() {
     for (path, args, expected_stdout) in [
         ("examples/hello.ref", &[] as &[&str], "Hello, Refal\n"),

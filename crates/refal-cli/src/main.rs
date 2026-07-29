@@ -73,6 +73,10 @@ fn main() {
     match command.as_str() {
         "check" => println!("{path}: check ok"),
         "dump-ast" => println!("{program:#?}"),
+        "lower" => println!(
+            "{}",
+            refal_core::format_program(&refal_core::lower_program(&program))
+        ),
         "run" => run_program(&program, &input_args),
         other => {
             eprintln!("unknown command `{other}`");
@@ -89,6 +93,7 @@ fn print_usage() {
     eprintln!("Commands:");
     eprintln!("  check      Check a Refal source file for syntax and semantic errors");
     eprintln!("  dump-ast   Print the parsed AST");
+    eprintln!("  lower      Lower checked Refal source to normalized Core Refal");
     eprintln!("  run        Run a Refal source file with the bootstrap interpreter");
 }
 

@@ -8,6 +8,7 @@ authors.workspace = true
 
 [dependencies]
 refal-ast = { path = "../refal-ast" }
+refal-core = { path = "../refal-core" }
 refal-runtime = { path = "../refal-runtime" }
 refal-semantics = { path = "../refal-semantics" }
 refal-syntax = { path = "../refal-syntax" }
