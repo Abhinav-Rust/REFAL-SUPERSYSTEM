@@ -79,6 +79,7 @@ Completed so far:
 - Classic identifier equivalence for functions and built-ins.
 - CLI runtime conformance examples for output, command-line input, external
   spelling equivalence, and conditions.
+- CLI runtime conformance example for recursive expression transformation.
 
 ## Milestone 5: Core Refal Lowering
 
@@ -98,6 +99,8 @@ Completed so far:
 - Rebuild compiler components in Refal.
 - Compile compiler sources through the toolchain.
 - Maintain Rust bootstrap as a verification harness.
+
+This milestone is part of the project's 100% Refal-first completion target.
 
 ## Quality Bar
 
