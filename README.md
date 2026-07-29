@@ -205,6 +205,9 @@ cargo run -p refal -- run examples/identity.ref "Hello Refal"
 
 # Run a condition-matching interpreter smoke test
 cargo run -p refal -- run examples/runtime-condition.ref
+
+# Match and unwrap a structural bracket passed from the command line
+cargo run -p refal -- run examples/runtime-bracket.ref Bracket
 ```
 
 The CLI and interpreter are at an initial stage. Not all Refal-5 programs will execute correctly yet. See the [frontend coverage matrix](docs/FRONTEND-COVERAGE.md) for what is currently supported.
