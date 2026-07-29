@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added `Print`, `Explode`, and `Implode` bootstrap runtime built-ins with CLI
+  conformance coverage.
 - Added `refal lower --output` for writing normalized Core Refal to a file.
 - Proved normalized Core Refal output round-trips through the checker and made
   quote formatting safe for the supported lexer syntax.

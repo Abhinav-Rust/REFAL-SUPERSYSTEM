@@ -18,6 +18,7 @@ const DEFAULT_MAX_CALL_DEPTH: usize = 1_024;
 pub enum EvalError {
     FunctionNotFound(String),
     ExternalFunctionNotImplemented(String),
+    InvalidBuiltinArguments { name: String, message: String },
     NoMatchingSentence(String),
     RecursionLimitExceeded { function: String, limit: usize },
     UnboundVariable(String),
@@ -32,6 +33,12 @@ impl fmt::Display for EvalError {
                 write!(
                     formatter,
                     "external function `{name}` is declared but not implemented by the runtime"
+                )
+            }
+            Self::InvalidBuiltinArguments { name, message } => {
+                write!(
+                    formatter,
+                    "invalid arguments for built-in `{name}`: {message}"
                 )
             }
             Self::NoMatchingSentence(name) => {
@@ -171,6 +178,12 @@ impl<'a> Evaluator<'a> {
                 self.output.borrow_mut().push(args.to_vec());
                 Some(Ok(Vec::new()))
             }
+            "PRINT" => {
+                self.output.borrow_mut().push(args.to_vec());
+                Some(Ok(args.to_vec()))
+            }
+            "EXPLODE" => Some(explode(args)),
+            "IMPLODE" => Some(implode(args)),
             _ => None,
         }
     }
@@ -235,6 +248,59 @@ impl<'a> Evaluator<'a> {
         }
         Ok(output)
     }
+}
+
+fn explode(args: &[Value]) -> Result<Vec<Value>, EvalError> {
+    let [Value::Identifier(identifier)] = args else {
+        return Err(invalid_builtin_arguments(
+            "Explode",
+            "expected exactly one identifier",
+        ));
+    };
+
+    Ok(identifier.chars().map(Value::Char).collect())
+}
+
+fn implode(args: &[Value]) -> Result<Vec<Value>, EvalError> {
+    let Some(identifier) = args
+        .iter()
+        .map(|value| match value {
+            Value::Char(ch) => Some(*ch),
+            Value::Identifier(_) | Value::Number(_) | Value::Bracket(_) => None,
+        })
+        .collect::<Option<String>>()
+    else {
+        return Err(invalid_builtin_arguments(
+            "Implode",
+            "expected an expression made only of character symbols",
+        ));
+    };
+
+    if is_classic_identifier(&identifier) {
+        Ok(vec![Value::Identifier(identifier)])
+    } else {
+        let mut result = vec![Value::Number("0".to_string())];
+        result.extend_from_slice(args);
+        Ok(result)
+    }
+}
+
+fn invalid_builtin_arguments(name: &str, message: &str) -> EvalError {
+    EvalError::InvalidBuiltinArguments {
+        name: name.to_string(),
+        message: message.to_string(),
+    }
+}
+
+fn is_classic_identifier(identifier: &str) -> bool {
+    let mut chars = identifier.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+
+    first.is_ascii_uppercase()
+        && identifier.chars().count() <= 15
+        && chars.all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-'))
 }
 
 fn eval_symbol(symbol: &Symbol) -> Value {
@@ -445,6 +511,82 @@ mod tests {
             vec![]
         );
         assert_eq!(evaluator.captured_output(), vec![vec![Value::Char('A')]]);
+    }
+
+    #[test]
+    fn print_builtin_captures_output_and_returns_its_argument() {
+        let sentence = Sentence {
+            pattern: vec![],
+            conditions: vec![],
+            result: vec![call(
+                "Print",
+                vec![term(TermKind::Symbol(Symbol::Char('A')))],
+            )],
+            span: span(),
+        };
+        let program = program(vec![function("Go", Visibility::Entry, vec![sentence])]);
+        let evaluator = Evaluator::new(&program);
+
+        assert_eq!(
+            evaluator.evaluate_entry(&[]).unwrap(),
+            vec![Value::Char('A')]
+        );
+        assert_eq!(evaluator.captured_output(), vec![vec![Value::Char('A')]]);
+    }
+
+    #[test]
+    fn explodes_and_implodes_classic_identifiers() {
+        let explode_sentence = Sentence {
+            pattern: vec![],
+            conditions: vec![],
+            result: vec![call(
+                "Explode",
+                vec![term(TermKind::Symbol(Symbol::Identifier(
+                    "Hello-5".to_string(),
+                )))],
+            )],
+            span: span(),
+        };
+        let implode_sentence = Sentence {
+            pattern: vec![],
+            conditions: vec![],
+            result: vec![call(
+                "Implode",
+                "World"
+                    .chars()
+                    .map(|ch| term(TermKind::Symbol(Symbol::Char(ch))))
+                    .collect(),
+            )],
+            span: span(),
+        };
+        let program = program(vec![
+            function("Go", Visibility::Entry, vec![explode_sentence]),
+            function("Build", Visibility::Local, vec![implode_sentence]),
+        ]);
+        let evaluator = Evaluator::new(&program);
+
+        assert_eq!(
+            evaluator.evaluate_entry(&[]).unwrap(),
+            "Hello-5".chars().map(Value::Char).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            evaluator.evaluate_function("Build", &[]).unwrap(),
+            vec![Value::Identifier("World".to_string())]
+        );
+    }
+
+    #[test]
+    fn implode_returns_zero_and_original_expression_for_non_identifier_text() {
+        let result = implode(&[Value::Char('1'), Value::Char('x')]).unwrap();
+
+        assert_eq!(
+            result,
+            vec![
+                Value::Number("0".to_string()),
+                Value::Char('1'),
+                Value::Char('x')
+            ]
+        );
     }
 
     #[test]

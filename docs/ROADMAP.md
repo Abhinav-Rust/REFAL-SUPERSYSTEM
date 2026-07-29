@@ -76,6 +76,8 @@ Completed so far:
 - Result expression evaluation and nested function calls.
 - Condition evaluation with rollback to later sentences.
 - `Prout` built-in output capture.
+- `Print`, `Explode`, and `Implode` built-ins with Classic-compatible output
+  and identifier conversion behavior.
 - Classic identifier equivalence for functions and built-ins.
 - CLI runtime conformance examples for output, command-line input, external
   spelling equivalence, and conditions.
