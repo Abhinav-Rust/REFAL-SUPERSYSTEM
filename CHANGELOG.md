@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added a recursive runtime conformance example and made Refal-authored
+  self-hosting part of the project's 100% completion target.
 - Reworked the README project status section into a milestone-ordered progress
   tracker with a separate component map.
 - Added `cargo clippy --all-targets -- -D warnings` to CI and documented the
