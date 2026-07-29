@@ -80,6 +80,8 @@ Completed so far:
 - CLI runtime conformance examples for output, command-line input, external
   spelling equivalence, and conditions.
 - CLI runtime conformance example for recursive expression transformation.
+- CLI runtime conformance example for matching and unwrapping a structural
+  bracket supplied through the command line.
 
 ## Milestone 5: Core Refal Lowering
 
