@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Proved normalized Core Refal output round-trips through the checker and made
+  quote formatting safe for the supported lexer syntax.
 - Started Core Refal lowering with a source-mapped normalized representation,
   deterministic formatter, and `refal lower` CLI command.
 - Added condition-aware expression backtracking to the bootstrap interpreter.

@@ -124,7 +124,7 @@ The project starts with a robust bootstrap front end written in Rust and grows t
 | 2 | Classic Refal-5 front end | ✅ Complete | Lexer/parser coverage for Classic syntax, source spans, diagnostics, examples, and golden tests |
 | 3 | Semantic checker | ✅ Complete | Entry validation, declarations, Classic name equivalence, call checks, variable binding, condition legality, and semantic audit |
 | 4 | Runtime and interpreter | 🔶 Active | Object-expression runtime, `s.`, `t.`, `e.` matching, backtracking, repeated variables, conditions, `Prout`, CLI input, recursion-depth protection, condition-aware backtracking, and runtime conformance examples |
-| 5 | Core Refal lowering | 🔶 Active | Normalized source-mapped Core Refal model, deterministic formatting, and `lower` CLI command; backend-oriented IR remains |
+| 5 | Core Refal lowering | 🔶 Active | Normalized source-mapped Core Refal model, deterministic round-trip-safe formatting, and `lower` CLI command; backend-oriented IR remains |
 | 6 | Production backend | 🔷 Planned | Generate practical executable code and prove backend output against interpreter behavior |
 | 7 | Self-hosting track | 🔷 Later | Rebuild selected compiler components in Refal after the production toolchain is stable |
 
@@ -136,7 +136,7 @@ The project starts with a robust bootstrap front end written in Rust and grows t
 | `refal-syntax` | 2 | ✅ Complete for the current Classic Refal-5 frontend scope |
 | `refal-semantics` | 3 | ✅ Complete for the current frontend/runtime legality scope |
 | `refal-runtime` | 4 | 🔶 Active implementation |
-| `refal-core` | 5 | 🔶 Source-mapped normalized Core Refal model and deterministic formatter |
+| `refal-core` | 5 | 🔶 Source-mapped normalized Core Refal model and round-trip-safe deterministic formatter |
 | `refal-cli` | 1-5 | 🔶 Usable bootstrap CLI: `check`, `dump-ast`, `lower`, `run`, help output, diagnostics, and runtime examples |
 | CI and quality gates | 1+ | ✅ `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and `cargo test` |
 

@@ -1,4 +1,8 @@
-use std::process::Command;
+use std::{
+    env, fs,
+    process::{self, Command},
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 fn refal_bin() -> &'static str {
     env!("CARGO_BIN_EXE_refal")
@@ -299,6 +303,45 @@ fn lowers_checked_source_to_normalized_core_refal() {
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
         "$EXTERN Prout;\n\n$ENTRY Go {\n  = <Prout 'H' 'e' 'l' 'l' 'o' ',' ' ' 'R' 'e' 'f' 'a' 'l'>;\n}\n\n"
+    );
+}
+
+#[test]
+fn lowered_output_round_trips_through_the_checker() {
+    let lowered = Command::new(refal_bin())
+        .args(["lower", &workspace_path("examples/classic-syntax.ref")])
+        .output()
+        .expect("lower classic syntax example");
+    assert!(
+        lowered.status.success(),
+        "lower should pass\nstderr:\n{}",
+        String::from_utf8_lossy(&lowered.stderr)
+    );
+
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock is after Unix epoch")
+        .as_nanos();
+    let lowered_path = env::temp_dir().join(format!(
+        "refal-core-roundtrip-{}-{unique}.ref",
+        process::id()
+    ));
+    fs::write(&lowered_path, &lowered.stdout).expect("write lowered source");
+
+    let checked = Command::new(refal_bin())
+        .args([
+            "check",
+            lowered_path.to_str().expect("temporary path is UTF-8"),
+        ])
+        .output()
+        .expect("check lowered source");
+    fs::remove_file(&lowered_path).expect("remove temporary lowered source");
+
+    assert!(
+        checked.status.success(),
+        "lowered output should check\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&checked.stdout),
+        String::from_utf8_lossy(&checked.stderr)
     );
 }
 

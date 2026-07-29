@@ -175,13 +175,10 @@ fn format_terms(terms: &[CoreTerm], output: &mut String) {
 fn format_term(term: &CoreTerm, output: &mut String) {
     match &term.kind {
         CoreTermKind::Char(ch) => {
-            output.push('\'');
-            match ch {
-                '\\' => output.push_str("\\\\"),
-                '\'' => output.push_str("\\'"),
-                other => output.push(*other),
-            }
-            output.push('\'');
+            let delimiter = if *ch == '\'' { '"' } else { '\'' };
+            output.push(delimiter);
+            output.push(*ch);
+            output.push(delimiter);
         }
         CoreTermKind::Identifier(name) | CoreTermKind::Number(name) => output.push_str(name),
         CoreTermKind::Variable { kind, name } => {
@@ -283,5 +280,34 @@ mod tests {
             format_program(&core),
             "$EXTERN Prout;\n\n$ENTRY Go {\n  =;\n}\n"
         );
+    }
+
+    #[test]
+    fn formats_quote_characters_with_the_opposite_delimiter() {
+        let core = CoreProgram {
+            declarations: vec![],
+            functions: vec![CoreFunction {
+                name: "Go".to_string(),
+                visibility: Visibility::Entry,
+                sentences: vec![CoreSentence {
+                    pattern: vec![],
+                    conditions: vec![],
+                    result: vec![
+                        CoreTerm {
+                            kind: CoreTermKind::Char('\''),
+                            span: span(),
+                        },
+                        CoreTerm {
+                            kind: CoreTermKind::Char('\\'),
+                            span: span(),
+                        },
+                    ],
+                    span: span(),
+                }],
+                span: span(),
+            }],
+        };
+
+        assert_eq!(format_program(&core), "$ENTRY Go {\n  = \"'\" '\\';\n}\n");
     }
 }
