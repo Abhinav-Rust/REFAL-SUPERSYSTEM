@@ -21,7 +21,10 @@ pub enum MatchError {
 }
 
 pub fn match_pattern(pattern: &[Term], input: &[Value]) -> Result<Bindings, MatchError> {
-    match_pattern_with_bindings(pattern, input, Bindings::new())
+    match_pattern_candidates(pattern, input)?
+        .into_iter()
+        .next()
+        .ok_or(MatchError::NoMatch)
 }
 
 pub fn match_pattern_with_bindings(
@@ -29,48 +32,78 @@ pub fn match_pattern_with_bindings(
     input: &[Value],
     bindings: Bindings,
 ) -> Result<Bindings, MatchError> {
-    match_from(pattern, input, bindings)
+    match_pattern_with_bindings_candidates(pattern, input, bindings)?
+        .into_iter()
+        .next()
+        .ok_or(MatchError::NoMatch)
 }
 
-fn match_from(
+pub fn match_pattern_candidates(
+    pattern: &[Term],
+    input: &[Value],
+) -> Result<Vec<Bindings>, MatchError> {
+    match_pattern_with_bindings_candidates(pattern, input, Bindings::new())
+}
+
+pub fn match_pattern_with_bindings_candidates(
     pattern: &[Term],
     input: &[Value],
     bindings: Bindings,
-) -> Result<Bindings, MatchError> {
+) -> Result<Vec<Bindings>, MatchError> {
+    let candidates = match_all_from(pattern, input, bindings)?;
+    if candidates.is_empty() {
+        Err(MatchError::NoMatch)
+    } else {
+        Ok(candidates)
+    }
+}
+
+fn match_all_from(
+    pattern: &[Term],
+    input: &[Value],
+    bindings: Bindings,
+) -> Result<Vec<Bindings>, MatchError> {
     let Some((first, rest_pattern)) = pattern.split_first() else {
         return if input.is_empty() {
-            Ok(bindings)
+            Ok(vec![bindings])
         } else {
-            Err(MatchError::NoMatch)
+            Ok(Vec::new())
         };
     };
 
     match &first.kind {
         TermKind::Symbol(symbol) => {
             let Some((first_input, rest_input)) = input.split_first() else {
-                return Err(MatchError::NoMatch);
+                return Ok(Vec::new());
             };
             if symbol_matches(symbol, first_input) {
-                match_from(rest_pattern, rest_input, bindings)
+                match_all_from(rest_pattern, rest_input, bindings)
             } else {
-                Err(MatchError::NoMatch)
+                Ok(Vec::new())
             }
         }
         TermKind::Bracket(inner_pattern) => {
             let Some((Value::Bracket(inner_input), rest_input)) = input.split_first() else {
-                return Err(MatchError::NoMatch);
+                return Ok(Vec::new());
             };
-            let bindings = match_from(inner_pattern, inner_input, bindings)?;
-            match_from(rest_pattern, rest_input, bindings)
+            let mut candidates = Vec::new();
+            for inner_bindings in match_all_from(inner_pattern, inner_input, bindings)? {
+                candidates.extend(match_all_from(rest_pattern, rest_input, inner_bindings)?);
+            }
+            Ok(candidates)
         }
         TermKind::Variable(variable) => match variable.kind {
             VariableKind::Symbol => {
-                match_single(variable, input, rest_pattern, bindings, |value| {
+                match_single_all(variable, input, rest_pattern, bindings, |value| {
                     !matches!(value, Value::Bracket(_))
                 })
             }
-            VariableKind::Term => match_single(variable, input, rest_pattern, bindings, |_| true),
-            VariableKind::Expression => match_expression(variable, input, rest_pattern, bindings),
+            VariableKind::Term => {
+                match_single_all(variable, input, rest_pattern, bindings, |_| true)
+            }
+            VariableKind::Expression => {
+                match_expression_all(variable, input, rest_pattern, bindings)
+            }
         },
         TermKind::Call { .. } => Err(MatchError::CallsAreNotPatterns),
     }
@@ -85,49 +118,51 @@ fn symbol_matches(symbol: &Symbol, value: &Value) -> bool {
     }
 }
 
-fn match_single(
+fn match_single_all(
     variable: &Variable,
     input: &[Value],
     rest_pattern: &[Term],
     bindings: Bindings,
     accepts: impl Fn(&Value) -> bool,
-) -> Result<Bindings, MatchError> {
+) -> Result<Vec<Bindings>, MatchError> {
     let Some((first_input, rest_input)) = input.split_first() else {
-        return Err(MatchError::NoMatch);
+        return Ok(Vec::new());
     };
     if !accepts(first_input) {
-        return Err(MatchError::NoMatch);
+        return Ok(Vec::new());
     }
 
     let key = VariableKey::from(variable);
     let value = vec![first_input.clone()];
-    let bindings = bind_or_check(bindings, key, value)?;
-    match_from(rest_pattern, rest_input, bindings)
+    let Ok(bindings) = bind_or_check(bindings, key, value) else {
+        return Ok(Vec::new());
+    };
+    match_all_from(rest_pattern, rest_input, bindings)
 }
 
-fn match_expression(
+fn match_expression_all(
     variable: &Variable,
     input: &[Value],
     rest_pattern: &[Term],
     bindings: Bindings,
-) -> Result<Bindings, MatchError> {
+) -> Result<Vec<Bindings>, MatchError> {
     let key = VariableKey::from(variable);
     if let Some(bound) = bindings.get(&key) {
         if input.starts_with(bound) {
-            return match_from(rest_pattern, &input[bound.len()..], bindings);
+            return match_all_from(rest_pattern, &input[bound.len()..], bindings);
         }
-        return Err(MatchError::NoMatch);
+        return Ok(Vec::new());
     }
 
+    let mut candidates = Vec::new();
     for split in 0..=input.len() {
         let value = input[..split].to_vec();
-        let attempt = bind_or_check(bindings.clone(), key.clone(), value)?;
-        if let Ok(final_bindings) = match_from(rest_pattern, &input[split..], attempt) {
-            return Ok(final_bindings);
+        if let Ok(attempt) = bind_or_check(bindings.clone(), key.clone(), value) {
+            candidates.extend(match_all_from(rest_pattern, &input[split..], attempt)?);
         }
     }
 
-    Err(MatchError::NoMatch)
+    Ok(candidates)
 }
 
 fn bind_or_check(
@@ -266,6 +301,26 @@ mod tests {
                 name: "Right".to_string()
             }],
             vec![Value::Char('c')]
+        );
+    }
+
+    #[test]
+    fn returns_every_expression_split_that_matches_the_pattern() {
+        let pattern = vec![
+            var(VariableKind::Expression, "Left"),
+            var(VariableKind::Expression, "Right"),
+        ];
+        let input = vec![Value::Char('a'), Value::Char('b')];
+
+        let candidates = match_pattern_candidates(&pattern, &input).unwrap();
+
+        assert_eq!(candidates.len(), 3);
+        assert_eq!(
+            candidates[1][&VariableKey {
+                kind: VariableKind::Expression,
+                name: "Left".to_string()
+            }],
+            vec![Value::Char('a')]
         );
     }
 
