@@ -292,6 +292,7 @@ fn runs_runtime_conformance_examples() {
         ),
         ("examples/extern-equivalence.ref", &[] as &[&str], "Equiv\n"),
         ("examples/runtime-condition.ref", &[] as &[&str], "Y\n"),
+        ("examples/runtime-recursion.ref", &[] as &[&str], "cba\n"),
     ] {
         let output = run_file(path, args);
 
