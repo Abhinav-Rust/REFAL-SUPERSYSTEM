@@ -1,0 +1,9 @@
+$EXTERN Prout;
+
+$ENTRY Go {
+  = <Choose 'ab'>;
+}
+
+Choose {
+  e.Left e.Right, e.Left : 'a' = <Prout e.Right>;
+}
