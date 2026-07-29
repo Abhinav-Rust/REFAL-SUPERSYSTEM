@@ -102,6 +102,8 @@ Completed so far:
 - Deterministic normalized Core Refal formatter.
 - `refal lower <file.ref>` command, which runs syntax and semantic validation
   before emitting normalized source.
+- `refal lower <file.ref> --output <file.ref>` support for source-to-source
+  build pipelines.
 - Unit and CLI coverage for lowering and formatting, including a lowered-source
   round trip through the checker and quote-delimiter safety.
 

@@ -211,6 +211,9 @@ cargo run -p refal -- dump-ast examples/hello.ref
 # Lower checked source into normalized Core Refal text
 cargo run -p refal -- lower examples/hello.ref
 
+# Write normalized Core Refal source for a build pipeline
+cargo run -p refal -- lower examples/hello.ref --output build/hello.core.ref
+
 # Run a .ref program (interpreter — initial stage)
 cargo run -p refal -- run examples/hello.ref
 
@@ -222,6 +225,10 @@ cargo run -p refal -- run examples/runtime-condition.ref
 ```
 
 The CLI and interpreter are at an initial stage. Not all Refal-5 programs will execute correctly yet. See the [frontend coverage matrix](docs/FRONTEND-COVERAGE.md) for what is currently supported.
+
+`lower` writes normalized Core Refal to standard output by default. Pass
+`--output <file.ref>` (or `-o <file.ref>`) to write the generated source to a
+file for subsequent checking, versioning, or backend processing.
 
 For `run`, each extra command-line argument is passed to `$ENTRY` as a structural
 bracket term containing that argument's characters. A non-empty final expression

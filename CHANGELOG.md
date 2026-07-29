@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added `refal lower --output` for writing normalized Core Refal to a file.
 - Proved normalized Core Refal output round-trips through the checker and made
   quote formatting safe for the supported lexer syntax.
 - Started Core Refal lowering with a source-mapped normalized representation,

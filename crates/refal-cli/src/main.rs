@@ -73,10 +73,7 @@ fn main() {
     match command.as_str() {
         "check" => println!("{path}: check ok"),
         "dump-ast" => println!("{program:#?}"),
-        "lower" => println!(
-            "{}",
-            refal_core::format_program(&refal_core::lower_program(&program))
-        ),
+        "lower" => lower_program(&program, &input_args),
         "run" => run_program(&program, &input_args),
         other => {
             eprintln!("unknown command `{other}`");
@@ -95,6 +92,23 @@ fn print_usage() {
     eprintln!("  dump-ast   Print the parsed AST");
     eprintln!("  lower      Lower checked Refal source to normalized Core Refal");
     eprintln!("  run        Run a Refal source file with the bootstrap interpreter");
+}
+
+fn lower_program(program: &refal_ast::Program, args: &[String]) {
+    let output = refal_core::format_program(&refal_core::lower_program(program));
+    match args {
+        [] => print!("{output}"),
+        [flag, path] if flag == "--output" || flag == "-o" => {
+            if let Err(error) = fs::write(path, output) {
+                eprintln!("failed to write {path}: {error}");
+                process::exit(1);
+            }
+        }
+        _ => {
+            eprintln!("Usage: refal lower <file.ref> [--output <file.ref>]");
+            process::exit(2);
+        }
+    }
 }
 
 fn run_program(program: &refal_ast::Program, input_args: &[String]) {

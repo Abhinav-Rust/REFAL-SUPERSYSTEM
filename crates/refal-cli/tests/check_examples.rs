@@ -302,7 +302,39 @@ fn lowers_checked_source_to_normalized_core_refal() {
     );
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
-        "$EXTERN Prout;\n\n$ENTRY Go {\n  = <Prout 'H' 'e' 'l' 'l' 'o' ',' ' ' 'R' 'e' 'f' 'a' 'l'>;\n}\n\n"
+        "$EXTERN Prout;\n\n$ENTRY Go {\n  = <Prout 'H' 'e' 'l' 'l' 'o' ',' ' ' 'R' 'e' 'f' 'a' 'l'>;\n}\n"
+    );
+}
+
+#[test]
+fn writes_lowered_source_to_an_output_file() {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock is after Unix epoch")
+        .as_nanos();
+    let output_path =
+        env::temp_dir().join(format!("refal-lower-output-{}-{unique}.ref", process::id()));
+
+    let output = Command::new(refal_bin())
+        .args([
+            "lower",
+            &workspace_path("examples/hello.ref"),
+            "--output",
+            output_path.to_str().expect("temporary path is UTF-8"),
+        ])
+        .output()
+        .expect("lower source to output file");
+    assert!(
+        output.status.success(),
+        "lower should pass\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let lowered = fs::read_to_string(&output_path).expect("read lowered output file");
+    fs::remove_file(&output_path).expect("remove lowered output file");
+    assert_eq!(
+        lowered,
+        "$EXTERN Prout;\n\n$ENTRY Go {\n  = <Prout 'H' 'e' 'l' 'l' 'o' ',' ' ' 'R' 'e' 'f' 'a' 'l'>;\n}\n"
     );
 }
 
