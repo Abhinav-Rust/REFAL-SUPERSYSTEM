@@ -67,6 +67,7 @@ fn accepts_positive_examples() {
         "examples/extern-equivalence.ref",
         "examples/runtime-condition.ref",
         "examples/runtime-bracket.ref",
+        "examples/runtime-condition-backtracking.ref",
     ] {
         let output = check_file(path);
 
@@ -298,6 +299,11 @@ fn runs_runtime_conformance_examples() {
             "examples/runtime-bracket.ref",
             &["Bracket"] as &[&str],
             "Bracket\n",
+        ),
+        (
+            "examples/runtime-condition-backtracking.ref",
+            &[] as &[&str],
+            "b\n",
         ),
     ] {
         let output = run_file(path, args);
