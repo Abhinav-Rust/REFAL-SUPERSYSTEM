@@ -114,7 +114,7 @@ The project starts with a robust bootstrap front end written in Rust and grows t
 | 1 | Public-grade foundation | ✅ Complete | Rust workspace, repository layout, README, clean-room policy, MIT license, and CI baseline |
 | 2 | Classic Refal-5 front end | ✅ Complete | Lexer/parser coverage for Classic syntax, source spans, diagnostics, examples, and golden tests |
 | 3 | Semantic checker | ✅ Complete | Entry validation, declarations, Classic name equivalence, call checks, variable binding, condition legality, and semantic audit |
-| 4 | Runtime and interpreter | 🔶 Active | Object-expression runtime, `s.`, `t.`, `e.` matching, backtracking, repeated variables, conditions, `Prout`, CLI input, recursion-depth protection, and runtime conformance examples |
+| 4 | Runtime and interpreter | 🔶 Active | Object-expression runtime, `s.`, `t.`, `e.` matching, backtracking, repeated variables, conditions, `Prout`, CLI input, recursion-depth protection, condition-aware backtracking, and runtime conformance examples |
 | 5 | Core Refal lowering | 🔷 Planned | Normalize checked Refal into documented Core Refal with stable formatting and source maps |
 | 6 | Production backend | 🔷 Planned | Generate practical executable code and prove backend output against interpreter behavior |
 | 7 | Self-hosting track | 🔷 Later | Rebuild selected compiler components in Refal after the production toolchain is stable |
