@@ -74,6 +74,7 @@ fn accepts_positive_examples() {
         "examples/runtime-condition-backtracking.ref",
         "examples/runtime-symbol-builtins.ref",
         "examples/runtime-character-codes.ref",
+        "examples/runtime-number-builtins.ref",
     ] {
         let output = check_file(path);
 
@@ -410,6 +411,11 @@ fn runs_runtime_conformance_examples() {
             "examples/runtime-character-codes.ref",
             &[] as &[&str],
             "AZ\n",
+        ),
+        (
+            "examples/runtime-number-builtins.ref",
+            &[] as &[&str],
+            "42\n",
         ),
     ] {
         let output = run_file(path, args);

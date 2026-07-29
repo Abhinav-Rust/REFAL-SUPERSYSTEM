@@ -79,6 +79,8 @@ Completed so far:
 - `Print`, `Explode`, and `Implode` built-ins with Classic-compatible output
   and identifier conversion behavior.
 - `Ord` and `Chr` built-ins for character-code transformations.
+- `Numb` and `Symb` built-ins for arbitrary-length decimal character-string
+  conversion.
 - Classic identifier equivalence for functions and built-ins.
 - CLI runtime conformance examples for output, command-line input, external
   spelling equivalence, and conditions.

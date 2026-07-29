@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added `Numb` and `Symb` bootstrap runtime built-ins with decimal conversion
+  conformance coverage.
 - Added `Ord` and `Chr` bootstrap runtime built-ins with character-code
   conformance coverage.
 - Added `Print`, `Explode`, and `Implode` bootstrap runtime built-ins with CLI

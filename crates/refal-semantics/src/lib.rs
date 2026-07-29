@@ -4,7 +4,9 @@ use std::collections::{HashMap, HashSet};
 
 use refal_ast::{DeclarationKind, Item, Program, Span, Term, TermKind, VariableKind, Visibility};
 
-const SUPPORTED_RUNTIME_EXTERNS: &[&str] = &["CHR", "EXPLODE", "IMPLODE", "ORD", "PRINT", "PROUT"];
+const SUPPORTED_RUNTIME_EXTERNS: &[&str] = &[
+    "CHR", "EXPLODE", "IMPLODE", "NUMB", "ORD", "PRINT", "PROUT", "SYMB",
+];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Diagnostic {

@@ -233,9 +233,9 @@ file for subsequent checking, versioning, or backend processing.
 For `run`, each extra command-line argument is passed to `$ENTRY` as a structural
 bracket term containing that argument's characters. A non-empty final expression
 is printed after any captured output. The bootstrap runtime currently implements
-`Prout`, `Print`, `Explode`, `Implode`, `Ord`, and `Chr`; calls to other
-declared external functions are rejected by `check` until the runtime implements
-them.
+`Prout`, `Print`, `Explode`, `Implode`, `Ord`, `Chr`, `Numb`, and `Symb`; calls
+to other declared external functions are rejected by `check` until the runtime
+implements them.
 
 ---
 

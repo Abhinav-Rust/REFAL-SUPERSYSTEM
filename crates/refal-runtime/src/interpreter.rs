@@ -186,6 +186,8 @@ impl<'a> Evaluator<'a> {
             "IMPLODE" => Some(implode(args)),
             "CHR" => Some(Ok(chr(args))),
             "ORD" => Some(Ok(ord(args))),
+            "NUMB" => Some(numb(args)),
+            "SYMB" => Some(symb(args)),
             _ => None,
         }
     }
@@ -325,6 +327,60 @@ fn ord(args: &[Value]) -> Vec<Value> {
             Value::Identifier(_) | Value::Number(_) | Value::Bracket(_) => value.clone(),
         })
         .collect()
+}
+
+fn numb(args: &[Value]) -> Result<Vec<Value>, EvalError> {
+    let Some(digits) = args
+        .iter()
+        .map(|value| match value {
+            Value::Char(ch) if ch.is_ascii_digit() => Some(*ch),
+            Value::Char(_) | Value::Identifier(_) | Value::Number(_) | Value::Bracket(_) => None,
+        })
+        .collect::<Option<String>>()
+    else {
+        return Err(invalid_builtin_arguments(
+            "Numb",
+            "expected a non-empty character string of decimal digits",
+        ));
+    };
+
+    if digits.is_empty() {
+        return Err(invalid_builtin_arguments(
+            "Numb",
+            "expected a non-empty character string of decimal digits",
+        ));
+    }
+
+    Ok(vec![Value::Number(normalize_macrodigit(&digits))])
+}
+
+fn symb(args: &[Value]) -> Result<Vec<Value>, EvalError> {
+    let [Value::Number(number)] = args else {
+        return Err(invalid_builtin_arguments(
+            "Symb",
+            "expected exactly one non-negative integer macrodigit",
+        ));
+    };
+    if number.is_empty() || !number.chars().all(|ch| ch.is_ascii_digit()) {
+        return Err(invalid_builtin_arguments(
+            "Symb",
+            "expected exactly one non-negative integer macrodigit",
+        ));
+    }
+
+    Ok(normalize_macrodigit(number)
+        .chars()
+        .map(Value::Char)
+        .collect())
+}
+
+fn normalize_macrodigit(digits: &str) -> String {
+    let normalized = digits.trim_start_matches('0');
+    if normalized.is_empty() {
+        "0".to_string()
+    } else {
+        normalized.to_string()
+    }
 }
 
 fn eval_symbol(symbol: &Symbol) -> Value {
@@ -629,6 +685,18 @@ mod tests {
                 Value::Number("65".to_string()),
                 Value::Identifier("Name".to_string())
             ]
+        );
+    }
+
+    #[test]
+    fn converts_between_decimal_character_strings_and_macrodigits() {
+        assert_eq!(
+            numb(&[Value::Char('0'), Value::Char('0'), Value::Char('7')]).unwrap(),
+            vec![Value::Number("7".to_string())]
+        );
+        assert_eq!(
+            symb(&[Value::Number("00042".to_string())]).unwrap(),
+            vec![Value::Char('4'), Value::Char('2')]
         );
     }
 
