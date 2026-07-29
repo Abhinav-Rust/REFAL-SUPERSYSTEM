@@ -84,6 +84,8 @@ Completed so far:
 - `Type` built-in for inspecting the first object's Classic Refal category
   without consuming the expression.
 - Classic identifier equivalence for functions and built-ins.
+- User-defined function dispatch takes precedence over a built-in with the same
+  Classic-equivalent name.
 - CLI runtime conformance examples for output, command-line input, external
   spelling equivalence, and conditions.
 - CLI runtime conformance example for recursive expression transformation.

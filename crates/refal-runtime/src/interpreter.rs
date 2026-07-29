@@ -135,37 +135,37 @@ impl<'a> Evaluator<'a> {
             });
         }
 
+        let canonical = canonical_name(name);
+        if let Some(function) = self.functions.get(&canonical) {
+            for sentence in &function.sentences {
+                match match_pattern_candidates(&sentence.pattern, args) {
+                    Ok(pattern_candidates) => {
+                        for bindings in pattern_candidates {
+                            let condition_candidates =
+                                self.eval_conditions(&sentence.conditions, bindings, call_depth)?;
+                            if let Some(bindings) = condition_candidates.into_iter().next() {
+                                return self.eval_terms(&sentence.result, &bindings, call_depth);
+                            }
+                        }
+                    }
+                    Err(MatchError::NoMatch) => continue,
+                    Err(error) => return Err(EvalError::Match(error)),
+                }
+            }
+
+            return Err(EvalError::NoMatchingSentence(name.to_string()));
+        }
+
         if let Some(result) = self.evaluate_builtin(name, args) {
             return result;
         }
 
-        let canonical = canonical_name(name);
-        let Some(function) = self.functions.get(&canonical) else {
-            if let Some(extern_name) = self.externs.get(&canonical) {
-                return Err(EvalError::ExternalFunctionNotImplemented(
-                    extern_name.to_string(),
-                ));
-            }
-            return Err(EvalError::FunctionNotFound(name.to_string()));
-        };
-
-        for sentence in &function.sentences {
-            match match_pattern_candidates(&sentence.pattern, args) {
-                Ok(pattern_candidates) => {
-                    for bindings in pattern_candidates {
-                        let condition_candidates =
-                            self.eval_conditions(&sentence.conditions, bindings, call_depth)?;
-                        if let Some(bindings) = condition_candidates.into_iter().next() {
-                            return self.eval_terms(&sentence.result, &bindings, call_depth);
-                        }
-                    }
-                }
-                Err(MatchError::NoMatch) => continue,
-                Err(error) => return Err(EvalError::Match(error)),
-            }
+        if let Some(extern_name) = self.externs.get(&canonical) {
+            return Err(EvalError::ExternalFunctionNotImplemented(
+                extern_name.to_string(),
+            ));
         }
-
-        Err(EvalError::NoMatchingSentence(name.to_string()))
+        Err(EvalError::FunctionNotFound(name.to_string()))
     }
 
     fn evaluate_builtin(
@@ -634,6 +634,33 @@ mod tests {
             vec![Value::Char('A')]
         );
         assert_eq!(evaluator.captured_output(), vec![vec![Value::Char('A')]]);
+    }
+
+    #[test]
+    fn user_defined_function_overrides_a_builtin_name() {
+        let entry = Sentence {
+            pattern: vec![],
+            conditions: vec![],
+            result: vec![call("Print", vec![])],
+            span: span(),
+        };
+        let replacement = Sentence {
+            pattern: vec![],
+            conditions: vec![],
+            result: vec![term(TermKind::Symbol(Symbol::Char('U')))],
+            span: span(),
+        };
+        let program = program(vec![
+            function("Go", Visibility::Entry, vec![entry]),
+            function("Print", Visibility::Local, vec![replacement]),
+        ]);
+        let evaluator = Evaluator::new(&program);
+
+        assert_eq!(
+            evaluator.evaluate_entry(&[]).unwrap(),
+            vec![Value::Char('U')]
+        );
+        assert!(evaluator.captured_output().is_empty());
     }
 
     #[test]

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Made user-defined functions take precedence over bootstrap runtime built-ins
+  with the same Classic-equivalent name.
 - Added `Type` bootstrap runtime built-in with category-classification
   conformance coverage.
 - Added `Numb` and `Symb` bootstrap runtime built-ins with decimal conversion

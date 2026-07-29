@@ -235,7 +235,8 @@ bracket term containing that argument's characters. A non-empty final expression
 is printed after any captured output. The bootstrap runtime currently implements
 `Prout`, `Print`, `Explode`, `Implode`, `Ord`, `Chr`, `Numb`, `Symb`, and
 `Type`; calls to other declared external functions are rejected by `check` until
-the runtime implements them.
+the runtime implements them. A program-defined function takes precedence over a
+built-in with the same Classic-equivalent name.
 
 ---
 
