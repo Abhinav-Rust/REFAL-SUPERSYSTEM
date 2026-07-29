@@ -11,11 +11,14 @@ use crate::matcher::{
     Bindings, MatchError, VariableKey, match_pattern, match_pattern_with_bindings,
 };
 
+const DEFAULT_MAX_CALL_DEPTH: usize = 1_024;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EvalError {
     FunctionNotFound(String),
     ExternalFunctionNotImplemented(String),
     NoMatchingSentence(String),
+    RecursionLimitExceeded { function: String, limit: usize },
     UnboundVariable(String),
     Match(MatchError),
 }
@@ -32,6 +35,12 @@ impl fmt::Display for EvalError {
             }
             Self::NoMatchingSentence(name) => {
                 write!(formatter, "no sentence matched in function `{name}`")
+            }
+            Self::RecursionLimitExceeded { function, limit } => {
+                write!(
+                    formatter,
+                    "recursion limit of {limit} exceeded in function `{function}`"
+                )
             }
             Self::UnboundVariable(variable) => {
                 write!(formatter, "variable `{variable}` is not bound")
@@ -50,10 +59,15 @@ pub struct Evaluator<'a> {
     functions: HashMap<String, &'a Function>,
     externs: HashMap<String, String>,
     output: RefCell<Vec<Vec<Value>>>,
+    max_call_depth: usize,
 }
 
 impl<'a> Evaluator<'a> {
     pub fn new(program: &'a Program) -> Self {
+        Self::with_max_call_depth(program, DEFAULT_MAX_CALL_DEPTH)
+    }
+
+    pub fn with_max_call_depth(program: &'a Program, max_call_depth: usize) -> Self {
         let functions = program
             .items
             .iter()
@@ -76,6 +90,7 @@ impl<'a> Evaluator<'a> {
             functions,
             externs,
             output: RefCell::new(Vec::new()),
+            max_call_depth,
         }
     }
 
@@ -92,10 +107,26 @@ impl<'a> Evaluator<'a> {
             return Err(EvalError::FunctionNotFound("$ENTRY".to_string()));
         };
 
-        self.evaluate_function(&entry.name, args)
+        self.evaluate_function_at_depth(&entry.name, args, 0)
     }
 
     pub fn evaluate_function(&self, name: &str, args: &[Value]) -> Result<Vec<Value>, EvalError> {
+        self.evaluate_function_at_depth(name, args, 0)
+    }
+
+    fn evaluate_function_at_depth(
+        &self,
+        name: &str,
+        args: &[Value],
+        call_depth: usize,
+    ) -> Result<Vec<Value>, EvalError> {
+        if call_depth > self.max_call_depth {
+            return Err(EvalError::RecursionLimitExceeded {
+                function: name.to_string(),
+                limit: self.max_call_depth,
+            });
+        }
+
         if let Some(result) = self.evaluate_builtin(name, args) {
             return result;
         }
@@ -112,11 +143,15 @@ impl<'a> Evaluator<'a> {
 
         for sentence in &function.sentences {
             match match_pattern(&sentence.pattern, args) {
-                Ok(bindings) => match self.eval_conditions(&sentence.conditions, bindings) {
-                    Ok(bindings) => return self.eval_terms(&sentence.result, &bindings),
-                    Err(EvalError::Match(MatchError::NoMatch)) => continue,
-                    Err(error) => return Err(error),
-                },
+                Ok(bindings) => {
+                    match self.eval_conditions(&sentence.conditions, bindings, call_depth) {
+                        Ok(bindings) => {
+                            return self.eval_terms(&sentence.result, &bindings, call_depth);
+                        }
+                        Err(EvalError::Match(MatchError::NoMatch)) => continue,
+                        Err(error) => return Err(error),
+                    }
+                }
                 Err(MatchError::NoMatch) => continue,
                 Err(error) => return Err(EvalError::Match(error)),
             }
@@ -143,9 +178,10 @@ impl<'a> Evaluator<'a> {
         &self,
         conditions: &[Condition],
         mut bindings: Bindings,
+        call_depth: usize,
     ) -> Result<Bindings, EvalError> {
         for condition in conditions {
-            let condition_value = self.eval_terms(&condition.result, &bindings)?;
+            let condition_value = self.eval_terms(&condition.result, &bindings, call_depth)?;
             bindings = match_pattern_with_bindings(&condition.pattern, &condition_value, bindings)
                 .map_err(EvalError::Match)?;
         }
@@ -153,7 +189,12 @@ impl<'a> Evaluator<'a> {
         Ok(bindings)
     }
 
-    fn eval_terms(&self, terms: &[Term], bindings: &Bindings) -> Result<Vec<Value>, EvalError> {
+    fn eval_terms(
+        &self,
+        terms: &[Term],
+        bindings: &Bindings,
+        call_depth: usize,
+    ) -> Result<Vec<Value>, EvalError> {
         let mut output = Vec::new();
         for term in terms {
             match &term.kind {
@@ -162,11 +203,17 @@ impl<'a> Evaluator<'a> {
                     output.extend(resolve_variable(variable, bindings)?);
                 }
                 TermKind::Bracket(inner) => {
-                    output.push(Value::Bracket(self.eval_terms(inner, bindings)?));
+                    output.push(Value::Bracket(
+                        self.eval_terms(inner, bindings, call_depth)?,
+                    ));
                 }
                 TermKind::Call { name, args } => {
-                    let evaluated_args = self.eval_terms(args, bindings)?;
-                    output.extend(self.evaluate_function(name, &evaluated_args)?);
+                    let evaluated_args = self.eval_terms(args, bindings, call_depth)?;
+                    output.extend(self.evaluate_function_at_depth(
+                        name,
+                        &evaluated_args,
+                        call_depth + 1,
+                    )?);
                 }
             }
         }
@@ -458,5 +505,29 @@ mod tests {
         let error = EvalError::NoMatchingSentence("Go".to_string());
 
         assert_eq!(error.to_string(), "no sentence matched in function `Go`");
+    }
+
+    #[test]
+    fn reports_recursion_limit_instead_of_exhausting_the_process_stack() {
+        let loop_sentence = Sentence {
+            pattern: vec![var(VariableKind::Expression, "X")],
+            conditions: vec![],
+            result: vec![call("Loop", vec![var(VariableKind::Expression, "X")])],
+            span: span(),
+        };
+        let program = program(vec![function(
+            "Loop",
+            Visibility::Entry,
+            vec![loop_sentence],
+        )]);
+        let evaluator = Evaluator::with_max_call_depth(&program, 2);
+
+        assert_eq!(
+            evaluator.evaluate_entry(&[Value::Char('A')]),
+            Err(EvalError::RecursionLimitExceeded {
+                function: "Loop".to_string(),
+                limit: 2,
+            })
+        );
     }
 }
