@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added a CLI conformance example for matching structural bracket input.
 - Added a recursive runtime conformance example and made Refal-authored
   self-hosting part of the project's 100% completion target.
 - Reworked the README project status section into a milestone-ordered progress
