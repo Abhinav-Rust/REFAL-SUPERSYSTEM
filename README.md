@@ -125,7 +125,7 @@ Active work is runtime/interpreter hardening and Core Refal lowering. The fronte
 | 1 | Public-grade foundation | ✅ Complete | Rust workspace, repository layout, README, clean-room policy, MIT license, and CI baseline |
 | 2 | Classic Refal-5 front end | ✅ Complete | Lexer/parser coverage for Classic syntax, source spans, diagnostics, examples, and golden tests |
 | 3 | Semantic checker | ✅ Complete | Entry validation, declarations, Classic name equivalence, call checks, variable binding, condition legality, and semantic audit |
-| 4 | Runtime and interpreter | 🔶 Active / partial | Object-expression runtime, `s.`, `t.`, `e.` matching, backtracking, repeated variables, conditions, `Prout`, CLI input, recursion-depth protection, condition-aware backtracking, and runtime conformance examples |
+| 4 | Runtime and interpreter | 🔶 Active / partial | Object-expression runtime, `s.`, `t.`, `e.` matching, backtracking, repeated variables, conditions, `Prout`, CLI input, recursion-depth protection, condition-aware backtracking, and positive/negative runtime conformance examples |
 | 5 | Core Refal lowering | 🔶 Active / partial | Normalized source-mapped Core Refal model, deterministic round-trip-safe formatting, and `lower` CLI command; backend-oriented IR remains |
 | 6 | Production backend | ⬜ Not started | Generate practical executable code and prove backend output against interpreter behavior |
 | 7 | Self-hosting track | ⬜ Not started | Rebuild selected compiler components in Refal after the production toolchain is stable |
