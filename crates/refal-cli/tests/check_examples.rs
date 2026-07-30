@@ -433,6 +433,20 @@ fn runs_runtime_conformance_examples() {
 }
 
 #[test]
+fn reports_runtime_error_for_invalid_builtin_arguments() {
+    let output = run_file("examples/runtime-invalid-numb.ref", &[]);
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains(
+            "runtime error: invalid arguments for built-in \`Numb\`: expected a non-empty character string of decimal digits"
+        ),
+        "unexpected stderr:\n{stderr}"
+    );
+}
+
+#[test]
 fn reports_declared_but_unimplemented_external_during_check() {
     let output = Command::new(refal_bin())
         .args([
