@@ -116,9 +116,9 @@ The project starts with a robust bootstrap front end written in Rust and grows t
 
 ## Project Status
 
-**Current completion estimate: about 42% of the first production-grade toolchain.** Milestones 1, 2, and 3 are complete. Milestones 4 and 5 have working bootstrap implementations but remain incomplete; Milestone 6 (a production backend) and Milestone 7 (verified self-hosting) have not started. This repository is therefore a usable **bootstrap frontend, checker, interpreter, and source normalizer**—not yet a production compiler that emits executable code, and not yet self-hosting.
+**Current completion estimate: 38% of the Refal-first, self-hosting completion target.** Here, 100% means a Classic Refal-5 compiler implemented in Refal that emits Refal source and can compile its own compiler sources; Rust may remain only as a bootstrap and verification harness. Milestones 1, 2, and 3 are complete. Milestones 4 and 5 have working bootstrap implementations but remain incomplete; the Refal-written compiler and verified self-hosting stages have not started. This repository is therefore a usable **Rust bootstrap frontend, checker, interpreter, and source normalizer**—not yet a production compiler implemented in Refal.
 
-Active work is runtime/interpreter hardening and Core Refal lowering. The frontend completion contract is tracked in the [Classic Refal-5 frontend coverage matrix](docs/FRONTEND-COVERAGE.md), the semantic completion audit is recorded in [SEMANTIC-AUDIT.md](docs/SEMANTIC-AUDIT.md), and the full milestone plan is in the [Roadmap](docs/ROADMAP.md). The definition of the first production release is in [PRODUCTION-COMPLETION.md](docs/PRODUCTION-COMPLETION.md).
+Active work is runtime/interpreter hardening and Core Refal lowering. The frontend completion contract is tracked in the [Classic Refal-5 frontend coverage matrix](docs/FRONTEND-COVERAGE.md), the semantic completion audit is recorded in [SEMANTIC-AUDIT.md](docs/SEMANTIC-AUDIT.md), and the full milestone plan is in the [Roadmap](docs/ROADMAP.md). The definition, scorecard, and verification gates for the Refal-first target are in [REFAL-FIRST-COMPLETION.md](docs/REFAL-FIRST-COMPLETION.md).
 
 | # | Milestone | Status | Current Evidence |
 |---|---|---|---|
@@ -249,7 +249,7 @@ built-in with the same Classic-equivalent name.
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Crate design and compiler pipeline |
 | [ROADMAP.md](docs/ROADMAP.md) | Milestone plan and completion criteria |
 | [SEMANTIC-AUDIT.md](docs/SEMANTIC-AUDIT.md) | Milestone 3 semantic completion audit |
-| [PRODUCTION-COMPLETION.md](docs/PRODUCTION-COMPLETION.md) | Definition of the first production-grade release |
+| [REFAL-FIRST-COMPLETION.md](docs/REFAL-FIRST-COMPLETION.md) | Self-hosting completion contract, scorecard, and verification gates |
 | [FRONTEND-COVERAGE.md](docs/FRONTEND-COVERAGE.md) | Lexer/parser coverage tracking |
 | [LANGUAGE-SCOPE.md](docs/LANGUAGE-SCOPE.md) | Dialect features in and out of scope |
 | [CLEANROOM.md](docs/CLEANROOM.md) | Clean-room authorship policy |
