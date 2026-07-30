@@ -440,7 +440,7 @@ fn reports_runtime_error_for_invalid_builtin_arguments() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains(
-            "runtime error: invalid arguments for built-in \`Numb\`: expected a non-empty character string of decimal digits"
+            "runtime error: invalid arguments for built-in `Numb`: expected a non-empty character string of decimal digits"
         ),
         "unexpected stderr:\n{stderr}"
     );
