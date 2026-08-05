@@ -217,12 +217,16 @@ Native codegen (§4.7) if wanted, packaging, performance suite, compatibility st
 
 ## 5. Completion accounting
 
-Honest reset. The clarified goal added a workstream, so the denominator grew: **~18% today.**
+Honest reset. The clarified goal added a workstream, so the denominator grew. The figure
+also *fell* from an earlier published 38%, because that figure gave full credit to two
+milestones an audit then found to be Partial.
+
+**~19% today**, after the six conformance fixes in `641ffc0`.
 
 | Workstream | Weight | Now | After P1 | After P3 | After P5 |
 |---|---:|---:|---:|---:|---:|
-| Bootstrap frontend | 8.5% | 6.6 | 8.5 | 8.5 | 8.5 |
-| Bootstrap semantics | 6% | 4.3 | 6 | 6 | 6 |
+| Bootstrap frontend | 8.5% | 7.0 | 8.5 | 8.5 | 8.5 |
+| Bootstrap semantics | 6% | 5.0 | 6 | 6 | 6 |
 | Refal machine | 19.5% | 4.3 | 19.5 | 19.5 | 19.5 |
 | Graph of states / Refal emission | 8.5% | 2.1 | 2.1 | 8.5 | 8.5 |
 | Static verification | 15% | 0.8 | 1 | 13 | 13 |
@@ -245,17 +249,30 @@ Honest reset. The clarified goal added a workstream, so the denominator grew: **
 
 ---
 
-## 7. Decisions required from the the maintainer
+## 7. Decisions taken
 
-1. **Two-tier analysis** — Tier 1 decidable checks added on top of Turchin's Tier 2 graph. Approve?
-2. **`--classic` / `--strict` severity split** — strict checking never changes the language, only
-   diagnostics. Approve?
-3. **Graph of states replaces `refal-core`.** Approve?
-4. **Native codegen deferred until after self-hosting** (M6 ↔ M7 swap). Approve?
-5. **Milestones 2 and 3 reset to Partial** in the public docs. Approve?
-6. **Completion figure restated as ~18%** against the enlarged target. Approve?
-7. **Begin Phase 0 immediately** on approval.
+All seven were approved by the the maintainer on 2026-08-05.
 
-On approval I begin with Phase 0: the eight conformance fixes, the conformance corpus, the
-documentation reset, and the two design documents — `TURCHIN-ARCHITECTURE.md` and
-`VERIFICATION-CONTRACT.md` — for review before Phase 1 code begins.
+| # | Decision | Status |
+| ---: | --- | --- |
+| 1 | Tier 1 decidable checks added on top of Turchin's Tier 2 graph | Approved |
+| 2 | `--classic` / `--strict` severity split; strict checking never changes the language, only the diagnostics | Approved |
+| 3 | The graph of states replaces `refal-core` as the lowering | Approved |
+| 4 | Native code generation deferred until after self-hosting | Approved |
+| 5 | Milestones 2 and 3 reset to Partial in the public documentation | Approved |
+| 6 | Completion figure restated honestly against the enlarged target | Approved |
+| 7 | Phase 0 begins immediately | Approved, in progress |
+
+The maintainer holds standing authority to take judgement calls inside this
+direction without returning for approval. Anything that changes the *direction* — the
+language accepted, the published guarantee, or the order of the phases — comes back to the
+the maintainer first.
+
+## 8. Standing obligations
+
+- The README on the repository front page must always reflect both the vision and the
+  true state of progress. It is updated with every change that moves the status.
+- No status claim without a test. No milestone marked Complete before its conformance
+  rows are green.
+- Every language rule cites the clause of the Refal-5 reference it implements.
+- Every design decision traces to a cited section of a primary source in `docs/turchin/`.

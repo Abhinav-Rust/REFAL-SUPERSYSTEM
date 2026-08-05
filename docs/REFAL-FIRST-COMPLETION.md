@@ -53,17 +53,16 @@ verification harness; it must not contain the production compiler's logic.
 
 ## Quantitative Scorecard
 
-Superseded by the accounting in [`PLAN.md`](PLAN.md) section 5, which is kept current.
+The live accounting is [`PLAN.md`](PLAN.md) section 5. The published estimate is **~19%**.
 
-The published estimate is **~19%**. It decreased from an earlier 38% for two reasons,
-both deliberate:
+It went *down* from an earlier 38%, deliberately, for two reasons:
 
-- The earlier figure gave full credit to the Classic frontend and semantic checking.
-  An audit against the normative reference on 2026-08-05 found eight conformance
-  defects, including one that silently corrupted character strings and one that
-  rejected legal programs. Six are fixed; two remain open (#7, #13).
-- The completion target now includes the two verification tiers, so the denominator
-  grew.
+- The earlier figure gave full credit to the Classic frontend and to semantic checking.
+  An audit against the normative reference on 2026-08-05 found eight conformance defects,
+  including one that silently corrupted character strings and two that rejected legal
+  programs. Six are fixed in `641ffc0`; two remain open (#7, #13).
+- The completion target now includes the two verification tiers described in `PLAN.md`,
+  so the denominator grew.
 
 | Workstream | Weight | Credit |
 | --- | ---: | ---: |
@@ -79,5 +78,5 @@ both deliberate:
 
 ## Reporting Rule
 
-No figure in this document may be raised without a test or a gate that demonstrates the
-work. A milestone is Complete only when its conformance rows are green.
+No figure here may be raised without a test or a gate that demonstrates the work. A gate
+is Complete only when its conformance rows are green.
