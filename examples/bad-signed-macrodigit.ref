@@ -1,0 +1,6 @@
+* A sign is legal only on a real number, and a real number must contain a
+* decimal point or an exponent marker. Macrodigits are non-negative
+* (reference 1.2.2, 1.2.3).
+$ENTRY Go {
+  = -3;
+}

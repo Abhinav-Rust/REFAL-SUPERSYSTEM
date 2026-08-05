@@ -112,7 +112,9 @@ fn match_all_from(
 fn symbol_matches(symbol: &Symbol, value: &Value) -> bool {
     match (symbol, value) {
         (Symbol::Char(left), Value::Char(right)) => left == right,
-        (Symbol::Identifier(left), Value::Identifier(right)) => left == right,
+        (Symbol::Identifier(left), Value::Identifier(right)) => {
+            refal_ast::identifiers_equal(left, right)
+        }
         (Symbol::Number(left), Value::Number(right)) => left == right,
         _ => false,
     }
@@ -186,7 +188,9 @@ impl From<&Variable> for VariableKey {
     fn from(variable: &Variable) -> Self {
         Self {
             kind: variable.kind,
-            name: variable.name.clone(),
+            // Variable indices are case-insensitive (reference 1.3), so the key
+            // is canonical while the AST keeps the spelling for diagnostics.
+            name: refal_ast::canonical_variable_index(&variable.name),
         }
     }
 }
@@ -206,6 +210,15 @@ mod tests {
             kind: TermKind::Symbol(Symbol::Char(ch)),
             span: span(),
         }
+    }
+
+    /// Builds a binding key the way the matcher does, so tests exercise the same
+    /// canonicalisation rather than assuming a spelling.
+    fn key(kind: VariableKind, name: &str) -> VariableKey {
+        VariableKey::from(&Variable {
+            kind,
+            name: name.to_string(),
+        })
     }
 
     fn var(kind: VariableKind, name: &str) -> Term {
@@ -237,10 +250,7 @@ mod tests {
         let bindings =
             match_pattern(&[var(VariableKind::Symbol, "X")], &[Value::Char('A')]).unwrap();
         assert_eq!(
-            bindings[&VariableKey {
-                kind: VariableKind::Symbol,
-                name: "X".to_string()
-            }],
+            bindings[&key(VariableKind::Symbol, "X")],
             vec![Value::Char('A')]
         );
     }
@@ -264,13 +274,7 @@ mod tests {
             std::slice::from_ref(&input),
         )
         .unwrap();
-        assert_eq!(
-            bindings[&VariableKey {
-                kind: VariableKind::Term,
-                name: "X".to_string()
-            }],
-            vec![input]
-        );
+        assert_eq!(bindings[&key(VariableKind::Term, "X")], vec![input]);
     }
 
     #[test]
@@ -289,17 +293,11 @@ mod tests {
         let bindings = match_pattern(&pattern, &input).unwrap();
 
         assert_eq!(
-            bindings[&VariableKey {
-                kind: VariableKind::Expression,
-                name: "Left".to_string()
-            }],
+            bindings[&key(VariableKind::Expression, "Left")],
             vec![Value::Char('a'), Value::Char('b')]
         );
         assert_eq!(
-            bindings[&VariableKey {
-                kind: VariableKind::Expression,
-                name: "Right".to_string()
-            }],
+            bindings[&key(VariableKind::Expression, "Right")],
             vec![Value::Char('c')]
         );
     }
@@ -316,10 +314,7 @@ mod tests {
 
         assert_eq!(candidates.len(), 3);
         assert_eq!(
-            candidates[1][&VariableKey {
-                kind: VariableKind::Expression,
-                name: "Left".to_string()
-            }],
+            candidates[1][&key(VariableKind::Expression, "Left")],
             vec![Value::Char('a')]
         );
     }

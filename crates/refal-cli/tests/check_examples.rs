@@ -26,6 +26,25 @@ fn run_file(path: &str, args: &[&str]) -> std::process::Output {
     command.output().expect("run refal binary")
 }
 
+/// Checks a source string, for conformance cases too small to warrant an example
+/// file. The temporary file is removed before the assertion runs.
+fn check_source(source: &str) -> std::process::Output {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock after unix epoch")
+        .as_nanos();
+    let path = env::temp_dir().join(format!("refal-check-{}-{unique}.ref", process::id()));
+    fs::write(&path, source).expect("write temporary source");
+
+    let output = Command::new(refal_bin())
+        .args(["check", &path.to_string_lossy()])
+        .output()
+        .expect("run refal binary");
+
+    let _ = fs::remove_file(&path);
+    output
+}
+
 #[test]
 fn prints_help_without_requiring_input_file() {
     let output = Command::new(refal_bin())
@@ -76,6 +95,11 @@ fn accepts_positive_examples() {
         "examples/runtime-character-codes.ref",
         "examples/runtime-number-builtins.ref",
         "examples/runtime-type.ref",
+        "examples/multiple-entry.ref",
+        "examples/quote-escape.ref",
+        "examples/shorthand-variables.ref",
+        "examples/identifier-equivalence.ref",
+        "examples/variable-index-equivalence.ref",
     ] {
         let output = check_file(path);
 
@@ -96,13 +120,13 @@ fn rejects_negative_examples() {
         "examples/bad-lowercase-identifier.ref",
         "examples/bad-malformed-real.ref",
         "examples/bad-call-in-pattern.ref",
-        "examples/bad-multiple-entry.ref",
         "examples/bad-duplicate-function.ref",
         "examples/bad-duplicate-extern.ref",
         "examples/bad-variable-kind-conflict.ref",
         "examples/bad-condition-unbound-variable.ref",
         "examples/bad-missing-entry.ref",
         "examples/bad-empty-function.ref",
+        "examples/bad-signed-macrodigit.ref",
         "examples/runtime-unimplemented-extern.ref",
     ] {
         let output = check_file(path);
@@ -167,16 +191,122 @@ fn reports_line_and_column_for_pattern_call_error() {
 }
 
 #[test]
-fn reports_line_and_column_for_multiple_entry_error() {
-    let output = Command::new(refal_bin())
-        .args(["check", &workspace_path("examples/bad-multiple-entry.ref")])
-        .output()
-        .expect("run refal binary");
+fn accepts_several_exported_entry_functions() {
+    // `$ENTRY` marks a function as externally visible for linking and may appear
+    // on any number of definitions (reference 3).
+    let output = check_file("examples/multiple-entry.ref");
+
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn reports_a_program_without_a_go_entry_point() {
+    let output = check_file("examples/bad-missing-entry.ref");
 
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("semantic error at 5:1: program has more than one $ENTRY function"),
+        stderr.contains("program does not define a `Go` function to start from"),
+        "unexpected stderr:\n{stderr}"
+    );
+}
+
+#[test]
+fn requires_the_go_entry_point_to_be_exported() {
+    let output = check_source("Go {\n  =;\n}\n");
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("`Go` must be exported as `$ENTRY Go`"),
+        "unexpected stderr:\n{stderr}"
+    );
+}
+
+#[test]
+fn embeds_a_quote_by_doubling_it() {
+    let output = run_file("examples/quote-escape.ref", &[]);
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Jimmy's Pizza"),
+        "unexpected stdout:\n{stdout}"
+    );
+    // Both quote forms denote the same object, so the text appears twice.
+    assert_eq!(
+        stdout.matches("Jimmy's Pizza").count(),
+        2,
+        "stdout:\n{stdout}"
+    );
+}
+
+#[test]
+fn rejects_a_character_string_spanning_a_line_break() {
+    let output = check_source("$ENTRY Go {\n  = 'broken\n  text';\n}\n");
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("character string cannot span a line break"),
+        "unexpected stderr:\n{stderr}"
+    );
+}
+
+#[test]
+fn accepts_juxtaposed_one_character_variables() {
+    let output = run_file("examples/shorthand-variables.ref", &["abc"]);
+
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn folds_identifier_case_for_data_as_well_as_function_names() {
+    let output = run_file("examples/identifier-equivalence.ref", &[]);
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("identifier equivalence holds"),
+        "unexpected stdout:\n{stdout}"
+    );
+}
+
+#[test]
+fn folds_variable_index_case() {
+    // `e.X` and `e.x` denote the same Refal object (reference 1.3), and the
+    // equivalence also governs repeated-variable equality.
+    let output = run_file("examples/variable-index-equivalence.ref", &["refal"]);
+
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("refal"), "unexpected stdout:\n{stdout}");
+    assert!(
+        stdout.contains("repeated variable folded case"),
+        "unexpected stdout:\n{stdout}"
+    );
+}
+
+#[test]
+fn rejects_a_signed_macrodigit() {
+    let output = check_file("examples/bad-signed-macrodigit.ref");
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("a sign is only permitted on a real number"),
         "unexpected stderr:\n{stderr}"
     );
 }
@@ -237,18 +367,6 @@ fn reports_line_and_column_for_condition_unbound_variable() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("semantic error at 2:5: unbound variable `e.Missing` in result expression"),
-        "unexpected stderr:\n{stderr}"
-    );
-}
-
-#[test]
-fn reports_line_and_column_for_missing_entry_error() {
-    let output = check_file("examples/bad-missing-entry.ref");
-
-    assert!(!output.status.success());
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("semantic error at 1:1: program has no $ENTRY function"),
         "unexpected stderr:\n{stderr}"
     );
 }

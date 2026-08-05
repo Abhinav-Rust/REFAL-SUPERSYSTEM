@@ -1,5 +1,9 @@
 use std::collections::VecDeque;
 
+/// Classic Refal-5 limits a quoted character string to 255 characters
+/// (reference 1.2.4); longer text must be split into several strings.
+const MAX_LITERAL_CHARS: usize = 255;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token {
     pub kind: TokenKind,
@@ -162,18 +166,18 @@ impl<'a> Lexer<'a> {
             return Ok(TokenKind::Variable { kind: first, name });
         }
 
-        if matches!(first, 's' | 't' | 'e') {
-            let mut remaining = self.source[self.cursor..].chars();
-            if let Some(index) = remaining.next()
-                && (index.is_ascii_uppercase() || index.is_ascii_digit())
-                && remaining.next().is_none_or(|ch| !is_ident_continue(ch))
-            {
-                self.bump();
-                return Ok(TokenKind::Variable {
-                    kind: first,
-                    name: index.to_string(),
-                });
-            }
+        if matches!(first, 's' | 't' | 'e')
+            && let Some(index) = self.peek()
+            && (index.is_ascii_uppercase() || index.is_ascii_digit())
+        {
+            // Exactly one symbol is expected after a type indicator that is not
+            // immediately followed by a dot, so `s1s2s3` is legal and equivalent
+            // to `s1 s2 s3` (reference 1.4).
+            self.bump();
+            return Ok(TokenKind::Variable {
+                kind: first,
+                name: index.to_string(),
+            });
         }
 
         if !first.is_ascii_uppercase() {
@@ -203,10 +207,13 @@ impl<'a> Lexer<'a> {
     }
 
     fn lex_number(&mut self, first: char, start: usize) -> Result<TokenKind, LexerError> {
+        let signed = matches!(first, '+' | '-');
+        let mut is_real = false;
         let mut number = String::from(first);
         number.push_str(&self.take_while(|c| c.is_ascii_digit()));
 
         if self.peek() == Some('.') {
+            is_real = true;
             number.push(self.bump().expect("peeked decimal point"));
             let fraction = self.take_while(|c| c.is_ascii_digit());
             if fraction.is_empty() {
@@ -222,6 +229,7 @@ impl<'a> Lexer<'a> {
         }
 
         if self.peek() == Some('E') {
+            is_real = true;
             number.push(self.bump().expect("peeked exponent marker"));
             let exponent = self.take_while(|c| c.is_ascii_digit());
             if exponent.is_empty() {
@@ -236,6 +244,20 @@ impl<'a> Lexer<'a> {
             number.push_str(&exponent);
         }
 
+        // A sign is only legal on a real number, and a real number must contain a
+        // decimal point or an exponent marker. Macrodigits are non-negative
+        // (reference 1.2.2, 1.2.3).
+        if signed && !is_real {
+            return Err(LexerError {
+                message: "a sign is only permitted on a real number; macrodigits are non-negative"
+                    .to_string(),
+                span: Span {
+                    start,
+                    end: self.cursor,
+                },
+            });
+        }
+
         Ok(TokenKind::Number(number))
     }
 
@@ -243,6 +265,27 @@ impl<'a> Lexer<'a> {
         let mut chars = Vec::new();
         while let Some(ch) = self.bump() {
             if ch == delimiter {
+                // Classic Refal-5 embeds the delimiter by doubling it, so
+                // `'Jimmy''s Pizza'` and `"Jimmy's Pizza"` denote the same Refal
+                // object (reference 1.2.4).
+                if self.peek() == Some(delimiter) {
+                    self.bump();
+                    chars.push(delimiter);
+                    continue;
+                }
+
+                if chars.len() > MAX_LITERAL_CHARS {
+                    return Err(LexerError {
+                        message: format!(
+                            "character string exceeds the Classic Refal-5 limit of {MAX_LITERAL_CHARS} characters"
+                        ),
+                        span: Span {
+                            start,
+                            end: self.cursor,
+                        },
+                    });
+                }
+
                 if chars.is_empty() {
                     return Err(LexerError {
                         message: "empty character literal".to_string(),
@@ -267,6 +310,17 @@ impl<'a> Lexer<'a> {
 
                 return Ok(Token {
                     kind: TokenKind::Char(first),
+                    span: Span {
+                        start,
+                        end: self.cursor,
+                    },
+                });
+            }
+            // A character string may not be carried from one line to the next
+            // (reference 1.2.4).
+            if ch == '\n' {
+                return Err(LexerError {
+                    message: "character string cannot span a line break".to_string(),
                     span: Span {
                         start,
                         end: self.cursor,
@@ -529,6 +583,117 @@ mod tests {
 
         assert_eq!(single[0].kind, TokenKind::Char('"'));
         assert_eq!(double[0].kind, TokenKind::Char('\''));
+    }
+
+    #[test]
+    fn embeds_the_delimiter_by_doubling_it() {
+        // `'Jimmy''s'` and `"Jimmy's"` denote the same Refal object (reference 1.2.4).
+        let doubled = Lexer::new("'Jimmy''s'").tokenize().unwrap();
+        let other = Lexer::new("\"Jimmy's\"").tokenize().unwrap();
+
+        let text: String = doubled
+            .iter()
+            .filter_map(|token| match token.kind {
+                TokenKind::Char(ch) => Some(ch),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(text, "Jimmy's");
+        assert_eq!(
+            doubled.iter().map(|t| &t.kind).collect::<Vec<_>>(),
+            other.iter().map(|t| &t.kind).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn a_doubled_delimiter_alone_is_one_character() {
+        let tokens = Lexer::new("''''").tokenize().unwrap();
+
+        assert_eq!(tokens[0].kind, TokenKind::Char('\''));
+        assert_eq!(tokens[1].kind, TokenKind::Eof);
+    }
+
+    #[test]
+    fn rejects_a_character_string_spanning_a_line_break() {
+        let error = Lexer::new("'broken\ntext'").tokenize().unwrap_err();
+
+        assert_eq!(error.message, "character string cannot span a line break");
+    }
+
+    #[test]
+    fn rejects_a_character_string_longer_than_the_classic_limit() {
+        let long = "x".repeat(MAX_LITERAL_CHARS + 1);
+        let error = Lexer::new(&format!("'{long}'")).tokenize().unwrap_err();
+
+        assert!(
+            error.message.contains("exceeds the Classic Refal-5 limit"),
+            "unexpected message: {}",
+            error.message
+        );
+
+        let at_limit = "y".repeat(MAX_LITERAL_CHARS);
+        assert!(Lexer::new(&format!("'{at_limit}'")).tokenize().is_ok());
+    }
+
+    #[test]
+    fn tokenizes_juxtaposed_one_character_variables() {
+        // `s1s2s3` is legal and equivalent to `s1 s2 s3` (reference 1.4).
+        let joined = Lexer::new("s1s2s3").tokenize().unwrap();
+        let spaced = Lexer::new("s1 s2 s3").tokenize().unwrap();
+
+        assert_eq!(
+            joined.iter().map(|t| &t.kind).collect::<Vec<_>>(),
+            spaced.iter().map(|t| &t.kind).collect::<Vec<_>>()
+        );
+        assert_eq!(joined.len(), 4, "three variables and Eof");
+    }
+
+    #[test]
+    fn tokenizes_juxtaposed_variables_of_mixed_kinds() {
+        let tokens = Lexer::new("e1t2s3").tokenize().unwrap();
+
+        for (index, kind) in ['e', 't', 's'].into_iter().enumerate() {
+            assert_eq!(
+                tokens[index].kind,
+                TokenKind::Variable {
+                    kind,
+                    name: (index + 1).to_string()
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn preserves_the_spelling_of_a_variable_index() {
+        // Indices are case-insensitive, but the token keeps what the user wrote so
+        // diagnostics can echo it; canonicalisation happens in comparison keys.
+        let tokens = Lexer::new("e.Missing").tokenize().unwrap();
+
+        assert_eq!(
+            tokens[0].kind,
+            TokenKind::Variable {
+                kind: 'e',
+                name: "Missing".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_a_signed_macrodigit() {
+        // A sign is legal only on a real number, and a real must contain a decimal
+        // point or an exponent (reference 1.2.2, 1.2.3).
+        for source in ["-3", "+7"] {
+            let error = Lexer::new(source).tokenize().unwrap_err();
+            assert_eq!(
+                error.message,
+                "a sign is only permitted on a real number; macrodigits are non-negative"
+            );
+        }
+
+        for source in ["-3.25", "+4E2", "6.0E3", "12.5", "3"] {
+            assert!(Lexer::new(source).tokenize().is_ok(), "{source} should lex");
+        }
     }
 
     #[test]

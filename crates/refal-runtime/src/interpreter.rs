@@ -4,7 +4,10 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
 
-use refal_ast::{Condition, Function, Item, Program, Symbol, Term, TermKind, Variable, Visibility};
+use refal_ast::{
+    Condition, Function, Item, PROGRAM_ENTRY_POINT, Program, Symbol, Term, TermKind, Variable,
+    canonical_identifier,
+};
 
 use crate::Value;
 use crate::matcher::{
@@ -80,7 +83,7 @@ impl<'a> Evaluator<'a> {
             .items
             .iter()
             .filter_map(|item| match item {
-                Item::Function(function) => Some((canonical_name(&function.name), function)),
+                Item::Function(function) => Some((canonical_identifier(&function.name), function)),
                 Item::Declaration(_) => None,
             })
             .collect();
@@ -91,7 +94,7 @@ impl<'a> Evaluator<'a> {
                 Item::Declaration(declaration) => declaration.names.iter(),
                 Item::Function(_) => [].iter(),
             })
-            .map(|name| (canonical_name(name), name.clone()))
+            .map(|name| (canonical_identifier(name), name.clone()))
             .collect();
 
         Self {
@@ -106,13 +109,15 @@ impl<'a> Evaluator<'a> {
         self.output.borrow().clone()
     }
 
+    /// Runs the program from its Classic Refal-5 entry point, the function named
+    /// `Go` (reference A). `$ENTRY` marks exported names and may appear on any
+    /// number of definitions, so it cannot identify the starting function.
     pub fn evaluate_entry(&self, args: &[Value]) -> Result<Vec<Value>, EvalError> {
         let Some(entry) = self
             .functions
-            .values()
-            .find(|function| function.visibility == Visibility::Entry)
+            .get(&canonical_identifier(PROGRAM_ENTRY_POINT))
         else {
-            return Err(EvalError::FunctionNotFound("$ENTRY".to_string()));
+            return Err(EvalError::FunctionNotFound(PROGRAM_ENTRY_POINT.to_string()));
         };
 
         self.evaluate_function_at_depth(&entry.name, args, 0)
@@ -135,7 +140,7 @@ impl<'a> Evaluator<'a> {
             });
         }
 
-        let canonical = canonical_name(name);
+        let canonical = canonical_identifier(name);
         if let Some(function) = self.functions.get(&canonical) {
             for sentence in &function.sentences {
                 match match_pattern_candidates(&sentence.pattern, args) {
@@ -173,7 +178,7 @@ impl<'a> Evaluator<'a> {
         name: &str,
         args: &[Value],
     ) -> Option<Result<Vec<Value>, EvalError>> {
-        match canonical_name(name).as_str() {
+        match canonical_identifier(name).as_str() {
             "PROUT" => {
                 self.output.borrow_mut().push(args.to_vec());
                 Some(Ok(Vec::new()))
@@ -413,18 +418,6 @@ fn eval_symbol(symbol: &Symbol) -> Value {
     }
 }
 
-fn canonical_name(name: &str) -> String {
-    name.chars()
-        .map(|ch| {
-            if ch == '_' {
-                '-'
-            } else {
-                ch.to_ascii_uppercase()
-            }
-        })
-        .collect()
-}
-
 fn resolve_variable(variable: &Variable, bindings: &Bindings) -> Result<Vec<Value>, EvalError> {
     let key = VariableKey::from(variable);
     bindings.get(&key).cloned().ok_or_else(|| {
@@ -442,7 +435,7 @@ fn variable_prefix(variable: &Variable) -> char {
 
 #[cfg(test)]
 mod tests {
-    use refal_ast::{Condition, Sentence, Span, Variable, VariableKind};
+    use refal_ast::{Condition, Sentence, Span, Variable, VariableKind, Visibility};
 
     use super::*;
 
@@ -817,7 +810,7 @@ mod tests {
             span: span(),
         };
         let program = program(vec![function(
-            "ContainsX",
+            "Go",
             Visibility::Entry,
             vec![first, fallback],
         )]);
@@ -850,11 +843,18 @@ mod tests {
             result: vec![call("Loop", vec![var(VariableKind::Expression, "X")])],
             span: span(),
         };
-        let program = program(vec![function(
-            "Loop",
-            Visibility::Entry,
-            vec![loop_sentence],
-        )]);
+        // `Go` is the program entry point; the runaway recursion lives in a local
+        // function so the diagnostic names the function that actually overflowed.
+        let entry = Sentence {
+            pattern: vec![var(VariableKind::Expression, "X")],
+            conditions: vec![],
+            result: vec![call("Loop", vec![var(VariableKind::Expression, "X")])],
+            span: span(),
+        };
+        let program = program(vec![
+            function("Go", Visibility::Entry, vec![entry]),
+            function("Loop", Visibility::Local, vec![loop_sentence]),
+        ]);
         let evaluator = Evaluator::with_max_call_depth(&program, 2);
 
         assert_eq!(

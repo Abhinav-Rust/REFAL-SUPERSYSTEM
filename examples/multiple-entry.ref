@@ -1,0 +1,9 @@
+* $ENTRY marks a function as externally visible for linking, so a program may
+* export any number of them. The program itself starts from `Go` (reference 3).
+$ENTRY Go {
+  e.Text = <Upd e.Text>;
+}
+
+$ENTRY Upd {
+  e.Text = e.Text;
+}

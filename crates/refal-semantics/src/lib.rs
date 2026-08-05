@@ -2,7 +2,10 @@
 
 use std::collections::{HashMap, HashSet};
 
-use refal_ast::{DeclarationKind, Item, Program, Span, Term, TermKind, VariableKind, Visibility};
+use refal_ast::{
+    DeclarationKind, Item, PROGRAM_ENTRY_POINT, Program, Span, Term, TermKind, Variable,
+    VariableKind, Visibility, canonical_identifier, canonical_variable_index, identifiers_equal,
+};
 
 const SUPPORTED_RUNTIME_EXTERNS: &[&str] = &[
     "CHR", "EXPLODE", "IMPLODE", "NUMB", "ORD", "PRINT", "PROUT", "SYMB", "TYPE",
@@ -31,7 +34,7 @@ pub fn check_program(program: &Program) -> Result<(), Vec<Diagnostic>> {
 struct Checker {
     functions: HashMap<String, Span>,
     externs: HashMap<String, Span>,
-    entry: Option<Span>,
+    program_entry: Option<(Span, Visibility)>,
     diagnostics: Vec<Diagnostic>,
 }
 
@@ -40,7 +43,7 @@ impl Checker {
         for item in &program.items {
             match item {
                 Item::Function(function) => {
-                    let name = canonical_name(&function.name);
+                    let name = canonical_identifier(&function.name);
                     if self.functions.contains_key(&name) || self.externs.contains_key(&name) {
                         self.push(
                             format!("duplicate function or declaration `{}`", function.name),
@@ -57,15 +60,11 @@ impl Checker {
                         );
                     }
 
-                    if function.visibility == Visibility::Entry {
-                        if self.entry.is_some() {
-                            self.push(
-                                "program has more than one $ENTRY function".to_string(),
-                                function.span,
-                            );
-                        } else {
-                            self.entry = Some(function.span);
-                        }
+                    // `$ENTRY` may appear on any number of definitions; it marks a
+                    // function as externally visible for linking, not as the place the
+                    // program starts (reference 3). The program starts from `Go`.
+                    if identifiers_equal(&function.name, PROGRAM_ENTRY_POINT) {
+                        self.program_entry = Some((function.span, function.visibility));
                     }
                 }
                 Item::Declaration(declaration) => {
@@ -74,7 +73,7 @@ impl Checker {
                     }
 
                     for name in &declaration.names {
-                        let canonical = canonical_name(name);
+                        let canonical = canonical_identifier(name);
                         if self.functions.contains_key(&canonical)
                             || self.externs.contains_key(&canonical)
                         {
@@ -90,11 +89,18 @@ impl Checker {
             }
         }
 
-        if self.entry.is_none() {
-            self.push(
-                "program has no $ENTRY function".to_string(),
+        match self.program_entry {
+            None => self.push(
+                format!("program does not define a `{PROGRAM_ENTRY_POINT}` function to start from"),
                 Span { start: 0, end: 0 },
-            );
+            ),
+            Some((span, Visibility::Local)) => self.push(
+                format!(
+                    "`{PROGRAM_ENTRY_POINT}` must be exported as `$ENTRY {PROGRAM_ENTRY_POINT}`"
+                ),
+                span,
+            ),
+            Some((_, Visibility::Entry)) => {}
         }
     }
 
@@ -119,7 +125,7 @@ impl Checker {
         for term in terms {
             match &term.kind {
                 TermKind::Call { name, args } => {
-                    let canonical = canonical_name(name);
+                    let canonical = canonical_identifier(name);
                     if !self.functions.contains_key(&canonical)
                         && !self.externs.contains_key(&canonical)
                     {
@@ -186,8 +192,9 @@ impl Checker {
                         continue;
                     }
 
+                    let canonical = canonical_variable_index(&variable.name);
                     if let Some(existing) = bound.iter().find(|existing| {
-                        existing.name == variable.name && existing.kind != variable.kind
+                        existing.name == canonical && existing.kind != variable.kind
                     }) {
                         self.push(
                             format!(
@@ -201,10 +208,7 @@ impl Checker {
                         continue;
                     }
 
-                    bound.insert(VariableKey {
-                        kind: variable.kind,
-                        name: variable.name.clone(),
-                    });
+                    bound.insert(VariableKey::new(variable));
                 }
                 TermKind::Bracket(inner) => self.collect_pattern_bindings(inner, bound),
                 TermKind::Call { args, .. } => self.require_bound_variables(args, bound),
@@ -222,11 +226,7 @@ impl Checker {
                         continue;
                     }
 
-                    let key = VariableKey {
-                        kind: variable.kind,
-                        name: variable.name.clone(),
-                    };
-                    if !bound.contains(&key) {
+                    if !bound.contains(&VariableKey::new(variable)) {
                         self.push(
                             format!(
                                 "unbound variable `{}.{}` in result expression",
@@ -249,18 +249,6 @@ impl Checker {
     }
 }
 
-fn canonical_name(name: &str) -> String {
-    name.chars()
-        .map(|ch| {
-            if ch == '_' {
-                '-'
-            } else {
-                ch.to_ascii_uppercase()
-            }
-        })
-        .collect()
-}
-
 fn is_supported_runtime_extern(canonical_name: &str) -> bool {
     SUPPORTED_RUNTIME_EXTERNS.contains(&canonical_name)
 }
@@ -271,16 +259,13 @@ struct VariableKey {
     name: String,
 }
 
-trait VariableKindDisplay {
-    fn refal_prefix(self) -> char;
-}
-
-impl VariableKindDisplay for VariableKind {
-    fn refal_prefix(self) -> char {
-        match self {
-            VariableKind::Symbol => 's',
-            VariableKind::Term => 't',
-            VariableKind::Expression => 'e',
+impl VariableKey {
+    /// Variable indices are case-insensitive (reference 1.3), so the key is
+    /// canonical while the AST keeps the spelling the user wrote.
+    fn new(variable: &Variable) -> Self {
+        Self {
+            kind: variable.kind,
+            name: canonical_variable_index(&variable.name),
         }
     }
 }
@@ -321,43 +306,72 @@ mod tests {
     }
 
     #[test]
-    fn rejects_missing_entry() {
+    fn rejects_a_program_without_a_go_entry_point() {
         let program = Program { items: vec![] };
         let diagnostics = check_program(&program).unwrap_err();
 
         assert!(
-            diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.message.contains("no $ENTRY"))
+            diagnostics.iter().any(|diagnostic| diagnostic
+                .message
+                .contains("does not define a `Go` function to start from")),
+            "unexpected diagnostics: {diagnostics:?}"
         );
     }
 
     #[test]
-    fn rejects_multiple_entry_functions() {
+    fn requires_the_go_entry_point_to_be_exported() {
+        let program = Program {
+            items: vec![Item::Function(Function {
+                name: "Go".to_string(),
+                visibility: Visibility::Local,
+                sentences: vec![Sentence {
+                    pattern: vec![],
+                    conditions: vec![],
+                    result: vec![],
+                    span: empty_span(),
+                }],
+                span: Span { start: 0, end: 9 },
+            })],
+        };
+
+        let diagnostics = check_program(&program).unwrap_err();
+
+        assert!(
+            diagnostics.iter().any(|diagnostic| diagnostic
+                .message
+                .contains("must be exported as `$ENTRY Go`")),
+            "unexpected diagnostics: {diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn accepts_several_exported_entry_functions() {
+        // `$ENTRY` marks a function as externally visible for linking and may
+        // appear on any number of definitions (reference 3).
+        let sentences = vec![Sentence {
+            pattern: vec![],
+            conditions: vec![],
+            result: vec![],
+            span: empty_span(),
+        }];
         let program = Program {
             items: vec![
                 Item::Function(Function {
                     name: "Go".to_string(),
                     visibility: Visibility::Entry,
-                    sentences: vec![],
+                    sentences: sentences.clone(),
                     span: Span { start: 0, end: 10 },
                 }),
                 Item::Function(Function {
-                    name: "Main".to_string(),
+                    name: "Upd".to_string(),
                     visibility: Visibility::Entry,
-                    sentences: vec![],
+                    sentences,
                     span: Span { start: 11, end: 21 },
                 }),
             ],
         };
 
-        let diagnostics = check_program(&program).unwrap_err();
-
-        assert!(diagnostics.iter().any(|diagnostic| diagnostic
-            == &Diagnostic {
-                message: "program has more than one $ENTRY function".to_string(),
-                span: Span { start: 11, end: 21 }
-            }));
+        assert!(check_program(&program).is_ok());
     }
 
     #[test]
@@ -527,7 +541,10 @@ mod tests {
 
     #[test]
     fn canonicalizes_classic_identifier_spelling() {
-        assert_eq!(canonical_name("Foo_Bar"), canonical_name("fOO-bAR"));
+        assert_eq!(
+            canonical_identifier("Foo_Bar"),
+            canonical_identifier("fOO-bAR")
+        );
     }
 
     #[test]

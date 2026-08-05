@@ -1,4 +1,8 @@
-$ENTRY ContainsX {
+$ENTRY Go {
+  e.Text = <ContainsX e.Text>;
+}
+
+ContainsX {
   e.Text, e.Text : e.Left 'x' e.Right = 'Y';
   e.Text = 'N';
 }
