@@ -1,0 +1,5 @@
+# Primary source PDFs are retrieved by fetch-sources.sh, not committed.
+# See README.md in this directory for the rationale.
+pdf/
+*.pdf
+*.djvu
