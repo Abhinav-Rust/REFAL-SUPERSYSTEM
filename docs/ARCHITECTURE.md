@@ -45,12 +45,20 @@ The runtime model will implement:
 - result evaluation,
 - built-in functions.
 
-## Stage D: Compiler IR
+## Stage D: Graph Of States
 
-The front end lowers checked Refal into `refal-core`, an explicit intermediate
-representation with source spans retained on every lowered construct. The
-initial Core Refal formatter provides stable normalized source through
-`refal lower`; later work will add backend-oriented control-flow and data IR.
+Design revised 2026-08-05, approved in [`PLAN.md`](PLAN.md) phase 2.
+
+Turchin defines compilation as driving a configuration into a *graph of states*, cleaning
+it, and generalising it (1980, chapter 4); code generation is 4.7, one subsection at the
+end. Chapter 5 reuses the same graph to prove properties of the program, which is why in
+this compiler the verifier and the optimiser are one mechanism rather than two passes.
+
+What exists today is the earlier design: `refal lower` emits a deterministic,
+round-trip-safe normalised source through `refal-core`. That formatter stays useful, but
+`refal-core` is an AST-shaped copy rather than a lowering, so it is the piece the graph of
+states replaces. Building a conventional three-address IR on top of it would mean writing
+the analysis machinery twice.
 
 ## Stage E: Backends
 

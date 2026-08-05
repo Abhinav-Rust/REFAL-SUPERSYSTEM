@@ -9,12 +9,12 @@ verification harness; it must not contain the production compiler's logic.
 
 ## Completion Gates
 
-### 1. Classic Front End — Complete
+### 1. Classic Front End — Partial
 
 - Parse and diagnose the documented Classic Refal-5 frontend scope.
 - Preserve source spans and validate the supported language rules.
 
-### 2. Bootstrap Semantics — Complete
+### 2. Bootstrap Semantics — Partial
 
 - Validate entry points, declarations, calls, bindings, variable kinds, and
   condition legality before execution.
@@ -53,18 +53,31 @@ verification harness; it must not contain the production compiler's logic.
 
 ## Quantitative Scorecard
 
-The current estimate against this Refal-first target is **38% complete**:
+Superseded by the accounting in [`PLAN.md`](PLAN.md) section 5, which is kept current.
+
+The published estimate is **~19%**. It decreased from an earlier 38% for two reasons,
+both deliberate:
+
+- The earlier figure gave full credit to the Classic frontend and semantic checking.
+  An audit against the normative reference on 2026-08-05 found eight conformance
+  defects, including one that silently corrupted character strings and one that
+  rejected legal programs. Six are fixed; two remain open (#7, #13).
+- The completion target now includes the two verification tiers, so the denominator
+  grew.
 
 | Workstream | Weight | Credit |
 | --- | ---: | ---: |
-| Classic frontend | 15% | 15% |
-| Semantic checking | 10% | 10% |
-| Runtime/interpreter completeness | 20% | 8% |
-| Refal-to-Refal lowering | 10% | 4% |
-| Compiler implementation in Refal | 25% | 0% |
-| Self-hosting bootstrap | 15% | 0% |
-| Compatibility, release, and installation evidence | 5% | 1% |
-| **Total** | **100%** | **38%** |
+| Bootstrap frontend | 8.5% | 7.0% |
+| Bootstrap semantics | 6% | 5.0% |
+| Refal machine | 19.5% | 4.3% |
+| Graph of states and Refal emission | 8.5% | 2.1% |
+| Static verification | 15% | 0.8% |
+| Compiler implemented in Refal | 25.5% | 0% |
+| Verified self-hosting bootstrap | 13% | 0% |
+| Conformance, release and compatibility evidence | 4% | 0.6% |
+| **Total** | **100%** | **~19%** |
 
-The score may rise only when implementation and automated verification satisfy
-a completion gate. Documentation alone does not increase it.
+## Reporting Rule
+
+No figure in this document may be raised without a test or a gate that demonstrates the
+work. A milestone is Complete only when its conformance rows are green.

@@ -1,9 +1,15 @@
 # Roadmap
 
+> **The authoritative plan is [`PLAN.md`](PLAN.md)**, approved 2026-08-05. It supersedes
+> the milestone numbering below: it reorganises the work around Turchin's graph-of-states
+> architecture, adds the two verification tiers, and moves native code generation off the
+> critical path to after self-hosting. This file is retained for the per-milestone detail
+> and is corrected where it was wrong.
+
 The roadmap is intentionally practical. The compiler must become useful for real programs, not merely demonstrate a few parser tricks.
 
-The first production-grade completion target is defined in
-[`PRODUCTION-COMPLETION.md`](PRODUCTION-COMPLETION.md).
+The Refal-first completion target is defined in
+[`REFAL-FIRST-COMPLETION.md`](REFAL-FIRST-COMPLETION.md).
 
 ## Milestone 1: Public-Grade Foundation
 
@@ -18,7 +24,9 @@ Status: **Complete**.
 
 ## Milestone 2: Classic Refal-5 Front End
 
-Status: **Complete**. Completion is governed by
+Status: **Partial**, corrected 2026-08-05 (previously reported as Complete). The
+`block-ending` production of the reference grammar is unimplemented (issue #13), and four
+lexical rows diverged from the reference until `641ffc0`. Completion is governed by
 [`FRONTEND-COVERAGE.md`](FRONTEND-COVERAGE.md).
 
 - Complete token coverage.
@@ -36,12 +44,17 @@ Status: **Complete**. Completion is governed by
 - Condition checks.
 - Clear diagnostics.
 
-Status: **Complete**. Completion is recorded in
+Status: **Partial**, corrected 2026-08-05 (previously reported as Complete). The
+entry-point rules were wrong -- legal multi-`$ENTRY` programs were rejected and the
+program's starting function was unspecified -- and are fixed in `641ffc0`. No
+exhaustiveness analysis exists yet. Completion is recorded in
 [`SEMANTIC-AUDIT.md`](SEMANTIC-AUDIT.md).
 
 Completed so far:
 
-- Missing-entry and duplicate-entry validation.
+- Missing program entry point (`Go`) validation, and the requirement that `Go` be
+  exported. Note: duplicate-`$ENTRY` validation was **removed** as incorrect -- a program
+  may export any number of `$ENTRY` functions (reference 3).
 - Duplicate function/declaration checks with Classic identifier equivalence.
 - Unresolved-call checks.
 - Result-variable binding checks.
