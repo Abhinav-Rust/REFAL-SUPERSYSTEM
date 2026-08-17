@@ -195,22 +195,25 @@ The guarantee this compiler intends to publish, once Tier 1 lands:
 
 ## Project Status
 
-**Completion against the goal: 60%.**
+**Completion against the goal: 65%.**
 
 That figure counts a compiler *written in Refal* that emits Refal and compiles its own
-sources, with the verification tiers above, as 100%. The eighth implementation milestone moves the weighted score from 55.0% to 60.0% by adding
-a first Refal residualization surface. `refal residualize` emits a checked `$ENTRY Go` wrapper
-for the supported symbolic residual subset, proving that a reduced identity configuration can
-be converted back into valid Refal source. This is progress toward the target, not a claim
-that complete graph residualization, the Refal compiler, or self-hosting exists yet.
+sources, with the verification tiers above, as 100%. The ninth implementation milestone moves the weighted score from 60.0% to 65.0% by adding
+tested system builtins. `Mu` now performs visible dynamic dispatch through the normal evaluator,
+while `Time` returns evaluator-owned elapsed milliseconds as a numeric macrodigit. The previous
+milestone added a first Refal residualization surface: `refal residualize` emits a checked
+`$ENTRY Go` wrapper for the supported symbolic residual subset, proving that a reduced identity
+configuration can be converted back into valid Refal source. This is progress toward the target,
+not a claim that complete graph residualization, the Refal compiler, or self-hosting exists yet.
 
 The estimate is kept deliberately evidence-backed. The milestones include end-to-end
 sentence-ending blocks, the Classic macrodigit lexer bound, integer arithmetic
 (`Add`/`Sub`/`Mul`/`Div`/`Divmod`/`Mod`/`Compare`/`Trunc`/`Real`), descriptor-backed file I/O
 (`Card`/`Open`/`Get`/`Put`/`Putout`), and a tested structural runtime slice: `First`, `Last`,
 `Lenw`, `Lower`, `Upper`, `Br`, `Dg`, `Cp`, `Rp`, `Dgall`, `Arg`, and `Step`, plus `Trunc` and
-`Real`, with semantic registration, unit tests, and CLI fixtures. The runtime now also has an
-explicit work-list path for eligible deep call chains. `refal-core` has a deterministic
+`Real`, with semantic registration, unit tests, and CLI fixtures. The latest runtime slice adds
+`Mu` visible dynamic dispatch and `Time` elapsed-millisecond reporting, each with runtime and
+CLI coverage. The runtime now also has an explicit work-list path for eligible deep call chains. `refal-core` has a deterministic
 sentence-state/call-edge seed graph, SCC detection, function-aware structural reachability
 cleanup, bounded concrete driving, shape-aware conservative symbolic driving, and a small
 Refal residualization surface. Complete Turchin driving, semantic graph cleaning,
@@ -236,7 +239,7 @@ generate code.
 | 1 | Public-grade foundation | ✅ Complete | Workspace, layout, clean-room policy, MIT licence, CI gate |
 | 2 | Classic Refal-5 front end | 🔶 Partial | Lexer/parser cover most of the Classic surface with spans and diagnostics. Sentence-ending blocks now parse, check, execute, and lower recursively; the traceable conformance corpus is still incomplete |
 | 3 | Semantic checker | 🔶 Partial | Entry points, declarations, name equivalence, call checks, variable binding, condition legality. Entry-point rules corrected in `641ffc0` |
-| 4 | Refal machine | 🔶 Partial | Object-expression runtime, `s.`/`t.`/`e.` matching with backtracking, conditions, recursion guard, arithmetic, `Trunc`/`Real`, descriptor-backed file I/O, structural stack operations, expression splitting, case conversion, `Arg`, and `Step`. An explicit work-list path now handles eligible deep block-free call chains; conditions, blocks, symbolic matching plans, and the full flat view-field machine remain open ([#7](../../issues/7)) |
+| 4 | Refal machine | 🔶 Partial | Object-expression runtime, `s.`/`t.`/`e.` matching with backtracking, conditions, recursion guard, arithmetic, `Trunc`/`Real`, descriptor-backed file I/O, structural stack operations, expression splitting, case conversion, `Arg`, `Step`, `Time`, and visible dynamic `Mu` dispatch. An explicit work-list path now handles eligible deep block-free call chains; conditions, blocks, symbolic matching plans, and the full flat view-field machine remain open ([#7](../../issues/7)) |
 | 5 | Graph of states | 🔶 Partial | `refal-core` exposes deterministic sentence states, syntactic call edges, SCC detection, function-aware structural reachability cleanup, bounded ground driving, shape-aware symbolic driving, and a supported-subset Refal residual emitter; complete Turchin driving, semantic cleaning, generalization, and graph residualisation remain open |
 | 6 | Tier 1 analyses | ⬜ Not started | Requires Milestone 5 |
 | 7 | Compiler written in Refal | ⬜ Not started | Gated on Milestone 4: a Refal compiler cannot read a source file until `Card`/`Open`/`Get` exist |
@@ -253,6 +256,7 @@ The full phase plan, gates and completion accounting are in [`docs/PLAN.md`](doc
 
 | Date | Change |
 |---|---|
+| 2026-08-17 | Ninth 5-point implementation milestone: `Mu` visible dynamic dispatch, evaluator-owned `Time` elapsed-millisecond reporting, semantic registration, runtime unit tests, CLI fixtures, and synchronized runtime documentation; full workspace gates pass |
 | 2026-08-17 | Eighth 5-point implementation milestone: supported-subset Refal residualization, the `refal residualize` command, valid emitted `$ENTRY Go` source, residualizer unit/CLI regressions, and synchronized architecture documentation; full workspace gates pass |
 | 2026-08-17 | Seventh 5-point implementation milestone: shape-aware symbolic driving over caller-provided configurations, known-symbol/symbolic-tail reduction, core regression coverage, and synchronized architecture documentation; full workspace gates pass |
 | 2026-08-17 | Sixth 5-point implementation milestone: conservative symbolic driving, residual expression-variable reduction, ambiguity preservation, the `refal drive-symbolic` command, symbolic fixtures, and synchronized architecture documentation; focused gates pass; full workspace gates pending commit |
@@ -273,7 +277,7 @@ The full phase plan, gates and completion accounting are in [`docs/PLAN.md`](doc
 | `refal-ast` | 🔶 AST plus shared Refal-5 name-equivalence helpers, each citing its clause |
 | `refal-syntax` | 🔶 Lexer and parser; blocks and macrodigit-bound tests are implemented; full traceable conformance remains |
 | `refal-semantics` | 🔶 Legality checks for the supported surface |
-| `refal-runtime` | 🔶 Correct for the covered subset; arithmetic, `Trunc`/`Real`, descriptor-backed file I/O, structural splitting/case/stack operations, `Arg`, and `Step` are implemented; an explicit work-list path handles eligible deep call chains, but the full machine is not complete |
+| `refal-runtime` | 🔶 Correct for the covered subset; arithmetic, `Trunc`/`Real`, descriptor-backed file I/O, structural splitting/case/stack operations, `Arg`, `Step`, `Time`, and visible dynamic `Mu` are implemented; an explicit work-list path handles eligible deep call chains, but the full machine is not complete |
 | `refal-core` | 🔶 Normalised formatter, deterministic sentence-state/call-edge seed graph, SCC detection, structural cleanup, bounded ground driving, shape-aware symbolic driving, and supported-subset Refal residualization; complete Turchin driving and graph residualization are not implemented |
 | `refal-cli` | 🔶 `check`, `dump-ast`, `lower`, `graph`, `drive`, `drive-symbolic`, `residualize`, `run` |
 | CI and quality gates | ✅ `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` |

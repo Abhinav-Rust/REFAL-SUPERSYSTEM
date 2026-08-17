@@ -193,6 +193,8 @@ fn accepts_positive_examples() {
         "examples/runtime-character-codes.ref",
         "examples/runtime-number-builtins.ref",
         "examples/runtime-type.ref",
+        "examples/runtime-mu.ref",
+        "examples/runtime-time.ref",
         "examples/multiple-entry.ref",
         "examples/quote-escape.ref",
         "examples/shorthand-variables.ref",
@@ -651,6 +653,7 @@ fn runs_runtime_conformance_examples() {
             &["cli-argument"] as &[&str],
             "(ab)c\na(bc)\n3abc\nab\nAB\ncli-argument\n",
         ),
+        ("examples/runtime-mu.ref", &[] as &[&str], "Z\n"),
     ] {
         let output = run_file(path, args);
 
@@ -662,6 +665,25 @@ fn runs_runtime_conformance_examples() {
         );
         assert_eq!(String::from_utf8_lossy(&output.stdout), expected_stdout);
     }
+}
+
+#[test]
+fn reports_time_as_a_numeric_macrodigit() {
+    let output = run_file("examples/runtime-time.ref", &[]);
+
+    assert!(
+        output.status.success(),
+        "runtime-time.ref should run\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let value = stdout.trim_end_matches(['\r', '\n']);
+    assert!(!value.is_empty(), "Time should return a non-empty value");
+    assert!(
+        value.chars().all(|character| character.is_ascii_digit()),
+        "Time should return decimal digits, got {value:?}"
+    );
 }
 
 #[test]

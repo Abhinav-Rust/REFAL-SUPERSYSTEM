@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Runtime system builtins milestone (2026-08-17)
+
+The weighted completion score advances from 60% to 65% with tested bootstrap-runtime support for
+Classic `Mu` and `Time`. `Mu` performs visible dynamic dispatch through the normal evaluator and
+`Time` reports evaluator-owned elapsed milliseconds as a numeric macrodigit. Semantic registration,
+runtime unit tests, positive CLI fixtures, and a format-only CLI regression provide the evidence.
+`Up`/`Dn`, complete Classic runtime conformance, Turchin configuration driving, graph cleaning,
+generalisation, full residualisation, Refal compiler authorship, and self-hosting remain open.
+
 ### Supported-subset Refal residualization milestone (2026-08-17)
 
 The weighted completion score advances from 55% to 60% with `residualize_symbolic` and the

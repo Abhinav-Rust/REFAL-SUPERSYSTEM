@@ -1,0 +1,6 @@
+$EXTERNAL Prout, Time;
+
+$ENTRY Go {
+  = <Prout <Time>>;
+}
+

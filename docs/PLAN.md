@@ -146,7 +146,7 @@ Turchin Ch. 1–2. Replaces `refal-runtime`.
   2. **Arithmetic** — `Add`, `Sub`, `Mul`, `Div`, `Divmod`, `Mod`, `Compare`, `Trunc`, and `Real`
      are implemented.
   3. **Buried data** — `Br`, `Dg`, `Cp`, `Rp`, `Dgall` are implemented with evaluator-owned stack state.
-  4. `Lenw`, `First`, `Last`, `Upper`, `Lower`, `Arg`, and `Step` are implemented; `Mu`, `Time`, `Up`, and `Dn` remain.
+  4. `Lenw`, `First`, `Last`, `Upper`, `Lower`, `Arg`, and `Step` are implemented; `Mu` and `Time` now have tested bootstrap-runtime support, while `Up` and `Dn` remain.
 - **1e** Refal-5 blocks (`, arg : { block }`) end-to-end — issue #13.
 
 **Gate:** tokenise a 50 KB source file in Refal, on this machine, in reasonable time and memory.

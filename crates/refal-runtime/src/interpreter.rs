@@ -5,6 +5,7 @@ use std::collections::{HashMap, hash_map::Entry};
 use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufRead, BufReader, BufWriter, Write};
+use std::time::Instant;
 
 use refal_ast::{
     Condition, Function, Item, PROGRAM_ENTRY_POINT, Program, Symbol, Term, TermKind, Variable,
@@ -106,6 +107,7 @@ pub struct Evaluator<'a> {
     arguments: Vec<Vec<Value>>,
     stack: RefCell<Vec<(Vec<Value>, Vec<Value>)>>,
     steps: Cell<usize>,
+    start_time: Instant,
     max_call_depth: usize,
 }
 
@@ -154,6 +156,7 @@ impl<'a> Evaluator<'a> {
             arguments,
             stack: RefCell::new(Vec::new()),
             steps: Cell::new(0),
+            start_time: Instant::now(),
             max_call_depth,
         }
     }
@@ -516,7 +519,7 @@ impl<'a> Evaluator<'a> {
             return self.evaluate_sentences(&function.name, &function.sentences, args, call_depth);
         }
 
-        if let Some(result) = self.evaluate_builtin(name, args) {
+        if let Some(result) = self.evaluate_builtin(name, args, call_depth) {
             return result;
         }
 
@@ -558,6 +561,7 @@ impl<'a> Evaluator<'a> {
         &self,
         name: &str,
         args: &[Value],
+        call_depth: usize,
     ) -> Option<Result<Vec<Value>, EvalError>> {
         match canonical_identifier(name).as_str() {
             "CARD" => Some(self.card()),
@@ -607,6 +611,10 @@ impl<'a> Evaluator<'a> {
             "DGALL" => Some(self.dgall()),
             "ARG" => Some(self.arg(args)),
             "STEP" => Some(Ok(vec![Value::Number(self.steps.get().to_string())])),
+            "TIME" => Some(Ok(vec![Value::Number(
+                self.start_time.elapsed().as_millis().to_string(),
+            )])),
+            "MU" => Some(self.mu(args, call_depth)),
             _ => None,
         }
     }
@@ -650,6 +658,38 @@ impl<'a> Evaluator<'a> {
             }));
         }
         Ok(result)
+    }
+
+    fn mu(&self, args: &[Value], call_depth: usize) -> Result<Vec<Value>, EvalError> {
+        let Some((name, expression)) = args.split_first() else {
+            return Err(invalid_builtin_arguments(
+                "Mu",
+                "expected a function name and an expression",
+            ));
+        };
+        let function_name = match name {
+            Value::Identifier(name) => name.clone(),
+            Value::Bracket(values) => values
+                .iter()
+                .map(|value| match value {
+                    Value::Char(character) => Ok(*character),
+                    Value::Identifier(_) | Value::Number(_) | Value::Bracket(_) => Err(()),
+                })
+                .collect::<Result<String, ()>>()
+                .map_err(|_| {
+                    invalid_builtin_arguments(
+                        "Mu",
+                        "dynamic function name must be an identifier or character string",
+                    )
+                })?,
+            Value::Char(_) | Value::Number(_) => {
+                return Err(invalid_builtin_arguments(
+                    "Mu",
+                    "function name must be an identifier or character string",
+                ));
+            }
+        };
+        self.evaluate_function_at_depth(&function_name, expression, call_depth + 1)
     }
 
     fn arg(&self, args: &[Value]) -> Result<Vec<Value>, EvalError> {
@@ -1683,6 +1723,61 @@ mod tests {
         );
         assert_eq!(evaluator.captured_output(), vec![vec![Value::Char('x')]]);
         fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn mu_dispatches_a_visible_function_with_an_expression() {
+        let entry = Sentence {
+            pattern: vec![],
+            conditions: vec![],
+            result: vec![call(
+                "Mu",
+                vec![
+                    term(TermKind::Symbol(Symbol::Identifier("Echo".to_string()))),
+                    term(TermKind::Symbol(Symbol::Char('Z'))),
+                ],
+            )],
+            span: span(),
+        };
+        let echo = Sentence {
+            pattern: vec![var(VariableKind::Expression, "X")],
+            conditions: vec![],
+            result: vec![var(VariableKind::Expression, "X")],
+            span: span(),
+        };
+        let program = program(vec![
+            function("Go", Visibility::Entry, vec![entry]),
+            function("Echo", Visibility::Local, vec![echo]),
+        ]);
+        let evaluator = Evaluator::new(&program);
+
+        assert_eq!(
+            evaluator.evaluate_entry(&[]).unwrap(),
+            vec![Value::Char('Z')]
+        );
+    }
+
+    #[test]
+    fn time_returns_elapsed_milliseconds_as_a_macrodigit() {
+        let sentence = Sentence {
+            pattern: vec![],
+            conditions: vec![],
+            result: vec![call("Time", vec![])],
+            span: span(),
+        };
+        let program = program(vec![function("Go", Visibility::Entry, vec![sentence])]);
+        let evaluator = Evaluator::new(&program);
+
+        let result = evaluator.evaluate_entry(&[]).unwrap();
+        let [Value::Number(milliseconds)] = result.as_slice() else {
+            panic!("Time must return exactly one numeric value");
+        };
+        assert!(!milliseconds.is_empty());
+        assert!(
+            milliseconds
+                .chars()
+                .all(|character| character.is_ascii_digit())
+        );
     }
 
     #[test]

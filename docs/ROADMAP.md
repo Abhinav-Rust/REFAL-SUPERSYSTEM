@@ -79,11 +79,12 @@ Completed so far:
 - Executable interpreter mode.
 - CLI conformance examples for runtime behavior.
 
-Status: **Partial implementation; updated 2026-08-17**. The structural builtin slice and the
-integer-to-real conversion builtins are implemented and tested. An explicit work-list path now
-handles eligible deep block-free call chains; the full flat view-field machine, symbolic
-matching plans, and remaining Classic builtins remain open. The graph driver’s transparent
-`Prout` path is a concrete-driver facility, not a replacement for the runtime builtin.
+Status: **Partial implementation; updated 2026-08-17**. The structural builtin slice, the
+integer-to-real conversion builtins, visible dynamic `Mu`, and evaluator-owned elapsed-time
+`Time` are implemented and tested. An explicit work-list path now handles eligible deep
+block-free call chains; the full flat view-field machine, symbolic matching plans, and the
+remaining `Up`/`Dn` metacode builtins remain open. The graph driver’s transparent `Prout` path
+is a concrete-driver facility, not a replacement for the runtime builtin.
 
 Completed so far:
 
@@ -123,7 +124,8 @@ Completed so far:
 - Integer-to-real conversion through `Trunc` and `Real`, with canonical numeric results.
 - Structural `First`, `Last`, and `Lenw` expression operations with Classic result shapes.
 - `Lower` and `Upper` case conversion, evaluator-owned `Br`/`Dg`/`Cp`/`Rp`/`Dgall` buried-data stack,
-  `Arg` command-line access, and monotonic `Step` counter with unit and CLI coverage.
+  `Arg` command-line access, monotonic `Step` counter, visible dynamic `Mu`, and evaluator-owned
+  elapsed-millisecond `Time`, with runtime unit and CLI coverage.
 
 ## Milestone 5: Core Refal Lowering
 
