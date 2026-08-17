@@ -135,8 +135,9 @@ Status: **Partial implementation; updated 2026-08-17**. The deterministic seed g
 one state per source sentence and syntactic call edges. SCC detection, condition-preserving
 states, function-aware structural reachability cleanup, bounded concrete driving, and
 shape-aware symbolic execution over known prefixes with symbolic expression tails are
-implemented and tested. Complete symbolic Turchin driving, semantic graph cleaning,
-generalisation, whistle termination, and residualisation remain open.
+implemented and tested. A supported-subset residual wrapper emits checked Refal source from
+the symbolic report. Complete symbolic Turchin driving, semantic graph cleaning,
+generalisation, whistle termination, and graph residualisation remain open.
 
 Completed so far:
 
@@ -155,6 +156,8 @@ Completed so far:
   residual calls. Identity and ambiguity-preservation CLI regressions cover the behavior.
 - Shape-aware symbolic driving through `drive_symbolic_with_input`, which can reduce a known
   symbol prefix followed by a symbolic expression tail; the core suite covers this reduction.
+- Supported-subset residualization through `residualize_symbolic` and `refal residualize`,
+  emitting a checked `$ENTRY Go` wrapper; core and CLI regressions cover the identity case.
 - `refal lower <file.ref>` command, which runs syntax and semantic validation
   before emitting normalized source.
 - `refal lower <file.ref> --output <file.ref>` support for source-to-source

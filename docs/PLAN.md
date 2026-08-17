@@ -159,7 +159,7 @@ Turchin Ch. 3–4. Replaces `refal-core`.
 - **2a** Driving — bounded ground execution, deterministic structural graph infrastructure, and shape-aware symbolic execution for known prefixes with symbolic tails are implemented; complete Turchin configuration driving and graph construction (§4.2) remain open.
 - **2b** Function-aware structural reachability cleanup is implemented; semantic clean graphs (§4.3) and compilation strategy (§4.4) remain open.
 - **2c** SCC detection is implemented as graph infrastructure; generalisation and the whistle (§4.6; 1988 *Algorithm of Generalization*; 2013 Nepeivoda *On Turchin's Theorem* for whistle termination) remain open.
-- **2d** Residualisation — graph → Refal source. **This is the "emits Refal" deliverable and remains open.**
+- **2d** Residualisation — a supported-subset residual wrapper now emits checked Refal source; complete graph → Refal residualisation remains open. **This is the "emits Refal" deliverable.**
 
 **Gate:** for every corpus program, symbolic `drive → clean → generalise → residualise → run` agrees with the Phase 1 interpreter on all test inputs. The current bounded ground driver is an intermediate regression surface, not this gate.
 
@@ -220,23 +220,24 @@ Honest reset. The clarified goal added a workstream, so the denominator grew. Th
 also *fell* from an earlier published 38%, because that figure gave full credit to two
 milestones an audit then found to be Partial.
 
-**~55% today**, after seven implementation milestones on 2026-08-17. The audited
+**~60% today**, after eight implementation milestones on 2026-08-17. The audited
 19.8% baseline remains the comparison point; the new score credits only tested frontend,
 bootstrap-runtime, deterministic graph infrastructure, bounded concrete driving,
-shape-aware symbolic driving, and conformance work. Complete Turchin graph driving,
-residualisation, the Refal compiler, and self-hosting remain unimplemented.
+shape-aware symbolic driving, supported-subset Refal residualization, and conformance work.
+Complete Turchin graph driving, graph residualisation, the Refal compiler, and self-hosting
+remain unimplemented.
 
 | Workstream | Weight | Now | After P1 | After P3 | After P5 |
 |---|---:|---:|---:|---:|---:|
 | Bootstrap frontend | 8.5% | 8.0 | 8.5 | 8.5 | 8.5 |
 | Bootstrap semantics | 6% | 5.0 | 6 | 6 | 6 |
 | Refal machine | 19.5% | 18.8 | 19.5 | 19.5 | 19.5 |
-| Graph of states / Refal emission | 8.5% | 7.4 | 7.4 | 8.5 | 8.5 |
+| Graph of states / Refal emission | 8.5% | 8.0 | 8.0 | 8.5 | 8.5 |
 | Static verification | 15% | 0.8 | 1 | 13 | 13 |
 | Compiler in Refal | 25.5% | 0 | 0 | 0 | 25.5 |
 | Self-hosting fixpoint | 13% | 0 | 0 | 0 | 13 |
 | Conformance / release | 4% | 1.5 | 1.5 | 2.5 | 3 |
-| **Total** | **100%** | **~55%** | **~42%** | **~58%** | **~97%** |
+| **Total** | **100%** | **~60%** | **~42%** | **~58%** | **~97%** |
 
 ---
 
@@ -264,7 +265,7 @@ All seven were approved by the the maintainer on 2026-08-05.
 | 4 | Native code generation deferred until after self-hosting | Approved |
 | 5 | Milestones 2 and 3 reset to Partial in the public documentation | Approved |
 | 6 | Completion figure restated honestly against the enlarged target | Approved |
-| 7 | Explicit work-list call execution, deterministic seed graph, SCC detection, structural cleanup, bounded ground driver, conservative symbolic driver, and shape-aware symbolic configurations added; weighted score advanced to 55% | Approved |
+| 7 | Explicit work-list call execution, deterministic seed graph, SCC detection, structural cleanup, bounded ground driver, conservative symbolic driver, shape-aware symbolic configurations, and supported-subset Refal residualization added; weighted score advanced to 60% | Approved |
 | 8 | Phase 0 begins immediately | Approved, in progress |
 
 The maintainer holds standing authority to take judgement calls inside this

@@ -47,6 +47,13 @@ fn symbolic_drive_file(path: &str, args: &[&str]) -> std::process::Output {
     command.output().expect("run refal binary")
 }
 
+fn residualize_file(path: &str, args: &[&str]) -> std::process::Output {
+    let mut command = Command::new(refal_bin());
+    command.args(["residualize", &workspace_path(path)]);
+    command.args(args);
+    command.output().expect("run refal binary")
+}
+
 /// Checks a source string, for conformance cases too small to warrant an example
 /// file. The temporary file is removed before the assertion runs.
 fn check_source(source: &str) -> std::process::Output {
@@ -139,6 +146,20 @@ fn drives_a_symbolic_identity_to_a_residual_expression_variable() {
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
         "steps: 2\nvisited: S0 -> S1\nresidual: e.Input\n"
+    );
+}
+
+#[test]
+fn emits_valid_refal_for_a_symbolic_identity_residual() {
+    let output = residualize_file("examples/symbolic-identity.ref", &[]);
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "$ENTRY Go {\n  e.Input = e.Input;\n}\n"
     );
 }
 

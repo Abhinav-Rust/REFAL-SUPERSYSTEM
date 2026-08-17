@@ -793,6 +793,19 @@ pub fn format_term_sequence(terms: &[CoreTerm]) -> String {
     output
 }
 
+/// Emit a valid Refal wrapper for a residual produced by the conservative symbolic driver.
+///
+/// The current emitter is intentionally small: it preserves the fixed symbolic input name
+/// `e.Input` used by `drive_symbolic` and emits the residual expression as the `Go` result.
+/// It is a residualization surface for the supported subset, not the complete graph-to-Refal
+/// compiler required by Turchin's architecture.
+pub fn residualize_symbolic(report: &SymbolicDriveReport) -> String {
+    format!(
+        "$ENTRY Go {{\n  e.Input = {};\n}}\n",
+        format_term_sequence(&report.residual)
+    )
+}
+
 pub fn format_seed_graph(graph: &StateGraph) -> String {
     let mut output = String::new();
     match graph.entry {
@@ -1377,6 +1390,25 @@ mod tests {
         assert_eq!(report.steps, 2);
         assert_eq!(report.visited, vec![StateId(0), StateId(1)]);
         assert_eq!(report.residual, vec![input[1].clone()]);
+    }
+
+    #[test]
+    fn residualizes_a_symbolic_identity_report_to_refal() {
+        let report = SymbolicDriveReport {
+            residual: vec![CoreTerm {
+                kind: CoreTermKind::Variable {
+                    kind: VariableKind::Expression,
+                    name: "Input".to_string(),
+                },
+                span: span(),
+            }],
+            visited: vec![StateId(0), StateId(1)],
+            steps: 2,
+        };
+        assert_eq!(
+            residualize_symbolic(&report),
+            "$ENTRY Go {\n  e.Input = e.Input;\n}\n"
+        );
     }
 
     #[test]

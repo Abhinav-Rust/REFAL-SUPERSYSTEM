@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Supported-subset Refal residualization milestone (2026-08-17)
+
+The weighted completion score advances from 55% to 60% with `residualize_symbolic` and the
+`refal residualize` command. A reduced symbolic identity report now emits the valid source
+`$ENTRY Go { e.Input = e.Input; }`, and the CLI regression re-checks the generated source with
+the semantic checker. This is the first tested Refal-emission surface, not complete graph
+residualization: Turchin configuration graphs, semantic cleaning, generalisation, Refal
+compiler authorship, and self-hosting remain unclaimed.
+
 ### Shape-aware symbolic configuration milestone (2026-08-17)
 
 The weighted completion score advances from 50% to 55% by extending the symbolic driver to
