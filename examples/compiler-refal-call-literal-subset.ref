@@ -1,0 +1,9 @@
+$EXTERN Prout;
+
+* Restricted source grammar: Name = <Callee e.Input>; Callee = 'literal';
+* The repeated Callee name is checked by Refal pattern matching.
+$ENTRY Go {
+  (e.Name " = <" e.Callee " e.Input>; " e.Callee " = 'ok';") =
+    <Prout "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { e.Input = <" e.Callee " e.Input>; } " e.Callee " { e.Input = 'ok'; }">;
+}
+
