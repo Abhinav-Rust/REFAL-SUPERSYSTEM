@@ -210,6 +210,7 @@ pub struct DriveReport {
 pub struct SymbolicDriveReport {
     pub residual: Vec<CoreTerm>,
     pub visited: Vec<StateId>,
+    pub whistle_states: Vec<StateId>,
     pub steps: usize,
 }
 
@@ -271,6 +272,7 @@ pub fn drive_ground(
     let mut context = DriveContext {
         graph,
         visited: Vec::new(),
+        whistle_states: Vec::new(),
         steps: 0,
         max_steps,
     };
@@ -324,6 +326,7 @@ pub fn drive_symbolic_with_input(
     let mut context = DriveContext {
         graph,
         visited: Vec::new(),
+        whistle_states: Vec::new(),
         steps: 0,
         max_steps,
     };
@@ -340,6 +343,7 @@ pub fn drive_symbolic_with_input(
     Ok(SymbolicDriveReport {
         residual,
         visited: context.visited,
+        whistle_states: context.whistle_states,
         steps: context.steps,
     })
 }
@@ -347,6 +351,7 @@ pub fn drive_symbolic_with_input(
 struct DriveContext<'a> {
     graph: &'a StateGraph,
     visited: Vec<StateId>,
+    whistle_states: Vec<StateId>,
     steps: usize,
     max_steps: usize,
 }
@@ -417,6 +422,12 @@ impl<'a> DriveContext<'a> {
                 SymbolicMatch::Unknown => unknown_before = true,
                 SymbolicMatch::Yes if unknown_before => return Ok(SymbolicInvoke::Residual),
                 SymbolicMatch::Yes => {
+                    if self.visited.contains(&state.id) {
+                        if !self.whistle_states.contains(&state.id) {
+                            self.whistle_states.push(state.id);
+                        }
+                        return Ok(SymbolicInvoke::Residual);
+                    }
                     self.visited.push(state.id);
                     return self.instantiate_symbolic(&state.result, &bindings);
                 }
@@ -1583,6 +1594,45 @@ mod tests {
     }
 
     #[test]
+    fn whistles_on_a_repeated_symbolic_configuration() {
+        let expression = CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind: VariableKind::Expression,
+                name: "Input".to_string(),
+            },
+            span: span(),
+        };
+        let graph = StateGraph {
+            entry: Some(StateId(0)),
+            states: vec![GraphState {
+                id: StateId(0),
+                function: "Loop".to_string(),
+                sentence: 0,
+                pattern: vec![expression.clone()],
+                conditions: Vec::new(),
+                result: vec![CoreTerm {
+                    kind: CoreTermKind::Call {
+                        name: "Loop".to_string(),
+                        args: vec![expression.clone()],
+                    },
+                    span: span(),
+                }],
+                span: span(),
+            }],
+            transitions: vec![GraphTransition {
+                from: StateId(0),
+                to: StateId(0),
+                callee: "Loop".to_string(),
+            }],
+        };
+        let report = drive_symbolic_with_input(&graph, vec![expression], 10).expect("drive");
+        assert_eq!(report.steps, 2);
+        assert_eq!(report.visited, vec![StateId(0)]);
+        assert_eq!(report.whistle_states, vec![StateId(0)]);
+        assert_eq!(format_term_sequence(&report.residual), "<Loop e.Input>");
+    }
+
+    #[test]
     fn residualizes_a_symbolic_identity_report_to_refal() {
         let report = SymbolicDriveReport {
             residual: vec![CoreTerm {
@@ -1593,6 +1643,7 @@ mod tests {
                 span: span(),
             }],
             visited: vec![StateId(0), StateId(1)],
+            whistle_states: vec![],
             steps: 2,
         };
         assert_eq!(
