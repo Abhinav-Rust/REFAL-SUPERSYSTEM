@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Post-95 incremental compiler analysis (2026-08-17)
+
+The Refal-authored compiler subset now has an additional checked fixture for one literal definition,
+`Name = 'literal';`, with generated-source validation and execution coverage. The symbolic driver
+also records repeated state configurations as deterministic whistle diagnostics and residualises the
+recursive call rather than looping. These changes improve the evidence surface but do not change the
+published 95% score or claim full compiler coverage, generalisation, or self-hosting.
+
 ### Bounded compiler fixpoint milestone (2026-08-17)
 
 The weighted completion score advances from 90% to 95%. The new `refal fixpoint` command applies
