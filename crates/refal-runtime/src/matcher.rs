@@ -105,7 +105,7 @@ fn match_all_from(
                 match_expression_all(variable, input, rest_pattern, bindings)
             }
         },
-        TermKind::Call { .. } => Err(MatchError::CallsAreNotPatterns),
+        TermKind::Call { .. } | TermKind::Block { .. } => Err(MatchError::CallsAreNotPatterns),
     }
 }
 

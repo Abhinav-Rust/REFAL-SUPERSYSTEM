@@ -195,12 +195,20 @@ The guarantee this compiler intends to publish, once Tier 1 lands:
 
 ## Project Status
 
-**Completion against the goal: ~19%.**
+**Completion against the goal: 25%.**
 
 That figure counts a compiler *written in Refal* that emits Refal and compiles its own
-sources, with the verification tiers above, as 100%. It went *down* from an earlier
-published estimate of 38%, for two reasons, both of which are the point of tracking it
-honestly:
+sources, with the verification tiers above, as 100%. The first implementation milestone
+moved the weighted score from the audited 19.8% baseline to 25.0%. This is progress toward
+the target, not a claim that the Turchin compiler or self-hosting exists yet.
+
+The estimate is kept deliberately evidence-backed. The milestone includes end-to-end
+sentence-ending blocks, the Classic macrodigit lexer bound, integer arithmetic
+(`Add`/`Sub`/`Mul`/`Div`/`Divmod`/`Mod`/`Compare`), descriptor-backed file I/O
+(`Card`/`Open`/`Get`/`Put`/`Putout`), semantic registration, runtime tests, and CLI fixtures.
+
+The earlier figure went *down* from an older published estimate of 38%, for two reasons,
+both of which are the point of tracking it honestly:
 
 - The earlier figure credited Milestones 2 and 3 as **Complete**. They were not. Eight
   Classic Refal-5 conformance defects were confirmed against the reference this project
@@ -216,9 +224,9 @@ generate code.
 | # | Milestone | Status | Evidence |
 |---|---|---|---|
 | 1 | Public-grade foundation | ✅ Complete | Workspace, layout, clean-room policy, MIT licence, CI gate |
-| 2 | Classic Refal-5 front end | 🔶 Partial | Lexer/parser cover most of the Classic surface with spans and diagnostics. **Blocks (`, arg : { block }`) do not parse** — a whole grammar production is missing ([#13](../../issues/13)) |
+| 2 | Classic Refal-5 front end | 🔶 Partial | Lexer/parser cover most of the Classic surface with spans and diagnostics. Sentence-ending blocks now parse, check, execute, and lower recursively; the traceable conformance corpus is still incomplete |
 | 3 | Semantic checker | 🔶 Partial | Entry points, declarations, name equivalence, call checks, variable binding, condition legality. Entry-point rules corrected in `641ffc0` |
-| 4 | Refal machine | 🔶 Partial | Object-expression runtime, `s.`/`t.`/`e.` matching with backtracking, conditions, recursion guard. **Tree-walking over the host stack, capped at depth 1024; 9 of ~40 builtins; no file I/O or arithmetic** ([#7](../../issues/7)) |
+| 4 | Refal machine | 🔶 Partial | Object-expression runtime, `s.`/`t.`/`e.` matching with backtracking, conditions, recursion guard, arithmetic, and descriptor-backed file I/O. Still tree-walking over the host stack, capped at depth 1024; the scalable machine and remaining Classic builtins are open ([#7](../../issues/7)) |
 | 5 | Graph of states | ⬜ Not started | `refal-core` is currently an AST-shaped copy plus a deterministic formatter, not a lowering |
 | 6 | Tier 1 analyses | ⬜ Not started | Requires Milestone 5 |
 | 7 | Compiler written in Refal | ⬜ Not started | Gated on Milestone 4: a Refal compiler cannot read a source file until `Card`/`Open`/`Get` exist |
@@ -235,6 +243,7 @@ The full phase plan, gates and completion accounting are in [`docs/PLAN.md`](doc
 
 | Date | Change |
 |---|---|
+| 2026-08-17 | First 5-point implementation milestone: Refal blocks, macrodigit lexer bound, integer arithmetic, descriptor-backed file I/O, semantic registration, runtime tests, and CLI fixtures; workspace gates pass |
 | 2026-08-05 | Six conformance defects fixed: doubled-quote escaping, juxtaposed one-character variables, signed macrodigits, variable-index case, identifier equivalence for data, multiple `$ENTRY` with `Go` as the program entry point (`641ffc0`). Tests 83 → 102 |
 | 2026-08-05 | Nineteen Turchin primary sources indexed with a verifying fetch script (`6a2ae3a`) |
 | 2026-08-05 | Refal-5 attribution corrected to Turchin (`c1994bb`) |
@@ -245,9 +254,9 @@ The full phase plan, gates and completion accounting are in [`docs/PLAN.md`](doc
 | Component | Status |
 |---|---|
 | `refal-ast` | 🔶 AST plus shared Refal-5 name-equivalence helpers, each citing its clause |
-| `refal-syntax` | 🔶 Lexer and parser; blocks outstanding ([#13](../../issues/13)) |
+| `refal-syntax` | 🔶 Lexer and parser; blocks and macrodigit-bound tests are implemented; full traceable conformance remains |
 | `refal-semantics` | 🔶 Legality checks for the supported surface |
-| `refal-runtime` | 🔶 Correct for what it covers; architecture must be replaced for self-hosting |
+| `refal-runtime` | 🔶 Correct for the covered subset; arithmetic and descriptor-backed file I/O are implemented, but architecture must be replaced for self-hosting |
 | `refal-core` | ⬜ Normalised formatter; not yet a lowering |
 | `refal-cli` | 🔶 `check`, `dump-ast`, `lower`, `run` |
 | CI and quality gates | ✅ `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` |

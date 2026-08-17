@@ -100,6 +100,8 @@ fn accepts_positive_examples() {
         "examples/shorthand-variables.ref",
         "examples/identifier-equivalence.ref",
         "examples/variable-index-equivalence.ref",
+        "examples/block-ending.ref",
+        "examples/runtime-arithmetic.ref",
     ] {
         let output = check_file(path);
 
@@ -536,6 +538,7 @@ fn runs_runtime_conformance_examples() {
             &[] as &[&str],
             "42\n",
         ),
+        ("examples/runtime-arithmetic.ref", &[] as &[&str], "17\n"),
         ("examples/runtime-type.ref", &[] as &[&str], "LA\n"),
     ] {
         let output = run_file(path, args);
@@ -578,7 +581,7 @@ fn reports_declared_but_unimplemented_external_during_check() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains(
-            "semantic error at 4:5: external function `Card` is declared but not implemented by the bootstrap runtime"
+            "semantic error at 4:5: external function `MissingExternal` is declared but not implemented by the bootstrap runtime"
         ),
         "unexpected stderr:\n{stderr}"
     );

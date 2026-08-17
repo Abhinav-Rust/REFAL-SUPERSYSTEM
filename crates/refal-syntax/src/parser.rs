@@ -118,13 +118,38 @@ impl Parser {
         }
 
         self.expect(TokenKind::Equals)?;
-        let result = self.parse_terms_until(&[TokenKind::Semicolon])?;
+        let result = if self.eat(TokenKind::Comma) {
+            vec![self.parse_block_ending()?]
+        } else {
+            self.parse_terms_until(&[TokenKind::Semicolon])?
+        };
         let end = self.expect(TokenKind::Semicolon)?.end;
 
         Ok(Sentence {
             pattern,
             conditions,
             result,
+            span: refal_ast::Span { start, end },
+        })
+    }
+
+    fn parse_block_ending(&mut self) -> Result<Term, ParseError> {
+        let start = self.peek().span.start;
+        let argument = self.parse_terms_until(&[TokenKind::Colon])?;
+        self.expect(TokenKind::Colon)?;
+        self.expect(TokenKind::LBrace)?;
+
+        let mut sentences = Vec::new();
+        while !self.at(TokenKind::RBrace) && !self.at(TokenKind::Eof) {
+            sentences.push(self.parse_sentence()?);
+        }
+        let end = self.expect(TokenKind::RBrace)?.end;
+
+        Ok(Term {
+            kind: TermKind::Block {
+                argument,
+                sentences,
+            },
             span: refal_ast::Span { start, end },
         })
     }
@@ -301,6 +326,42 @@ mod tests {
         assert_eq!(sentence.conditions[0].result.len(), 1);
         assert_eq!(sentence.conditions[0].pattern.len(), 3);
         assert_eq!(sentence.result.len(), 1);
+    }
+
+    #[test]
+    fn parses_block_ending_with_nested_sentences() {
+        let tokens = Lexer::new(
+            "$ENTRY Go { s.X = , s.X : { 'A' = 'yes'; e.Rest = , e.Rest : { = 'nested'; }; }; }",
+        )
+        .tokenize()
+        .unwrap();
+        let mut parser = Parser::new(tokens);
+        let program = parser.parse_program().unwrap();
+        let sentence = &first_function(&program).sentences[0];
+
+        let TermKind::Block {
+            argument,
+            sentences,
+        } = &sentence.result[0].kind
+        else {
+            panic!("expected a block-ending result")
+        };
+        assert_eq!(argument.len(), 1);
+        assert_eq!(sentences.len(), 2);
+        assert!(matches!(
+            &sentences[1].result[0].kind,
+            TermKind::Block { .. }
+        ));
+    }
+
+    #[test]
+    fn rejects_an_unclosed_block_ending() {
+        let tokens = Lexer::new("$ENTRY Go { = , 'A' : { 'A' = 'yes'; }")
+            .tokenize()
+            .unwrap();
+        let mut parser = Parser::new(tokens);
+        let error = parser.parse_program().unwrap_err();
+        assert!(error.message.contains("Semicolon") || error.message.contains("RBrace"));
     }
 
     #[test]

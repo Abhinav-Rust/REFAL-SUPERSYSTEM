@@ -1,0 +1,5 @@
+$EXTERN Add, Prout;
+
+$ENTRY Go {
+  = <Prout <Add 12 5>>;
+}

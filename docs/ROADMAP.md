@@ -24,9 +24,10 @@ Status: **Complete**.
 
 ## Milestone 2: Classic Refal-5 Front End
 
-Status: **Partial**, corrected 2026-08-05 (previously reported as Complete). The
-`block-ending` production of the reference grammar is unimplemented (issue #13), and four
-lexical rows diverged from the reference until `641ffc0`. Completion is governed by
+Status: **Partial**, updated 2026-08-17. The sentence-ending block production and
+macrodigit bound now have implementation and test evidence; the traceable conformance
+corpus remains incomplete. Four historical lexical rows diverged from the reference until
+`641ffc0`. Completion is governed by
 [`FRONTEND-COVERAGE.md`](FRONTEND-COVERAGE.md).
 
 - Complete token coverage.
@@ -108,6 +109,11 @@ Completed so far:
   host-process stack exhaustion.
 - Condition-aware expression backtracking: later valid expression splits are
   considered when an earlier split fails a sentence condition.
+- Sentence-ending blocks with recursive parsing, inherited bindings, branch fallthrough,
+  runtime evaluation, and normalized lowering.
+- `Card`, `Open`, `Get`, `Put`, and `Putout` with descriptor-backed file handles and
+  captured terminal output.
+- Integer `Add`, `Sub`, `Mul`, `Div`, `Divmod`, `Mod`, and `Compare` with checked results.
 
 ## Milestone 5: Core Refal Lowering
 

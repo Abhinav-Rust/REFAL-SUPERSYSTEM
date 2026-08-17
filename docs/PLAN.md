@@ -221,19 +221,22 @@ Honest reset. The clarified goal added a workstream, so the denominator grew. Th
 also *fell* from an earlier published 38%, because that figure gave full credit to two
 milestones an audit then found to be Partial.
 
-**~19% today**, after the six conformance fixes in `641ffc0`.
+**~25% today**, after the first implementation milestone on 2026-08-17. The audited
+19.8% baseline remains the comparison point; the new score credits only tested frontend,
+bootstrap-runtime, and conformance work. The graph, Refal compiler, and self-hosting rows
+remain at zero beyond their existing formatter credit.
 
 | Workstream | Weight | Now | After P1 | After P3 | After P5 |
 |---|---:|---:|---:|---:|---:|
-| Bootstrap frontend | 8.5% | 7.0 | 8.5 | 8.5 | 8.5 |
+| Bootstrap frontend | 8.5% | 8.0 | 8.5 | 8.5 | 8.5 |
 | Bootstrap semantics | 6% | 5.0 | 6 | 6 | 6 |
-| Refal machine | 19.5% | 4.3 | 19.5 | 19.5 | 19.5 |
+| Refal machine | 19.5% | 7.6 | 19.5 | 19.5 | 19.5 |
 | Graph of states / Refal emission | 8.5% | 2.1 | 2.1 | 8.5 | 8.5 |
 | Static verification | 15% | 0.8 | 1 | 13 | 13 |
 | Compiler in Refal | 25.5% | 0 | 0 | 0 | 25.5 |
 | Self-hosting fixpoint | 13% | 0 | 0 | 0 | 13 |
-| Conformance / release | 4% | 0.6 | 1.5 | 2.5 | 3 |
-| **Total** | **100%** | **~19%** | **~39%** | **~58%** | **~97%** |
+| Conformance / release | 4% | 1.3 | 1.5 | 2.5 | 3 |
+| **Total** | **100%** | **~25%** | **~39%** | **~58%** | **~97%** |
 
 ---
 

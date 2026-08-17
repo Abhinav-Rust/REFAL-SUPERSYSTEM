@@ -4,10 +4,10 @@ This matrix is the completion contract for Milestone 2. A row is complete only w
 lexer/parser behaviour and positive and negative tests are present.
 
 **Milestone 2 is PARTIAL, not complete.** An audit against the normative reference on
-2026-08-05 found that sentence-ending blocks are not implemented at all, and that four
-lexical rows were marked Complete while the behaviour diverged from the reference. The
-lexical defects are fixed in `641ffc0`; blocks remain open as issue #13. A row below says
-Complete only where a test proves it.
+2026-08-05 found that sentence-ending blocks were not implemented and that four lexical
+rows diverged from the reference. The historical lexical defects are fixed in `641ffc0`;
+blocks and the macrodigit bound are now implemented with parser, semantic, runtime, core,
+and CLI evidence. A row below says Complete only where a test proves it.
 
 Primary clean-room references:
 
@@ -45,7 +45,7 @@ extensions must not silently enter the Classic Refal-5 frontend.
 | One-character variable shorthand | Complete | Lexer test covers letter and digit indices |
 | Juxtaposed shorthand variables `s1s2s3` (1.4) | Complete | Fixed in `641ffc0`. Lexer test asserts token-stream equality with `s1 s2 s3`, plus a mixed-kind case |
 | Variable index case-insensitivity `e.X` = `e.x` (1.3) | Complete | Fixed in `641ffc0`. Canonical comparison keys; spelling preserved for diagnostics; runtime example and CLI golden test |
-| Macrodigit upper bound of 2^32 - 1 (1.2.2) | **Missing** | Numbers are unbounded digit strings. Must be corrected before arithmetic builtins land. #11 follow-up |
+| Macrodigit upper bound of 2^32 - 1 (1.2.2) | Complete | Lexer rejects the first value above `2^32 - 1`; boundary tests cover both sides |
 | Invalid-token diagnostics with spans | Complete | CLI golden tests cover identifier and malformed-number lex errors with line/column output |
 
 ## Grammar Coverage
@@ -63,17 +63,17 @@ extensions must not silently enter the Classic Refal-5 frontend.
 | Sentence alternatives | Complete | Runtime/parser examples |
 | Empty patterns and results | Complete | Hello example |
 | Condition chains | Complete | Parser and interpreter tests |
-| Sentence-ending blocks `, arg : { block }` | **Missing** | `block-ending` is a normative production of the reference grammar (section 3). Currently a parse error. Requires changes to the AST, parser, semantics, runtime and formatter. Issue #13 |
+| Sentence-ending blocks `, arg : { block }` | Complete | Recursive AST/parser/semantic/runtime/core implementation with nested-block, scope, fallthrough, CLI, and round-trip tests |
 | Calls prohibited in patterns | Complete | Semantic checker and CLI golden tests reject calls in patterns |
 | Optional semicolons between top-level definitions | Complete | Parser test covers separated definitions |
-| Full malformed-program golden suite | Partial | Negative fixtures cover unresolved calls, unbound variables, lexical errors, malformed numbers, signed macrodigits and pattern calls. Not yet traceable clause by clause to the reference, and block-ending cases cannot be written until #13 lands |
+| Full malformed-program golden suite | Partial | Negative fixtures cover unresolved calls, unbound variables, lexical errors, malformed numbers, signed macrodigits and pattern calls. The suite is not yet traceable clause by clause to the reference |
 
 ## Milestone 2 Exit Criteria
 
 **Not met.** The list below is the contract, not a claim of completion.
 
-- [ ] Every row above is `Complete` — not met, sentence-ending blocks (#13) and the
-      macrodigit bound are outstanding.
+- [ ] Every row above is `Complete` — not met; the traceable corpus and remaining reference
+      coverage are still outstanding.
 - [ ] Positive and negative golden fixtures cover every lexical and grammar category in
       scope, each traceable to the clause of the reference it exercises.
 - [x] `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` and

@@ -69,7 +69,14 @@ pub enum TermKind {
     Symbol(Symbol),
     Variable(Variable),
     Bracket(Vec<Term>),
-    Call { name: String, args: Vec<Term> },
+    Block {
+        argument: Vec<Term>,
+        sentences: Vec<Sentence>,
+    },
+    Call {
+        name: String,
+        args: Vec<Term>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

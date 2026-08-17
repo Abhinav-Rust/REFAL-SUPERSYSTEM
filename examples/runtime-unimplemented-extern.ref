@@ -1,5 +1,5 @@
-$EXTERN Card;
+$EXTERN MissingExternal;
 
 $ENTRY Go {
-  = <Card>;
+  = <MissingExternal>;
 }

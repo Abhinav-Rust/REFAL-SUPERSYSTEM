@@ -48,9 +48,19 @@ pub enum CoreTermKind {
     Char(char),
     Identifier(String),
     Number(String),
-    Variable { kind: VariableKind, name: String },
+    Variable {
+        kind: VariableKind,
+        name: String,
+    },
     Bracket(Vec<CoreTerm>),
-    Call { name: String, args: Vec<CoreTerm> },
+    Block {
+        argument: Vec<CoreTerm>,
+        sentences: Vec<CoreSentence>,
+    },
+    Call {
+        name: String,
+        args: Vec<CoreTerm>,
+    },
 }
 
 /// Lowers a checked AST into the stable representation consumed by backends.
@@ -95,23 +105,7 @@ pub fn format_program(program: &CoreProgram) -> String {
         output.push_str(&function.name);
         output.push_str(" {\n");
         for sentence in &function.sentences {
-            output.push_str("  ");
-            format_terms(&sentence.pattern, &mut output);
-            for condition in &sentence.conditions {
-                output.push_str(", ");
-                format_terms(&condition.result, &mut output);
-                output.push_str(" : ");
-                format_terms(&condition.pattern, &mut output);
-            }
-            if !sentence.pattern.is_empty() || !sentence.conditions.is_empty() {
-                output.push(' ');
-            }
-            output.push('=');
-            if !sentence.result.is_empty() {
-                output.push(' ');
-                format_terms(&sentence.result, &mut output);
-            }
-            output.push_str(";\n");
+            format_sentence(sentence, &mut output, 2);
         }
         output.push('}');
         if index + 1 < program.functions.len() {
@@ -122,6 +116,47 @@ pub fn format_program(program: &CoreProgram) -> String {
     }
 
     output
+}
+
+fn format_sentence(sentence: &CoreSentence, output: &mut String, indent: usize) {
+    output.push_str(&" ".repeat(indent));
+    format_terms(&sentence.pattern, output);
+    for condition in &sentence.conditions {
+        output.push_str(", ");
+        format_terms(&condition.result, output);
+        output.push_str(" : ");
+        format_terms(&condition.pattern, output);
+    }
+    if !sentence.pattern.is_empty() || !sentence.conditions.is_empty() {
+        output.push(' ');
+    }
+    output.push('=');
+
+    if sentence.result.len() == 1
+        && let CoreTermKind::Block {
+            argument,
+            sentences,
+        } = &sentence.result[0].kind
+    {
+        output.push_str(" ,");
+        if !argument.is_empty() {
+            output.push(' ');
+            format_terms(argument, output);
+        }
+        output.push_str(" : {\n");
+        for nested in sentences {
+            format_sentence(nested, output, indent + 2);
+        }
+        output.push_str(&" ".repeat(indent));
+        output.push_str("};\n");
+        return;
+    }
+
+    if !sentence.result.is_empty() {
+        output.push(' ');
+        format_terms(&sentence.result, output);
+    }
+    output.push_str(";\n");
 }
 
 fn lower_sentence(sentence: &refal_ast::Sentence) -> CoreSentence {
@@ -151,6 +186,13 @@ fn lower_term(term: &refal_ast::Term) -> CoreTerm {
             name: variable.name.clone(),
         },
         TermKind::Bracket(inner) => CoreTermKind::Bracket(inner.iter().map(lower_term).collect()),
+        TermKind::Block {
+            argument,
+            sentences,
+        } => CoreTermKind::Block {
+            argument: argument.iter().map(lower_term).collect(),
+            sentences: sentences.iter().map(lower_sentence).collect(),
+        },
         TermKind::Call { name, args } => CoreTermKind::Call {
             name: name.clone(),
             args: args.iter().map(lower_term).collect(),
@@ -195,6 +237,9 @@ fn format_term(term: &CoreTerm, output: &mut String) {
             output.push('(');
             format_terms(inner, output);
             output.push(')');
+        }
+        CoreTermKind::Block { .. } => {
+            unreachable!("block-ending terms are formatted as sentence bodies")
         }
         CoreTermKind::Call { name, args } => {
             output.push('<');
@@ -253,6 +298,38 @@ mod tests {
         assert_eq!(
             format_program(&core),
             "$ENTRY Go {\n  e.Input = <Print ('x')>;\n}\n"
+        );
+    }
+
+    #[test]
+    fn lowers_and_formats_nested_block_endings() {
+        let sentence = Sentence {
+            pattern: vec![],
+            conditions: vec![],
+            result: vec![term(TermKind::Block {
+                argument: vec![term(TermKind::Symbol(Symbol::Char('A')))],
+                sentences: vec![Sentence {
+                    pattern: vec![term(TermKind::Symbol(Symbol::Char('A')))],
+                    conditions: vec![],
+                    result: vec![term(TermKind::Symbol(Symbol::Char('Y')))],
+                    span: span(),
+                }],
+            })],
+            span: span(),
+        };
+        let program = Program {
+            items: vec![Item::Function(Function {
+                name: "Go".to_string(),
+                visibility: Visibility::Entry,
+                sentences: vec![sentence],
+                span: span(),
+            })],
+        };
+
+        let core = lower_program(&program);
+        assert_eq!(
+            format_program(&core),
+            "$ENTRY Go {\n  = , 'A' : {\n    'A' = 'Y';\n  };\n}\n"
         );
     }
 

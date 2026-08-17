@@ -8,7 +8,8 @@ use refal_ast::{
 };
 
 const SUPPORTED_RUNTIME_EXTERNS: &[&str] = &[
-    "CHR", "EXPLODE", "IMPLODE", "NUMB", "ORD", "PRINT", "PROUT", "SYMB", "TYPE",
+    "ADD", "CARD", "CHR", "COMPARE", "DIV", "DIVMOD", "EXPLODE", "GET", "IMPLODE", "MOD", "MUL",
+    "NUMB", "OPEN", "ORD", "PRINT", "PROUT", "PUT", "PUTOUT", "SUB", "SYMB", "TYPE",
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -111,14 +112,18 @@ impl Checker {
             };
 
             for sentence in &function.sentences {
-                self.check_pattern_terms(&sentence.pattern);
-                for condition in &sentence.conditions {
-                    self.check_expression_terms(&condition.result);
-                    self.check_pattern_terms(&condition.pattern);
-                }
-                self.check_expression_terms(&sentence.result);
+                self.check_sentence_calls(sentence);
             }
         }
+    }
+
+    fn check_sentence_calls(&mut self, sentence: &refal_ast::Sentence) {
+        self.check_pattern_terms(&sentence.pattern);
+        for condition in &sentence.conditions {
+            self.check_expression_terms(&condition.result);
+            self.check_pattern_terms(&condition.pattern);
+        }
+        self.check_expression_terms(&sentence.result);
     }
 
     fn check_expression_terms(&mut self, terms: &[Term]) {
@@ -143,6 +148,15 @@ impl Checker {
                     self.check_expression_terms(args);
                 }
                 TermKind::Bracket(inner) => self.check_expression_terms(inner),
+                TermKind::Block {
+                    argument,
+                    sentences,
+                } => {
+                    self.check_expression_terms(argument);
+                    for sentence in sentences {
+                        self.check_sentence_calls(sentence);
+                    }
+                }
                 TermKind::Symbol(_) | TermKind::Variable(_) => {}
             }
         }
@@ -154,6 +168,12 @@ impl Checker {
                 TermKind::Call { .. } => {
                     self.push(
                         "function calls are not allowed in patterns".to_string(),
+                        term.span,
+                    );
+                }
+                TermKind::Block { .. } => {
+                    self.push(
+                        "block-ending expressions are not allowed in patterns".to_string(),
                         term.span,
                     );
                 }
@@ -170,17 +190,25 @@ impl Checker {
             };
 
             for sentence in &function.sentences {
-                let mut bound = HashSet::new();
-                self.collect_pattern_bindings(&sentence.pattern, &mut bound);
-
-                for condition in &sentence.conditions {
-                    self.require_bound_variables(&condition.result, &bound);
-                    self.collect_pattern_bindings(&condition.pattern, &mut bound);
-                }
-
-                self.require_bound_variables(&sentence.result, &bound);
+                self.check_sentence_variables(sentence, &HashSet::new());
             }
         }
+    }
+
+    fn check_sentence_variables(
+        &mut self,
+        sentence: &refal_ast::Sentence,
+        inherited: &HashSet<VariableKey>,
+    ) {
+        let mut bound = inherited.clone();
+        self.collect_pattern_bindings(&sentence.pattern, &mut bound);
+
+        for condition in &sentence.conditions {
+            self.require_bound_variables(&condition.result, &bound);
+            self.collect_pattern_bindings(&condition.pattern, &mut bound);
+        }
+
+        self.require_bound_variables(&sentence.result, &bound);
     }
 
     fn collect_pattern_bindings(&mut self, terms: &[Term], bound: &mut HashSet<VariableKey>) {
@@ -211,6 +239,10 @@ impl Checker {
                     bound.insert(VariableKey::new(variable));
                 }
                 TermKind::Bracket(inner) => self.collect_pattern_bindings(inner, bound),
+                TermKind::Block { .. } => self.push(
+                    "block-ending expressions are not allowed in patterns".to_string(),
+                    term.span,
+                ),
                 TermKind::Call { args, .. } => self.require_bound_variables(args, bound),
                 TermKind::Symbol(_) => {}
             }
@@ -238,6 +270,15 @@ impl Checker {
                     }
                 }
                 TermKind::Bracket(inner) => self.require_bound_variables(inner, bound),
+                TermKind::Block {
+                    argument,
+                    sentences,
+                } => {
+                    self.require_bound_variables(argument, bound);
+                    for sentence in sentences {
+                        self.check_sentence_variables(sentence, bound);
+                    }
+                }
                 TermKind::Call { args, .. } => self.require_bound_variables(args, bound),
                 TermKind::Symbol(_) => {}
             }
@@ -303,6 +344,87 @@ mod tests {
         };
 
         assert!(check_program(&program).is_ok());
+    }
+
+    #[test]
+    fn accepts_outer_bindings_inside_a_block_ending() {
+        let span = empty_span();
+        let outer = |name: &str| Term {
+            kind: TermKind::Variable(Variable {
+                kind: VariableKind::Expression,
+                name: name.to_string(),
+            }),
+            span,
+        };
+        let nested = Sentence {
+            pattern: vec![outer("Input")],
+            conditions: vec![],
+            result: vec![outer("Input")],
+            span,
+        };
+        let program = Program {
+            items: vec![Item::Function(Function {
+                name: "Go".to_string(),
+                visibility: Visibility::Entry,
+                sentences: vec![Sentence {
+                    pattern: vec![outer("Input")],
+                    conditions: vec![],
+                    result: vec![Term {
+                        kind: TermKind::Block {
+                            argument: vec![outer("Input")],
+                            sentences: vec![nested],
+                        },
+                        span,
+                    }],
+                    span,
+                }],
+                span,
+            })],
+        };
+
+        assert!(check_program(&program).is_ok());
+    }
+
+    #[test]
+    fn rejects_an_unbound_variable_inside_a_block_ending() {
+        let span = empty_span();
+        let program = Program {
+            items: vec![Item::Function(Function {
+                name: "Go".to_string(),
+                visibility: Visibility::Entry,
+                sentences: vec![Sentence {
+                    pattern: vec![],
+                    conditions: vec![],
+                    result: vec![Term {
+                        kind: TermKind::Block {
+                            argument: vec![],
+                            sentences: vec![Sentence {
+                                pattern: vec![],
+                                conditions: vec![],
+                                result: vec![Term {
+                                    kind: TermKind::Variable(Variable {
+                                        kind: VariableKind::Expression,
+                                        name: "Missing".to_string(),
+                                    }),
+                                    span,
+                                }],
+                                span,
+                            }],
+                        },
+                        span,
+                    }],
+                    span,
+                }],
+                span,
+            })],
+        };
+
+        let diagnostics = check_program(&program).unwrap_err();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| { diagnostic.message.contains("unbound variable") })
+        );
     }
 
     #[test]
@@ -574,7 +696,7 @@ mod tests {
             items: vec![
                 Item::Declaration(refal_ast::Declaration {
                     kind: DeclarationKind::Extern,
-                    names: vec!["Card".to_string()],
+                    names: vec!["MissingExternal".to_string()],
                     span: empty_span(),
                 }),
                 Item::Function(Function {
@@ -585,7 +707,7 @@ mod tests {
                         conditions: vec![],
                         result: vec![Term {
                             kind: TermKind::Call {
-                                name: "Card".to_string(),
+                                name: "MissingExternal".to_string(),
                                 args: vec![],
                             },
                             span: call_span,
@@ -601,7 +723,7 @@ mod tests {
 
         assert!(diagnostics.iter().any(|diagnostic| diagnostic
             == &Diagnostic {
-                message: "external function `Card` is declared but not implemented by the bootstrap runtime"
+                message: "external function `MissingExternal` is declared but not implemented by the bootstrap runtime"
                     .to_string(),
                 span: call_span
             }));

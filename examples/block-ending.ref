@@ -1,0 +1,9 @@
+$EXTERN Prout;
+
+$ENTRY Go {
+  = , 'A' : {
+    'A' = <Prout 'yes'>;
+    e.Rest = <Prout 'no'>;
+  };
+}
+

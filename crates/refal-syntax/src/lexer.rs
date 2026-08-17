@@ -3,6 +3,7 @@ use std::collections::VecDeque;
 /// Classic Refal-5 limits a quoted character string to 255 characters
 /// (reference 1.2.4); longer text must be split into several strings.
 const MAX_LITERAL_CHARS: usize = 255;
+const MAX_MACRODIGIT: u64 = u32::MAX as u64;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token {
@@ -258,6 +259,21 @@ impl<'a> Lexer<'a> {
             });
         }
 
+        if !is_real {
+            let value = number.parse::<u64>().unwrap_or(u64::MAX);
+            if value > MAX_MACRODIGIT {
+                return Err(LexerError {
+                    message: format!(
+                        "macrodigit exceeds the Classic Refal-5 maximum of {MAX_MACRODIGIT}"
+                    ),
+                    span: Span {
+                        start,
+                        end: self.cursor,
+                    },
+                });
+            }
+        }
+
         Ok(TokenKind::Number(number))
     }
 
@@ -477,6 +493,18 @@ mod tests {
         assert_eq!(tokens[0].kind, TokenKind::Char('O'));
         assert_eq!(tokens[1].kind, TokenKind::Char('K'));
         assert_eq!(tokens[2].kind, TokenKind::Eof);
+    }
+
+    #[test]
+    fn accepts_the_maximum_classic_macrodigit() {
+        let tokens = Lexer::new("4294967295").tokenize().unwrap();
+        assert_eq!(tokens[0].kind, TokenKind::Number("4294967295".to_string()));
+    }
+
+    #[test]
+    fn rejects_a_macrodigit_above_the_classic_limit() {
+        let error = Lexer::new("4294967296").tokenize().unwrap_err();
+        assert!(error.message.contains("maximum of 4294967295"));
     }
 
     #[test]
