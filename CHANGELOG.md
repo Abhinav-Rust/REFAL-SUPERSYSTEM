@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Ground graph-driving milestone (2026-08-17)
+
+The weighted completion score advances from 40% to 45% with deterministic SCC detection,
+condition-preserving sentence states, function-aware structural reachability cleanup, and a
+bounded concrete graph driver exposed as `refal drive`. The recursive `runtime-recursion.ref`
+fixture now proves a six-step state trace and the output `'c' 'b' 'a'`; the cleanup regression
+also proves that reachable fallback and recursive sentences are retained. This is an
+executable graph foundation, not symbolic Turchin driving, semantic cleaning, generalisation,
+residualisation, Refal emission, or self-hosting.
+
 ### Explicit machine and graph seed milestone (2026-08-17)
 
 The weighted completion score advances from 35% to 40% with an explicit work-list execution

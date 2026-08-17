@@ -33,6 +33,13 @@ fn graph_file(path: &str) -> std::process::Output {
         .expect("run refal binary")
 }
 
+fn drive_file(path: &str, args: &[&str]) -> std::process::Output {
+    let mut command = Command::new(refal_bin());
+    command.args(["drive", &workspace_path(path)]);
+    command.args(args);
+    command.output().expect("run refal binary")
+}
+
 /// Checks a source string, for conformance cases too small to warrant an example
 /// file. The temporary file is removed before the assertion runs.
 fn check_source(source: &str) -> std::process::Output {
@@ -96,7 +103,21 @@ fn prints_a_deterministic_seed_graph() {
     );
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
-        "entry: S0\nS0 = Go#0\nS1 = Reverse#0\nS0 -Reverse-> S1\n"
+        "entry: S0\nS0 = Go#0\nS1 = Reverse#0\nS2 = Reverse#1\nS0 -Reverse-> S1\nS2 -Reverse-> S1\n"
+    );
+}
+
+#[test]
+fn drives_recursive_ground_program_to_reversed_output() {
+    let output = drive_file("examples/runtime-recursion.ref", &[]);
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "steps: 6\nvisited: S0 -> S2 -> S2 -> S2 -> S1\noutput: 'c' 'b' 'a'\n"
     );
 }
 

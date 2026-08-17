@@ -75,6 +75,7 @@ fn main() {
         "dump-ast" => println!("{program:#?}"),
         "lower" => lower_program(&program, &input_args),
         "graph" => graph_program(&program, &input_args),
+        "drive" => drive_program(&program, &input_args),
         "run" => run_program(&program, &input_args),
         other => {
             eprintln!("unknown command `{other}`");
@@ -93,6 +94,7 @@ fn print_usage() {
     eprintln!("  dump-ast   Print the parsed AST");
     eprintln!("  lower      Lower checked Refal source to normalized Core Refal");
     eprintln!("  graph      Print the deterministic seed graph of sentence states and calls");
+    eprintln!("  drive      Execute the bounded ground graph driver [--steps N] [args...]");
     eprintln!("  run        Run a Refal source file with the bootstrap interpreter");
 }
 
@@ -122,6 +124,54 @@ fn graph_program(program: &refal_ast::Program, args: &[String]) {
     let graph = refal_core::build_seed_graph(&core);
     let cleaned = refal_core::clean_unreachable_states(&graph);
     print!("{}", refal_core::format_seed_graph(&cleaned));
+}
+
+fn drive_program(program: &refal_ast::Program, args: &[String]) {
+    let (max_steps, input_args) = match args {
+        [flag, limit, rest @ ..] if flag == "--steps" => {
+            let Ok(limit) = limit.parse::<usize>() else {
+                eprintln!("Usage: refal drive <file.ref> [--steps N] [args...]");
+                process::exit(2);
+            };
+            (limit, rest)
+        }
+        _ => (10_000, args),
+    };
+    let core = refal_core::lower_program(program);
+    let graph = refal_core::clean_unreachable_states(&refal_core::build_seed_graph(&core));
+    let input = input_args
+        .iter()
+        .map(|arg| refal_core::CoreTerm {
+            kind: refal_core::CoreTermKind::Bracket(
+                arg.chars()
+                    .map(|ch| refal_core::CoreTerm {
+                        kind: refal_core::CoreTermKind::Char(ch),
+                        span: AstSpan { start: 0, end: 0 },
+                    })
+                    .collect(),
+            ),
+            span: AstSpan { start: 0, end: 0 },
+        })
+        .collect::<Vec<_>>();
+    let report = match refal_core::drive_ground(&graph, &input, max_steps) {
+        Ok(report) => report,
+        Err(error) => {
+            eprintln!("drive error: {error}");
+            process::exit(1);
+        }
+    };
+    let visited = report
+        .visited
+        .iter()
+        .map(|state| format!("S{}", state.0))
+        .collect::<Vec<_>>()
+        .join(" -> ");
+    println!("steps: {}", report.steps);
+    println!("visited: {visited}");
+    println!(
+        "output: {}",
+        refal_core::format_term_sequence(&report.output)
+    );
 }
 
 fn run_program(program: &refal_ast::Program, input_args: &[String]) {

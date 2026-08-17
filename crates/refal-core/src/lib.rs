@@ -19,6 +19,7 @@ pub struct GraphState {
     pub function: String,
     pub sentence: usize,
     pub pattern: Vec<CoreTerm>,
+    pub conditions: Vec<CoreCondition>,
     pub result: Vec<CoreTerm>,
     pub span: Span,
 }
@@ -42,7 +43,326 @@ pub struct StateGraph {
     pub transitions: Vec<GraphTransition>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GraphComponent {
+    pub id: usize,
+    pub states: Vec<StateId>,
+    pub recursive: bool,
+}
+
+/// Compute deterministic strongly connected components over the structural graph.
+///
+/// Components expose recursion cycles for later compilation strategy and generalisation.
+/// This pass is graph-theoretic only; it does not symbolically drive Refal configurations.
+pub fn strongly_connected_components(graph: &StateGraph) -> Vec<GraphComponent> {
+    let mut adjacency = vec![Vec::new(); graph.states.len()];
+    let mut reverse = vec![Vec::new(); graph.states.len()];
+    for transition in &graph.transitions {
+        if transition.from.0 < graph.states.len() && transition.to.0 < graph.states.len() {
+            adjacency[transition.from.0].push(transition.to.0);
+            reverse[transition.to.0].push(transition.from.0);
+        }
+    }
+
+    let mut visited = vec![false; graph.states.len()];
+    let mut order = Vec::with_capacity(graph.states.len());
+    for start in 0..graph.states.len() {
+        if visited[start] {
+            continue;
+        }
+        visited[start] = true;
+        let mut stack = vec![(start, 0usize)];
+        while let Some((node, next)) = stack.last_mut() {
+            if *next < adjacency[*node].len() {
+                let child = adjacency[*node][*next];
+                *next += 1;
+                if !visited[child] {
+                    visited[child] = true;
+                    stack.push((child, 0));
+                }
+            } else {
+                let (finished, _) = stack.pop().expect("non-empty DFS stack");
+                order.push(finished);
+            }
+        }
+    }
+
+    let mut component_for = vec![usize::MAX; graph.states.len()];
+    let mut raw_components = Vec::new();
+    for start in order.into_iter().rev() {
+        if component_for[start] != usize::MAX {
+            continue;
+        }
+        let raw_id = raw_components.len();
+        let mut states = Vec::new();
+        let mut stack = vec![start];
+        component_for[start] = raw_id;
+        while let Some(node) = stack.pop() {
+            states.push(StateId(node));
+            for &child in &reverse[node] {
+                if component_for[child] == usize::MAX {
+                    component_for[child] = raw_id;
+                    stack.push(child);
+                }
+            }
+        }
+        states.sort_by_key(|state| state.0);
+        raw_components.push(states);
+    }
+
+    let mut components = raw_components
+        .into_iter()
+        .map(|states| GraphComponent {
+            id: 0,
+            recursive: states.len() > 1,
+            states,
+        })
+        .collect::<Vec<_>>();
+    for transition in &graph.transitions {
+        if transition.from == transition.to
+            && transition.from.0 < component_for.len()
+            && component_for[transition.from.0] != usize::MAX
+        {
+            components[component_for[transition.from.0]].recursive = true;
+        }
+    }
+    components.sort_by_key(|component| component.states[0].0);
+    for (id, component) in components.iter_mut().enumerate() {
+        component.id = id;
+    }
+    components
+}
+
 /// Build the structural seed graph that later driving will refine into configurations.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DriveReport {
+    pub output: Vec<CoreTerm>,
+    pub visited: Vec<StateId>,
+    pub steps: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DriveError {
+    NoEntry,
+    StepLimit { limit: usize },
+    Unsupported { feature: &'static str },
+    NoMatchingSentence { function: String },
+}
+
+impl std::fmt::Display for DriveError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NoEntry => write!(formatter, "graph has no entry state"),
+            Self::StepLimit { limit } => write!(formatter, "drive step limit {limit} exceeded"),
+            Self::Unsupported { feature } => {
+                write!(formatter, "ground driver does not support {feature}")
+            }
+            Self::NoMatchingSentence { function } => {
+                write!(formatter, "no sentence matched function {function}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for DriveError {}
+
+/// Execute the graph for a concrete ground expression with a bounded call budget.
+///
+/// This is the first executable driving pass: it records the selected state trace and
+/// evaluates calls over ground terms. It is deliberately not symbolic driving and does
+/// not residualise a graph into Refal source.
+pub fn drive_ground(
+    graph: &StateGraph,
+    input: &[CoreTerm],
+    max_steps: usize,
+) -> Result<DriveReport, DriveError> {
+    let entry = graph.entry.ok_or(DriveError::NoEntry)?;
+    let function = graph
+        .states
+        .get(entry.0)
+        .ok_or(DriveError::NoEntry)?
+        .function
+        .clone();
+    let mut context = DriveContext {
+        graph,
+        visited: Vec::new(),
+        steps: 0,
+        max_steps,
+    };
+    let output = context.invoke(&function, input)?;
+    Ok(DriveReport {
+        output,
+        visited: context.visited,
+        steps: context.steps,
+    })
+}
+
+struct DriveContext<'a> {
+    graph: &'a StateGraph,
+    visited: Vec<StateId>,
+    steps: usize,
+    max_steps: usize,
+}
+
+impl<'a> DriveContext<'a> {
+    fn invoke(&mut self, function: &str, input: &[CoreTerm]) -> Result<Vec<CoreTerm>, DriveError> {
+        if self.steps >= self.max_steps {
+            return Err(DriveError::StepLimit {
+                limit: self.max_steps,
+            });
+        }
+        if function.eq_ignore_ascii_case("Prout") {
+            self.steps += 1;
+            return Ok(input.to_vec());
+        }
+        self.steps += 1;
+        for state in self
+            .graph
+            .states
+            .iter()
+            .filter(|state| state.function.eq_ignore_ascii_case(function))
+        {
+            if !state.conditions.is_empty() {
+                return Err(DriveError::Unsupported {
+                    feature: "sentence conditions",
+                });
+            }
+            let mut bindings = HashMap::new();
+            if match_ground_pattern(&state.pattern, input, &mut bindings) {
+                self.visited.push(state.id);
+                return self.instantiate(&state.result, &bindings);
+            }
+        }
+        Err(DriveError::NoMatchingSentence {
+            function: function.to_string(),
+        })
+    }
+
+    fn instantiate(
+        &mut self,
+        terms: &[CoreTerm],
+        bindings: &HashMap<String, Vec<CoreTerm>>,
+    ) -> Result<Vec<CoreTerm>, DriveError> {
+        let mut output = Vec::new();
+        for term in terms {
+            match &term.kind {
+                CoreTermKind::Variable { name, .. } => output.extend(
+                    bindings
+                        .get(&name.to_ascii_lowercase())
+                        .ok_or(DriveError::Unsupported {
+                            feature: "unbound residual variables",
+                        })?
+                        .clone(),
+                ),
+                CoreTermKind::Bracket(inner) => {
+                    output.push(CoreTerm {
+                        kind: CoreTermKind::Bracket(self.instantiate(inner, bindings)?),
+                        span: term.span,
+                    });
+                }
+                CoreTermKind::Call { name, args } => {
+                    let arguments = self.instantiate(args, bindings)?;
+                    output.extend(self.invoke(name, &arguments)?);
+                }
+                CoreTermKind::Block { .. } => {
+                    return Err(DriveError::Unsupported {
+                        feature: "sentence-ending blocks",
+                    });
+                }
+                CoreTermKind::Char(_) | CoreTermKind::Identifier(_) | CoreTermKind::Number(_) => {
+                    output.push(term.clone())
+                }
+            }
+        }
+        Ok(output)
+    }
+}
+
+fn match_ground_pattern(
+    pattern: &[CoreTerm],
+    input: &[CoreTerm],
+    bindings: &mut HashMap<String, Vec<CoreTerm>>,
+) -> bool {
+    fn match_from(
+        pattern: &[CoreTerm],
+        input: &[CoreTerm],
+        pattern_index: usize,
+        input_index: usize,
+        bindings: &mut HashMap<String, Vec<CoreTerm>>,
+    ) -> bool {
+        if pattern_index == pattern.len() {
+            return input_index == input.len();
+        }
+        let term = &pattern[pattern_index];
+        if let CoreTermKind::Variable { kind, name } = &term.kind {
+            let key = name.to_ascii_lowercase();
+            let min = match kind {
+                VariableKind::Symbol | VariableKind::Term => 1,
+                VariableKind::Expression => 0,
+            };
+            let max = match kind {
+                VariableKind::Symbol | VariableKind::Term => input_index.saturating_add(1),
+                VariableKind::Expression => input.len(),
+            };
+            for end in (input_index + min.min(input.len().saturating_sub(input_index))
+                ..=max.min(input.len()))
+                .rev()
+            {
+                let slice = &input[input_index..end];
+                let valid = match kind {
+                    VariableKind::Symbol => {
+                        slice.len() == 1 && matches!(slice[0].kind, CoreTermKind::Char(_))
+                    }
+                    VariableKind::Term => {
+                        slice.len() == 1 && matches!(slice[0].kind, CoreTermKind::Bracket(_))
+                    }
+                    VariableKind::Expression => true,
+                };
+                if !valid {
+                    continue;
+                }
+                if let Some(previous) = bindings.get(&key) {
+                    if previous != slice {
+                        continue;
+                    }
+                    if match_from(pattern, input, pattern_index + 1, end, bindings) {
+                        return true;
+                    }
+                    continue;
+                }
+                bindings.insert(key.clone(), slice.to_vec());
+                if match_from(pattern, input, pattern_index + 1, end, bindings) {
+                    return true;
+                }
+                bindings.remove(&key);
+            }
+            return false;
+        }
+
+        if input_index >= input.len() || !ground_term_matches(term, &input[input_index]) {
+            return false;
+        }
+        match_from(pattern, input, pattern_index + 1, input_index + 1, bindings)
+    }
+
+    match_from(pattern, input, 0, 0, bindings)
+}
+
+fn ground_term_matches(pattern: &CoreTerm, input: &CoreTerm) -> bool {
+    match (&pattern.kind, &input.kind) {
+        (CoreTermKind::Char(left), CoreTermKind::Char(right)) => left == right,
+        (CoreTermKind::Identifier(left), CoreTermKind::Identifier(right)) => {
+            left.eq_ignore_ascii_case(right)
+        }
+        (CoreTermKind::Number(left), CoreTermKind::Number(right)) => left == right,
+        (CoreTermKind::Bracket(left), CoreTermKind::Bracket(right)) => {
+            let mut bindings = HashMap::new();
+            match_ground_pattern(left, right, &mut bindings)
+        }
+        _ => false,
+    }
+}
+
 pub fn build_seed_graph(program: &CoreProgram) -> StateGraph {
     let mut states = Vec::new();
     let mut first_states = HashMap::new();
@@ -57,6 +377,7 @@ pub fn build_seed_graph(program: &CoreProgram) -> StateGraph {
                 function: function.name.clone(),
                 sentence: sentence_index,
                 pattern: sentence.pattern.clone(),
+                conditions: sentence.conditions.clone(),
                 result: sentence.result.clone(),
                 span: sentence.span,
             });
@@ -116,6 +437,12 @@ pub fn clean_unreachable_states(graph: &StateGraph) -> StateGraph {
         if !reachable.insert(state) {
             continue;
         }
+        let function = &graph.states[state.0].function;
+        for candidate in &graph.states {
+            if candidate.function.eq_ignore_ascii_case(function) {
+                queue.push_back(candidate.id);
+            }
+        }
         for transition in graph.transitions.iter().filter(|edge| edge.from == state) {
             queue.push_back(transition.to);
         }
@@ -135,6 +462,7 @@ pub fn clean_unreachable_states(graph: &StateGraph) -> StateGraph {
                 function: state.function.clone(),
                 sentence: state.sentence,
                 pattern: state.pattern.clone(),
+                conditions: state.conditions.clone(),
                 result: state.result.clone(),
                 span: state.span,
             }
@@ -157,6 +485,12 @@ pub fn clean_unreachable_states(graph: &StateGraph) -> StateGraph {
         states,
         transitions,
     }
+}
+
+pub fn format_term_sequence(terms: &[CoreTerm]) -> String {
+    let mut output = String::new();
+    format_terms(terms, &mut output);
+    output
 }
 
 pub fn format_seed_graph(graph: &StateGraph) -> String {
@@ -619,6 +953,66 @@ mod tests {
         assert_eq!(cleaned.states.len(), 2);
         assert_eq!(cleaned.transitions.len(), 1);
         assert_eq!(cleaned.entry, Some(StateId(0)));
+    }
+
+    #[test]
+    fn detects_recursive_graph_components_deterministically() {
+        let graph = StateGraph {
+            entry: Some(StateId(0)),
+            states: (0..4)
+                .map(|id| GraphState {
+                    id: StateId(id),
+                    function: format!("F{id}"),
+                    sentence: 0,
+                    pattern: Vec::new(),
+                    conditions: Vec::new(),
+                    result: Vec::new(),
+                    span: span(),
+                })
+                .collect(),
+            transitions: vec![
+                GraphTransition {
+                    from: StateId(0),
+                    to: StateId(1),
+                    callee: "F1".to_string(),
+                },
+                GraphTransition {
+                    from: StateId(1),
+                    to: StateId(2),
+                    callee: "F2".to_string(),
+                },
+                GraphTransition {
+                    from: StateId(2),
+                    to: StateId(1),
+                    callee: "F1".to_string(),
+                },
+                GraphTransition {
+                    from: StateId(3),
+                    to: StateId(3),
+                    callee: "F3".to_string(),
+                },
+            ],
+        };
+        assert_eq!(
+            strongly_connected_components(&graph),
+            vec![
+                GraphComponent {
+                    id: 0,
+                    states: vec![StateId(0)],
+                    recursive: false,
+                },
+                GraphComponent {
+                    id: 1,
+                    states: vec![StateId(1), StateId(2)],
+                    recursive: true,
+                },
+                GraphComponent {
+                    id: 2,
+                    states: vec![StateId(3)],
+                    recursive: true,
+                },
+            ]
+        );
     }
 
     #[test]

@@ -82,7 +82,8 @@ Completed so far:
 Status: **Partial implementation; updated 2026-08-17**. The structural builtin slice and the
 integer-to-real conversion builtins are implemented and tested. An explicit work-list path now
 handles eligible deep block-free call chains; the full flat view-field machine, symbolic
-matching plans, and remaining Classic builtins remain open.
+matching plans, and remaining Classic builtins remain open. The graph driver’s transparent
+`Prout` path is a concrete-driver facility, not a replacement for the runtime builtin.
 
 Completed so far:
 
@@ -131,8 +132,10 @@ Completed so far:
 - Emit stable formatted Refal/Core Refal output.
 
 Status: **Partial implementation; updated 2026-08-17**. The deterministic seed graph now has
-one state per source sentence and syntactic call edges. Turchin driving, graph cleaning,
-generalisation, whistle termination, and residualisation remain open.
+one state per source sentence and syntactic call edges. SCC detection, condition-preserving
+states, function-aware structural reachability cleanup, and bounded concrete driving are
+implemented and tested. Symbolic Turchin driving, semantic graph cleaning, generalisation,
+whistle termination, and residualisation remain open.
 
 Completed so far:
 
@@ -141,6 +144,11 @@ Completed so far:
 - Deterministic normalized Core Refal formatter.
 - Deterministic seed graph with sentence states, Classic identifier-equivalent entry lookup,
   and syntactic call transitions, covered by a core regression.
+- Deterministic SCC decomposition over the seed graph, with recursive-component regression.
+- Function-aware structural reachability cleanup that retains every sentence of reachable
+  functions, including fallback and recursive sentences.
+- Bounded ground driving with state traces and formatted output, exposed as `refal drive`,
+  with a recursive reversal CLI regression.
 - `refal lower <file.ref>` command, which runs syntax and semantic validation
   before emitting normalized source.
 - `refal lower <file.ref> --output <file.ref>` support for source-to-source
