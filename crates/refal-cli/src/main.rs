@@ -74,6 +74,7 @@ fn main() {
         "check" => println!("{path}: check ok"),
         "dump-ast" => println!("{program:#?}"),
         "lower" => lower_program(&program, &input_args),
+        "graph" => graph_program(&program, &input_args),
         "run" => run_program(&program, &input_args),
         other => {
             eprintln!("unknown command `{other}`");
@@ -91,6 +92,7 @@ fn print_usage() {
     eprintln!("  check      Check a Refal source file for syntax and semantic errors");
     eprintln!("  dump-ast   Print the parsed AST");
     eprintln!("  lower      Lower checked Refal source to normalized Core Refal");
+    eprintln!("  graph      Print the deterministic seed graph of sentence states and calls");
     eprintln!("  run        Run a Refal source file with the bootstrap interpreter");
 }
 
@@ -109,6 +111,17 @@ fn lower_program(program: &refal_ast::Program, args: &[String]) {
             process::exit(2);
         }
     }
+}
+
+fn graph_program(program: &refal_ast::Program, args: &[String]) {
+    if !args.is_empty() {
+        eprintln!("Usage: refal graph <file.ref>");
+        process::exit(2);
+    }
+    let core = refal_core::lower_program(program);
+    let graph = refal_core::build_seed_graph(&core);
+    let cleaned = refal_core::clean_unreachable_states(&graph);
+    print!("{}", refal_core::format_seed_graph(&cleaned));
 }
 
 fn run_program(program: &refal_ast::Program, input_args: &[String]) {

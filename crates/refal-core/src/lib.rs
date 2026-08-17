@@ -1,6 +1,6 @@
 //! A normalized, source-mapped representation used between checking and backends.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use refal_ast::{Program, Span, Symbol, TermKind, VariableKind, Visibility};
 
@@ -95,6 +95,89 @@ pub fn build_seed_graph(program: &CoreProgram) -> StateGraph {
         states,
         transitions,
     }
+}
+
+/// Remove sentence states that cannot be reached from the graph entry.
+///
+/// This is structural reachability cleanup only; it does not perform Turchin's
+/// semantic graph cleaning or generalisation.
+pub fn clean_unreachable_states(graph: &StateGraph) -> StateGraph {
+    let Some(entry) = graph.entry else {
+        return StateGraph {
+            entry: None,
+            states: Vec::new(),
+            transitions: Vec::new(),
+        };
+    };
+
+    let mut reachable = HashSet::new();
+    let mut queue = VecDeque::from([entry]);
+    while let Some(state) = queue.pop_front() {
+        if !reachable.insert(state) {
+            continue;
+        }
+        for transition in graph.transitions.iter().filter(|edge| edge.from == state) {
+            queue.push_back(transition.to);
+        }
+    }
+
+    let mut remap = HashMap::new();
+    let states = graph
+        .states
+        .iter()
+        .filter(|state| reachable.contains(&state.id))
+        .enumerate()
+        .map(|(index, state)| {
+            let id = StateId(index);
+            remap.insert(state.id, id);
+            GraphState {
+                id,
+                function: state.function.clone(),
+                sentence: state.sentence,
+                pattern: state.pattern.clone(),
+                result: state.result.clone(),
+                span: state.span,
+            }
+        })
+        .collect::<Vec<_>>();
+    let transitions = graph
+        .transitions
+        .iter()
+        .filter_map(|transition| {
+            Some(GraphTransition {
+                from: *remap.get(&transition.from)?,
+                to: *remap.get(&transition.to)?,
+                callee: transition.callee.clone(),
+            })
+        })
+        .collect();
+
+    StateGraph {
+        entry: remap.get(&entry).copied(),
+        states,
+        transitions,
+    }
+}
+
+pub fn format_seed_graph(graph: &StateGraph) -> String {
+    let mut output = String::new();
+    match graph.entry {
+        Some(entry) => output.push_str(&format!("entry: S{}\n", entry.0)),
+        None => output.push_str("entry: <none>\n"),
+    }
+    for state in &graph.states {
+        output.push_str(&format!(
+            "S{} = {}#{}\n",
+            state.id.0, state.function, state.sentence
+        ));
+    }
+    for transition in &graph.transitions {
+        output.push_str(&format!(
+            "S{} -{}-> S{}\n",
+            transition.from.0, transition.callee, transition.to.0
+        ));
+    }
+    output
 }
 
 fn collect_call_names(terms: &[CoreTerm], names: &mut Vec<String>) {
@@ -518,6 +601,24 @@ mod tests {
         assert_eq!(graph.transitions[0].from, StateId(0));
         assert_eq!(graph.transitions[0].to, StateId(1));
         assert_eq!(graph.transitions[0].callee, "worker_fn");
+
+        let mut with_unreachable = program.clone();
+        with_unreachable.items.push(Item::Function(Function {
+            name: "Unused".to_string(),
+            visibility: Visibility::Local,
+            sentences: vec![Sentence {
+                pattern: vec![],
+                conditions: vec![],
+                result: vec![],
+                span: span(),
+            }],
+            span: span(),
+        }));
+        let cleaned =
+            clean_unreachable_states(&build_seed_graph(&lower_program(&with_unreachable)));
+        assert_eq!(cleaned.states.len(), 2);
+        assert_eq!(cleaned.transitions.len(), 1);
+        assert_eq!(cleaned.entry, Some(StateId(0)));
     }
 
     #[test]

@@ -26,6 +26,13 @@ fn run_file(path: &str, args: &[&str]) -> std::process::Output {
     command.output().expect("run refal binary")
 }
 
+fn graph_file(path: &str) -> std::process::Output {
+    Command::new(refal_bin())
+        .args(["graph", &workspace_path(path)])
+        .output()
+        .expect("run refal binary")
+}
+
 /// Checks a source string, for conformance cases too small to warrant an example
 /// file. The temporary file is removed before the assertion runs.
 fn check_source(source: &str) -> std::process::Output {
@@ -76,6 +83,20 @@ fn reports_usage_for_missing_input_file() {
     assert!(
         stderr.contains("Usage: refal <command> <file.ref> [args...]"),
         "unexpected stderr:\n{stderr}"
+    );
+}
+
+#[test]
+fn prints_a_deterministic_seed_graph() {
+    let output = graph_file("examples/runtime-recursion.ref");
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "entry: S0\nS0 = Go#0\nS1 = Reverse#0\nS0 -Reverse-> S1\n"
     );
 }
 
