@@ -195,17 +195,20 @@ The guarantee this compiler intends to publish, once Tier 1 lands:
 
 ## Project Status
 
-**Completion against the goal: 25%.**
+**Completion against the goal: 30%.**
 
 That figure counts a compiler *written in Refal* that emits Refal and compiles its own
-sources, with the verification tiers above, as 100%. The first implementation milestone
-moved the weighted score from the audited 19.8% baseline to 25.0%. This is progress toward
+sources, with the verification tiers above, as 100%. The first two implementation milestones
+moved the weighted score from the audited 19.8% baseline to 30.0%. This is progress toward
 the target, not a claim that the Turchin compiler or self-hosting exists yet.
 
-The estimate is kept deliberately evidence-backed. The milestone includes end-to-end
+The estimate is kept deliberately evidence-backed. The milestones include end-to-end
 sentence-ending blocks, the Classic macrodigit lexer bound, integer arithmetic
 (`Add`/`Sub`/`Mul`/`Div`/`Divmod`/`Mod`/`Compare`), descriptor-backed file I/O
-(`Card`/`Open`/`Get`/`Put`/`Putout`), semantic registration, runtime tests, and CLI fixtures.
+(`Card`/`Open`/`Get`/`Put`/`Putout`), and a tested structural runtime slice: `First`, `Last`,
+`Lenw`, `Lower`, `Upper`, `Br`, `Dg`, `Cp`, `Rp`, `Dgall`, `Arg`, and `Step`, with semantic
+registration, unit tests, and a CLI fixture. Graph-of-states supercompilation, the Refal-authored
+compiler, and self-hosting remain unimplemented.
 
 The earlier figure went *down* from an older published estimate of 38%, for two reasons,
 both of which are the point of tracking it honestly:
@@ -226,7 +229,7 @@ generate code.
 | 1 | Public-grade foundation | ✅ Complete | Workspace, layout, clean-room policy, MIT licence, CI gate |
 | 2 | Classic Refal-5 front end | 🔶 Partial | Lexer/parser cover most of the Classic surface with spans and diagnostics. Sentence-ending blocks now parse, check, execute, and lower recursively; the traceable conformance corpus is still incomplete |
 | 3 | Semantic checker | 🔶 Partial | Entry points, declarations, name equivalence, call checks, variable binding, condition legality. Entry-point rules corrected in `641ffc0` |
-| 4 | Refal machine | 🔶 Partial | Object-expression runtime, `s.`/`t.`/`e.` matching with backtracking, conditions, recursion guard, arithmetic, and descriptor-backed file I/O. Still tree-walking over the host stack, capped at depth 1024; the scalable machine and remaining Classic builtins are open ([#7](../../issues/7)) |
+| 4 | Refal machine | 🔶 Partial | Object-expression runtime, `s.`/`t.`/`e.` matching with backtracking, conditions, recursion guard, arithmetic, descriptor-backed file I/O, structural stack operations, expression splitting, case conversion, `Arg`, and `Step`. Still tree-walking over the host stack, capped at depth 1024; the scalable machine and remaining Classic builtins are open ([#7](../../issues/7)) |
 | 5 | Graph of states | ⬜ Not started | `refal-core` is currently an AST-shaped copy plus a deterministic formatter, not a lowering |
 | 6 | Tier 1 analyses | ⬜ Not started | Requires Milestone 5 |
 | 7 | Compiler written in Refal | ⬜ Not started | Gated on Milestone 4: a Refal compiler cannot read a source file until `Card`/`Open`/`Get` exist |
@@ -243,6 +246,7 @@ The full phase plan, gates and completion accounting are in [`docs/PLAN.md`](doc
 
 | Date | Change |
 |---|---|
+| 2026-08-17 | Second 5-point implementation milestone: structural expression operations (`First`, `Last`, `Lenw`, `Lower`, `Upper`), buried-data stack (`Br`, `Dg`, `Cp`, `Rp`, `Dgall`), `Arg`/`Step`, semantic registration, unit tests, and a CLI fixture; workspace gates pass |
 | 2026-08-17 | First 5-point implementation milestone: Refal blocks, macrodigit lexer bound, integer arithmetic, descriptor-backed file I/O, semantic registration, runtime tests, and CLI fixtures; workspace gates pass |
 | 2026-08-05 | Six conformance defects fixed: doubled-quote escaping, juxtaposed one-character variables, signed macrodigits, variable-index case, identifier equivalence for data, multiple `$ENTRY` with `Go` as the program entry point (`641ffc0`). Tests 83 → 102 |
 | 2026-08-05 | Nineteen Turchin primary sources indexed with a verifying fetch script (`6a2ae3a`) |
@@ -256,7 +260,7 @@ The full phase plan, gates and completion accounting are in [`docs/PLAN.md`](doc
 | `refal-ast` | 🔶 AST plus shared Refal-5 name-equivalence helpers, each citing its clause |
 | `refal-syntax` | 🔶 Lexer and parser; blocks and macrodigit-bound tests are implemented; full traceable conformance remains |
 | `refal-semantics` | 🔶 Legality checks for the supported surface |
-| `refal-runtime` | 🔶 Correct for the covered subset; arithmetic and descriptor-backed file I/O are implemented, but architecture must be replaced for self-hosting |
+| `refal-runtime` | 🔶 Correct for the covered subset; arithmetic, descriptor-backed file I/O, structural splitting/case/stack operations, `Arg`, and `Step` are implemented, but architecture must be replaced for self-hosting |
 | `refal-core` | ⬜ Normalised formatter; not yet a lowering |
 | `refal-cli` | 🔶 `check`, `dump-ast`, `lower`, `run` |
 | CI and quality gates | ✅ `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` |

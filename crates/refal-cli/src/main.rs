@@ -112,8 +112,12 @@ fn lower_program(program: &refal_ast::Program, args: &[String]) {
 }
 
 fn run_program(program: &refal_ast::Program, input_args: &[String]) {
-    let evaluator = Evaluator::new(program);
     let input = args_to_values(input_args);
+    let arguments = input_args
+        .iter()
+        .map(|arg| arg.chars().map(Value::Char).collect())
+        .collect();
+    let evaluator = Evaluator::with_arguments(program, arguments);
     let result = match evaluator.evaluate_entry(&input) {
         Ok(result) => result,
         Err(error) => {

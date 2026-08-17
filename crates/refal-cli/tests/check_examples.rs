@@ -540,6 +540,11 @@ fn runs_runtime_conformance_examples() {
         ),
         ("examples/runtime-arithmetic.ref", &[] as &[&str], "17\n"),
         ("examples/runtime-type.ref", &[] as &[&str], "LA\n"),
+        (
+            "examples/runtime-structural.ref",
+            &["cli-argument"] as &[&str],
+            "(ab)c\na(bc)\n3abc\nab\nAB\ncli-argument\n",
+        ),
     ] {
         let output = run_file(path, args);
 

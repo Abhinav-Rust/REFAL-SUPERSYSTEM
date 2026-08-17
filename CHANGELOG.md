@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Structural runtime milestone (2026-08-17)
+
+The weighted completion score advances from 25% to 30% with tested Classic Refal-5
+structural runtime coverage. Added `First`, `Last`, `Lenw`, `Lower`, `Upper`, `Br`, `Dg`,
+`Cp`, `Rp`, `Dgall`, `Arg`, and `Step`; wired command-line arguments into the evaluator;
+added unit regressions and the `runtime-structural.ref` CLI fixture. The graph-of-states
+compiler, Refal-authored compiler, and self-hosting remain intentionally unclaimed.
+
 ### Conformance fixes (2026-08-05)
 
 Six Classic Refal-5 conformance defects, each verified against the reference this project

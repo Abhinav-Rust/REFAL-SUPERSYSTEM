@@ -1,6 +1,6 @@
 //! Minimal interpreter layer over the runtime matcher.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, hash_map::Entry};
 use std::fmt;
 use std::fs::{File, OpenOptions};
@@ -79,15 +79,30 @@ pub struct Evaluator<'a> {
     output: RefCell<Vec<Vec<Value>>>,
     files: RefCell<HashMap<u32, FileHandle>>,
     stdin: RefCell<io::Stdin>,
+    arguments: Vec<Vec<Value>>,
+    stack: RefCell<Vec<(Vec<Value>, Vec<Value>)>>,
+    steps: Cell<usize>,
     max_call_depth: usize,
 }
 
 impl<'a> Evaluator<'a> {
     pub fn new(program: &'a Program) -> Self {
-        Self::with_max_call_depth(program, DEFAULT_MAX_CALL_DEPTH)
+        Self::with_arguments(program, Vec::new())
+    }
+
+    pub fn with_arguments(program: &'a Program, arguments: Vec<Vec<Value>>) -> Self {
+        Self::with_max_call_depth_and_arguments(program, DEFAULT_MAX_CALL_DEPTH, arguments)
     }
 
     pub fn with_max_call_depth(program: &'a Program, max_call_depth: usize) -> Self {
+        Self::with_max_call_depth_and_arguments(program, max_call_depth, Vec::new())
+    }
+
+    fn with_max_call_depth_and_arguments(
+        program: &'a Program,
+        max_call_depth: usize,
+        arguments: Vec<Vec<Value>>,
+    ) -> Self {
         let functions = program
             .items
             .iter()
@@ -112,6 +127,9 @@ impl<'a> Evaluator<'a> {
             output: RefCell::new(Vec::new()),
             files: RefCell::new(HashMap::new()),
             stdin: RefCell::new(io::stdin()),
+            arguments,
+            stack: RefCell::new(Vec::new()),
+            steps: Cell::new(0),
             max_call_depth,
         }
     }
@@ -273,6 +291,7 @@ impl<'a> Evaluator<'a> {
         args: &[Value],
         call_depth: usize,
     ) -> Result<Vec<Value>, EvalError> {
+        self.steps.set(self.steps.get().saturating_add(1));
         if call_depth > self.max_call_depth {
             return Err(EvalError::RecursionLimitExceeded {
                 function: name.to_string(),
@@ -362,8 +381,78 @@ impl<'a> Evaluator<'a> {
             "DIVMOD" => Some(divide(args, true)),
             "MOD" => Some(modulo(args)),
             "COMPARE" => Some(compare_numbers(args)),
+            "FIRST" => Some(split_first(args)),
+            "LAST" => Some(split_last(args)),
+            "LENW" => Some(length_with_expression(args)),
+            "LOWER" => Some(change_case(args, false)),
+            "UPPER" => Some(change_case(args, true)),
+            "BR" => Some(self.br(args)),
+            "DG" => Some(self.dg(args, true)),
+            "CP" => Some(self.dg(args, false)),
+            "RP" => Some(self.rp(args)),
+            "DGALL" => Some(self.dgall()),
+            "ARG" => Some(self.arg(args)),
+            "STEP" => Some(Ok(vec![Value::Number(self.steps.get().to_string())])),
             _ => None,
         }
+    }
+
+    fn br(&self, args: &[Value]) -> Result<Vec<Value>, EvalError> {
+        let (name, value) = split_stack_assignment(args, "Br")?;
+        self.stack.borrow_mut().push((name, value));
+        Ok(Vec::new())
+    }
+
+    fn dg(&self, args: &[Value], remove: bool) -> Result<Vec<Value>, EvalError> {
+        let mut stack = self.stack.borrow_mut();
+        let Some(index) = stack.iter().rposition(|(name, _)| name == args) else {
+            return Ok(Vec::new());
+        };
+        if remove {
+            Ok(stack.remove(index).1)
+        } else {
+            Ok(stack[index].1.clone())
+        }
+    }
+
+    fn rp(&self, args: &[Value]) -> Result<Vec<Value>, EvalError> {
+        let (name, value) = split_stack_assignment(args, "Rp")?;
+        let mut stack = self.stack.borrow_mut();
+        if let Some(index) = stack.iter().rposition(|(stored, _)| *stored == name) {
+            stack[index].1 = value;
+        }
+        Ok(Vec::new())
+    }
+
+    fn dgall(&self) -> Result<Vec<Value>, EvalError> {
+        let stack = self.stack.replace(Vec::new());
+        let mut result = Vec::new();
+        for (name, value) in stack {
+            result.push(Value::Bracket({
+                let mut entry = name;
+                entry.push(Value::Char('='));
+                entry.extend(value);
+                entry
+            }));
+        }
+        Ok(result)
+    }
+
+    fn arg(&self, args: &[Value]) -> Result<Vec<Value>, EvalError> {
+        let [Value::Number(index)] = args else {
+            return Err(invalid_builtin_arguments(
+                "Arg",
+                "expected exactly one macrodigit argument index",
+            ));
+        };
+        let index = index
+            .parse::<usize>()
+            .map_err(|_| invalid_builtin_arguments("Arg", "argument index must be a macrodigit"))?;
+        Ok(self
+            .arguments
+            .get(index.saturating_sub(1))
+            .cloned()
+            .unwrap_or_default())
     }
 
     fn eval_conditions(
@@ -438,6 +527,89 @@ impl<'a> Evaluator<'a> {
         }
         Ok(output)
     }
+}
+
+fn split_stack_assignment(
+    args: &[Value],
+    name: &str,
+) -> Result<(Vec<Value>, Vec<Value>), EvalError> {
+    let Some(index) = args.iter().position(|value| *value == Value::Char('=')) else {
+        return Err(invalid_builtin_arguments(
+            name,
+            "expected an expression name, `=`, and a value expression",
+        ));
+    };
+    if index == 0 {
+        return Err(invalid_builtin_arguments(
+            name,
+            "the stack name must not be empty",
+        ));
+    }
+    Ok((args[..index].to_vec(), args[index + 1..].to_vec()))
+}
+
+fn split_count<'a>(args: &'a [Value], name: &str) -> Result<(usize, &'a [Value]), EvalError> {
+    let [Value::Number(count), expression @ ..] = args else {
+        return Err(invalid_builtin_arguments(
+            name,
+            "expected a macrodigit count followed by an expression",
+        ));
+    };
+    let count = count.parse::<usize>().map_err(|_| {
+        invalid_builtin_arguments(name, "the count must be a non-negative macrodigit")
+    })?;
+    Ok((count, expression))
+}
+
+fn split_first(args: &[Value]) -> Result<Vec<Value>, EvalError> {
+    let (count, expression) = split_count(args, "First")?;
+    let split = count.min(expression.len());
+    let mut result = vec![Value::Bracket(expression[..split].to_vec())];
+    result.extend_from_slice(&expression[split..]);
+    Ok(result)
+}
+
+fn split_last(args: &[Value]) -> Result<Vec<Value>, EvalError> {
+    let (count, expression) = split_count(args, "Last")?;
+    let split = expression.len().saturating_sub(count);
+    let mut result = expression[..split].to_vec();
+    result.push(Value::Bracket(expression[split..].to_vec()));
+    Ok(result)
+}
+
+fn length_with_expression(args: &[Value]) -> Result<Vec<Value>, EvalError> {
+    if args.len() > u32::MAX as usize {
+        return Err(invalid_builtin_arguments(
+            "Lenw",
+            "expression is too long for a Classic macrodigit",
+        ));
+    }
+    let mut result = vec![Value::Number(args.len().to_string())];
+    result.extend_from_slice(args);
+    Ok(result)
+}
+
+fn change_case(args: &[Value], upper: bool) -> Result<Vec<Value>, EvalError> {
+    fn transform(value: &Value, upper: bool) -> Value {
+        match value {
+            Value::Char(ch) => Value::Char(if upper {
+                ch.to_ascii_uppercase()
+            } else {
+                ch.to_ascii_lowercase()
+            }),
+            Value::Identifier(identifier) => Value::Identifier(if upper {
+                identifier.to_ascii_uppercase()
+            } else {
+                identifier.to_ascii_lowercase()
+            }),
+            Value::Number(number) => Value::Number(number.clone()),
+            Value::Bracket(inner) => {
+                Value::Bracket(inner.iter().map(|value| transform(value, upper)).collect())
+            }
+        }
+    }
+
+    Ok(args.iter().map(|value| transform(value, upper)).collect())
 }
 
 fn explode(args: &[Value]) -> Result<Vec<Value>, EvalError> {
@@ -1250,6 +1422,138 @@ mod tests {
         );
         assert_eq!(evaluator.captured_output(), vec![vec![Value::Char('x')]]);
         fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn supports_structural_expression_builtins() {
+        let expression = [
+            Value::Char('a'),
+            Value::Char('b'),
+            Value::Char('c'),
+            Value::Char('d'),
+        ];
+        assert_eq!(
+            split_first(&[
+                Value::Number("2".to_string()),
+                expression[0].clone(),
+                expression[1].clone(),
+                expression[2].clone(),
+                expression[3].clone(),
+            ])
+            .unwrap(),
+            vec![
+                Value::Bracket(vec![Value::Char('a'), Value::Char('b')]),
+                Value::Char('c'),
+                Value::Char('d'),
+            ]
+        );
+        assert_eq!(
+            split_last(&[
+                Value::Number("2".to_string()),
+                expression[0].clone(),
+                expression[1].clone(),
+                expression[2].clone(),
+                expression[3].clone(),
+            ])
+            .unwrap(),
+            vec![
+                Value::Char('a'),
+                Value::Char('b'),
+                Value::Bracket(vec![Value::Char('c'), Value::Char('d')]),
+            ]
+        );
+        assert_eq!(
+            length_with_expression(&expression).unwrap(),
+            vec![
+                Value::Number("4".to_string()),
+                Value::Char('a'),
+                Value::Char('b'),
+                Value::Char('c'),
+                Value::Char('d'),
+            ]
+        );
+        assert_eq!(
+            change_case(
+                &[Value::Char('A'), Value::Identifier("Bee".to_string())],
+                false
+            )
+            .unwrap(),
+            vec![Value::Char('a'), Value::Identifier("bee".to_string())]
+        );
+        assert_eq!(
+            change_case(
+                &[Value::Char('a'), Value::Identifier("Bee".to_string())],
+                true
+            )
+            .unwrap(),
+            vec![Value::Char('A'), Value::Identifier("BEE".to_string())]
+        );
+    }
+
+    #[test]
+    fn supports_refal_stack_and_command_argument_builtins() {
+        let program = program(vec![]);
+        let evaluator = Evaluator::with_arguments(
+            &program,
+            vec![
+                vec![Value::Char('o'), Value::Char('n')],
+                vec![Value::Char('t'), Value::Char('w'), Value::Char('o')],
+            ],
+        );
+        let name = vec![Value::Identifier("Name".to_string())];
+        let mut first = name.clone();
+        first.push(Value::Char('='));
+        first.push(Value::Char('1'));
+        evaluator.br(&first).unwrap();
+        let mut second = name.clone();
+        second.push(Value::Char('='));
+        second.push(Value::Char('2'));
+        evaluator.br(&second).unwrap();
+        assert_eq!(evaluator.dg(&name, false).unwrap(), vec![Value::Char('2')]);
+        assert_eq!(evaluator.dg(&name, true).unwrap(), vec![Value::Char('2')]);
+        assert_eq!(evaluator.dg(&name, true).unwrap(), vec![Value::Char('1')]);
+        assert_eq!(
+            evaluator.arg(&[Value::Number("2".to_string())]).unwrap(),
+            vec![Value::Char('t'), Value::Char('w'), Value::Char('o')]
+        );
+        assert!(
+            evaluator
+                .arg(&[Value::Number("3".to_string())])
+                .unwrap()
+                .is_empty()
+        );
+
+        evaluator
+            .br(&[
+                Value::Identifier("Other".to_string()),
+                Value::Char('='),
+                Value::Char('x'),
+            ])
+            .unwrap();
+        evaluator
+            .rp(&[
+                Value::Identifier("Other".to_string()),
+                Value::Char('='),
+                Value::Char('y'),
+            ])
+            .unwrap();
+        assert_eq!(
+            evaluator.dgall().unwrap(),
+            vec![Value::Bracket(vec![
+                Value::Identifier("Other".to_string()),
+                Value::Char('='),
+                Value::Char('y'),
+            ])]
+        );
+        let first_step = evaluator.evaluate_function("Step", &[]).unwrap();
+        let second_step = evaluator.evaluate_function("Step", &[]).unwrap();
+        let [Value::Number(first_step)] = first_step.as_slice() else {
+            panic!("Step did not return a macrodigit");
+        };
+        let [Value::Number(second_step)] = second_step.as_slice() else {
+            panic!("Step did not return a macrodigit");
+        };
+        assert!(first_step.parse::<usize>().unwrap() < second_step.parse::<usize>().unwrap());
     }
 
     #[test]
