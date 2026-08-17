@@ -275,6 +275,19 @@ fn supercompile_program(program: &refal_ast::Program, args: &[String]) {
         .collect::<Vec<_>>()
         .join(", ");
     println!("whistles: {whistles}");
+    let generalized = report
+        .whistle_events
+        .iter()
+        .map(|event| {
+            format!(
+                "S{}: {}",
+                event.state.0,
+                refal_core::format_term_sequence(&event.generalized_input)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    println!("generalized: {generalized}");
     println!("residual:");
     print!("{}", refal_core::residualize_symbolic(&report));
 }

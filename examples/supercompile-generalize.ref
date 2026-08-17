@@ -1,0 +1,8 @@
+$ENTRY Go {
+  e.Input = <Loop 'a'>;
+}
+
+Loop {
+  e.Input = <Loop 'b'>;
+}
+

@@ -466,7 +466,29 @@ fn supercompiles_recursive_symbolic_program_with_a_whistle() {
     );
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
-        "states: 2\ntransitions: 2\nsteps: 3\nvisited: S0 -> S1\nwhistles: S1\nresidual:\n$ENTRY Go {\n  e.Input = <Loop e.Input>;\n}\n"
+        "states: 2\ntransitions: 2\nsteps: 3\nvisited: S0 -> S1\nwhistles: S1\ngeneralized: S1: e.Input\nresidual:\n$ENTRY Go {\n  e.Input = <Loop e.Input>;\n}\n"
+    );
+}
+
+#[test]
+fn supercompiles_a_differing_recursive_input_to_a_whistle_variable() {
+    let output = Command::new(refal_bin())
+        .args([
+            "supercompile",
+            &workspace_path("examples/supercompile-generalize.ref"),
+            "--steps",
+            "10",
+        ])
+        .output()
+        .expect("run bounded supercompiler generalization");
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "states: 2\ntransitions: 2\nsteps: 3\nvisited: S0 -> S1\nwhistles: S1\ngeneralized: S1: e.Whistle\nresidual:\n$ENTRY Go {\n  e.Input = <Loop 'b'>;\n}\n"
     );
 }
 
@@ -548,6 +570,7 @@ fn accepts_positive_examples() {
         "examples/compiler-refal-literal-subset.ref",
         "examples/compiler-refal-call-subset.ref",
         "examples/supercompile-loop.ref",
+        "examples/supercompile-generalize.ref",
     ] {
         let output = check_file(path);
 
