@@ -614,6 +614,8 @@ impl<'a> Evaluator<'a> {
             "TIME" => Some(Ok(vec![Value::Number(
                 self.start_time.elapsed().as_millis().to_string(),
             )])),
+            "DN" => Some(dn(args)),
+            "UP" => Some(up(args)),
             "MU" => Some(self.mu(args, call_depth)),
             _ => None,
         }
@@ -908,6 +910,94 @@ fn terms_are_worklist_safe(terms: &[Term]) -> bool {
         TermKind::Call { args, .. } => terms_are_worklist_safe(args),
         TermKind::Block { .. } => false,
     })
+}
+
+const META_CHAR: &str = "Char";
+const META_IDENTIFIER: &str = "Identifier";
+const META_NUMBER: &str = "Number";
+const META_BRACKET: &str = "Bracket";
+
+fn dn(args: &[Value]) -> Result<Vec<Value>, EvalError> {
+    Ok(vec![Value::Bracket(encode_values(args))])
+}
+
+fn up(args: &[Value]) -> Result<Vec<Value>, EvalError> {
+    let [Value::Bracket(encoded)] = args else {
+        return Err(invalid_builtin_arguments(
+            "Up",
+            "expected exactly one bootstrap metacode bracket produced by Dn",
+        ));
+    };
+    decode_values(encoded).map_err(|message| invalid_builtin_arguments("Up", &message))
+}
+
+fn encode_values(values: &[Value]) -> Vec<Value> {
+    values.iter().map(encode_value).collect()
+}
+
+fn encode_value(value: &Value) -> Value {
+    let (tag, payload) = match value {
+        Value::Char(character) => (META_CHAR, Value::Char(*character)),
+        Value::Identifier(identifier) => (
+            META_IDENTIFIER,
+            Value::Bracket(identifier.chars().map(Value::Char).collect()),
+        ),
+        Value::Number(number) => (
+            META_NUMBER,
+            Value::Bracket(number.chars().map(Value::Char).collect()),
+        ),
+        Value::Bracket(values) => (META_BRACKET, Value::Bracket(encode_values(values))),
+    };
+    Value::Bracket(vec![Value::Identifier(tag.to_string()), payload])
+}
+
+fn decode_values(values: &[Value]) -> Result<Vec<Value>, String> {
+    values.iter().map(decode_value).collect()
+}
+
+fn decode_value(value: &Value) -> Result<Value, String> {
+    let Value::Bracket(fields) = value else {
+        return Err("each bootstrap metacode term must be a tagged bracket".to_string());
+    };
+    let [Value::Identifier(tag), payload] = fields.as_slice() else {
+        return Err(
+            "each bootstrap metacode term must contain one tag and one payload".to_string(),
+        );
+    };
+    match tag.as_str() {
+        META_CHAR => {
+            let Value::Char(character) = payload else {
+                return Err("Char metacode payload must be one character".to_string());
+            };
+            Ok(Value::Char(*character))
+        }
+        META_IDENTIFIER => Ok(Value::Identifier(decode_text(payload, "Identifier")?)),
+        META_NUMBER => Ok(Value::Number(decode_text(payload, "Number")?)),
+        META_BRACKET => {
+            let Value::Bracket(nested) = payload else {
+                return Err("Bracket metacode payload must be a metacode sequence".to_string());
+            };
+            Ok(Value::Bracket(decode_values(nested)?))
+        }
+        _ => Err(format!("unknown bootstrap metacode tag `{tag}`")),
+    }
+}
+
+fn decode_text(value: &Value, kind: &str) -> Result<String, String> {
+    let Value::Bracket(chars) = value else {
+        return Err(format!(
+            "{kind} metacode payload must be a character string"
+        ));
+    };
+    chars
+        .iter()
+        .map(|value| match value {
+            Value::Char(character) => Ok(*character),
+            _ => Err(format!(
+                "{kind} metacode payload must contain only characters"
+            )),
+        })
+        .collect()
 }
 
 fn invalid_builtin_arguments(name: &str, message: &str) -> EvalError {
@@ -1777,6 +1867,36 @@ mod tests {
             milliseconds
                 .chars()
                 .all(|character| character.is_ascii_digit())
+        );
+    }
+
+    #[test]
+    fn dn_and_up_round_trip_supported_metacode_values() {
+        let original = vec![
+            Value::Char('A'),
+            Value::Identifier("Foo-Bar".to_string()),
+            Value::Number("42".to_string()),
+            Value::Bracket(vec![
+                Value::Char('x'),
+                Value::Identifier("Inner".to_string()),
+            ]),
+        ];
+        let encoded = dn(&original).unwrap();
+
+        assert_eq!(up(&encoded).unwrap(), original);
+    }
+
+    #[test]
+    fn up_rejects_untagged_metacode() {
+        let error = up(&[Value::Char('A')]).unwrap_err();
+
+        assert_eq!(
+            error,
+            EvalError::InvalidBuiltinArguments {
+                name: "Up".to_string(),
+                message: "expected exactly one bootstrap metacode bracket produced by Dn"
+                    .to_string(),
+            }
         );
     }
 

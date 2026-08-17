@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Bootstrap metacode milestone (2026-08-17)
+
+The weighted completion score advances from 65% to 70% with a tested tagged, invertible
+bootstrap subset for Classic `Dn` and `Up`. Supported runtime characters, identifiers, numbers,
+and nested brackets round-trip through the representation; malformed input is rejected, and
+`runtime-metacode.ref` proves CLI reconstruction before `Prout`. The official Chapter 6 metacode
+encoding and restrictions, complete Classic conformance, Turchin driving, graph cleaning,
+generalisation, full residualisation, Refal compiler authorship, and self-hosting remain open.
+
 ### Runtime system builtins milestone (2026-08-17)
 
 The weighted completion score advances from 60% to 65% with tested bootstrap-runtime support for

@@ -11,7 +11,7 @@ const SUPPORTED_RUNTIME_EXTERNS: &[&str] = &[
     "ADD", "ARG", "BR", "CARD", "CHR", "COMPARE", "CP", "DG", "DGALL", "DIV", "DIVMOD", "EXPLODE",
     "FIRST", "GET", "IMPLODE", "LAST", "LENW", "LOWER", "MOD", "MUL", "NUMB", "OPEN", "ORD",
     "PRINT", "PROUT", "PUT", "PUTOUT", "REAL", "RP", "STEP", "SUB", "SYMB", "TIME", "TRUNC",
-    "TYPE", "MU", "UPPER",
+    "TYPE", "UP", "MU", "DN", "UPPER",
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]

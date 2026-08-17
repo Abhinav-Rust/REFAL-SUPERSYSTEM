@@ -195,6 +195,7 @@ fn accepts_positive_examples() {
         "examples/runtime-type.ref",
         "examples/runtime-mu.ref",
         "examples/runtime-time.ref",
+        "examples/runtime-metacode.ref",
         "examples/multiple-entry.ref",
         "examples/quote-escape.ref",
         "examples/shorthand-variables.ref",
@@ -654,6 +655,7 @@ fn runs_runtime_conformance_examples() {
             "(ab)c\na(bc)\n3abc\nab\nAB\ncli-argument\n",
         ),
         ("examples/runtime-mu.ref", &[] as &[&str], "Z\n"),
+        ("examples/runtime-metacode.ref", &[] as &[&str], "ab\n"),
     ] {
         let output = run_file(path, args);
 

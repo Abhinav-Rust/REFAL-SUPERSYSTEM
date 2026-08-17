@@ -80,11 +80,12 @@ Completed so far:
 - CLI conformance examples for runtime behavior.
 
 Status: **Partial implementation; updated 2026-08-17**. The structural builtin slice, the
-integer-to-real conversion builtins, visible dynamic `Mu`, and evaluator-owned elapsed-time
-`Time` are implemented and tested. An explicit work-list path now handles eligible deep
-block-free call chains; the full flat view-field machine, symbolic matching plans, and the
-remaining `Up`/`Dn` metacode builtins remain open. The graph driver’s transparent `Prout` path
-is a concrete-driver facility, not a replacement for the runtime builtin.
+integer-to-real conversion builtins, visible dynamic `Mu`, evaluator-owned elapsed-time `Time`,
+and a tagged invertible `Dn`/`Up` subset for supported runtime values are implemented and tested.
+An explicit work-list path now handles eligible deep block-free call chains; the full flat
+view-field machine, symbolic matching plans, and the official Chapter 6 metacode encoding remain
+open. The graph driver’s transparent `Prout` path is a concrete-driver facility, not a
+replacement for the runtime builtin.
 
 Completed so far:
 
@@ -124,8 +125,9 @@ Completed so far:
 - Integer-to-real conversion through `Trunc` and `Real`, with canonical numeric results.
 - Structural `First`, `Last`, and `Lenw` expression operations with Classic result shapes.
 - `Lower` and `Upper` case conversion, evaluator-owned `Br`/`Dg`/`Cp`/`Rp`/`Dgall` buried-data stack,
-  `Arg` command-line access, monotonic `Step` counter, visible dynamic `Mu`, and evaluator-owned
-  elapsed-millisecond `Time`, with runtime unit and CLI coverage.
+  `Arg` command-line access, monotonic `Step` counter, visible dynamic `Mu`, evaluator-owned
+  elapsed-millisecond `Time`, and tagged invertible `Dn`/`Up` metacode for supported values, with
+  runtime unit and CLI coverage.
 
 ## Milestone 5: Core Refal Lowering
 
