@@ -76,6 +76,7 @@ fn main() {
         "lower" => lower_program(&program, &input_args),
         "graph" => graph_program(&program, &input_args),
         "drive" => drive_program(&program, &input_args),
+        "drive-symbolic" => drive_symbolic_program(&program, &input_args),
         "run" => run_program(&program, &input_args),
         other => {
             eprintln!("unknown command `{other}`");
@@ -95,6 +96,7 @@ fn print_usage() {
     eprintln!("  lower      Lower checked Refal source to normalized Core Refal");
     eprintln!("  graph      Print the deterministic seed graph of sentence states and calls");
     eprintln!("  drive      Execute the bounded ground graph driver [--steps N] [args...]");
+    eprintln!("  drive-symbolic  Partially drive from an expression variable [--steps N]");
     eprintln!("  run        Run a Refal source file with the bootstrap interpreter");
 }
 
@@ -171,6 +173,44 @@ fn drive_program(program: &refal_ast::Program, args: &[String]) {
     println!(
         "output: {}",
         refal_core::format_term_sequence(&report.output)
+    );
+}
+
+fn drive_symbolic_program(program: &refal_ast::Program, args: &[String]) {
+    let max_steps = match args {
+        [] => 10_000,
+        [flag, limit] if flag == "--steps" => match limit.parse::<usize>() {
+            Ok(limit) => limit,
+            Err(_) => {
+                eprintln!("Usage: refal drive-symbolic <file.ref> [--steps N]");
+                process::exit(2);
+            }
+        },
+        _ => {
+            eprintln!("Usage: refal drive-symbolic <file.ref> [--steps N]");
+            process::exit(2);
+        }
+    };
+    let core = refal_core::lower_program(program);
+    let graph = refal_core::clean_unreachable_states(&refal_core::build_seed_graph(&core));
+    let report = match refal_core::drive_symbolic(&graph, max_steps) {
+        Ok(report) => report,
+        Err(error) => {
+            eprintln!("symbolic drive error: {error}");
+            process::exit(1);
+        }
+    };
+    let visited = report
+        .visited
+        .iter()
+        .map(|state| format!("S{}", state.0))
+        .collect::<Vec<_>>()
+        .join(" -> ");
+    println!("steps: {}", report.steps);
+    println!("visited: {visited}");
+    println!(
+        "residual: {}",
+        refal_core::format_term_sequence(&report.residual)
     );
 }
 

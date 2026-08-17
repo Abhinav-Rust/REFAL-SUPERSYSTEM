@@ -142,6 +142,26 @@ pub struct DriveReport {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SymbolicDriveReport {
+    pub residual: Vec<CoreTerm>,
+    pub visited: Vec<StateId>,
+    pub steps: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SymbolicMatch {
+    Yes,
+    No,
+    Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum SymbolicInvoke {
+    Reduced(Vec<CoreTerm>),
+    Residual,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DriveError {
     NoEntry,
     StepLimit { limit: usize },
@@ -197,6 +217,52 @@ pub fn drive_ground(
     })
 }
 
+/// Execute the graph conservatively from a symbolic expression variable.
+///
+/// A sentence is selected only when its pattern is definitely applicable and no earlier
+/// sentence may also apply. Unknown branch choices remain as residual calls; this is a
+/// partial symbolic-driving pass, not yet Turchin's complete configuration graph.
+pub fn drive_symbolic(
+    graph: &StateGraph,
+    max_steps: usize,
+) -> Result<SymbolicDriveReport, DriveError> {
+    let entry = graph.entry.ok_or(DriveError::NoEntry)?;
+    let function = graph
+        .states
+        .get(entry.0)
+        .ok_or(DriveError::NoEntry)?
+        .function
+        .clone();
+    let input = vec![CoreTerm {
+        kind: CoreTermKind::Variable {
+            kind: VariableKind::Expression,
+            name: "Input".to_string(),
+        },
+        span: Span { start: 0, end: 0 },
+    }];
+    let mut context = DriveContext {
+        graph,
+        visited: Vec::new(),
+        steps: 0,
+        max_steps,
+    };
+    let residual = match context.invoke_symbolic(&function, &input)? {
+        SymbolicInvoke::Reduced(output) => output,
+        SymbolicInvoke::Residual => vec![CoreTerm {
+            kind: CoreTermKind::Call {
+                name: function,
+                args: input,
+            },
+            span: Span { start: 0, end: 0 },
+        }],
+    };
+    Ok(SymbolicDriveReport {
+        residual,
+        visited: context.visited,
+        steps: context.steps,
+    })
+}
+
 struct DriveContext<'a> {
     graph: &'a StateGraph,
     visited: Vec<StateId>,
@@ -238,6 +304,100 @@ impl<'a> DriveContext<'a> {
         })
     }
 
+    fn invoke_symbolic(
+        &mut self,
+        function: &str,
+        input: &[CoreTerm],
+    ) -> Result<SymbolicInvoke, DriveError> {
+        if self.steps >= self.max_steps {
+            return Err(DriveError::StepLimit {
+                limit: self.max_steps,
+            });
+        }
+        if function.eq_ignore_ascii_case("Prout") {
+            self.steps += 1;
+            return Ok(SymbolicInvoke::Reduced(input.to_vec()));
+        }
+        self.steps += 1;
+        let mut unknown_before = false;
+        for state in self
+            .graph
+            .states
+            .iter()
+            .filter(|state| state.function.eq_ignore_ascii_case(function))
+        {
+            if !state.conditions.is_empty() {
+                unknown_before = true;
+                continue;
+            }
+            let mut bindings = HashMap::new();
+            match match_symbolic_pattern(&state.pattern, input, &mut bindings) {
+                SymbolicMatch::No => {}
+                SymbolicMatch::Unknown => unknown_before = true,
+                SymbolicMatch::Yes if unknown_before => return Ok(SymbolicInvoke::Residual),
+                SymbolicMatch::Yes => {
+                    self.visited.push(state.id);
+                    return self.instantiate_symbolic(&state.result, &bindings);
+                }
+            }
+        }
+        Ok(SymbolicInvoke::Residual)
+    }
+
+    fn instantiate_symbolic(
+        &mut self,
+        terms: &[CoreTerm],
+        bindings: &HashMap<String, Vec<CoreTerm>>,
+    ) -> Result<SymbolicInvoke, DriveError> {
+        let mut output = Vec::new();
+        for term in terms {
+            match &term.kind {
+                CoreTermKind::Variable { name, .. } => output.extend(
+                    bindings
+                        .get(&name.to_ascii_lowercase())
+                        .ok_or(DriveError::Unsupported {
+                            feature: "unbound residual variables",
+                        })?
+                        .clone(),
+                ),
+                CoreTermKind::Bracket(inner) => match self.instantiate_symbolic(inner, bindings)? {
+                    SymbolicInvoke::Reduced(inner) => output.push(CoreTerm {
+                        kind: CoreTermKind::Bracket(inner),
+                        span: term.span,
+                    }),
+                    SymbolicInvoke::Residual => {
+                        return Ok(SymbolicInvoke::Residual);
+                    }
+                },
+                CoreTermKind::Call { name, args } => {
+                    let arguments = match self.instantiate_symbolic(args, bindings)? {
+                        SymbolicInvoke::Reduced(arguments) => arguments,
+                        SymbolicInvoke::Residual => return Ok(SymbolicInvoke::Residual),
+                    };
+                    match self.invoke_symbolic(name, &arguments)? {
+                        SymbolicInvoke::Reduced(result) => output.extend(result),
+                        SymbolicInvoke::Residual => output.push(CoreTerm {
+                            kind: CoreTermKind::Call {
+                                name: name.clone(),
+                                args: arguments,
+                            },
+                            span: term.span,
+                        }),
+                    }
+                }
+                CoreTermKind::Block { .. } => {
+                    return Err(DriveError::Unsupported {
+                        feature: "sentence-ending blocks",
+                    });
+                }
+                CoreTermKind::Char(_) | CoreTermKind::Identifier(_) | CoreTermKind::Number(_) => {
+                    output.push(term.clone())
+                }
+            }
+        }
+        Ok(SymbolicInvoke::Reduced(output))
+    }
+
     fn instantiate(
         &mut self,
         terms: &[CoreTerm],
@@ -275,6 +435,51 @@ impl<'a> DriveContext<'a> {
             }
         }
         Ok(output)
+    }
+}
+
+fn match_symbolic_pattern(
+    pattern: &[CoreTerm],
+    input: &[CoreTerm],
+    bindings: &mut HashMap<String, Vec<CoreTerm>>,
+) -> SymbolicMatch {
+    if pattern.len() == 1
+        && let CoreTermKind::Variable {
+            kind: VariableKind::Expression,
+            name,
+        } = &pattern[0].kind
+        && input.len() == 1
+        && matches!(input[0].kind, CoreTermKind::Variable { .. })
+    {
+        bindings.insert(name.to_ascii_lowercase(), input.to_vec());
+        return SymbolicMatch::Yes;
+    }
+    if input.iter().any(contains_symbolic_variable) {
+        return SymbolicMatch::Unknown;
+    }
+    if match_ground_pattern(pattern, input, bindings) {
+        SymbolicMatch::Yes
+    } else {
+        SymbolicMatch::No
+    }
+}
+
+fn contains_symbolic_variable(term: &CoreTerm) -> bool {
+    match &term.kind {
+        CoreTermKind::Variable { .. } => true,
+        CoreTermKind::Bracket(inner) => inner.iter().any(contains_symbolic_variable),
+        CoreTermKind::Block {
+            argument,
+            sentences,
+        } => {
+            argument.iter().any(contains_symbolic_variable)
+                || sentences.iter().any(|sentence| {
+                    sentence.pattern.iter().any(contains_symbolic_variable)
+                        || sentence.result.iter().any(contains_symbolic_variable)
+                })
+        }
+        CoreTermKind::Call { args, .. } => args.iter().any(contains_symbolic_variable),
+        CoreTermKind::Char(_) | CoreTermKind::Identifier(_) | CoreTermKind::Number(_) => false,
     }
 }
 

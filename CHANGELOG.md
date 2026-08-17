@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Conservative symbolic-driving milestone (2026-08-17)
+
+The weighted completion score advances from 45% to 50% with a conservative symbolic-driving
+pass exposed as `refal drive-symbolic`. It reduces an unambiguous expression-variable identity
+call to `e.Input`, records the deterministic trace `S0 -> S1`, and preserves an ambiguous
+sentence choice as the residual call `<Choose e.Input>`. The new `symbolic-identity.ref` and
+`symbolic-branch.ref` fixtures are checked by the CLI suite. Complete Turchin configuration
+driving, semantic graph cleaning, generalisation, residualisation, Refal emission, and
+self-hosting remain intentionally unclaimed.
+
 ### Ground graph-driving milestone (2026-08-17)
 
 The weighted completion score advances from 40% to 45% with deterministic SCC detection,

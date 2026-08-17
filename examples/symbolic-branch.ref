@@ -1,0 +1,9 @@
+$ENTRY Go {
+  e.Input = <Choose e.Input>;
+}
+
+Choose {
+  = 'empty';
+  s.Head e.Tail = 'nonempty';
+}
+

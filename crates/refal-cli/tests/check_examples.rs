@@ -40,6 +40,13 @@ fn drive_file(path: &str, args: &[&str]) -> std::process::Output {
     command.output().expect("run refal binary")
 }
 
+fn symbolic_drive_file(path: &str, args: &[&str]) -> std::process::Output {
+    let mut command = Command::new(refal_bin());
+    command.args(["drive-symbolic", &workspace_path(path)]);
+    command.args(args);
+    command.output().expect("run refal binary")
+}
+
 /// Checks a source string, for conformance cases too small to warrant an example
 /// file. The temporary file is removed before the assertion runs.
 fn check_source(source: &str) -> std::process::Output {
@@ -122,6 +129,34 @@ fn drives_recursive_ground_program_to_reversed_output() {
 }
 
 #[test]
+fn drives_a_symbolic_identity_to_a_residual_expression_variable() {
+    let output = symbolic_drive_file("examples/symbolic-identity.ref", &[]);
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "steps: 2\nvisited: S0 -> S1\nresidual: e.Input\n"
+    );
+}
+
+#[test]
+fn preserves_an_ambiguous_symbolic_call_as_a_residual() {
+    let output = symbolic_drive_file("examples/symbolic-branch.ref", &[]);
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "steps: 2\nvisited: S0\nresidual: <Choose e.Input>\n"
+    );
+}
+
+#[test]
 fn accepts_positive_examples() {
     for path in [
         "examples/identity.ref",
@@ -145,6 +180,8 @@ fn accepts_positive_examples() {
         "examples/block-ending.ref",
         "examples/runtime-arithmetic.ref",
         "examples/runtime-numeric-conversion.ref",
+        "examples/symbolic-identity.ref",
+        "examples/symbolic-branch.ref",
     ] {
         let output = check_file(path);
 
