@@ -381,6 +381,8 @@ impl<'a> Evaluator<'a> {
             "DIVMOD" => Some(divide(args, true)),
             "MOD" => Some(modulo(args)),
             "COMPARE" => Some(compare_numbers(args)),
+            "TRUNC" => Some(trunc(args)),
+            "REAL" => Some(real(args)),
             "FIRST" => Some(split_first(args)),
             "LAST" => Some(split_last(args)),
             "LENW" => Some(length_with_expression(args)),
@@ -878,6 +880,30 @@ fn compare_numbers(args: &[Value]) -> Result<Vec<Value>, EvalError> {
     Ok(vec![Value::Char(result)])
 }
 
+fn trunc(args: &[Value]) -> Result<Vec<Value>, EvalError> {
+    let [Value::Number(number)] = args else {
+        return Err(invalid_builtin_arguments(
+            "Trunc",
+            "expected exactly one integer number",
+        ));
+    };
+    let value = parse_integer(number)
+        .ok_or_else(|| invalid_builtin_arguments("Trunc", "expected exactly one integer number"))?;
+    Ok(vec![Value::Number(format_integer(value))])
+}
+
+fn real(args: &[Value]) -> Result<Vec<Value>, EvalError> {
+    let [Value::Number(number)] = args else {
+        return Err(invalid_builtin_arguments(
+            "Real",
+            "expected exactly one integer number",
+        ));
+    };
+    let value = parse_integer(number)
+        .ok_or_else(|| invalid_builtin_arguments("Real", "expected exactly one integer number"))?;
+    Ok(vec![Value::Number(format!("{}.0", format_integer(value)))])
+}
+
 fn integer_pair(name: &str, args: &[Value]) -> Result<(i128, i128), EvalError> {
     let [Value::Number(left), Value::Number(right)] = args else {
         return Err(invalid_builtin_arguments(
@@ -1357,6 +1383,20 @@ mod tests {
             vec![Value::Number("2".to_string())]
         );
         assert_eq!(compare_numbers(&numbers).unwrap(), vec![Value::Char('+')]);
+    }
+
+    #[test]
+    fn numeric_conversion_builtins_follow_classic_integer_conventions() {
+        assert_eq!(
+            trunc(&[Value::Number("+00042".to_string())]).unwrap(),
+            vec![Value::Number("42".to_string())]
+        );
+        assert_eq!(
+            real(&[Value::Number("-7".to_string())]).unwrap(),
+            vec![Value::Number("-7.0".to_string())]
+        );
+        assert!(trunc(&[Value::Number("2.5".to_string())]).is_err());
+        assert!(real(&[Value::Number("2.5".to_string())]).is_err());
     }
 
     #[test]

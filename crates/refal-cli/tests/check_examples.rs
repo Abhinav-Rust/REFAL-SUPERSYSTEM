@@ -102,6 +102,7 @@ fn accepts_positive_examples() {
         "examples/variable-index-equivalence.ref",
         "examples/block-ending.ref",
         "examples/runtime-arithmetic.ref",
+        "examples/runtime-numeric-conversion.ref",
     ] {
         let output = check_file(path);
 
@@ -539,6 +540,11 @@ fn runs_runtime_conformance_examples() {
             "42\n",
         ),
         ("examples/runtime-arithmetic.ref", &[] as &[&str], "17\n"),
+        (
+            "examples/runtime-numeric-conversion.ref",
+            &[] as &[&str],
+            "42.0\n",
+        ),
         ("examples/runtime-type.ref", &[] as &[&str], "LA\n"),
         (
             "examples/runtime-structural.ref",

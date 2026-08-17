@@ -143,7 +143,8 @@ Turchin Ch. 1–2. Replaces `refal-runtime`.
 - **1d** Builtin library, in dependency order:
   1. **File I/O** — `Card`, `Open`, `Get`, `Put`, `Putout`. *Without these a Refal compiler cannot
      read a source file.* Hard gate on Phase 4.
-  2. **Arithmetic** — `Add`, `Sub`, `Mul`, `Div`, `Divmod`, `Mod`, `Compare` are implemented; `Trunc` and `Real` remain.
+  2. **Arithmetic** — `Add`, `Sub`, `Mul`, `Div`, `Divmod`, `Mod`, `Compare`, `Trunc`, and `Real`
+     are implemented.
   3. **Buried data** — `Br`, `Dg`, `Cp`, `Rp`, `Dgall` are implemented with evaluator-owned stack state.
   4. `Lenw`, `First`, `Last`, `Upper`, `Lower`, `Arg`, and `Step` are implemented; `Mu`, `Time`, `Up`, and `Dn` remain.
 - **1e** Refal-5 blocks (`, arg : { block }`) end-to-end — issue #13.
@@ -221,7 +222,7 @@ Honest reset. The clarified goal added a workstream, so the denominator grew. Th
 also *fell* from an earlier published 38%, because that figure gave full credit to two
 milestones an audit then found to be Partial.
 
-**~30% today**, after two implementation milestones on 2026-08-17. The audited
+**~35% today**, after three implementation milestones on 2026-08-17. The audited
 19.8% baseline remains the comparison point; the new score credits only tested frontend,
 bootstrap-runtime, and conformance work. The graph, Refal compiler, and self-hosting rows
 remain at zero beyond their existing formatter credit.
@@ -230,13 +231,13 @@ remain at zero beyond their existing formatter credit.
 |---|---:|---:|---:|---:|---:|
 | Bootstrap frontend | 8.5% | 8.0 | 8.5 | 8.5 | 8.5 |
 | Bootstrap semantics | 6% | 5.0 | 6 | 6 | 6 |
-| Refal machine | 19.5% | 12.6 | 19.5 | 19.5 | 19.5 |
+| Refal machine | 19.5% | 17.6 | 19.5 | 19.5 | 19.5 |
 | Graph of states / Refal emission | 8.5% | 2.1 | 2.1 | 8.5 | 8.5 |
 | Static verification | 15% | 0.8 | 1 | 13 | 13 |
 | Compiler in Refal | 25.5% | 0 | 0 | 0 | 25.5 |
 | Self-hosting fixpoint | 13% | 0 | 0 | 0 | 13 |
 | Conformance / release | 4% | 1.5 | 1.5 | 2.5 | 3 |
-| **Total** | **100%** | **~30%** | **~39%** | **~58%** | **~97%** |
+| **Total** | **100%** | **~35%** | **~39%** | **~58%** | **~97%** |
 
 ---
 

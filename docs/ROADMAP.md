@@ -79,8 +79,9 @@ Completed so far:
 - Executable interpreter mode.
 - CLI conformance examples for runtime behavior.
 
-Status: **Partial implementation; updated 2026-08-17**. The structural builtin slice is now
-implemented and tested; the scalable work-list machine and remaining Classic builtins remain open.
+Status: **Partial implementation; updated 2026-08-17**. The structural builtin slice and the
+integer-to-real conversion builtins are now implemented and tested; the scalable work-list
+machine and remaining Classic builtins remain open.
 
 Completed so far:
 
@@ -115,6 +116,7 @@ Completed so far:
 - `Card`, `Open`, `Get`, `Put`, and `Putout` with descriptor-backed file handles and
   captured terminal output.
 - Integer `Add`, `Sub`, `Mul`, `Div`, `Divmod`, `Mod`, and `Compare` with checked results.
+- Integer-to-real conversion through `Trunc` and `Real`, with canonical numeric results.
 - Structural `First`, `Last`, and `Lenw` expression operations with Classic result shapes.
 - `Lower` and `Upper` case conversion, evaluator-owned `Br`/`Dg`/`Cp`/`Rp`/`Dgall` buried-data stack,
   `Arg` command-line access, and monotonic `Step` counter with unit and CLI coverage.

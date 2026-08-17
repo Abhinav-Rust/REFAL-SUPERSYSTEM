@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Numeric conversion milestone (2026-08-17)
+
+The weighted completion score advances from 30% to 35% with tested Classic Refal-5
+`Trunc` and `Real` builtins. Both are registered with semantic checking, normalize integer
+results canonically, reject non-integer arguments, and are exercised by unit tests and the
+`runtime-numeric-conversion.ref` CLI fixture. The graph-of-states compiler, Refal-authored
+compiler, and self-hosting remain intentionally unclaimed.
+
 ### Structural runtime milestone (2026-08-17)
 
 The weighted completion score advances from 25% to 30% with tested Classic Refal-5

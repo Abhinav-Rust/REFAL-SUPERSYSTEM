@@ -21,3 +21,9 @@ These notes are evidence for the block-ending, macrodigit-bound, and arithmetic 
 The official reference sections C.2–C.5 define the next runtime slice: `Trunc` and `Real` convert numeric values; `Br` pushes `(name = value)` on the runtime stack; `Dg` pops the newest matching name; `Cp` copies it without removal; `Rp` replaces it; `Dgall` returns the full stack; `First` and `Last` split an expression into bracketed halves; `Lenw` prefixes the term count; `Lower` and `Upper` change character case; `Arg` reads a command-line argument; `Step` and `Time` expose system state; `Mu` performs a visible dynamic call; `Up`/`Dn` are metacode operations. The implementation will stage these in dependency order, beginning with pure expression operations and an evaluator-owned stack, and will not claim full Classic coverage until each supported row has tests.
 
 Source: http://www.refal.net/refer_r5.html, sections C.2–C.5, accessed 2026-08-17.
+
+### Numeric conversion semantics
+
+The official reference, section C.2, states that `<Trunc e.N>` requires an integer and returns the truncated integer, while `<Real e.N>` requires an integer and returns the equal real number. It also states that real numbers occupy one runtime symbol and that arithmetic results are integer only when both operands are integers. Source: http://www.refal.net/refer_r5.html, section C.2, accessed 2026-08-17; extracted locally as `/home/ubuntu/upload/www.refal.net_refer_r5.html_1786967944525.md`.
+
+The same reference defines the buried-data stack as a sequence of `(e.Name '=' e.Value)` terms; each `Br` adds a term to the left, `Dg` removes the leftmost matching term, `Cp` copies it, `Rp` replaces it, and `Dgall` removes the whole stack. Source: http://www.refal.net/refer_r5.html, section C.3, accessed 2026-08-17.
