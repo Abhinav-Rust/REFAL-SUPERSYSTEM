@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Shape-aware symbolic configuration milestone (2026-08-17)
+
+The weighted completion score advances from 50% to 55% by extending the symbolic driver to
+caller-provided partially known configurations. A known symbol prefix followed by a symbolic
+expression tail can now select a structurally definite sentence and reduce it, with the core
+regression proving a two-step `Go -> Choose` reduction and preservation of the symbolic tail.
+Uncertain branch choices remain residual. Complete Turchin configuration graphs, semantic
+cleaning, generalisation, residualisation, Refal emission, and self-hosting remain unclaimed.
+
 ### Conservative symbolic-driving milestone (2026-08-17)
 
 The weighted completion score advances from 45% to 50% with a conservative symbolic-driving

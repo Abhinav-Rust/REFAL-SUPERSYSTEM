@@ -133,10 +133,10 @@ Completed so far:
 
 Status: **Partial implementation; updated 2026-08-17**. The deterministic seed graph now has
 one state per source sentence and syntactic call edges. SCC detection, condition-preserving
-states, function-aware structural reachability cleanup, bounded concrete driving, and a
-conservative symbolic pass for unambiguous expression-variable reductions are implemented
-and tested. Complete symbolic Turchin driving, semantic graph cleaning, generalisation,
-whistle termination, and residualisation remain open.
+states, function-aware structural reachability cleanup, bounded concrete driving, and
+shape-aware symbolic execution over known prefixes with symbolic expression tails are
+implemented and tested. Complete symbolic Turchin driving, semantic graph cleaning,
+generalisation, whistle termination, and residualisation remain open.
 
 Completed so far:
 
@@ -153,6 +153,8 @@ Completed so far:
 - Conservative symbolic driving from an expression variable, exposed as `refal drive-symbolic`;
   definite identity reductions are performed, while ambiguous sentence choices remain as
   residual calls. Identity and ambiguity-preservation CLI regressions cover the behavior.
+- Shape-aware symbolic driving through `drive_symbolic_with_input`, which can reduce a known
+  symbol prefix followed by a symbolic expression tail; the core suite covers this reduction.
 - `refal lower <file.ref>` command, which runs syntax and semantic validation
   before emitting normalized source.
 - `refal lower <file.ref> --output <file.ref>` support for source-to-source

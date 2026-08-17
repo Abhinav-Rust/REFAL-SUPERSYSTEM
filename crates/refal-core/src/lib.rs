@@ -226,6 +226,29 @@ pub fn drive_symbolic(
     graph: &StateGraph,
     max_steps: usize,
 ) -> Result<SymbolicDriveReport, DriveError> {
+    drive_symbolic_with_input(
+        graph,
+        vec![CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind: VariableKind::Expression,
+                name: "Input".to_string(),
+            },
+            span: Span { start: 0, end: 0 },
+        }],
+        max_steps,
+    )
+}
+
+/// Symbolically drive a caller-provided sequence containing known terms and variables.
+///
+/// The input is treated as a partially known configuration. Known prefixes can select a
+/// sentence when the remaining symbolic tail is structurally compatible; uncertain branch
+/// choices remain residual instead of being guessed.
+pub fn drive_symbolic_with_input(
+    graph: &StateGraph,
+    input: Vec<CoreTerm>,
+    max_steps: usize,
+) -> Result<SymbolicDriveReport, DriveError> {
     let entry = graph.entry.ok_or(DriveError::NoEntry)?;
     let function = graph
         .states
@@ -233,13 +256,6 @@ pub fn drive_symbolic(
         .ok_or(DriveError::NoEntry)?
         .function
         .clone();
-    let input = vec![CoreTerm {
-        kind: CoreTermKind::Variable {
-            kind: VariableKind::Expression,
-            name: "Input".to_string(),
-        },
-        span: Span { start: 0, end: 0 },
-    }];
     let mut context = DriveContext {
         graph,
         visited: Vec::new(),
@@ -455,13 +471,92 @@ fn match_symbolic_pattern(
         return SymbolicMatch::Yes;
     }
     if input.iter().any(contains_symbolic_variable) {
-        return SymbolicMatch::Unknown;
+        return match_shape_pattern(pattern, input, bindings);
     }
     if match_ground_pattern(pattern, input, bindings) {
         SymbolicMatch::Yes
     } else {
         SymbolicMatch::No
     }
+}
+
+fn match_shape_pattern(
+    pattern: &[CoreTerm],
+    input: &[CoreTerm],
+    bindings: &mut HashMap<String, Vec<CoreTerm>>,
+) -> SymbolicMatch {
+    fn match_at(
+        pattern: &[CoreTerm],
+        input: &[CoreTerm],
+        pattern_index: usize,
+        input_index: usize,
+        bindings: &mut HashMap<String, Vec<CoreTerm>>,
+    ) -> SymbolicMatch {
+        if pattern_index == pattern.len() {
+            if input_index == input.len() {
+                return SymbolicMatch::Yes;
+            }
+            return if input[input_index..].iter().any(contains_symbolic_variable) {
+                SymbolicMatch::Unknown
+            } else {
+                SymbolicMatch::No
+            };
+        }
+        let pattern_term = &pattern[pattern_index];
+        if let CoreTermKind::Variable { kind, name } = &pattern_term.kind {
+            let key = name.to_ascii_lowercase();
+            if *kind == VariableKind::Expression {
+                if pattern_index + 1 != pattern.len() {
+                    return SymbolicMatch::Unknown;
+                }
+                bindings.insert(key, input[input_index..].to_vec());
+                return SymbolicMatch::Yes;
+            }
+            let Some(input_term) = input.get(input_index) else {
+                return SymbolicMatch::No;
+            };
+            let compatible = match kind {
+                VariableKind::Symbol => matches!(
+                    input_term.kind,
+                    CoreTermKind::Char(_)
+                        | CoreTermKind::Variable {
+                            kind: VariableKind::Symbol,
+                            ..
+                        }
+                ),
+                VariableKind::Term => matches!(
+                    input_term.kind,
+                    CoreTermKind::Bracket(_)
+                        | CoreTermKind::Variable {
+                            kind: VariableKind::Term,
+                            ..
+                        }
+                ),
+                VariableKind::Expression => unreachable!(),
+            };
+            if !compatible {
+                return if contains_symbolic_variable(input_term) {
+                    SymbolicMatch::Unknown
+                } else {
+                    SymbolicMatch::No
+                };
+            }
+            bindings.insert(key, vec![input_term.clone()]);
+            return match_at(pattern, input, pattern_index + 1, input_index + 1, bindings);
+        }
+        let Some(input_term) = input.get(input_index) else {
+            return SymbolicMatch::No;
+        };
+        if contains_symbolic_variable(input_term) {
+            return SymbolicMatch::Unknown;
+        }
+        if !ground_term_matches(pattern_term, input_term) {
+            return SymbolicMatch::No;
+        }
+        match_at(pattern, input, pattern_index + 1, input_index + 1, bindings)
+    }
+
+    match_at(pattern, input, 0, 0, bindings)
 }
 
 fn contains_symbolic_variable(term: &CoreTerm) -> bool {
@@ -1218,6 +1313,70 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn drives_a_known_symbol_and_symbolic_tail() {
+        let expression_variable = |name: &str| CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind: VariableKind::Expression,
+                name: name.to_string(),
+            },
+            span: span(),
+        };
+        let graph = build_seed_graph(&CoreProgram {
+            declarations: vec![],
+            functions: vec![
+                CoreFunction {
+                    name: "Go".to_string(),
+                    visibility: Visibility::Entry,
+                    sentences: vec![CoreSentence {
+                        pattern: vec![expression_variable("Input")],
+                        conditions: vec![],
+                        result: vec![CoreTerm {
+                            kind: CoreTermKind::Call {
+                                name: "Choose".to_string(),
+                                args: vec![expression_variable("Input")],
+                            },
+                            span: span(),
+                        }],
+                        span: span(),
+                    }],
+                    span: span(),
+                },
+                CoreFunction {
+                    name: "Choose".to_string(),
+                    visibility: Visibility::Local,
+                    sentences: vec![CoreSentence {
+                        pattern: vec![
+                            CoreTerm {
+                                kind: CoreTermKind::Variable {
+                                    kind: VariableKind::Symbol,
+                                    name: "Head".to_string(),
+                                },
+                                span: span(),
+                            },
+                            expression_variable("Tail"),
+                        ],
+                        conditions: vec![],
+                        result: vec![expression_variable("Tail")],
+                        span: span(),
+                    }],
+                    span: span(),
+                },
+            ],
+        });
+        let input = vec![
+            CoreTerm {
+                kind: CoreTermKind::Char('a'),
+                span: span(),
+            },
+            expression_variable("Unknown"),
+        ];
+        let report = drive_symbolic_with_input(&graph, input.clone(), 10).expect("drive");
+        assert_eq!(report.steps, 2);
+        assert_eq!(report.visited, vec![StateId(0), StateId(1)]);
+        assert_eq!(report.residual, vec![input[1].clone()]);
     }
 
     #[test]

@@ -195,15 +195,15 @@ The guarantee this compiler intends to publish, once Tier 1 lands:
 
 ## Project Status
 
-**Completion against the goal: 50%.**
+**Completion against the goal: 55%.**
 
 That figure counts a compiler *written in Refal* that emits Refal and compiles its own
-sources, with the verification tiers above, as 100%. The sixth implementation milestone moves the weighted score from 45.0% to 50.0% by adding
-a conservative symbolic-driving pass exposed through `refal drive-symbolic`. It reduces
-unambiguous expression-variable calls, preserves ambiguous calls as residual Refal, and
-records a deterministic state trace. This is progress toward the target, not a claim that
-complete Turchin driving, graph cleaning, generalisation, residualisation, the Refal compiler,
-or self-hosting exists yet.
+sources, with the verification tiers above, as 100%. The seventh implementation milestone moves the weighted score from 50.0% to 55.0% by
+extending `refal drive-symbolic` to caller-provided partially known configurations. Known
+symbol prefixes and symbolic expression tails can now select a structurally definite
+sentence and reduce it, while uncertain branch choices remain residual. This is progress
+toward the target, not a claim that complete Turchin driving, graph cleaning, generalisation,
+residualisation, the Refal compiler, or self-hosting exists yet.
 
 The estimate is kept deliberately evidence-backed. The milestones include end-to-end
 sentence-ending blocks, the Classic macrodigit lexer bound, integer arithmetic
@@ -213,8 +213,8 @@ sentence-ending blocks, the Classic macrodigit lexer bound, integer arithmetic
 `Real`, with semantic registration, unit tests, and CLI fixtures. The runtime now also has an
 explicit work-list path for eligible deep call chains. `refal-core` has a deterministic
 sentence-state/call-edge seed graph, SCC detection, function-aware structural reachability
-cleanup, a bounded concrete driver, and a conservative symbolic driver. Complete Turchin
-driving, semantic graph cleaning, generalization, residualisation, the Refal-authored
+cleanup, a bounded concrete driver, and shape-aware conservative symbolic driving. Complete
+Turchin driving, semantic graph cleaning, generalization, residualisation, the Refal-authored
 compiler, and self-hosting remain unimplemented.
 
 The earlier figure went *down* from an older published estimate of 38%, for two reasons,
@@ -237,7 +237,7 @@ generate code.
 | 2 | Classic Refal-5 front end | 🔶 Partial | Lexer/parser cover most of the Classic surface with spans and diagnostics. Sentence-ending blocks now parse, check, execute, and lower recursively; the traceable conformance corpus is still incomplete |
 | 3 | Semantic checker | 🔶 Partial | Entry points, declarations, name equivalence, call checks, variable binding, condition legality. Entry-point rules corrected in `641ffc0` |
 | 4 | Refal machine | 🔶 Partial | Object-expression runtime, `s.`/`t.`/`e.` matching with backtracking, conditions, recursion guard, arithmetic, `Trunc`/`Real`, descriptor-backed file I/O, structural stack operations, expression splitting, case conversion, `Arg`, and `Step`. An explicit work-list path now handles eligible deep block-free call chains; conditions, blocks, symbolic matching plans, and the full flat view-field machine remain open ([#7](../../issues/7)) |
-| 5 | Graph of states | 🔶 Partial | `refal-core` exposes deterministic sentence states, syntactic call edges, SCC detection, function-aware structural reachability cleanup, bounded ground driving, and conservative symbolic driving via `refal drive-symbolic`; complete Turchin driving, semantic cleaning, generalization, and residualisation remain open |
+| 5 | Graph of states | 🔶 Partial | `refal-core` exposes deterministic sentence states, syntactic call edges, SCC detection, function-aware structural reachability cleanup, bounded ground driving, and shape-aware symbolic driving over partially known configurations; complete Turchin driving, semantic cleaning, generalization, and residualisation remain open |
 | 6 | Tier 1 analyses | ⬜ Not started | Requires Milestone 5 |
 | 7 | Compiler written in Refal | ⬜ Not started | Gated on Milestone 4: a Refal compiler cannot read a source file until `Card`/`Open`/`Get` exist |
 | 8 | Verified self-hosting | ⬜ Not started | Three-stage fixpoint, `C2 ≡ C3` |
@@ -253,6 +253,7 @@ The full phase plan, gates and completion accounting are in [`docs/PLAN.md`](doc
 
 | Date | Change |
 |---|---|
+| 2026-08-17 | Seventh 5-point implementation milestone: shape-aware symbolic driving over caller-provided configurations, known-symbol/symbolic-tail reduction, core regression coverage, and synchronized architecture documentation; full workspace gates pass |
 | 2026-08-17 | Sixth 5-point implementation milestone: conservative symbolic driving, residual expression-variable reduction, ambiguity preservation, the `refal drive-symbolic` command, symbolic fixtures, and synchronized architecture documentation; focused gates pass; full workspace gates pending commit |
 | 2026-08-17 | Fifth 5-point implementation milestone: SCC detection, condition-preserving graph states, function-aware reachability cleanup, bounded ground driving, the `refal drive` command, recursive-driver regression, and synchronized architecture documentation; workspace gates pass |
 | 2026-08-17 | Fourth 5-point implementation milestone: explicit work-list execution for 5,000-call chains, deterministic `refal-core` seed graph with sentence states and call edges, focused regressions, and synchronized architecture documentation; workspace gates pass |
@@ -272,7 +273,7 @@ The full phase plan, gates and completion accounting are in [`docs/PLAN.md`](doc
 | `refal-syntax` | 🔶 Lexer and parser; blocks and macrodigit-bound tests are implemented; full traceable conformance remains |
 | `refal-semantics` | 🔶 Legality checks for the supported surface |
 | `refal-runtime` | 🔶 Correct for the covered subset; arithmetic, `Trunc`/`Real`, descriptor-backed file I/O, structural splitting/case/stack operations, `Arg`, and `Step` are implemented; an explicit work-list path handles eligible deep call chains, but the full machine is not complete |
-| `refal-core` | 🔶 Normalised formatter, deterministic sentence-state/call-edge seed graph, SCC detection, structural cleanup, bounded ground driving, and conservative symbolic driving; complete Turchin driving and residualisation are not implemented |
+| `refal-core` | 🔶 Normalised formatter, deterministic sentence-state/call-edge seed graph, SCC detection, structural cleanup, bounded ground driving, and shape-aware symbolic driving; complete Turchin driving and residualisation are not implemented |
 | `refal-cli` | 🔶 `check`, `dump-ast`, `lower`, `graph`, `drive`, `drive-symbolic`, `run` |
 | CI and quality gates | ✅ `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` |
 
