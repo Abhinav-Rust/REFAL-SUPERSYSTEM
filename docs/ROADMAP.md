@@ -180,6 +180,15 @@ pattern overlap, sentence subsumption, function-format inference, builtin-domain
 and the strict severity model remain open; this slice does not claim Turchin's semantic graph
 cleaning.
 
+## Refal-authored Compiler Slice
+
+Status: **Partial implementation; updated 2026-08-17**. `examples/compiler-refal-subset.ref` is a
+Refal program that accepts a restricted character-string function name and emits a valid Refal
+program containing a `Go` wrapper and a generated identity function. The generated source is
+checked and executed through the bootstrap runtime in an end-to-end CLI regression. General source
+lexing/parsing, Core Refal emission, differential compilation of the corpus, and self-hosting remain
+open.
+
 ## Milestone 6: Production Backend
 
 - Lower Core Refal to compiler IR.

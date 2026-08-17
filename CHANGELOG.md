@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Refal-authored compiler-subset milestone (2026-08-17)
+
+The weighted completion score advances from 75% to 80% with the first runnable compiler logic
+written in Refal. `examples/compiler-refal-subset.ref` accepts a restricted character-string
+function name and emits a valid `$ENTRY Go` wrapper plus a generated identity function. The CLI
+regression checks the emitted source, executes it through the bootstrap runtime, and verifies the
+generated program returns its input. General source parsing, complete Core Refal emission,
+differential corpus compilation, and self-hosting remain open.
+
 ### Tier 1 graph-analysis milestone (2026-08-17)
 
 The weighted completion score advances from 70% to 75% with a deterministic bounded analysis
