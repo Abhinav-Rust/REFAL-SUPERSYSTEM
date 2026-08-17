@@ -143,6 +143,56 @@ fn prints_deterministic_tier_one_graph_analysis() {
 }
 
 #[test]
+fn executes_refal_authored_two_literal_compiler_subset_end_to_end() {
+    let output = run_file(
+        "examples/compiler-refal-two-literals-subset.ref",
+        &["Demo = 'ok'; Echo = 'yes';"],
+    );
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let generated = String::from_utf8_lossy(&output.stdout).to_string();
+    assert_eq!(
+        generated,
+        "$ENTRY Go { e.Input = <Demo e.Input>; } Demo { e.Input = 'ok'; } Echo { e.Input = 'yes'; }\n"
+    );
+
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock after unix epoch")
+        .as_nanos();
+    let path = env::temp_dir().join(format!(
+        "refal-compiled-two-literals-{}-{unique}.ref",
+        process::id()
+    ));
+    fs::write(&path, generated).expect("write generated Refal source");
+
+    let checked = Command::new(refal_bin())
+        .args(["check", &path.to_string_lossy()])
+        .output()
+        .expect("check generated Refal source");
+    assert!(
+        checked.status.success(),
+        "generated source should check:\n{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+
+    let executed = Command::new(refal_bin())
+        .args(["run", &path.to_string_lossy(), "Demo"])
+        .output()
+        .expect("run generated Refal source");
+    let _ = fs::remove_file(&path);
+    assert!(
+        executed.status.success(),
+        "generated source should run:\n{}",
+        String::from_utf8_lossy(&executed.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&executed.stdout), "ok\n");
+}
+
+#[test]
 fn executes_refal_authored_call_literal_compiler_subset_end_to_end() {
     let output = run_file(
         "examples/compiler-refal-call-literal-subset.ref",
@@ -626,6 +676,7 @@ fn accepts_positive_examples() {
         "examples/compiler-refal-literal-subset.ref",
         "examples/compiler-refal-call-subset.ref",
         "examples/compiler-refal-call-literal-subset.ref",
+        "examples/compiler-refal-two-literals-subset.ref",
         "examples/supercompile-loop.ref",
         "examples/supercompile-generalize.ref",
     ] {
