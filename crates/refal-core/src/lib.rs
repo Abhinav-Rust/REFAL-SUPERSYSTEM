@@ -212,7 +212,16 @@ pub struct SymbolicDriveReport {
     pub visited: Vec<StateId>,
     pub whistle_states: Vec<StateId>,
     pub whistle_inputs: Vec<(StateId, Vec<CoreTerm>)>,
+    pub whistle_events: Vec<WhistleEvent>,
     pub steps: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WhistleEvent {
+    pub state: StateId,
+    pub previous_input: Vec<CoreTerm>,
+    pub repeated_input: Vec<CoreTerm>,
+    pub generalized_input: Vec<CoreTerm>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -275,6 +284,8 @@ pub fn drive_ground(
         visited: Vec::new(),
         whistle_states: Vec::new(),
         whistle_inputs: Vec::new(),
+        whistle_events: Vec::new(),
+        visited_inputs: Vec::new(),
         steps: 0,
         max_steps,
     };
@@ -330,6 +341,8 @@ pub fn drive_symbolic_with_input(
         visited: Vec::new(),
         whistle_states: Vec::new(),
         whistle_inputs: Vec::new(),
+        whistle_events: Vec::new(),
+        visited_inputs: Vec::new(),
         steps: 0,
         max_steps,
     };
@@ -348,6 +361,7 @@ pub fn drive_symbolic_with_input(
         visited: context.visited,
         whistle_states: context.whistle_states,
         whistle_inputs: context.whistle_inputs,
+        whistle_events: context.whistle_events,
         steps: context.steps,
     })
 }
@@ -357,6 +371,8 @@ struct DriveContext<'a> {
     visited: Vec<StateId>,
     whistle_states: Vec<StateId>,
     whistle_inputs: Vec<(StateId, Vec<CoreTerm>)>,
+    whistle_events: Vec<WhistleEvent>,
+    visited_inputs: Vec<(StateId, Vec<CoreTerm>)>,
     steps: usize,
     max_steps: usize,
 }
@@ -438,9 +454,26 @@ impl<'a> DriveContext<'a> {
                         {
                             self.whistle_inputs.push((state.id, input.to_vec()));
                         }
+                        if !self
+                            .whistle_events
+                            .iter()
+                            .any(|event| event.state == state.id)
+                            && let Some((_, previous_input)) = self
+                                .visited_inputs
+                                .iter()
+                                .find(|(visited_state, _)| *visited_state == state.id)
+                        {
+                            self.whistle_events.push(WhistleEvent {
+                                state: state.id,
+                                previous_input: previous_input.clone(),
+                                repeated_input: input.to_vec(),
+                                generalized_input: generalize_term_sequence(previous_input, input),
+                            });
+                        }
                         return Ok(SymbolicInvoke::Residual);
                     }
                     self.visited.push(state.id);
+                    self.visited_inputs.push((state.id, input.to_vec()));
                     return self.instantiate_symbolic(&state.result, &bindings);
                 }
             }
@@ -879,6 +912,54 @@ pub fn format_term_sequence(terms: &[CoreTerm]) -> String {
     let mut output = String::new();
     format_terms(terms, &mut output);
     output
+}
+
+fn generalize_term_sequence(previous: &[CoreTerm], repeated: &[CoreTerm]) -> Vec<CoreTerm> {
+    if previous.len() != repeated.len() {
+        return vec![generalized_expression_variable(Span { start: 0, end: 0 })];
+    }
+    previous
+        .iter()
+        .zip(repeated)
+        .map(|(left, right)| generalize_term(left, right))
+        .collect()
+}
+
+fn generalize_term(left: &CoreTerm, right: &CoreTerm) -> CoreTerm {
+    let kind = match (&left.kind, &right.kind) {
+        (CoreTermKind::Bracket(left_inner), CoreTermKind::Bracket(right_inner)) => {
+            CoreTermKind::Bracket(generalize_term_sequence(left_inner, right_inner))
+        }
+        (
+            CoreTermKind::Call {
+                name: left_name,
+                args: left_args,
+            },
+            CoreTermKind::Call {
+                name: right_name,
+                args: right_args,
+            },
+        ) if left_name.eq_ignore_ascii_case(right_name) => CoreTermKind::Call {
+            name: left_name.clone(),
+            args: generalize_term_sequence(left_args, right_args),
+        },
+        _ if left.kind == right.kind => left.kind.clone(),
+        _ => return generalized_expression_variable(left.span),
+    };
+    CoreTerm {
+        kind,
+        span: left.span,
+    }
+}
+
+fn generalized_expression_variable(span: Span) -> CoreTerm {
+    CoreTerm {
+        kind: CoreTermKind::Variable {
+            kind: VariableKind::Expression,
+            name: "Whistle".to_string(),
+        },
+        span,
+    }
 }
 
 /// Emit a valid Refal wrapper for a residual produced by the conservative symbolic driver.
@@ -1644,6 +1725,12 @@ mod tests {
         assert_eq!(report.whistle_inputs.len(), 1);
         assert_eq!(report.whistle_inputs[0].0, StateId(0));
         assert_eq!(format_term_sequence(&report.whistle_inputs[0].1), "e.Input");
+        assert_eq!(report.whistle_events.len(), 1);
+        assert_eq!(report.whistle_events[0].state, StateId(0));
+        assert_eq!(
+            format_term_sequence(&report.whistle_events[0].generalized_input),
+            "e.Input"
+        );
         assert_eq!(format_term_sequence(&report.residual), "<Loop e.Input>");
     }
 
@@ -1660,6 +1747,7 @@ mod tests {
             visited: vec![StateId(0), StateId(1)],
             whistle_states: vec![],
             whistle_inputs: vec![],
+            whistle_events: vec![],
             steps: 2,
         };
         assert_eq!(
