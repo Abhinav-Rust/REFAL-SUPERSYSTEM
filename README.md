@@ -236,7 +236,19 @@ This repository today is a **usable Rust bootstrap frontend, checker, interprete
 source normaliser**, plus a deliberately restricted compiler-in-Refal demonstration. It is not yet
 a general compiler written in Refal, and it does not yet generate complete compiler output.
 
-| # | Milestone | Status | Evidence |
+### How to read the 95% score and the milestone table
+
+The headline **95% completion score is a weighted, evidence-backed aggregate across individual
+capabilities and verification gates**. It is not the percentage of rows marked Complete, and it does
+not mean that every subsystem is 95% complete. The table below uses a stricter whole-milestone
+status: **Complete** means every gate in that broad milestone is closed; **Partial** means that the
+milestone contains substantial tested implementation but at least one material gate remains open;
+**Research** means the work is intentionally deferred. Therefore, several rows can correctly remain
+Partial while the weighted project score is 95%. The evidence column names both the implemented
+scope and the remaining gates so that the score is not mistaken for a claim of general compiler
+completeness.
+
+| # | Milestone | Whole-milestone status | Evidence |
 |---|---|---|---|
 | 1 | Public-grade foundation | ✅ Complete | Workspace, layout, clean-room policy, MIT licence, CI gate |
 | 2 | Classic Refal-5 front end | 🔶 Partial | Lexer/parser cover most of the Classic surface with spans and diagnostics. Sentence-ending blocks now parse, check, execute, and lower recursively; the traceable conformance corpus is still incomplete |
