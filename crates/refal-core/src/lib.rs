@@ -211,6 +211,7 @@ pub struct SymbolicDriveReport {
     pub residual: Vec<CoreTerm>,
     pub visited: Vec<StateId>,
     pub whistle_states: Vec<StateId>,
+    pub whistle_inputs: Vec<(StateId, Vec<CoreTerm>)>,
     pub steps: usize,
 }
 
@@ -273,6 +274,7 @@ pub fn drive_ground(
         graph,
         visited: Vec::new(),
         whistle_states: Vec::new(),
+        whistle_inputs: Vec::new(),
         steps: 0,
         max_steps,
     };
@@ -327,6 +329,7 @@ pub fn drive_symbolic_with_input(
         graph,
         visited: Vec::new(),
         whistle_states: Vec::new(),
+        whistle_inputs: Vec::new(),
         steps: 0,
         max_steps,
     };
@@ -344,6 +347,7 @@ pub fn drive_symbolic_with_input(
         residual,
         visited: context.visited,
         whistle_states: context.whistle_states,
+        whistle_inputs: context.whistle_inputs,
         steps: context.steps,
     })
 }
@@ -352,6 +356,7 @@ struct DriveContext<'a> {
     graph: &'a StateGraph,
     visited: Vec<StateId>,
     whistle_states: Vec<StateId>,
+    whistle_inputs: Vec<(StateId, Vec<CoreTerm>)>,
     steps: usize,
     max_steps: usize,
 }
@@ -425,6 +430,13 @@ impl<'a> DriveContext<'a> {
                     if self.visited.contains(&state.id) {
                         if !self.whistle_states.contains(&state.id) {
                             self.whistle_states.push(state.id);
+                        }
+                        if !self
+                            .whistle_inputs
+                            .iter()
+                            .any(|(whistle_state, _)| *whistle_state == state.id)
+                        {
+                            self.whistle_inputs.push((state.id, input.to_vec()));
                         }
                         return Ok(SymbolicInvoke::Residual);
                     }
@@ -1629,6 +1641,9 @@ mod tests {
         assert_eq!(report.steps, 2);
         assert_eq!(report.visited, vec![StateId(0)]);
         assert_eq!(report.whistle_states, vec![StateId(0)]);
+        assert_eq!(report.whistle_inputs.len(), 1);
+        assert_eq!(report.whistle_inputs[0].0, StateId(0));
+        assert_eq!(format_term_sequence(&report.whistle_inputs[0].1), "e.Input");
         assert_eq!(format_term_sequence(&report.residual), "<Loop e.Input>");
     }
 
@@ -1644,6 +1659,7 @@ mod tests {
             }],
             visited: vec![StateId(0), StateId(1)],
             whistle_states: vec![],
+            whistle_inputs: vec![],
             steps: 2,
         };
         assert_eq!(
