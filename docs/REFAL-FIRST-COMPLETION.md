@@ -34,8 +34,8 @@ verification harness; it must not contain the production compiler's logic.
 
 ### 5. Refal-Written Compiler Subset — Partial
 
-- Implement a useful compiler subset in Refal source. A restricted identity-function emitter now exists in `examples/compiler-refal-subset.ref`.
-- Execute that subset through the bootstrap runtime. The generated source is checked and executed end to end.
+- Implement a useful compiler subset in Refal source. Restricted identity-function emitter and `Name = Name;` lexer/parser fixtures now exist in `examples/`.
+- Execute that subset through the bootstrap runtime. The generated source is checked and executed end to end, and mismatched restricted definitions are rejected.
 - Use it to compile real Refal programs to Core Refal/Refal output. General source parsing and complete Core Refal emission remain open.
 
 ### 6. Self-Hosting Bootstrap — Not Started
@@ -71,7 +71,7 @@ It went *down* from an earlier 38%, deliberately, for two reasons:
 | Refal machine | 19.5% | 4.3% |
 | Graph of states and Refal emission | 8.5% | 2.1% |
 | Static verification | 15% | 0.8% |
-| Compiler implemented in Refal | 25.5% | partial restricted emitter; general compiler 0% |
+| Compiler implemented in Refal | 25.5% | partial restricted emitter/parser; general compiler 0% |
 | Verified self-hosting bootstrap | 13% | 0% |
 | Conformance, release and compatibility evidence | 4% | 0.6% |
 | **Total** | **100%** | **~19%** |

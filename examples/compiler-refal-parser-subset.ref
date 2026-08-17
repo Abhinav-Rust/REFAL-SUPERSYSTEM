@@ -1,0 +1,8 @@
+$EXTERN Prout;
+
+* Restricted source grammar: a character-string function definition of the form
+* Name = Name; where both names must be identical.
+$ENTRY Go {
+  (e.Name " = " e.Name ";") = <Prout "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { e.Input = e.Input; }">;
+}
+

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Refal-authored lexer/parser-subset milestone (2026-08-17)
+
+The weighted completion score advances from 80% to 85% with a Refal-authored restricted source
+front end. `examples/compiler-refal-parser-subset.ref` recognizes the `Name = Name;` grammar,
+rejects a mismatched definition, and emits a valid `$ENTRY Go` wrapper plus generated identity
+function. The CLI regression checks and executes the generated source through the bootstrap runtime.
+General source parsing, complete Core Refal emission, differential corpus compilation, and
+self-hosting remain open.
+
 ### Refal-authored compiler-subset milestone (2026-08-17)
 
 The weighted completion score advances from 75% to 80% with the first runnable compiler logic
