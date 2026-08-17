@@ -143,6 +143,27 @@ fn prints_deterministic_tier_one_graph_analysis() {
 }
 
 #[test]
+fn verifies_bounded_refal_compiler_fixpoint() {
+    let output = Command::new(refal_bin())
+        .args([
+            "fixpoint",
+            &workspace_path("examples/compiler-refal-fixedpoint-subset.ref"),
+            &workspace_path("examples/compiler-refal-parser-subset.ref"),
+        ])
+        .output()
+        .expect("run fixed-point verifier");
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "fixpoint: stable\nbytes: 32\n"
+    );
+}
+
+#[test]
 fn executes_refal_authored_checker_subset_end_to_end() {
     let output = run_file(
         "examples/compiler-refal-checker-subset.ref",
@@ -389,6 +410,7 @@ fn accepts_positive_examples() {
         "examples/compiler-refal-subset.ref",
         "examples/compiler-refal-parser-subset.ref",
         "examples/compiler-refal-checker-subset.ref",
+        "examples/compiler-refal-fixedpoint-subset.ref",
     ] {
         let output = check_file(path);
 

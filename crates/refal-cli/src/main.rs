@@ -79,6 +79,7 @@ fn main() {
         "drive" => drive_program(&program, &input_args),
         "drive-symbolic" => drive_symbolic_program(&program, &input_args),
         "residualize" => residualize_program(&program, &input_args),
+        "fixpoint" => fixpoint_program(&program, &input_args),
         "run" => run_program(&program, &input_args),
         other => {
             eprintln!("unknown command `{other}`");
@@ -101,6 +102,7 @@ fn print_usage() {
     eprintln!("  drive      Execute the bounded ground graph driver [--steps N] [args...]");
     eprintln!("  drive-symbolic  Partially drive from an expression variable [--steps N]");
     eprintln!("  residualize  Emit Refal for the supported symbolic residual subset [--steps N]");
+    eprintln!("  fixpoint   Apply a source-to-source compiler twice and check byte stability");
     eprintln!("  run        Run a Refal source file with the bootstrap interpreter");
 }
 
@@ -254,6 +256,63 @@ fn residualize_program(program: &refal_ast::Program, args: &[String]) {
         }
     };
     print!("{}", refal_core::residualize_symbolic(&report));
+}
+
+fn fixpoint_program(program: &refal_ast::Program, args: &[String]) {
+    let [source_path] = args else {
+        eprintln!("Usage: refal fixpoint <compiler.ref> <source.ref>");
+        process::exit(2);
+    };
+    let source = match fs::read_to_string(source_path) {
+        Ok(source) => source,
+        Err(error) => {
+            eprintln!("failed to read {source_path}: {error}");
+            process::exit(1);
+        }
+    };
+    let first = match apply_source_compiler(program, &source) {
+        Ok(output) => output,
+        Err(error) => {
+            eprintln!("fixpoint error on first application: {error}");
+            process::exit(1);
+        }
+    };
+    let second = match apply_source_compiler(program, &first) {
+        Ok(output) => output,
+        Err(error) => {
+            eprintln!("fixpoint error on second application: {error}");
+            process::exit(1);
+        }
+    };
+    if first != second {
+        eprintln!("fixpoint mismatch: compiler output changed on the second application");
+        process::exit(1);
+    }
+    println!("fixpoint: stable");
+    println!("bytes: {}", first.len());
+}
+
+fn apply_source_compiler(program: &refal_ast::Program, source: &str) -> Result<String, String> {
+    let input = vec![Value::Bracket(source.chars().map(Value::Char).collect())];
+    let evaluator = Evaluator::new(program);
+    let result = evaluator
+        .evaluate_entry(&input)
+        .map_err(|error| error.to_string())?;
+    let mut outputs = evaluator
+        .captured_output()
+        .into_iter()
+        .map(|expression| render_values(&expression))
+        .collect::<Vec<_>>();
+    if !result.is_empty() {
+        outputs.push(render_values(&result));
+    }
+    if outputs.len() != 1 {
+        return Err(format!(
+            "expected exactly one emitted source expression, got {}",
+            outputs.len()
+        ));
+    }
+    Ok(outputs.pop().expect("output length checked"))
 }
 
 fn run_program(program: &refal_ast::Program, input_args: &[String]) {

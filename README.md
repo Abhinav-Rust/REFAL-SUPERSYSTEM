@@ -195,17 +195,15 @@ The guarantee this compiler intends to publish, once Tier 1 lands:
 
 ## Project Status
 
-**Completion against the goal: 90%.**
+**Completion against the goal: 95%.**
 
 That figure counts a compiler *written in Refal* that emits Refal and compiles its own
-sources, with the verification tiers above, as 100%. The fourteenth implementation milestone moves the weighted score from 85.0% to 90.0% by adding a
-Refal-authored checker/compiler subset. `examples/compiler-refal-checker-subset.ref` validates two
-restricted `Name = Name;` definitions with exact repeated-name checks, rejects mismatched definitions,
-and emits a valid Refal program containing a `Go` wrapper plus two generated identity functions. The
-emitted source is checked and executed by the bootstrap runtime in an end-to-end CLI regression. The
-previous milestone added the one-definition lexer/parser subset. This is progress toward the target,
-not a claim that the Refal compiler handles general source files, emits complete Core Refal, or
-self-hosts.
+sources, with the verification tiers above, as 100%. The fifteenth implementation milestone moves the weighted score from 90.0% to 95.0% by adding a
+bounded compiler fixpoint verifier. `refal fixpoint` applies the Refal-authored canonical-output
+compiler in `examples/compiler-refal-fixedpoint-subset.ref` twice to a source file and verifies
+byte-stable output (`fixpoint: stable`, `bytes: 32`). The previous milestone added repeated-name
+checking and multi-function source emission. This is a tested subset stability result, not a claim
+of the full three-stage `C2 ≡ C3` self-hosting proof.
 
 The estimate is kept deliberately evidence-backed. The milestones include end-to-end
 sentence-ending blocks, the Classic macrodigit lexer bound, integer arithmetic
@@ -218,11 +216,11 @@ CLI coverage. The latest runtime slice adds a tagged `Dn`/`Up` metacode subset f
 identifiers, numbers, and nested brackets, with round-trip, validation, and CLI coverage. The runtime now also has an explicit work-list path for eligible deep call chains. `refal-core` now
 has bounded Tier 1 graph analysis in addition to a deterministic sentence-state/call-edge seed
 graph, SCC detection, function-aware structural reachability cleanup, bounded concrete driving,
-shape-aware conservative symbolic driving, and a small Refal residualization surface. Refal-authored
-emitter, parser, and checker subsets now validate repeated-name definitions and produce checked Refal
-source for generated identity functions, with end-to-end bootstrap execution tests. Complete Turchin
-driving, semantic graph cleaning, generalization, graph residualisation, the general Refal-authored
-compiler, and self-hosting remain unimplemented.
+shape-aware conservative symbolic driving, and a small Refal residualization surface. Refal-authored emitter, parser, and checker subsets now validate repeated-name definitions and
+produce checked Refal source for generated identity functions, with end-to-end bootstrap execution
+tests. A bounded `refal fixpoint` harness verifies byte-stable self-application of a canonical-output
+subset. Complete Turchin driving, semantic graph cleaning, generalization, graph residualisation, the
+general Refal-authored compiler, and the full `C2 ≡ C3` self-hosting proof remain unimplemented.
 
 The earlier figure went *down* from an older published estimate of 38%, for two reasons,
 both of which are the point of tracking it honestly:
@@ -247,7 +245,7 @@ a general compiler written in Refal, and it does not yet generate complete compi
 | 5 | Graph of states | 🔶 Partial | `refal-core` exposes deterministic sentence states, syntactic call edges, SCC detection, function-aware structural reachability cleanup, bounded ground driving, shape-aware symbolic driving, bounded Tier 1 reachability/terminal/SCC analysis, and a supported-subset Refal residual emitter; complete Turchin driving, semantic cleaning, generalization, and graph residualisation remain open |
 | 6 | Tier 1 analyses | 🔶 Partial | Deterministic structural reachability, terminal-state, function-coverage, and SCC recursion reports; semantic pattern overlap, binding analysis, and Turchin cleaning remain open |
 | 7 | Compiler written in Refal | 🔶 Partial | Refal-authored fixtures now parse and check restricted repeated-name definitions, reject mismatches, generate checked multi-function Refal programs, and execute them through the bootstrap runtime; general parsing, Core Refal emission, and compiler completeness remain open |
-| 8 | Verified self-hosting | ⬜ Not started | Three-stage fixpoint, `C2 ≡ C3` |
+| 8 | Verified self-hosting | 🔶 Partial | Bounded byte-stable self-application of a canonical-output subset; three-stage fixpoint and `C2 ≡ C3` remain open |
 | 9 | Tier 2 metasystem analysis | ⬜ Research | Post-1.0 |
 
 Native code generation is deliberately **off the critical path**. It is §4.7 of Turchin's
@@ -260,6 +258,7 @@ The full phase plan, gates and completion accounting are in [`docs/PLAN.md`](doc
 
 | Date | Change |
 |---|---|
+| 2026-08-17 | Fifteenth 5-point implementation milestone: bounded `refal fixpoint` verification, byte-stable twice-applied canonical-output compiler subset, exact CLI regression, and synchronized self-hosting documentation; full workspace gates pass |
 | 2026-08-17 | Fourteenth 5-point implementation milestone: a Refal-authored two-definition checker/compiler subset with repeated-name validation, mismatch rejection, checked multi-function source emission, generated-program execution, and an end-to-end CLI regression; full workspace gates pass |
 | 2026-08-17 | Thirteenth 5-point implementation milestone: a Refal-authored `Name = Name;` lexer/parser subset, mismatch rejection, checked source emission, generated-program execution, and an end-to-end CLI regression; full workspace gates pass |
 | 2026-08-17 | Twelfth 5-point implementation milestone: a runnable Refal-authored compiler subset that emits a `Go` wrapper plus named identity function, checks the generated source, executes it through the bootstrap runtime, and has an end-to-end CLI regression; full workspace gates pass |

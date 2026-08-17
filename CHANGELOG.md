@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Bounded compiler fixpoint milestone (2026-08-17)
+
+The weighted completion score advances from 90% to 95%. The new `refal fixpoint` command applies
+`examples/compiler-refal-fixedpoint-subset.ref` twice to a source file and verifies byte-stable
+output. The CLI regression records `fixpoint: stable` and `bytes: 32`, and the canonical-output
+subset itself passes semantic checking. This is bounded subset self-application evidence, not the
+full three-stage `C2 ≡ C3` self-hosting proof; general compilation, complete Turchin machinery, and
+whole-corpus differential verification remain open.
+
 ### Refal-authored checker/compiler-subset milestone (2026-08-17)
 
 The weighted completion score advances from 85% to 90% with a Refal-authored checker/compiler
