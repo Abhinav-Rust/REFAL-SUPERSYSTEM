@@ -50,6 +50,71 @@ pub struct GraphComponent {
     pub recursive: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GraphAnalysisReport {
+    pub state_count: usize,
+    pub transition_count: usize,
+    pub reachable_states: Vec<StateId>,
+    pub unreachable_states: Vec<StateId>,
+    pub terminal_states: Vec<StateId>,
+    pub functions: Vec<String>,
+    pub components: Vec<GraphComponent>,
+    pub recursive_components: Vec<usize>,
+}
+
+/// Analyze structural graph properties that are useful before symbolic driving.
+///
+/// This is a bounded Tier 1 pass: it reports deterministic reachability, terminal states,
+/// function coverage, and SCC recursion. It does not infer semantic pattern overlap or claim
+/// Turchin's complete configuration-graph cleaning.
+pub fn analyze_graph(graph: &StateGraph) -> GraphAnalysisReport {
+    let reachable_states = reachable_state_ids(graph);
+    let reachable_set = reachable_states.iter().copied().collect::<HashSet<_>>();
+    let unreachable_states = graph
+        .states
+        .iter()
+        .map(|state| state.id)
+        .filter(|state| !reachable_set.contains(state))
+        .collect::<Vec<_>>();
+    let terminal_states = graph
+        .states
+        .iter()
+        .filter(|state| {
+            !graph
+                .transitions
+                .iter()
+                .any(|transition| transition.from == state.id)
+        })
+        .map(|state| state.id)
+        .collect::<Vec<_>>();
+    let mut functions = Vec::new();
+    for state in &graph.states {
+        if !functions
+            .iter()
+            .any(|name: &String| name.eq_ignore_ascii_case(&state.function))
+        {
+            functions.push(state.function.clone());
+        }
+    }
+    let components = strongly_connected_components(graph);
+    let recursive_components = components
+        .iter()
+        .filter(|component| component.recursive)
+        .map(|component| component.id)
+        .collect();
+
+    GraphAnalysisReport {
+        state_count: graph.states.len(),
+        transition_count: graph.transitions.len(),
+        reachable_states,
+        unreachable_states,
+        terminal_states,
+        functions,
+        components,
+        recursive_components,
+    }
+}
+
 /// Compute deterministic strongly connected components over the structural graph.
 ///
 /// Components expose recursion cycles for later compilation strategy and generalisation.
@@ -806,6 +871,49 @@ pub fn residualize_symbolic(report: &SymbolicDriveReport) -> String {
     )
 }
 
+pub fn format_graph_analysis(report: &GraphAnalysisReport) -> String {
+    let states = |ids: &[StateId]| {
+        ids.iter()
+            .map(|state| format!("S{}", state.0))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let recursive = report
+        .recursive_components
+        .iter()
+        .map(|id| format!("C{id}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let components = report
+        .components
+        .iter()
+        .map(|component| {
+            format!(
+                "C{}=[{}]{}",
+                component.id,
+                states(&component.states),
+                if component.recursive {
+                    " recursive"
+                } else {
+                    ""
+                }
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("; ");
+    format!(
+        "states: {}\ntransitions: {}\nreachable: {}\nunreachable: {}\nterminal: {}\nfunctions: {}\ncomponents: {}\nrecursive-components: {}\n",
+        report.state_count,
+        report.transition_count,
+        states(&report.reachable_states),
+        states(&report.unreachable_states),
+        states(&report.terminal_states),
+        report.functions.join(", "),
+        components,
+        recursive,
+    )
+}
+
 pub fn format_seed_graph(graph: &StateGraph) -> String {
     let mut output = String::new();
     match graph.entry {
@@ -825,6 +933,33 @@ pub fn format_seed_graph(graph: &StateGraph) -> String {
         ));
     }
     output
+}
+
+fn reachable_state_ids(graph: &StateGraph) -> Vec<StateId> {
+    let Some(entry) = graph.entry.filter(|entry| entry.0 < graph.states.len()) else {
+        return Vec::new();
+    };
+    let mut reachable = HashSet::new();
+    let mut queue = VecDeque::from([entry]);
+    while let Some(state) = queue.pop_front() {
+        if !reachable.insert(state) {
+            continue;
+        }
+        let Some(current) = graph.states.get(state.0) else {
+            continue;
+        };
+        for candidate in &graph.states {
+            if candidate.function.eq_ignore_ascii_case(&current.function) {
+                queue.push_back(candidate.id);
+            }
+        }
+        for transition in graph.transitions.iter().filter(|edge| edge.from == state) {
+            queue.push_back(transition.to);
+        }
+    }
+    let mut states = reachable.into_iter().collect::<Vec<_>>();
+    states.sort_by_key(|state| state.0);
+    states
 }
 
 fn collect_call_names(terms: &[CoreTerm], names: &mut Vec<String>) {
@@ -1325,6 +1460,61 @@ mod tests {
                     recursive: true,
                 },
             ]
+        );
+    }
+
+    #[test]
+    fn reports_bounded_tier_one_graph_properties_deterministically() {
+        let graph = StateGraph {
+            entry: Some(StateId(0)),
+            states: (0..4)
+                .map(|id| GraphState {
+                    id: StateId(id),
+                    function: match id {
+                        0 => "Go".to_string(),
+                        1 | 2 => "Loop".to_string(),
+                        _ => "Dead".to_string(),
+                    },
+                    sentence: 0,
+                    pattern: Vec::new(),
+                    conditions: Vec::new(),
+                    result: Vec::new(),
+                    span: span(),
+                })
+                .collect(),
+            transitions: vec![
+                GraphTransition {
+                    from: StateId(0),
+                    to: StateId(1),
+                    callee: "Loop".to_string(),
+                },
+                GraphTransition {
+                    from: StateId(1),
+                    to: StateId(2),
+                    callee: "Loop".to_string(),
+                },
+                GraphTransition {
+                    from: StateId(2),
+                    to: StateId(1),
+                    callee: "Loop".to_string(),
+                },
+            ],
+        };
+        let report = analyze_graph(&graph);
+
+        assert_eq!(report.state_count, 4);
+        assert_eq!(report.transition_count, 3);
+        assert_eq!(
+            report.reachable_states,
+            vec![StateId(0), StateId(1), StateId(2)]
+        );
+        assert_eq!(report.unreachable_states, vec![StateId(3)]);
+        assert_eq!(report.terminal_states, vec![StateId(3)]);
+        assert_eq!(report.functions, vec!["Go", "Loop", "Dead"]);
+        assert_eq!(report.recursive_components, vec![1]);
+        assert_eq!(
+            format_graph_analysis(&report),
+            "states: 4\ntransitions: 3\nreachable: S0, S1, S2\nunreachable: S3\nterminal: S3\nfunctions: Go, Loop, Dead\ncomponents: C0=[S0]; C1=[S1, S2] recursive; C2=[S3]\nrecursive-components: C1\n"
         );
     }
 

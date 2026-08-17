@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Tier 1 graph-analysis milestone (2026-08-17)
+
+The weighted completion score advances from 70% to 75% with a deterministic bounded analysis
+report over the seed graph. `refal analyze` reports state and transition counts, reachability,
+structurally unreachable states, terminal states, function coverage, SCC components, and recursive
+components. Core and CLI regressions lock the exact report on a recursive fixture. Semantic pattern
+overlap, sentence subsumption, function-format inference, builtin-domain diagnostics, full
+Turchin cleaning, Refal compiler authorship, and self-hosting remain open.
+
 ### Bootstrap metacode milestone (2026-08-17)
 
 The weighted completion score advances from 65% to 70% with a tested tagged, invertible

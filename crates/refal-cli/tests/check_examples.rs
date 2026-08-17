@@ -33,6 +33,13 @@ fn graph_file(path: &str) -> std::process::Output {
         .expect("run refal binary")
 }
 
+fn analyze_file(path: &str) -> std::process::Output {
+    Command::new(refal_bin())
+        .args(["analyze", &workspace_path(path)])
+        .output()
+        .expect("run refal binary")
+}
+
 fn drive_file(path: &str, args: &[&str]) -> std::process::Output {
     let mut command = Command::new(refal_bin());
     command.args(["drive", &workspace_path(path)]);
@@ -118,6 +125,20 @@ fn prints_a_deterministic_seed_graph() {
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
         "entry: S0\nS0 = Go#0\nS1 = Reverse#0\nS2 = Reverse#1\nS0 -Reverse-> S1\nS2 -Reverse-> S1\n"
+    );
+}
+
+#[test]
+fn prints_deterministic_tier_one_graph_analysis() {
+    let output = analyze_file("examples/runtime-recursion.ref");
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "states: 3\ntransitions: 2\nreachable: S0, S1, S2\nunreachable: \nterminal: S1\nfunctions: Go, Reverse\ncomponents: C0=[S0]; C1=[S1]; C2=[S2]\nrecursive-components: \n"
     );
 }
 

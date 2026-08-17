@@ -156,7 +156,7 @@ Recursion depth bounded only by RAM. Full conformance corpus green.
 
 Turchin Ch. 3–4. Replaces `refal-core`.
 
-- **2a** Driving — bounded ground execution, deterministic structural graph infrastructure, and shape-aware symbolic execution for known prefixes with symbolic tails are implemented; complete Turchin configuration driving and graph construction (§4.2) remain open.
+- **2a** Driving — bounded ground execution, deterministic structural graph infrastructure, shape-aware symbolic execution for known prefixes with symbolic tails, and a deterministic Tier 1 graph-analysis report are implemented; complete Turchin configuration driving and graph construction (§4.2) remain open.
 - **2b** Function-aware structural reachability cleanup is implemented; semantic clean graphs (§4.3) and compilation strategy (§4.4) remain open.
 - **2c** SCC detection is implemented as graph infrastructure; generalisation and the whistle (§4.6; 1988 *Algorithm of Generalization*; 2013 Nepeivoda *On Turchin's Theorem* for whistle termination) remain open.
 - **2d** Residualisation — a supported-subset residual wrapper now emits checked Refal source; complete graph → Refal residualisation remains open. **This is the "emits Refal" deliverable.**
@@ -170,8 +170,8 @@ an artefact that does not currently exist in any modern toolchain.
 
 Queries over the Phase 2 graph.
 
-- Recognition-impossible reachability (exhaustiveness) — the borrow-checker analogue.
-- Sentence subsumption / dead sentence detection.
+- Structural reachability, terminal-state, function-coverage, and SCC recursion reporting are implemented by `refal analyze`; semantic recognition-impossible reachability (exhaustiveness) remains open.
+- Sentence subsumption / semantic dead-sentence detection remains open; the current report only identifies structural unreachable states.
 - Function formats (§2.3) — shape inference across call boundaries.
 - Builtin domain errors — `<Div e 0>`, `Numb` on non-digits, bad file descriptor, macrodigit overflow.
 - Open-`e` complexity lint — no other Refal toolchain has this.

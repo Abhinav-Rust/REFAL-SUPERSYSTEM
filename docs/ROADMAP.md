@@ -137,9 +137,9 @@ Completed so far:
 
 Status: **Partial implementation; updated 2026-08-17**. The deterministic seed graph now has
 one state per source sentence and syntactic call edges. SCC detection, condition-preserving
-states, function-aware structural reachability cleanup, bounded concrete driving, and
-shape-aware symbolic execution over known prefixes with symbolic expression tails are
-implemented and tested. A supported-subset residual wrapper emits checked Refal source from
+states, function-aware structural reachability cleanup, bounded concrete driving, shape-aware
+symbolic execution over known prefixes with symbolic expression tails, and deterministic Tier 1
+reachability/terminal/function/SCC analysis are implemented and tested. A supported-subset residual wrapper emits checked Refal source from
 the symbolic report. Complete symbolic Turchin driving, semantic graph cleaning,
 generalisation, whistle termination, and graph residualisation remain open.
 
@@ -158,6 +158,9 @@ Completed so far:
 - Conservative symbolic driving from an expression variable, exposed as `refal drive-symbolic`;
   definite identity reductions are performed, while ambiguous sentence choices remain as
   residual calls. Identity and ambiguity-preservation CLI regressions cover the behavior.
+- Deterministic Tier 1 graph analysis, exposed as `refal analyze`, reporting reachable and
+  structurally unreachable states, terminal states, functions, SCC components, and recursive
+  components. Core and CLI regressions cover the exact report.
 - Shape-aware symbolic driving through `drive_symbolic_with_input`, which can reduce a known
   symbol prefix followed by a symbolic expression tail; the core suite covers this reduction.
 - Supported-subset residualization through `residualize_symbolic` and `refal residualize`,
@@ -168,6 +171,14 @@ Completed so far:
   build pipelines.
 - Unit and CLI coverage for lowering and formatting, including a lowered-source
   round trip through the checker and quote-delimiter safety.
+
+## Tier 1 Analysis Slice
+
+Status: **Partial implementation; updated 2026-08-17**. The analyzer reports structural graph
+facts deterministically and is suitable for bounded diagnostics before symbolic driving. Semantic
+pattern overlap, sentence subsumption, function-format inference, builtin-domain diagnostics,
+and the strict severity model remain open; this slice does not claim Turchin's semantic graph
+cleaning.
 
 ## Milestone 6: Production Backend
 
