@@ -449,6 +449,28 @@ fn drives_recursive_ground_program_to_reversed_output() {
 }
 
 #[test]
+fn supercompiles_recursive_symbolic_program_with_a_whistle() {
+    let output = Command::new(refal_bin())
+        .args([
+            "supercompile",
+            &workspace_path("examples/supercompile-loop.ref"),
+            "--steps",
+            "10",
+        ])
+        .output()
+        .expect("run bounded supercompiler");
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "states: 2\ntransitions: 2\nsteps: 3\nvisited: S0 -> S1\nwhistles: S1\nresidual:\n$ENTRY Go {\n  e.Input = <Loop e.Input>;\n}\n"
+    );
+}
+
+#[test]
 fn drives_a_symbolic_identity_to_a_residual_expression_variable() {
     let output = symbolic_drive_file("examples/symbolic-identity.ref", &[]);
     assert!(
@@ -525,6 +547,7 @@ fn accepts_positive_examples() {
         "examples/compiler-refal-fixedpoint-subset.ref",
         "examples/compiler-refal-literal-subset.ref",
         "examples/compiler-refal-call-subset.ref",
+        "examples/supercompile-loop.ref",
     ] {
         let output = check_file(path);
 

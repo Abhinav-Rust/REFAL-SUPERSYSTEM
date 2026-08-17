@@ -79,6 +79,7 @@ fn main() {
         "drive" => drive_program(&program, &input_args),
         "drive-symbolic" => drive_symbolic_program(&program, &input_args),
         "residualize" => residualize_program(&program, &input_args),
+        "supercompile" => supercompile_program(&program, &input_args),
         "fixpoint" => fixpoint_program(&program, &input_args),
         "run" => run_program(&program, &input_args),
         other => {
@@ -102,6 +103,7 @@ fn print_usage() {
     eprintln!("  drive      Execute the bounded ground graph driver [--steps N] [args...]");
     eprintln!("  drive-symbolic  Partially drive from an expression variable [--steps N]");
     eprintln!("  residualize  Emit Refal for the supported symbolic residual subset [--steps N]");
+    eprintln!("  supercompile  Analyze, symbolically drive, whistle, and residualize [--steps N]");
     eprintln!("  fixpoint   Apply a source-to-source compiler twice and check byte stability");
     eprintln!("  run        Run a Refal source file with the bootstrap interpreter");
 }
@@ -229,6 +231,52 @@ fn drive_symbolic_program(program: &refal_ast::Program, args: &[String]) {
         "residual: {}",
         refal_core::format_term_sequence(&report.residual)
     );
+}
+
+fn supercompile_program(program: &refal_ast::Program, args: &[String]) {
+    let max_steps = match args {
+        [] => 10_000,
+        [flag, limit] if flag == "--steps" => match limit.parse::<usize>() {
+            Ok(limit) => limit,
+            Err(_) => {
+                eprintln!("Usage: refal supercompile <file.ref> [--steps N]");
+                process::exit(2);
+            }
+        },
+        _ => {
+            eprintln!("Usage: refal supercompile <file.ref> [--steps N]");
+            process::exit(2);
+        }
+    };
+    let core = refal_core::lower_program(program);
+    let graph = refal_core::clean_unreachable_states(&refal_core::build_seed_graph(&core));
+    let analysis = refal_core::analyze_graph(&graph);
+    let report = match refal_core::drive_symbolic(&graph, max_steps) {
+        Ok(report) => report,
+        Err(error) => {
+            eprintln!("supercompile error: {error}");
+            process::exit(1);
+        }
+    };
+    println!("states: {}", analysis.state_count);
+    println!("transitions: {}", analysis.transition_count);
+    println!("steps: {}", report.steps);
+    let visited = report
+        .visited
+        .iter()
+        .map(|state| format!("S{}", state.0))
+        .collect::<Vec<_>>()
+        .join(" -> ");
+    println!("visited: {visited}");
+    let whistles = report
+        .whistle_states
+        .iter()
+        .map(|state| format!("S{}", state.0))
+        .collect::<Vec<_>>()
+        .join(", ");
+    println!("whistles: {whistles}");
+    println!("residual:");
+    print!("{}", refal_core::residualize_symbolic(&report));
 }
 
 fn residualize_program(program: &refal_ast::Program, args: &[String]) {
