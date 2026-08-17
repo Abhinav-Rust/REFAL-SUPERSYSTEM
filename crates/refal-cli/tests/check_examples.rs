@@ -143,6 +143,62 @@ fn prints_deterministic_tier_one_graph_analysis() {
 }
 
 #[test]
+fn executes_refal_authored_call_compiler_subset_end_to_end() {
+    let output = run_file(
+        "examples/compiler-refal-call-subset.ref",
+        &["Demo = <Echo e.Input>; Echo = e.Input;"],
+    );
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let generated = String::from_utf8_lossy(&output.stdout).to_string();
+    assert_eq!(
+        generated,
+        "$ENTRY Go { e.Input = <Demo e.Input>; } Demo { e.Input = <Echo e.Input>; } Echo { e.Input = e.Input; }\n"
+    );
+
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock after unix epoch")
+        .as_nanos();
+    let path = env::temp_dir().join(format!(
+        "refal-compiled-call-demo-{}-{unique}.ref",
+        process::id()
+    ));
+    fs::write(&path, generated).expect("write generated call source");
+
+    let checked = Command::new(refal_bin())
+        .args(["check", &path.to_string_lossy()])
+        .output()
+        .expect("check generated call source");
+    assert!(
+        checked.status.success(),
+        "generated source should check:\n{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+
+    let executed = Command::new(refal_bin())
+        .args(["run", &path.to_string_lossy(), "ok"])
+        .output()
+        .expect("run generated call source");
+    let _ = fs::remove_file(&path);
+    assert!(
+        executed.status.success(),
+        "generated source should run:\n{}",
+        String::from_utf8_lossy(&executed.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&executed.stdout), "(ok)\n");
+
+    let rejected = run_file(
+        "examples/compiler-refal-call-subset.ref",
+        &["Demo = <Other e.Input>; Echo = e.Input;"],
+    );
+    assert!(!rejected.status.success());
+}
+
+#[test]
 fn executes_refal_authored_literal_compiler_subset_end_to_end() {
     let output = run_file(
         "examples/compiler-refal-literal-subset.ref",
@@ -468,6 +524,7 @@ fn accepts_positive_examples() {
         "examples/compiler-refal-checker-subset.ref",
         "examples/compiler-refal-fixedpoint-subset.ref",
         "examples/compiler-refal-literal-subset.ref",
+        "examples/compiler-refal-call-subset.ref",
     ] {
         let output = check_file(path);
 
