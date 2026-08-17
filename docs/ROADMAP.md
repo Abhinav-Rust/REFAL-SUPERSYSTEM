@@ -80,8 +80,9 @@ Completed so far:
 - CLI conformance examples for runtime behavior.
 
 Status: **Partial implementation; updated 2026-08-17**. The structural builtin slice and the
-integer-to-real conversion builtins are now implemented and tested; the scalable work-list
-machine and remaining Classic builtins remain open.
+integer-to-real conversion builtins are implemented and tested. An explicit work-list path now
+handles eligible deep block-free call chains; the full flat view-field machine, symbolic
+matching plans, and remaining Classic builtins remain open.
 
 Completed so far:
 
@@ -109,6 +110,8 @@ Completed so far:
   bracket supplied through the command line.
 - Configurable recursion-depth guard with a diagnostic instead of uncontrolled
   host-process stack exhaustion.
+- Explicit work-list evaluation for eligible block-free calls, with a 5,000-call regression
+  proving deep call chains do not consume one host stack frame per function call.
 - Condition-aware expression backtracking: later valid expression splits are
   considered when an earlier split fails a sentence condition.
 - Sentence-ending blocks with recursive parsing, inherited bindings, branch fallthrough,
@@ -127,13 +130,17 @@ Completed so far:
 - Preserve source maps for diagnostics.
 - Emit stable formatted Refal/Core Refal output.
 
-Status: **Partial implementation; active next milestone**.
+Status: **Partial implementation; updated 2026-08-17**. The deterministic seed graph now has
+one state per source sentence and syntactic call edges. Turchin driving, graph cleaning,
+generalisation, whistle termination, and residualisation remain open.
 
 Completed so far:
 
 - Source-mapped `refal-core` representation for declarations, functions,
   sentences, conditions, and terms.
 - Deterministic normalized Core Refal formatter.
+- Deterministic seed graph with sentence states, Classic identifier-equivalent entry lookup,
+  and syntactic call transitions, covered by a core regression.
 - `refal lower <file.ref>` command, which runs syntax and semantic validation
   before emitting normalized source.
 - `refal lower <file.ref> --output <file.ref>` support for source-to-source

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Explicit machine and graph seed milestone (2026-08-17)
+
+The weighted completion score advances from 35% to 40% with an explicit work-list execution
+path for eligible block-free call chains and a 5,000-call regression proving that deep calls do
+not consume one host stack frame per function call. `refal-core` now exposes a deterministic
+seed graph with one state per sentence, Classic identifier-equivalent entry lookup, and
+syntactic call transitions. This is a foundation for Turchin driving, not yet symbolic driving,
+graph cleaning, generalisation, residualisation, Refal emission, or self-hosting.
+
 ### Numeric conversion milestone (2026-08-17)
 
 The weighted completion score advances from 30% to 35% with tested Classic Refal-5

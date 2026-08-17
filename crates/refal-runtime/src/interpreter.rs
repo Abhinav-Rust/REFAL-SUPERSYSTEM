@@ -73,6 +73,30 @@ enum FileHandle {
     Writer(BufWriter<File>),
 }
 
+struct WorkTermsFrame<'a> {
+    terms: &'a [Term],
+    next: usize,
+    bindings: Bindings,
+    output: Vec<Value>,
+    depth: usize,
+    pending: Option<PendingTerm>,
+}
+
+enum PendingTerm {
+    Bracket,
+    CallArguments(String),
+    CallResult,
+}
+
+enum WorkTask<'a> {
+    Function {
+        name: String,
+        args: Vec<Value>,
+        depth: usize,
+    },
+    Terms(WorkTermsFrame<'a>),
+}
+
 pub struct Evaluator<'a> {
     functions: HashMap<String, &'a Function>,
     externs: HashMap<String, String>,
@@ -278,7 +302,174 @@ impl<'a> Evaluator<'a> {
             return Err(EvalError::FunctionNotFound(PROGRAM_ENTRY_POINT.to_string()));
         };
 
+        if let Some(result) = self.evaluate_entry_worklist(&entry.name, args)? {
+            return Ok(result);
+        }
         self.evaluate_function_at_depth(&entry.name, args, 0)
+    }
+
+    fn evaluate_entry_worklist(
+        &self,
+        name: &str,
+        args: &[Value],
+    ) -> Result<Option<Vec<Value>>, EvalError> {
+        let Some(function) = self.functions.get(&canonical_identifier(name)) else {
+            return Ok(None);
+        };
+        if function.sentences.iter().any(|sentence| {
+            !sentence.conditions.is_empty() || !terms_are_worklist_safe(&sentence.result)
+        }) {
+            return Ok(None);
+        }
+
+        let mut tasks = vec![WorkTask::Function {
+            name: name.to_string(),
+            args: args.to_vec(),
+            depth: 0,
+        }];
+        let mut returned: Option<Result<Vec<Value>, EvalError>> = None;
+
+        while let Some(task) = tasks.pop() {
+            if let Some(result) = returned.take() {
+                let values = result?;
+                match task {
+                    WorkTask::Terms(mut frame) => match frame.pending.take() {
+                        Some(PendingTerm::Bracket) => {
+                            frame.output.push(Value::Bracket(values));
+                            tasks.push(WorkTask::Terms(frame));
+                        }
+                        Some(PendingTerm::CallArguments(call_name)) => {
+                            frame.pending = Some(PendingTerm::CallResult);
+                            let call_depth = frame.depth + 1;
+                            tasks.push(WorkTask::Terms(frame));
+                            tasks.push(WorkTask::Function {
+                                name: call_name,
+                                args: values,
+                                depth: call_depth,
+                            });
+                        }
+                        Some(PendingTerm::CallResult) => {
+                            frame.output.extend(values);
+                            tasks.push(WorkTask::Terms(frame));
+                        }
+                        None => {
+                            returned = Some(Ok(values));
+                            tasks.push(WorkTask::Terms(frame));
+                        }
+                    },
+                    WorkTask::Function { .. } => {
+                        return Ok(Some(values));
+                    }
+                }
+                continue;
+            }
+
+            match task {
+                WorkTask::Function { name, args, depth } => {
+                    self.steps.set(self.steps.get().saturating_add(1));
+                    if depth > self.max_call_depth {
+                        return Err(EvalError::RecursionLimitExceeded {
+                            function: name,
+                            limit: self.max_call_depth,
+                        });
+                    }
+                    let canonical = canonical_identifier(&name);
+                    let Some(function) = self.functions.get(&canonical) else {
+                        returned =
+                            Some(self.evaluate_function_at_depth_without_step(&name, &args, depth));
+                        continue;
+                    };
+                    if function.sentences.iter().any(|sentence| {
+                        !sentence.conditions.is_empty()
+                            || !terms_are_worklist_safe(&sentence.result)
+                    }) {
+                        returned =
+                            Some(self.evaluate_function_at_depth_without_step(&name, &args, depth));
+                        continue;
+                    }
+
+                    let mut matched = false;
+                    for sentence in &function.sentences {
+                        match match_pattern_candidates(&sentence.pattern, &args) {
+                            Ok(mut candidates) => {
+                                if let Some(bindings) = candidates.drain(..).next() {
+                                    tasks.push(WorkTask::Terms(WorkTermsFrame {
+                                        terms: &sentence.result,
+                                        next: 0,
+                                        bindings,
+                                        output: Vec::new(),
+                                        depth,
+                                        pending: None,
+                                    }));
+                                    matched = true;
+                                    break;
+                                }
+                            }
+                            Err(MatchError::NoMatch) => {}
+                            Err(error) => return Err(EvalError::Match(error)),
+                        }
+                    }
+                    if !matched {
+                        returned = Some(Err(EvalError::NoMatchingSentence(name)));
+                    }
+                }
+                WorkTask::Terms(mut frame) => {
+                    if frame.next == frame.terms.len() {
+                        returned = Some(Ok(frame.output));
+                        continue;
+                    }
+                    let term = &frame.terms[frame.next];
+                    frame.next += 1;
+                    match &term.kind {
+                        TermKind::Symbol(symbol) => {
+                            frame.output.push(eval_symbol(symbol));
+                            tasks.push(WorkTask::Terms(frame));
+                        }
+                        TermKind::Variable(variable) => {
+                            frame
+                                .output
+                                .extend(resolve_variable(variable, &frame.bindings)?);
+                            tasks.push(WorkTask::Terms(frame));
+                        }
+                        TermKind::Bracket(inner) => {
+                            frame.pending = Some(PendingTerm::Bracket);
+                            let child = WorkTermsFrame {
+                                terms: inner,
+                                next: 0,
+                                bindings: frame.bindings.clone(),
+                                output: Vec::new(),
+                                depth: frame.depth,
+                                pending: None,
+                            };
+                            tasks.push(WorkTask::Terms(frame));
+                            tasks.push(WorkTask::Terms(child));
+                        }
+                        TermKind::Call { name, args } => {
+                            frame.pending = Some(PendingTerm::CallArguments(name.clone()));
+                            let child = WorkTermsFrame {
+                                terms: args,
+                                next: 0,
+                                bindings: frame.bindings.clone(),
+                                output: Vec::new(),
+                                depth: frame.depth,
+                                pending: None,
+                            };
+                            tasks.push(WorkTask::Terms(frame));
+                            tasks.push(WorkTask::Terms(child));
+                        }
+                        TermKind::Block { .. } => {
+                            return Ok(None);
+                        }
+                    }
+                }
+            }
+        }
+
+        match returned {
+            Some(Ok(values)) => Ok(Some(values)),
+            Some(Err(error)) => Err(error),
+            None => Ok(None),
+        }
     }
 
     pub fn evaluate_function(&self, name: &str, args: &[Value]) -> Result<Vec<Value>, EvalError> {
@@ -291,7 +482,28 @@ impl<'a> Evaluator<'a> {
         args: &[Value],
         call_depth: usize,
     ) -> Result<Vec<Value>, EvalError> {
-        self.steps.set(self.steps.get().saturating_add(1));
+        self.evaluate_function_at_depth_with_step(name, args, call_depth, true)
+    }
+
+    fn evaluate_function_at_depth_without_step(
+        &self,
+        name: &str,
+        args: &[Value],
+        call_depth: usize,
+    ) -> Result<Vec<Value>, EvalError> {
+        self.evaluate_function_at_depth_with_step(name, args, call_depth, false)
+    }
+
+    fn evaluate_function_at_depth_with_step(
+        &self,
+        name: &str,
+        args: &[Value],
+        call_depth: usize,
+        count_step: bool,
+    ) -> Result<Vec<Value>, EvalError> {
+        if count_step {
+            self.steps.set(self.steps.get().saturating_add(1));
+        }
         if call_depth > self.max_call_depth {
             return Err(EvalError::RecursionLimitExceeded {
                 function: name.to_string(),
@@ -647,6 +859,15 @@ fn implode(args: &[Value]) -> Result<Vec<Value>, EvalError> {
         result.extend_from_slice(args);
         Ok(result)
     }
+}
+
+fn terms_are_worklist_safe(terms: &[Term]) -> bool {
+    terms.iter().all(|term| match &term.kind {
+        TermKind::Symbol(_) | TermKind::Variable(_) => true,
+        TermKind::Bracket(inner) => terms_are_worklist_safe(inner),
+        TermKind::Call { args, .. } => terms_are_worklist_safe(args),
+        TermKind::Block { .. } => false,
+    })
 }
 
 fn invalid_builtin_arguments(name: &str, message: &str) -> EvalError {
@@ -1670,6 +1891,44 @@ mod tests {
         let error = EvalError::NoMatchingSentence("Go".to_string());
 
         assert_eq!(error.to_string(), "no sentence matched in function `Go`");
+    }
+
+    #[test]
+    fn evaluates_deep_recursion_with_the_explicit_work_list() {
+        const DEPTH: usize = 5_000;
+        let entry = Sentence {
+            pattern: vec![],
+            conditions: vec![],
+            result: vec![call("F0", vec![])],
+            span: span(),
+        };
+        let mut functions = vec![function("Go", Visibility::Entry, vec![entry])];
+        for index in 0..DEPTH {
+            let result = if index + 1 == DEPTH {
+                vec![term(TermKind::Symbol(Symbol::Char('x')))]
+            } else {
+                vec![call(&format!("F{}", index + 1), vec![])]
+            };
+            let sentence = Sentence {
+                pattern: vec![],
+                conditions: vec![],
+                result,
+                span: span(),
+            };
+            functions.push(function(
+                &format!("F{index}"),
+                Visibility::Local,
+                vec![sentence],
+            ));
+        }
+
+        let program = program(functions);
+        let evaluator = Evaluator::with_max_call_depth(&program, DEPTH + 1);
+
+        assert_eq!(
+            evaluator.evaluate_entry(&[]).unwrap(),
+            vec![Value::Char('x')]
+        );
     }
 
     #[test]

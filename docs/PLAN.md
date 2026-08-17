@@ -222,22 +222,22 @@ Honest reset. The clarified goal added a workstream, so the denominator grew. Th
 also *fell* from an earlier published 38%, because that figure gave full credit to two
 milestones an audit then found to be Partial.
 
-**~35% today**, after three implementation milestones on 2026-08-17. The audited
+**~40% today**, after four implementation milestones on 2026-08-17. The audited
 19.8% baseline remains the comparison point; the new score credits only tested frontend,
-bootstrap-runtime, and conformance work. The graph, Refal compiler, and self-hosting rows
-remain at zero beyond their existing formatter credit.
+bootstrap-runtime, deterministic seed-graph, and conformance work. Symbolic graph driving,
+the Refal compiler, and self-hosting remain unimplemented.
 
 | Workstream | Weight | Now | After P1 | After P3 | After P5 |
 |---|---:|---:|---:|---:|---:|
 | Bootstrap frontend | 8.5% | 8.0 | 8.5 | 8.5 | 8.5 |
 | Bootstrap semantics | 6% | 5.0 | 6 | 6 | 6 |
-| Refal machine | 19.5% | 17.6 | 19.5 | 19.5 | 19.5 |
-| Graph of states / Refal emission | 8.5% | 2.1 | 2.1 | 8.5 | 8.5 |
+| Refal machine | 19.5% | 18.8 | 19.5 | 19.5 | 19.5 |
+| Graph of states / Refal emission | 8.5% | 5.1 | 5.1 | 8.5 | 8.5 |
 | Static verification | 15% | 0.8 | 1 | 13 | 13 |
 | Compiler in Refal | 25.5% | 0 | 0 | 0 | 25.5 |
 | Self-hosting fixpoint | 13% | 0 | 0 | 0 | 13 |
 | Conformance / release | 4% | 1.5 | 1.5 | 2.5 | 3 |
-| **Total** | **100%** | **~35%** | **~39%** | **~58%** | **~97%** |
+| **Total** | **100%** | **~40%** | **~42%** | **~58%** | **~97%** |
 
 ---
 
@@ -265,6 +265,7 @@ All seven were approved by the the maintainer on 2026-08-05.
 | 4 | Native code generation deferred until after self-hosting | Approved |
 | 5 | Milestones 2 and 3 reset to Partial in the public documentation | Approved |
 | 6 | Completion figure restated honestly against the enlarged target | Approved |
+| 7 | Explicit work-list call execution and deterministic seed graph added; weighted score advanced to 40% | Approved |
 | 7 | Phase 0 begins immediately | Approved, in progress |
 
 The maintainer holds standing authority to take judgement calls inside this

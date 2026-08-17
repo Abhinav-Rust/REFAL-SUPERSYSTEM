@@ -1,11 +1,125 @@
 //! A normalized, source-mapped representation used between checking and backends.
 
+use std::collections::HashMap;
+
 use refal_ast::{Program, Span, Symbol, TermKind, VariableKind, Visibility};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoreProgram {
     pub declarations: Vec<CoreDeclaration>,
     pub functions: Vec<CoreFunction>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct StateId(pub usize);
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GraphState {
+    pub id: StateId,
+    pub function: String,
+    pub sentence: usize,
+    pub pattern: Vec<CoreTerm>,
+    pub result: Vec<CoreTerm>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GraphTransition {
+    pub from: StateId,
+    pub to: StateId,
+    pub callee: String,
+}
+
+/// The deterministic seed graph produced before Turchin driving.
+///
+/// It records one state per source sentence and syntactic function-call edges. It is
+/// deliberately not called a driven graph: symbolic configurations, graph cleaning,
+/// generalisation, and residualisation are later phases.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StateGraph {
+    pub entry: Option<StateId>,
+    pub states: Vec<GraphState>,
+    pub transitions: Vec<GraphTransition>,
+}
+
+/// Build the structural seed graph that later driving will refine into configurations.
+pub fn build_seed_graph(program: &CoreProgram) -> StateGraph {
+    let mut states = Vec::new();
+    let mut first_states = HashMap::new();
+    for function in &program.functions {
+        for (sentence_index, sentence) in function.sentences.iter().enumerate() {
+            let id = StateId(states.len());
+            first_states
+                .entry(function.name.to_ascii_uppercase())
+                .or_insert(id);
+            states.push(GraphState {
+                id,
+                function: function.name.clone(),
+                sentence: sentence_index,
+                pattern: sentence.pattern.clone(),
+                result: sentence.result.clone(),
+                span: sentence.span,
+            });
+        }
+    }
+
+    let mut transitions = Vec::new();
+    for state in &states {
+        let Some(function) = program
+            .functions
+            .iter()
+            .find(|function| function.name.eq_ignore_ascii_case(&state.function))
+        else {
+            continue;
+        };
+        let sentence = &function.sentences[state.sentence];
+        let mut callees = Vec::new();
+        collect_call_names(&sentence.result, &mut callees);
+        for callee in callees {
+            if let Some(&to) = first_states.get(&callee.to_ascii_uppercase()) {
+                transitions.push(GraphTransition {
+                    from: state.id,
+                    to,
+                    callee,
+                });
+            }
+        }
+    }
+
+    let entry = first_states
+        .iter()
+        .find(|(name, _)| name.as_str() == "GO")
+        .map(|(_, &id)| id);
+    StateGraph {
+        entry,
+        states,
+        transitions,
+    }
+}
+
+fn collect_call_names(terms: &[CoreTerm], names: &mut Vec<String>) {
+    for term in terms {
+        match &term.kind {
+            CoreTermKind::Call { name, args } => {
+                names.push(name.clone());
+                collect_call_names(args, names);
+            }
+            CoreTermKind::Bracket(inner) => collect_call_names(inner, names),
+            CoreTermKind::Block {
+                argument,
+                sentences,
+            } => {
+                collect_call_names(argument, names);
+                for sentence in sentences {
+                    collect_call_names(&sentence.result, names);
+                }
+            }
+            CoreTermKind::Char(_)
+            | CoreTermKind::Identifier(_)
+            | CoreTermKind::Number(_)
+            | CoreTermKind::Variable { .. } => {}
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -357,6 +471,53 @@ mod tests {
             format_program(&core),
             "$EXTERN Prout;\n\n$ENTRY Go {\n  =;\n}\n"
         );
+    }
+
+    #[test]
+    fn builds_a_deterministic_seed_graph_from_sentence_calls() {
+        let call_term = Term {
+            kind: TermKind::Call {
+                name: "worker_fn".to_string(),
+                args: vec![],
+            },
+            span: span(),
+        };
+        let sentence = Sentence {
+            pattern: vec![],
+            conditions: vec![],
+            result: vec![call_term],
+            span: span(),
+        };
+        let worker = Function {
+            name: "Worker_Fn".to_string(),
+            visibility: Visibility::Local,
+            sentences: vec![Sentence {
+                pattern: vec![],
+                conditions: vec![],
+                result: vec![],
+                span: span(),
+            }],
+            span: span(),
+        };
+        let program = Program {
+            items: vec![
+                Item::Function(Function {
+                    name: "Go".to_string(),
+                    visibility: Visibility::Entry,
+                    sentences: vec![sentence],
+                    span: span(),
+                }),
+                Item::Function(worker),
+            ],
+        };
+
+        let graph = build_seed_graph(&lower_program(&program));
+        assert_eq!(graph.entry, Some(StateId(0)));
+        assert_eq!(graph.states.len(), 2);
+        assert_eq!(graph.transitions.len(), 1);
+        assert_eq!(graph.transitions[0].from, StateId(0));
+        assert_eq!(graph.transitions[0].to, StateId(1));
+        assert_eq!(graph.transitions[0].callee, "worker_fn");
     }
 
     #[test]
