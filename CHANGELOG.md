@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Refal-authored checker/compiler-subset milestone (2026-08-17)
+
+The weighted completion score advances from 85% to 90% with a Refal-authored checker/compiler
+subset. `examples/compiler-refal-checker-subset.ref` validates two `Name = Name;` definitions with
+exact repeated-name checks, rejects `Widget = Other; Echo = Echo;`, and emits a valid `$ENTRY Go`
+wrapper plus two generated identity functions. The CLI regression checks and executes the generated
+multi-function source through the bootstrap runtime. General source parsing, complete Core Refal
+emission, differential corpus compilation, and self-hosting remain open.
+
 ### Refal-authored lexer/parser-subset milestone (2026-08-17)
 
 The weighted completion score advances from 80% to 85% with a Refal-authored restricted source

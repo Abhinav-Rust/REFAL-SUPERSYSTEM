@@ -183,12 +183,13 @@ cleaning.
 ## Refal-authored Compiler Slice
 
 Status: **Partial implementation; updated 2026-08-17**. `examples/compiler-refal-subset.ref` is a
-Refal program that accepts a restricted character-string function name, while
-`examples/compiler-refal-parser-subset.ref` recognizes `Name = Name;` and rejects a mismatched
-definition. Both emit valid Refal programs containing a `Go` wrapper and generated identity
-functions. The generated source is checked and executed through the bootstrap runtime in end-to-end
-CLI regressions. General source lexing/parsing, Core Refal emission, differential compilation of the
-corpus, and self-hosting remain open.
+Refal program that accepts a restricted character-string function name,
+`examples/compiler-refal-parser-subset.ref` recognizes `Name = Name;`, and
+`examples/compiler-refal-checker-subset.ref` validates two repeated-name definitions while rejecting
+a mismatch. The checker subset emits valid Refal programs containing a `Go` wrapper and multiple
+generated identity functions. Generated sources are checked and executed through the bootstrap
+runtime in end-to-end CLI regressions. General source lexing/parsing, Core Refal emission,
+differential compilation of the corpus, and self-hosting remain open.
 
 ## Milestone 6: Production Backend
 

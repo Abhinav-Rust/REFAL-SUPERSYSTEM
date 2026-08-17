@@ -181,11 +181,12 @@ Queries over the Phase 2 graph.
 soundness argument plus a differential test against the interpreter.
 
 ### Phase 4 — The compiler in Refal · effort XL
-A restricted compiler-in-Refal emitter and lexer/parser subset are now implemented and executed
-through the Phase 1 machine: `examples/compiler-refal-subset.ref` accepts a character-string
-function name, while `examples/compiler-refal-parser-subset.ref` recognizes `Name = Name;` and
-rejects mismatched definitions. Both emit checked `Go` wrappers plus named identity functions. Each
-stage of the complete compiler must still be written
+A restricted compiler-in-Refal emitter, lexer/parser, and checker subset are now implemented and
+executed through the Phase 1 machine: `examples/compiler-refal-subset.ref` accepts a character-string
+function name, `examples/compiler-refal-parser-subset.ref` recognizes `Name = Name;`, and
+`examples/compiler-refal-checker-subset.ref` validates two repeated-name definitions while rejecting
+mismatches. The checker subset emits checked `Go` wrappers plus multiple named identity functions.
+Each stage of the complete compiler must still be written
 in Refal, run on the Phase 1 machine, and differentially tested against the Rust implementation on
 the whole corpus. Written under `--strict`: **the compiler is its own first user.**
 
@@ -224,10 +225,10 @@ Honest reset. The clarified goal added a workstream, so the denominator grew. Th
 also *fell* from an earlier published 38%, because that figure gave full credit to two
 milestones an audit then found to be Partial.
 
-**~85% today**, after thirteen implementation milestones on 2026-08-17. The audited
+**~90% today**, after fourteen implementation milestones on 2026-08-17. The audited
 19.8% baseline remains the comparison point; the new score credits only tested frontend,
 bootstrap-runtime, deterministic graph infrastructure, bounded concrete driving,
-shape-aware symbolic driving, supported-subset Refal residualization, restricted compiler-in-Refal emission/parsing, and conformance work.
+shape-aware symbolic driving, supported-subset Refal residualization, restricted compiler-in-Refal emission/parsing/checking, and conformance work.
 Complete Turchin graph driving, graph residualisation, the general Refal compiler, and self-hosting
 remain unimplemented.
 

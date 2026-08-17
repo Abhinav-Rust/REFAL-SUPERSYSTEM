@@ -195,16 +195,17 @@ The guarantee this compiler intends to publish, once Tier 1 lands:
 
 ## Project Status
 
-**Completion against the goal: 85%.**
+**Completion against the goal: 90%.**
 
 That figure counts a compiler *written in Refal* that emits Refal and compiles its own
-sources, with the verification tiers above, as 100%. The thirteenth implementation milestone moves the weighted score from 80.0% to 85.0% by adding a
-Refal-authored lexer/parser subset. `examples/compiler-refal-parser-subset.ref` recognizes the
-restricted character-string grammar `Name = Name;`, rejects a mismatched definition, emits a valid
-Refal program containing a `Go` wrapper and generated identity function, and is exercised end to end:
-the emitted source is checked and then executed by the bootstrap runtime. The previous milestone added
-a restricted emitter for a supplied function name. This is progress toward the target, not a claim
-that the Refal compiler parses the general language, emits complete Core Refal, or self-hosts.
+sources, with the verification tiers above, as 100%. The fourteenth implementation milestone moves the weighted score from 85.0% to 90.0% by adding a
+Refal-authored checker/compiler subset. `examples/compiler-refal-checker-subset.ref` validates two
+restricted `Name = Name;` definitions with exact repeated-name checks, rejects mismatched definitions,
+and emits a valid Refal program containing a `Go` wrapper plus two generated identity functions. The
+emitted source is checked and executed by the bootstrap runtime in an end-to-end CLI regression. The
+previous milestone added the one-definition lexer/parser subset. This is progress toward the target,
+not a claim that the Refal compiler handles general source files, emits complete Core Refal, or
+self-hosts.
 
 The estimate is kept deliberately evidence-backed. The milestones include end-to-end
 sentence-ending blocks, the Classic macrodigit lexer bound, integer arithmetic
@@ -217,11 +218,11 @@ CLI coverage. The latest runtime slice adds a tagged `Dn`/`Up` metacode subset f
 identifiers, numbers, and nested brackets, with round-trip, validation, and CLI coverage. The runtime now also has an explicit work-list path for eligible deep call chains. `refal-core` now
 has bounded Tier 1 graph analysis in addition to a deterministic sentence-state/call-edge seed
 graph, SCC detection, function-aware structural reachability cleanup, bounded concrete driving,
-shape-aware conservative symbolic driving, and a small Refal residualization surface. A restricted
-Refal-authored emitter and `Name = Name;` source parser now produce checked Refal source for generated
-identity functions, with end-to-end bootstrap execution tests. Complete Turchin driving, semantic
-graph cleaning, generalization, graph residualisation, the general Refal-authored compiler, and
-self-hosting remain unimplemented.
+shape-aware conservative symbolic driving, and a small Refal residualization surface. Refal-authored
+emitter, parser, and checker subsets now validate repeated-name definitions and produce checked Refal
+source for generated identity functions, with end-to-end bootstrap execution tests. Complete Turchin
+driving, semantic graph cleaning, generalization, graph residualisation, the general Refal-authored
+compiler, and self-hosting remain unimplemented.
 
 The earlier figure went *down* from an older published estimate of 38%, for two reasons,
 both of which are the point of tracking it honestly:
@@ -245,7 +246,7 @@ a general compiler written in Refal, and it does not yet generate complete compi
 | 4 | Refal machine | 🔶 Partial | Object-expression runtime, `s.`/`t.`/`e.` matching with backtracking, conditions, recursion guard, arithmetic, `Trunc`/`Real`, descriptor-backed file I/O, structural stack operations, expression splitting, case conversion, `Arg`, `Step`, `Time`, visible dynamic `Mu` dispatch, and a tagged `Dn`/`Up` metacode subset. An explicit work-list path now handles eligible deep block-free call chains; conditions, blocks, symbolic matching plans, the official Chapter 6 metacode encoding, and the full flat view-field machine remain open ([#7](../../issues/7)) |
 | 5 | Graph of states | 🔶 Partial | `refal-core` exposes deterministic sentence states, syntactic call edges, SCC detection, function-aware structural reachability cleanup, bounded ground driving, shape-aware symbolic driving, bounded Tier 1 reachability/terminal/SCC analysis, and a supported-subset Refal residual emitter; complete Turchin driving, semantic cleaning, generalization, and graph residualisation remain open |
 | 6 | Tier 1 analyses | 🔶 Partial | Deterministic structural reachability, terminal-state, function-coverage, and SCC recursion reports; semantic pattern overlap, binding analysis, and Turchin cleaning remain open |
-| 7 | Compiler written in Refal | 🔶 Partial | Refal-authored fixtures now parse the restricted `Name = Name;` form, reject mismatched definitions, generate checked Refal identity programs, and execute them through the bootstrap runtime; general parsing, Core Refal emission, and compiler completeness remain open |
+| 7 | Compiler written in Refal | 🔶 Partial | Refal-authored fixtures now parse and check restricted repeated-name definitions, reject mismatches, generate checked multi-function Refal programs, and execute them through the bootstrap runtime; general parsing, Core Refal emission, and compiler completeness remain open |
 | 8 | Verified self-hosting | ⬜ Not started | Three-stage fixpoint, `C2 ≡ C3` |
 | 9 | Tier 2 metasystem analysis | ⬜ Research | Post-1.0 |
 
@@ -259,6 +260,7 @@ The full phase plan, gates and completion accounting are in [`docs/PLAN.md`](doc
 
 | Date | Change |
 |---|---|
+| 2026-08-17 | Fourteenth 5-point implementation milestone: a Refal-authored two-definition checker/compiler subset with repeated-name validation, mismatch rejection, checked multi-function source emission, generated-program execution, and an end-to-end CLI regression; full workspace gates pass |
 | 2026-08-17 | Thirteenth 5-point implementation milestone: a Refal-authored `Name = Name;` lexer/parser subset, mismatch rejection, checked source emission, generated-program execution, and an end-to-end CLI regression; full workspace gates pass |
 | 2026-08-17 | Twelfth 5-point implementation milestone: a runnable Refal-authored compiler subset that emits a `Go` wrapper plus named identity function, checks the generated source, executes it through the bootstrap runtime, and has an end-to-end CLI regression; full workspace gates pass |
 | 2026-08-17 | Eleventh 5-point implementation milestone: bounded Tier 1 graph analysis, deterministic reachability/terminal/function/SCC reporting, the `refal analyze` command, core and CLI regressions, and synchronized graph documentation; full workspace gates pass |
