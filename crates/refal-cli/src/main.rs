@@ -83,6 +83,7 @@ fn main() {
         "residualize-graph" => residualize_graph_program(&program, &input_args),
         "supercompile" => supercompile_program(&program, &input_args),
         "fixpoint" => fixpoint_program(&program, &input_args),
+        "differential" => differential_program(&program, &input_args),
         "run" => run_program(&program, &input_args),
         other => {
             eprintln!("unknown command `{other}`");
@@ -109,6 +110,7 @@ fn print_usage() {
     eprintln!("  residualize-graph  Emit structurally cleaned reachable Core Refal");
     eprintln!("  supercompile  Analyze, symbolically drive, whistle, and residualize [--steps N]");
     eprintln!("  fixpoint   Apply a source-to-source compiler twice and check byte stability");
+    eprintln!("  differential  Compare original and lowered-source runtime outputs");
     eprintln!("  run        Run a Refal source file with the bootstrap interpreter");
 }
 
@@ -414,27 +416,91 @@ fn apply_source_compiler(program: &refal_ast::Program, source: &str) -> Result<S
     Ok(outputs.pop().expect("output length checked"))
 }
 
-fn run_program(program: &refal_ast::Program, input_args: &[String]) {
+fn differential_program(program: &refal_ast::Program, input_args: &[String]) {
+    let lowered_source = refal_core::format_program(&refal_core::lower_program(program));
+    let lowered_program = match parse_checked_source(&lowered_source) {
+        Ok(program) => program,
+        Err(error) => {
+            eprintln!("differential lowering error: {error}");
+            process::exit(1);
+        }
+    };
+    let original = match execute_program(program, input_args) {
+        Ok(output) => output,
+        Err(error) => {
+            eprintln!("differential original execution error: {error}");
+            process::exit(1);
+        }
+    };
+    let lowered = match execute_program(&lowered_program, input_args) {
+        Ok(output) => output,
+        Err(error) => {
+            eprintln!("differential lowered execution error: {error}");
+            process::exit(1);
+        }
+    };
+    if original != lowered {
+        eprintln!("differential mismatch");
+        eprintln!("original: {:?}", original);
+        eprintln!("lowered:  {:?}", lowered);
+        process::exit(1);
+    }
+    println!("differential: equal");
+    println!("outputs: {}", original.len());
+}
+
+fn parse_checked_source(source: &str) -> Result<refal_ast::Program, String> {
+    let tokens = Lexer::new(source)
+        .tokenize()
+        .map_err(|error| format!("lex error: {}", error.message))?;
+    let mut parser = Parser::new(tokens);
+    let program = parser
+        .parse_program()
+        .map_err(|error| format!("parse error: {}", error.message))?;
+    refal_semantics::check_program(&program).map_err(|diagnostics| {
+        diagnostics
+            .into_iter()
+            .map(|diagnostic| diagnostic.message)
+            .collect::<Vec<_>>()
+            .join("; ")
+    })?;
+    Ok(program)
+}
+
+fn execute_program(
+    program: &refal_ast::Program,
+    input_args: &[String],
+) -> Result<Vec<String>, String> {
     let input = args_to_values(input_args);
     let arguments = input_args
         .iter()
         .map(|arg| arg.chars().map(Value::Char).collect())
         .collect();
     let evaluator = Evaluator::with_arguments(program, arguments);
-    let result = match evaluator.evaluate_entry(&input) {
-        Ok(result) => result,
+    let result = evaluator
+        .evaluate_entry(&input)
+        .map_err(|error| error.to_string())?;
+    let mut outputs = evaluator
+        .captured_output()
+        .into_iter()
+        .map(|expression| render_values(&expression))
+        .collect::<Vec<_>>();
+    if !result.is_empty() {
+        outputs.push(render_values(&result));
+    }
+    Ok(outputs)
+}
+
+fn run_program(program: &refal_ast::Program, input_args: &[String]) {
+    let outputs = match execute_program(program, input_args) {
+        Ok(outputs) => outputs,
         Err(error) => {
             eprintln!("runtime error: {error}");
             process::exit(1);
         }
     };
-
-    for expression in evaluator.captured_output() {
-        println!("{}", render_values(&expression));
-    }
-
-    if !result.is_empty() {
-        println!("{}", render_values(&result));
+    for output in outputs {
+        println!("{output}");
     }
 }
 

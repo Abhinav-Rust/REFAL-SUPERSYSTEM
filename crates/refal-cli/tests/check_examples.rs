@@ -26,6 +26,13 @@ fn run_file(path: &str, args: &[&str]) -> std::process::Output {
     command.output().expect("run refal binary")
 }
 
+fn differential_file(path: &str, args: &[&str]) -> std::process::Output {
+    let mut command = Command::new(refal_bin());
+    command.args(["differential", &workspace_path(path)]);
+    command.args(args);
+    command.output().expect("run refal binary")
+}
+
 fn graph_file(path: &str) -> std::process::Output {
     Command::new(refal_bin())
         .args(["graph", &workspace_path(path)])
@@ -1359,6 +1366,48 @@ fn runs_runtime_conformance_examples() {
             String::from_utf8_lossy(&output.stderr)
         );
         assert_eq!(String::from_utf8_lossy(&output.stdout), expected_stdout);
+    }
+}
+
+#[test]
+fn compares_original_and_lowered_runtime_outputs_across_the_supported_corpus() {
+    for (path, args, expected_outputs) in [
+        ("examples/hello.ref", &[] as &[&str], 1),
+        ("examples/identity.ref", &["Hello Refal"] as &[&str], 1),
+        ("examples/runtime-recursion.ref", &[] as &[&str], 1),
+        ("examples/runtime-condition.ref", &[] as &[&str], 1),
+        (
+            "examples/runtime-condition-backtracking.ref",
+            &[] as &[&str],
+            1,
+        ),
+        ("examples/runtime-arithmetic.ref", &[] as &[&str], 1),
+        (
+            "examples/runtime-structural.ref",
+            &["cli-argument"] as &[&str],
+            6,
+        ),
+        ("examples/runtime-mu.ref", &[] as &[&str], 1),
+        ("examples/runtime-metacode.ref", &[] as &[&str], 1),
+        (
+            "examples/compiler-refal-body-subset.ref",
+            &["Echo { ('a') = 'A'; e.Input = e.Input; } Identity { e.Input = e.Input; }"]
+                as &[&str],
+            1,
+        ),
+    ] {
+        let output = differential_file(path, args);
+        assert!(
+            output.status.success(),
+            "{path} should be differential-stable\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout),
+            format!("differential: equal\noutputs: {expected_outputs}\n"),
+            "unexpected differential output for {path}"
+        );
     }
 }
 

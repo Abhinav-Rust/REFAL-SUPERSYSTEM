@@ -191,7 +191,11 @@ mismatches. Literal, forwarding, mixed call/literal, two-literal, and
 `examples/compiler-refal-general-subset.ref`, `examples/compiler-refal-sentence-subset.ref`, and `examples/compiler-refal-body-subset.ref` now extend the evidence; the former recursively parses an arbitrary-length supported identity/literal definition sequence, the second parses real-brace definitions with supported raw patterns/results, and the latter preserves complete multi-sentence function bodies while emitting a checked multi-function program. The checker subset emits checked `Go` wrappers plus multiple named identity functions.
 Each stage of the complete compiler must still be written
 in Refal, run on the Phase 1 machine, and differentially tested against the Rust implementation on
-the whole corpus. Written under `--strict`: **the compiler is its own first user.**
+the whole corpus. The `refal differential` command now lowers, formats, reparses, checks, and
+executes Core Refal against original checked execution across a representative supported corpus
+covering recursion, conditions, arithmetic, structural operations, metacode, and the Refal-authored
+body compiler; complete whole-corpus differential coverage remains open. Written under `--strict`:
+**the compiler is its own first user.**
 
 `lexer.ref` → `parser.ref` → `checker.ref` → `driver.ref` (driving + graph) → `emit.ref`
 
