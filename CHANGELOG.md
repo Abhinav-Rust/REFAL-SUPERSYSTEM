@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Condition-edge symbolic configuration expansion (2026-08-18)
+
+Symbolic configuration expansion now keeps condition-result evaluation under the active
+configuration, resolves resulting call edges to their bounded callee configurations, and
+deduplicates repeated edges deterministically. A Core regression proves the resolved `Go -> Check`
+condition edge. Full work-list expansion, semantic cleaning, and equivalence remain open; the
+audited score remains 95%.
+
 ### Traceable malformed-grammar frontend corpus (2026-08-18)
 
 Added four malformed Classic Refal fixtures with exact parser diagnostics and source locations for

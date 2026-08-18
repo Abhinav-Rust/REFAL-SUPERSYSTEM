@@ -639,7 +639,13 @@ impl<'a> DriveContext<'a> {
     }
 
     fn record_call(&mut self, callee: &str, input: &[CoreTerm]) {
-        if let Some(from) = self.active_configuration {
+        if let Some(from) = self.active_configuration
+            && !self.configuration_transitions.iter().any(|transition| {
+                transition.from == from
+                    && transition.callee.eq_ignore_ascii_case(callee)
+                    && transition.input == input
+            })
+        {
             self.configuration_transitions
                 .push(SymbolicConfigurationTransition {
                     from,
@@ -709,7 +715,13 @@ impl<'a> DriveContext<'a> {
                 SymbolicMatch::No => {}
                 SymbolicMatch::Unknown => unknown_before = true,
                 SymbolicMatch::Yes => {
-                    match self.match_symbolic_conditions(&state.conditions, &mut bindings)? {
+                    let configuration_id = self.record_configuration(state.id, input);
+                    let previous_configuration = self.active_configuration;
+                    self.active_configuration = Some(configuration_id);
+                    let condition_match =
+                        self.match_symbolic_conditions(&state.conditions, &mut bindings);
+                    self.active_configuration = previous_configuration;
+                    match condition_match? {
                         SymbolicMatch::No => continue,
                         SymbolicMatch::Unknown => {
                             unknown_before = true;
@@ -720,7 +732,6 @@ impl<'a> DriveContext<'a> {
                         }
                         SymbolicMatch::Yes => {}
                     }
-                    let configuration_id = self.record_configuration(state.id, input);
                     if self.visited.contains(&state.id) {
                         if !self.whistle_states.contains(&state.id) {
                             self.whistle_states.push(state.id);
@@ -2979,6 +2990,66 @@ mod tests {
             CoreTermKind::Call { name, args }
                 if name == "Go" && args == &symbolic_input
         ));
+    }
+
+    #[test]
+    fn records_symbolic_condition_call_transitions() {
+        let expression = |name: &str| CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind: VariableKind::Expression,
+                name: name.to_string(),
+            },
+            span: span(),
+        };
+        let graph = StateGraph {
+            entry: Some(StateId(0)),
+            states: vec![
+                GraphState {
+                    id: StateId(0),
+                    function: "Go".to_string(),
+                    sentence: 0,
+                    pattern: vec![expression("Input")],
+                    conditions: vec![CoreCondition {
+                        result: vec![CoreTerm {
+                            kind: CoreTermKind::Call {
+                                name: "Check".to_string(),
+                                args: vec![expression("Input")],
+                            },
+                            span: span(),
+                        }],
+                        pattern: vec![expression("Input")],
+                        span: span(),
+                    }],
+                    result: vec![expression("Input")],
+                    span: span(),
+                },
+                GraphState {
+                    id: StateId(1),
+                    function: "Check".to_string(),
+                    sentence: 0,
+                    pattern: vec![expression("Input")],
+                    conditions: Vec::new(),
+                    result: vec![expression("Input")],
+                    span: span(),
+                },
+            ],
+            transitions: vec![GraphTransition {
+                from: StateId(0),
+                to: StateId(1),
+                callee: "Check".to_string(),
+            }],
+        };
+        let input = vec![expression("Input")];
+        let report = drive_symbolic_with_input(&graph, input.clone(), 10).expect("drive");
+        assert_eq!(report.configurations.len(), 2);
+        assert_eq!(report.configurations[0].state, StateId(0));
+        assert_eq!(report.configurations[1].state, StateId(1));
+        assert!(report.configuration_transitions.iter().any(|transition| {
+            transition.from == 0
+                && transition.callee == "Check"
+                && transition.input == input
+                && transition.to == Some(1)
+        }));
     }
 
     #[test]

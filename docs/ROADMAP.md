@@ -226,7 +226,10 @@ condition colons, unclosed calls, and unclosed sentence-ending blocks; the full 
 malformed corpus remains partial. Complete whole-corpus semantic differential coverage, complete
 Turchin graph residualization, and Rust-to-Refal self-hosting remain open.
 The `refal drive-symbolic --configurations` command provides a checked bounded configuration
-projection with concrete nodes and resolved call edges. The `refal residualize-graph` command
+projection with concrete nodes and resolved call edges. Calls made while evaluating condition
+results are now attributed to their active configuration and deduplicated deterministically, with
+Core regression evidence for a resolved `Go -> Check` edge; complete work-list expansion and
+semantic equivalence remain open. The `refal residualize-graph` command
 provides a checked structural graph-to-Core-Refal projection
 for reachable functions, preserving supported terms, conditions, and sentence-ending blocks. The `refal residualize-driven` command additionally runs bounded symbolic driving, retains visited and
 whistle-triggering configurations, projects deterministic `GeneralizedResidualState` records with
