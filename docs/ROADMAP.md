@@ -207,10 +207,15 @@ the Refal-authored body compiler; negative cases, non-runnable sources, complete
 differential coverage, and byte-identical compiler-output proof remain open.
 The `refal residualize-graph` command provides a checked structural graph-to-Core-Refal projection
 for reachable functions, preserving supported terms, conditions, and sentence-ending blocks. The
-`refal fixpoint` command applies a canonical-output compiler subset three times and verifies
-successive byte-stable output, including the bounded `C2 ≡ C3` equality. General source
-lexing/parsing, driven Core Refal emission, complete differential compilation of all positive and
-negative corpus programs, and the full Rust-to-Refal three-stage self-hosting proof remain open.
+`refal residualize-driven` command additionally runs bounded symbolic driving, retains visited and
+whistle-triggering configurations, preserves residual-call-reachable functions, and emits checked
+recursive Core Refal with deterministic whistle/generalization metadata; a recursive `Loop`
+regression covers whistle detection and source validity. The `refal fixpoint` command applies a
+canonical-output compiler subset three times and verifies successive byte-stable output, including
+the bounded `C2 ≡ C3` equality. General source lexing/parsing, complete Turchin configuration
+driving and semantic cleaning, generalized driven Core Refal emission, complete differential
+compilation of all positive and negative corpus programs, and the full Rust-to-Refal three-stage
+self-hosting proof remain open.
 
 ## Milestone 6: Production Backend
 

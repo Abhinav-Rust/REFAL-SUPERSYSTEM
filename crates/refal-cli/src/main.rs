@@ -81,6 +81,7 @@ fn main() {
         "drive-symbolic" => drive_symbolic_program(&program, &input_args),
         "residualize" => residualize_program(&program, &input_args),
         "residualize-graph" => residualize_graph_program(&program, &input_args),
+        "residualize-driven" => residualize_driven_program(&program, &input_args),
         "supercompile" => supercompile_program(&program, &input_args),
         "fixpoint" => fixpoint_program(&program, &input_args),
         "differential" => differential_program(&program, &input_args),
@@ -108,6 +109,7 @@ fn print_usage() {
     eprintln!("  drive-symbolic  Partially drive from an expression variable [--steps N]");
     eprintln!("  residualize  Emit Refal for the supported symbolic residual subset [--steps N]");
     eprintln!("  residualize-graph  Emit structurally cleaned reachable Core Refal");
+    eprintln!("  residualize-driven  Emit driven Core Refal with whistle evidence [--steps N]");
     eprintln!("  supercompile  Analyze, symbolically drive, whistle, and residualize [--steps N]");
     eprintln!("  fixpoint   Apply a source-to-source compiler twice and check byte stability");
     eprintln!("  differential  Compare original and lowered-source runtime outputs");
@@ -345,6 +347,51 @@ fn residualize_graph_program(program: &refal_ast::Program, args: &[String]) {
     let graph = refal_core::clean_unreachable_states(&refal_core::build_seed_graph(&core));
     let residual = refal_core::residualize_cleaned_graph(&core, &graph);
     print!("{}", refal_core::format_program(&residual));
+}
+
+fn residualize_driven_program(program: &refal_ast::Program, args: &[String]) {
+    let max_steps = match args {
+        [] => 10_000,
+        [flag, limit] if flag == "--steps" => match limit.parse::<usize>() {
+            Ok(limit) => limit,
+            Err(_) => {
+                eprintln!("Usage: refal residualize-driven <file.ref> [--steps N]");
+                process::exit(2);
+            }
+        },
+        _ => {
+            eprintln!("Usage: refal residualize-driven <file.ref> [--steps N]");
+            process::exit(2);
+        }
+    };
+    let core = refal_core::lower_program(program);
+    let graph = refal_core::clean_unreachable_states(&refal_core::build_seed_graph(&core));
+    let residual = match refal_core::residualize_driven_graph(&core, &graph, max_steps) {
+        Ok(residual) => residual,
+        Err(error) => {
+            eprintln!("driven residualization error: {error}");
+            process::exit(1);
+        }
+    };
+    let visited = residual
+        .report
+        .visited
+        .iter()
+        .map(|state| format!("S{}", state.0))
+        .collect::<Vec<_>>()
+        .join(" -> ");
+    let whistles = residual
+        .report
+        .whistle_events
+        .iter()
+        .map(|event| format!("S{}", event.state.0))
+        .collect::<Vec<_>>()
+        .join(", ");
+    println!("steps: {}", residual.report.steps);
+    println!("visited: {visited}");
+    println!("whistles: {whistles}");
+    println!("generalized: {}", residual.report.whistle_events.len());
+    print!("{}", refal_core::format_program(&residual.program));
 }
 
 fn fixpoint_program(program: &refal_ast::Program, args: &[String]) {

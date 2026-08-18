@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Driven symbolic residualization with whistle evidence (2026-08-18)
+
+Added `residualize_driven_graph` and the `refal residualize-driven` command. The new path runs the
+bounded symbolic driver, retains visited and whistle-triggering configurations, conservatively
+keeps residual-call-reachable functions, and emits checked Core Refal together with deterministic
+visited/whistle/generalization metadata. A recursive regression proves `Loop` whistle detection,
+recursive residual-call preservation, and post-emission source validity. This is a post-95
+incremental improvement; full Turchin configuration driving, semantic cleaning, generalized
+residual graph construction, and self-hosting remain open.
+
 ### Supported-corpus differential execution (2026-08-18)
 
 Added `refal differential`, which lowers a checked program to canonical Core Refal, formats and

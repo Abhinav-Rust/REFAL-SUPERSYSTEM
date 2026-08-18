@@ -380,6 +380,12 @@ pub struct SymbolicDriveReport {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DrivenResidualization {
+    pub program: CoreProgram,
+    pub report: SymbolicDriveReport,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WhistleEvent {
     pub state: StateId,
     pub previous_input: Vec<CoreTerm>,
@@ -1144,6 +1150,60 @@ pub fn residualize_symbolic(report: &SymbolicDriveReport) -> String {
 /// Core Refal term, condition, and sentence-ending block while dropping functions removed by
 /// structural reachability cleanup. It is intentionally a graph-to-source projection, not yet
 /// Turchin's fully driven or semantically cleaned residual graph.
+pub fn residualize_driven_graph(
+    program: &CoreProgram,
+    graph: &StateGraph,
+    max_steps: usize,
+) -> Result<DrivenResidualization, DriveError> {
+    let report = drive_symbolic(graph, max_steps)?;
+    let driven_states = report
+        .visited
+        .iter()
+        .chain(&report.whistle_states)
+        .copied()
+        .collect::<HashSet<_>>();
+    let mut driven_functions = report
+        .visited
+        .iter()
+        .chain(&report.whistle_states)
+        .filter_map(|state_id| graph.states.get(state_id.0))
+        .map(|state| state.function.to_ascii_lowercase())
+        .collect::<HashSet<_>>();
+    let mut residual_calls = Vec::new();
+    collect_call_names(&report.residual, &mut residual_calls);
+    driven_functions.extend(
+        residual_calls
+            .into_iter()
+            .map(|name| name.to_ascii_lowercase()),
+    );
+    let driven_graph = StateGraph {
+        entry: graph.entry,
+        states: graph
+            .states
+            .iter()
+            .filter(|state| {
+                driven_states.contains(&state.id)
+                    || driven_functions.contains(&state.function.to_ascii_lowercase())
+            })
+            .cloned()
+            .collect(),
+        transitions: graph
+            .transitions
+            .iter()
+            .filter(|transition| {
+                driven_states.contains(&transition.from) || driven_states.contains(&transition.to)
+            })
+            .cloned()
+            .collect(),
+    };
+    let cleaned = clean_unreachable_states(&driven_graph);
+    let residual_program = residualize_cleaned_graph(program, &cleaned);
+    Ok(DrivenResidualization {
+        program: residual_program,
+        report,
+    })
+}
+
 pub fn residualize_cleaned_graph(program: &CoreProgram, graph: &StateGraph) -> CoreProgram {
     let mut functions = Vec::new();
     for function in &program.functions {
@@ -2096,6 +2156,70 @@ mod tests {
             "e.Input"
         );
         assert_eq!(format_term_sequence(&report.residual), "<Loop e.Input>");
+    }
+
+    #[test]
+    fn residualizes_a_driven_recursive_graph_with_whistle_evidence() {
+        let expression = CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind: VariableKind::Expression,
+                name: "Input".to_string(),
+            },
+            span: span(),
+        };
+        let program = CoreProgram {
+            declarations: vec![],
+            functions: vec![
+                CoreFunction {
+                    name: "Go".to_string(),
+                    visibility: Visibility::Entry,
+                    sentences: vec![CoreSentence {
+                        pattern: vec![expression.clone()],
+                        conditions: vec![],
+                        result: vec![CoreTerm {
+                            kind: CoreTermKind::Call {
+                                name: "Loop".to_string(),
+                                args: vec![expression.clone()],
+                            },
+                            span: span(),
+                        }],
+                        span: span(),
+                    }],
+                    span: span(),
+                },
+                CoreFunction {
+                    name: "Loop".to_string(),
+                    visibility: Visibility::Local,
+                    sentences: vec![CoreSentence {
+                        pattern: vec![expression.clone()],
+                        conditions: vec![],
+                        result: vec![CoreTerm {
+                            kind: CoreTermKind::Call {
+                                name: "Loop".to_string(),
+                                args: vec![expression],
+                            },
+                            span: span(),
+                        }],
+                        span: span(),
+                    }],
+                    span: span(),
+                },
+            ],
+        };
+        let graph = build_seed_graph(&program);
+        let residual = residualize_driven_graph(&program, &graph, 10).expect("residualize");
+        assert_eq!(residual.report.whistle_states, vec![StateId(1)]);
+        assert_eq!(residual.report.whistle_events.len(), 1);
+        assert_eq!(
+            residual
+                .program
+                .functions
+                .iter()
+                .map(|function| function.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Go", "Loop"]
+        );
+        assert!(format_program(&residual.program).contains("<Loop e.Input>"));
     }
 
     #[test]
