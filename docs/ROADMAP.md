@@ -193,12 +193,14 @@ Refal program that accepts a restricted character-string function name,
 `examples/compiler-refal-parser-subset.ref` recognizes `Name = Name;`, and
 `examples/compiler-refal-checker-subset.ref` validates two repeated-name definitions while rejecting
 a mismatch. Literal, forwarding, mixed call/literal, two-literal,
-`examples/compiler-refal-general-subset.ref`, and `examples/compiler-refal-sentence-subset.ref`
-extend the evidence; the former recursively parses an arbitrary-length sequence of supported
-`Name = Name;` and `Name = 'literal';` definitions, while the latter parses real-brace definitions
-with supported raw patterns/results, including a call result and literal function. The compiler emits
-valid multi-function Refal programs with a `Go` wrapper. Generated sources are checked and executed
-through the bootstrap runtime in end-to-end CLI regressions, and malformed sentence input is rejected.
+`examples/compiler-refal-general-subset.ref`, `examples/compiler-refal-sentence-subset.ref`, and
+`examples/compiler-refal-body-subset.ref` extend the evidence; the first recursively parses an
+arbitrary-length sequence of supported `Name = Name;` and `Name = 'literal';` definitions, the second
+parses real-brace definitions with supported raw patterns/results, and the third preserves complete
+multi-sentence function bodies. The compiler emits valid multi-function Refal programs with a `Go`
+wrapper. Generated sources are checked and executed through the bootstrap runtime in end-to-end CLI
+regressions, including branch-selecting execution of a preserved sentence, and malformed input is
+rejected.
 The `refal residualize-graph` command provides a checked structural graph-to-Core-Refal projection
 for reachable functions, preserving supported terms, conditions, and sentence-ending blocks. The
 `refal fixpoint` command applies a canonical-output compiler subset three times and verifies

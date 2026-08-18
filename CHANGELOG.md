@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Multi-sentence Refal-authored body compiler slice (2026-08-18)
+
+Added `examples/compiler-refal-body-subset.ref`, a Refal-authored compiler slice that captures and
+preserves complete supported multi-sentence function bodies while recursively emitting multiple
+functions. The generated source is checked, a branch-selecting sentence executes through the
+bootstrap runtime, and malformed input is rejected. This is a post-95 incremental improvement;
+general Classic Refal compilation, corpus-wide differential verification, complete driven
+residualization, and self-hosting remain open.
+
 ### Real-brace sentence-body compiler slice (2026-08-18)
 
 Added `examples/compiler-refal-sentence-subset.ref`, a Refal-authored compiler slice for real

@@ -1,0 +1,18 @@
+$EXTERN Prout;
+* Refal-authored compiler slice for complete supported function bodies.
+* Accepted source grammar: one or more definitions of the form
+* Name { body }, separated by one space; body may contain multiple sentences.
+$ENTRY Go {
+  (e.Source) = <Prout <Compile e.Source>>;
+}
+
+Compile {
+  e.Name " { " e.Body " } " e.Rest = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { " e.Body " } " <Definitions e.Rest>;
+  e.Name " { " e.Body " }" = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { " e.Body " }";
+}
+
+Definitions {
+  e.Name " { " e.Body " } " e.Rest = e.Name " { " e.Body " } " <Definitions e.Rest>;
+  e.Name " { " e.Body " }" = e.Name " { " e.Body " }";
+}
+
