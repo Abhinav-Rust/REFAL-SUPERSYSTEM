@@ -218,7 +218,8 @@ has bounded Tier 1 graph analysis in addition to a deterministic sentence-state/
 graph, SCC detection, function-aware structural reachability cleanup, bounded concrete driving,
 shape-aware conservative symbolic driving, a structurally cleaned-graph Core Refal emitter, and a
 bounded driven residualization surface with whistle/generalization metadata. The `refal
-residualize-driven` command retains visited and whistle-triggering configurations, preserves
+residualize-driven` command retains visited and whistle-triggering configurations, projects each
+whistle into an explicit generalized residual state with previous/repeated/LGG inputs, preserves
 residual-call-reachable functions, and emits checked Core Refal for the supported recursive subset. Refal-authored emitter, parser, and checker subsets now validate repeated-name definitions and
 produce checked Refal source for generated identity functions, with end-to-end bootstrap execution
 tests. A bounded `refal fixpoint` harness verifies byte-stable self-application of a canonical-output
@@ -273,6 +274,7 @@ The full phase plan, gates and completion accounting are in [`docs/PLAN.md`](doc
 
 | Date | Change |
 |---|---|
+| 2026-08-18 | Post-95 incremental Turchin improvement: driven residualization now exposes deterministic `GeneralizedResidualState` records carrying whistle state IDs, previous/repeated inputs, and the computed LGG input through the core API and `generalized-states` CLI metadata; focused core and CLI regressions pass, while complete generalized configuration driving remains open |
 | 2026-08-18 | Post-95 incremental Turchin improvement: `semantic_clean_driven_graph` now closes driven residual graphs over calls found in patterns, conditions, and results, materializes deterministic missing call edges, and retains a helper referenced only by a condition-call regression; `refal residualize-driven` emits checked recursive Core Refal with whistle metadata; the 95% score is unchanged because full configuration driving, generalized residual graph construction, and self-hosting remain open |
 | 2026-08-18 | Post-95 incremental verification improvement: `refal differential` lowers, formats, reparses, checks, and executes Core Refal, with a regression covering the entire currently runnable positive runtime-conformance corpus, including recursion, conditions, arithmetic, structural operations, metacode, and the Refal-authored multi-sentence compiler slice; the 95% score is unchanged because negative cases, non-runnable sources, and full compiler-output equivalence remain open |
 | 2026-08-18 | Post-95 incremental compiler improvement: `compiler-refal-body-subset.ref` preserves complete multi-sentence function bodies, emits checked multi-function Refal, and executes a branch-selecting sentence through the runtime; the 95% score is unchanged |

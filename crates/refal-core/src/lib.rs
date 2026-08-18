@@ -383,10 +383,25 @@ pub struct SymbolicDriveReport {
 pub struct DrivenResidualization {
     pub program: CoreProgram,
     pub report: SymbolicDriveReport,
+    pub generalized_states: Vec<GeneralizedResidualState>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WhistleEvent {
+    pub state: StateId,
+    pub previous_input: Vec<CoreTerm>,
+    pub repeated_input: Vec<CoreTerm>,
+    pub generalized_input: Vec<CoreTerm>,
+}
+
+/// An explicit residual configuration produced when symbolic driving whistles.
+///
+/// The generalized input is the deterministic least-general-generalization candidate used to
+/// continue residual compilation; the two concrete inputs are retained as evidence for the
+/// abstraction decision. This is still bounded and conservative: it does not claim a complete
+/// Turchin configuration graph or a proof that all future instances are equivalent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GeneralizedResidualState {
     pub state: StateId,
     pub previous_input: Vec<CoreTerm>,
     pub repeated_input: Vec<CoreTerm>,
@@ -1131,6 +1146,20 @@ fn generalized_expression_variable(span: Span) -> CoreTerm {
     }
 }
 
+/// Project whistle evidence into deterministic generalized residual configurations.
+pub fn generalized_residual_states(report: &SymbolicDriveReport) -> Vec<GeneralizedResidualState> {
+    report
+        .whistle_events
+        .iter()
+        .map(|event| GeneralizedResidualState {
+            state: event.state,
+            previous_input: event.previous_input.clone(),
+            repeated_input: event.repeated_input.clone(),
+            generalized_input: event.generalized_input.clone(),
+        })
+        .collect()
+}
+
 /// Emit a valid Refal wrapper for a residual produced by the conservative symbolic driver.
 ///
 /// The current emitter is intentionally small: it preserves the fixed symbolic input name
@@ -1285,9 +1314,11 @@ pub fn residualize_driven_graph(
     collect_call_names(&report.residual, &mut residual_calls);
     let cleaned = semantic_clean_driven_graph(graph, &driven_states, &residual_calls);
     let residual_program = residualize_cleaned_graph(program, &cleaned);
+    let generalized_states = generalized_residual_states(&report);
     Ok(DrivenResidualization {
         program: residual_program,
         report,
+        generalized_states,
     })
 }
 
@@ -2243,6 +2274,21 @@ mod tests {
             "e.Input"
         );
         assert_eq!(format_term_sequence(&report.residual), "<Loop e.Input>");
+        let generalized = generalized_residual_states(&report);
+        assert_eq!(generalized.len(), 1);
+        assert_eq!(generalized[0].state, StateId(0));
+        assert_eq!(
+            format_term_sequence(&generalized[0].previous_input),
+            "e.Input"
+        );
+        assert_eq!(
+            format_term_sequence(&generalized[0].repeated_input),
+            "e.Input"
+        );
+        assert_eq!(
+            format_term_sequence(&generalized[0].generalized_input),
+            "e.Input"
+        );
     }
 
     #[test]

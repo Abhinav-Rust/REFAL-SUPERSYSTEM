@@ -229,6 +229,10 @@ fn emits_driven_recursive_residual_with_whistle_evidence() {
         generated.contains("generalized: 1"),
         "unexpected output:\n{generated}"
     );
+    assert!(
+        generated.contains("generalized-states: S1"),
+        "unexpected output:\n{generated}"
+    );
     let source = generated
         .split_once("$ENTRY")
         .map(|(_, source)| format!("$ENTRY{source}"))

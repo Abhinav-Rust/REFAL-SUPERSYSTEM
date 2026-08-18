@@ -391,6 +391,13 @@ fn residualize_driven_program(program: &refal_ast::Program, args: &[String]) {
     println!("visited: {visited}");
     println!("whistles: {whistles}");
     println!("generalized: {}", residual.report.whistle_events.len());
+    let generalized_states = residual
+        .generalized_states
+        .iter()
+        .map(|state| format!("S{}", state.state.0))
+        .collect::<Vec<_>>()
+        .join(", ");
+    println!("generalized-states: {generalized_states}");
     print!("{}", refal_core::format_program(&residual.program));
 }
 

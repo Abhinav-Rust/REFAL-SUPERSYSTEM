@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Explicit generalized residual states for driven whistles (2026-08-18)
+
+Added the `GeneralizedResidualState` projection to driven residualization. Each deterministic whistle
+now exposes its state ID, previous input, repeated input, and computed least-general-generalization
+input through the core API; `refal residualize-driven` reports the corresponding `generalized-states`
+metadata. Focused core and CLI regressions cover recursive whistle projection and checked residual
+source validity. This is a post-95 incremental improvement; complete Turchin configuration driving,
+termination, generalized residual graph compilation, and self-hosting remain open.
+
 ### Bounded semantic cleaning for driven residual graphs (2026-08-18)
 
 Added `semantic_clean_driven_graph`, which closes a driven residual graph over user-function calls found
