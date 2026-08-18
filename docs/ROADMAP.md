@@ -215,8 +215,11 @@ through the bootstrap runtime in end-to-end CLI regressions, including branch-se
 of a preserved sentence and a condition-bearing body, and malformed input is rejected. The `refal differential` command now lowers, formats, reparses, checks, and executes Core
 Refal against original checked execution across the entire currently runnable positive runtime-
 conformance corpus covering recursion, conditions, arithmetic, structural operations, metacode, and
-the Refal-authored body compiler; negative cases, non-runnable sources, complete whole-corpus
-differential coverage, and byte-identical compiler-output proof remain open.
+the Refal-authored body compiler. The CLI suite now traces every current negative fixture and
+intentionally non-runnable runtime fixture by expected failure mode, and proves byte-identical
+lowering after reparse/check across the valid runtime and Refal-authored compiler corpus. Complete
+whole-corpus semantic differential coverage, complete Turchin graph residualization, and
+Rust-to-Refal self-hosting remain open.
 The `refal residualize-graph` command provides a checked structural graph-to-Core-Refal projection
 for reachable functions, preserving supported terms, conditions, and sentence-ending blocks. The `refal residualize-driven` command additionally runs bounded symbolic driving, retains visited and
 whistle-triggering configurations, projects deterministic `GeneralizedResidualState` records with

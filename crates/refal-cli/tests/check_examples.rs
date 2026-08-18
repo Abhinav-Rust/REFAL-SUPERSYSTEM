@@ -33,6 +33,13 @@ fn differential_file(path: &str, args: &[&str]) -> std::process::Output {
     command.output().expect("run refal binary")
 }
 
+fn lower_file(path: &str) -> std::process::Output {
+    Command::new(refal_bin())
+        .args(["lower", &workspace_path(path)])
+        .output()
+        .expect("run refal binary")
+}
+
 fn graph_file(path: &str) -> std::process::Output {
     Command::new(refal_bin())
         .args(["graph", &workspace_path(path)])
@@ -147,6 +154,49 @@ fn reports_usage_for_missing_input_file() {
         stderr.contains("Usage: refal <command> <file.ref> [args...]"),
         "unexpected stderr:\n{stderr}"
     );
+}
+
+#[test]
+fn rejects_the_traceable_negative_and_non_runnable_corpus() {
+    for path in [
+        "examples/bad-call-in-pattern.ref",
+        "examples/bad-condition-unbound-variable.ref",
+        "examples/bad-duplicate-extern.ref",
+        "examples/bad-duplicate-function.ref",
+        "examples/bad-empty-function.ref",
+        "examples/bad-lowercase-identifier.ref",
+        "examples/bad-malformed-real.ref",
+        "examples/bad-missing-entry.ref",
+        "examples/bad-signed-macrodigit.ref",
+        "examples/bad-unbound-variable.ref",
+        "examples/bad-unresolved-call.ref",
+        "examples/bad-variable-kind-conflict.ref",
+    ] {
+        let output = check_file(path);
+        assert!(
+            !output.status.success(),
+            "{path} should be rejected by check\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            !output.stderr.is_empty(),
+            "{path} should provide a diagnostic"
+        );
+    }
+
+    for path in [
+        "examples/runtime-invalid-numb.ref",
+        "examples/runtime-unimplemented-extern.ref",
+    ] {
+        let output = run_file(path, &[]);
+        assert!(
+            !output.status.success(),
+            "{path} should be non-runnable\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
 }
 
 #[test]
@@ -1513,6 +1563,82 @@ fn runs_runtime_conformance_examples() {
             String::from_utf8_lossy(&output.stderr)
         );
         assert_eq!(String::from_utf8_lossy(&output.stdout), expected_stdout);
+    }
+}
+
+#[test]
+fn proves_byte_identical_lowering_across_the_valid_corpus() {
+    for path in [
+        "examples/hello.ref",
+        "examples/identity.ref",
+        "examples/extern-equivalence.ref",
+        "examples/runtime-condition.ref",
+        "examples/runtime-recursion.ref",
+        "examples/runtime-bracket.ref",
+        "examples/runtime-condition-backtracking.ref",
+        "examples/runtime-symbol-builtins.ref",
+        "examples/runtime-character-codes.ref",
+        "examples/runtime-number-builtins.ref",
+        "examples/runtime-arithmetic.ref",
+        "examples/runtime-numeric-conversion.ref",
+        "examples/runtime-type.ref",
+        "examples/runtime-structural.ref",
+        "examples/runtime-mu.ref",
+        "examples/runtime-metacode.ref",
+        "examples/compiler-refal-subset.ref",
+        "examples/compiler-refal-parser-subset.ref",
+        "examples/compiler-refal-checker-subset.ref",
+        "examples/compiler-refal-fixedpoint-subset.ref",
+        "examples/compiler-refal-literal-subset.ref",
+        "examples/compiler-refal-call-subset.ref",
+        "examples/compiler-refal-call-literal-subset.ref",
+        "examples/compiler-refal-two-literals-subset.ref",
+        "examples/compiler-refal-general-subset.ref",
+        "examples/compiler-refal-sentence-subset.ref",
+        "examples/compiler-refal-body-subset.ref",
+    ] {
+        let first = lower_file(path);
+        assert!(
+            first.status.success(),
+            "{path} should lower\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&first.stdout),
+            String::from_utf8_lossy(&first.stderr)
+        );
+        let first_source = String::from_utf8_lossy(&first.stdout).to_string();
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock is after Unix epoch")
+            .as_nanos();
+        let temporary = env::temp_dir().join(format!(
+            "refal-lowered-corpus-{}-{unique}.ref",
+            process::id()
+        ));
+        fs::write(&temporary, &first_source).expect("write lowered corpus source");
+        let checked = Command::new(refal_bin())
+            .args(["check", &temporary.to_string_lossy()])
+            .output()
+            .expect("check lowered corpus source");
+        assert!(
+            checked.status.success(),
+            "{path} lowered source should check:\n{}",
+            String::from_utf8_lossy(&checked.stderr)
+        );
+        let second = Command::new(refal_bin())
+            .args(["lower", &temporary.to_string_lossy()])
+            .output()
+            .expect("lower lowered corpus source");
+        let _ = fs::remove_file(&temporary);
+        assert!(
+            second.status.success(),
+            "{path} should lower a second time\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&second.stdout),
+            String::from_utf8_lossy(&second.stderr)
+        );
+        assert_eq!(
+            first_source.as_bytes(),
+            second.stdout,
+            "{path} lowering should be byte-identical"
+        );
     }
 }
 

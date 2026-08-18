@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Corpus failure-mode and byte-stability verification (2026-08-18)
+
+The CLI integration suite now traces all current negative fixtures and intentionally non-runnable
+runtime fixtures by expected failure mode. It also lowers, reparses/checks, and lowers again across
+the valid runtime and Refal-authored compiler corpus, requiring byte-identical Core Refal output.
+This is evidence for the remaining differential gate, not a 100% claim: complete semantic
+corpus equivalence, complete Turchin graph compilation, and Rust-to-Refal self-hosting remain open.
+
 ### General symbolic shape matching and conditioned Refal body compilation (2026-08-18)
 
 Symbolic expression variables now match arbitrary positions with deterministic backtracking,
