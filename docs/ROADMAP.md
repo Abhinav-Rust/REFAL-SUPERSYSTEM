@@ -215,7 +215,9 @@ multi-sentence function bodies and condition-bearing sentences. The compiler emi
 multi-function Refal programs with a `Go` wrapper. Generated sources are checked and executed
 through the bootstrap runtime in end-to-end CLI regressions, including branch-selecting execution
 of a preserved sentence, a condition-bearing body, and a nested sentence-ending block on bracketed
-input; malformed input is rejected. The `refal differential` command now lowers, formats, reparses, checks, and executes Core
+input; malformed input is rejected. The body compiler also preserves `$ENTRY` visibility markers on
+exported source definitions, with generated-source checking and execution through the generated
+`Go` wrapper. The `refal differential` command now lowers, formats, reparses, checks, and executes Core
 Refal against original checked execution across the entire currently runnable positive runtime-
 conformance corpus covering recursion, conditions, arithmetic, structural operations, metacode, and
 the Refal-authored body compiler. The CLI suite now traces every current negative fixture and

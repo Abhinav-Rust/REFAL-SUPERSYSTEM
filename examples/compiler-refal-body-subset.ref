@@ -1,17 +1,22 @@
 $EXTERN Prout;
 * Refal-authored compiler slice for complete supported function bodies.
 * Accepted source grammar: one or more definitions of the form
-* Name { body }, separated by one space; body may contain multiple sentences and conditions.
+* [ $ENTRY ] Name { body }, separated by one space; body may contain multiple sentences,
+* conditions, and sentence-ending blocks. `$ENTRY` visibility is preserved in the output.
 $ENTRY Go {
   (e.Source) = <Prout <Compile e.Source>>;
 }
 
 Compile {
+  "$ENTRY " e.Name " { " e.Body " } " e.Rest = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } $ENTRY " e.Name " { " e.Body " } " <Definitions e.Rest>;
+  "$ENTRY " e.Name " { " e.Body " }" = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } $ENTRY " e.Name " { " e.Body " }";
   e.Name " { " e.Body " } " e.Rest = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { " e.Body " } " <Definitions e.Rest>;
   e.Name " { " e.Body " }" = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { " e.Body " }";
 }
 
 Definitions {
+  "$ENTRY " e.Name " { " e.Body " } " e.Rest = "$ENTRY " e.Name " { " e.Body " } " <Definitions e.Rest>;
+  "$ENTRY " e.Name " { " e.Body " }" = "$ENTRY " e.Name " { " e.Body " }";
   e.Name " { " e.Body " } " e.Rest = e.Name " { " e.Body " } " <Definitions e.Rest>;
   e.Name " { " e.Body " }" = e.Name " { " e.Body " }";
 }

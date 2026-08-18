@@ -208,7 +208,9 @@ non-runnable runtime fixture by expected failure mode, and proves byte-identical
 reparse/check across the valid runtime and Refal-authored compiler corpus. Symbolic reports now
 also expose concrete bounded configuration nodes and caller-aware call transitions, with an opt-in
 CLI projection and a recursive `C0 -> C1 -> C1` regression. The Refal-authored body compiler also
-has a nested sentence-ending block generation/check/execution regression. The frontend negative corpus
+has a nested sentence-ending block generation/check/execution regression and now preserves
+`$ENTRY` visibility markers on exported source definitions, with an end-to-end generated-source
+check and runtime execution through the generated `Go` wrapper. The frontend negative corpus
 now has exact parser diagnostics for four delimiter and termination errors, while full reference-clause
 coverage remains open. Symbolic configuration expansion now records condition-result calls under the
 active configuration, resolves their targets, and deduplicates repeated edges deterministically. The

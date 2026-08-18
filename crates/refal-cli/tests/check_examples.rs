@@ -998,6 +998,54 @@ fn executes_refal_authored_body_compiler_with_nested_block_end_to_end() {
 }
 
 #[test]
+fn executes_refal_authored_body_compiler_with_exported_definition_end_to_end() {
+    let output = run_file(
+        "examples/compiler-refal-body-subset.ref",
+        &["$ENTRY Main { e.Input = e.Input; }"],
+    );
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let generated = String::from_utf8_lossy(&output.stdout).to_string();
+    assert_eq!(
+        generated,
+        "$ENTRY Go { e.Input = <Main e.Input>; } $ENTRY Main { e.Input = e.Input; }\n"
+    );
+
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock is after Unix epoch")
+        .as_nanos();
+    let path = env::temp_dir().join(format!(
+        "refal-compiled-exported-body-{}-{unique}.ref",
+        process::id()
+    ));
+    fs::write(&path, generated).expect("write generated exported source");
+    let checked = Command::new(refal_bin())
+        .args(["check", &path.to_string_lossy()])
+        .output()
+        .expect("check generated exported source");
+    assert!(
+        checked.status.success(),
+        "generated exported source should check:\n{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+    let executed = Command::new(refal_bin())
+        .args(["run", &path.to_string_lossy(), "payload"])
+        .output()
+        .expect("run generated exported source");
+    let _ = fs::remove_file(&path);
+    assert!(
+        executed.status.success(),
+        "generated exported source should run:\n{}",
+        String::from_utf8_lossy(&executed.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&executed.stdout), "(payload)\n");
+}
+
+#[test]
 fn executes_refal_authored_compiler_subset_end_to_end() {
     let output = run_file("examples/compiler-refal-subset.ref", &["Widget"]);
     assert!(

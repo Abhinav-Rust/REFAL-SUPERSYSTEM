@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Refal-authored exported-definition preservation (2026-08-18)
+
+The Refal-authored body compiler now accepts and preserves `$ENTRY` visibility markers on source
+function definitions. An end-to-end CLI regression checks the generated multi-entry Refal source
+and executes an exported `Main` function through the generated `Go` wrapper. This extends the
+compiler slice without claiming complete Classic Refal coverage; the audited score remains 95%.
+
 ### Bounded symbolic configuration work-list (2026-08-18)
 
 The symbolic driver now performs a deterministic bounded work-list pass over unresolved
