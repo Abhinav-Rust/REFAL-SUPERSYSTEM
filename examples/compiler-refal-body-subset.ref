@@ -16,6 +16,7 @@ Compile {
 }
 
 Definitions {
+  "; " e.Rest = <Definitions e.Rest>;
   "$ENTRY " e.Name " { " e.Body " } " e.Rest = "$ENTRY " e.Name " { " e.Body " } " <Definitions e.Rest>;
   "$ENTRY " e.Name " { " e.Body " }" = "$ENTRY " e.Name " { " e.Body " }";
   e.Name " { " e.Body " } " e.Rest = e.Name " { " e.Body " } " <Definitions e.Rest>;

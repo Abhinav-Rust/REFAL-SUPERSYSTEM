@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Refal-authored definition-separator preservation (2026-08-18)
+
+The Refal-authored body compiler now accepts optional top-level semicolon separators between
+function definitions. An end-to-end regression checks the generated source and executes the first
+function through the generated `Go` wrapper. This remains bounded compiler evidence; general
+Classic Refal coverage and self-hosting remain open, and the audited score stays at 95%.
+
 ### Refal-authored external-declaration preservation (2026-08-18)
 
 The Refal-authored body compiler now recursively preserves leading `$EXTERN` declarations. An

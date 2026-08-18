@@ -217,7 +217,9 @@ through the bootstrap runtime in end-to-end CLI regressions, including branch-se
 of a preserved sentence, a condition-bearing body, and a nested sentence-ending block on bracketed
 input; malformed input is rejected. The body compiler also preserves `$ENTRY` visibility markers on
 exported source definitions and recursively preserves leading `$EXTERN` declarations, with
-generated-source checking and execution through the generated `Go` wrapper. The `refal differential`
+generated-source checking and execution through the generated `Go` wrapper; optional top-level
+semicolon separators between definitions are covered by the same check-and-run regression. The
+`refal differential`
 command now lowers, formats, reparses, checks, and executes Core
 Refal against original checked execution across the entire currently runnable positive runtime-
 conformance corpus covering recursion, conditions, arithmetic, structural operations, metacode, and
