@@ -187,7 +187,10 @@ three times and verifies successive byte-stable output, including the bounded `C
  `examples/compiler-refal-subset.ref` accepts a character-string
 function name, `examples/compiler-refal-parser-subset.ref` recognizes `Name = Name;`, and
 `examples/compiler-refal-checker-subset.ref` validates two repeated-name definitions while rejecting
-mismatches. The checker subset emits checked `Go` wrappers plus multiple named identity functions.
+mismatches. Literal, forwarding, mixed call/literal, two-literal, and
+`examples/compiler-refal-general-subset.ref` now extend the evidence; the latter recursively parses
+an arbitrary-length supported identity/literal definition sequence and emits checked multi-function
+source. The checker subset emits checked `Go` wrappers plus multiple named identity functions.
 Each stage of the complete compiler must still be written
 in Refal, run on the Phase 1 machine, and differentially tested against the Rust implementation on
 the whole corpus. Written under `--strict`: **the compiler is its own first user.**

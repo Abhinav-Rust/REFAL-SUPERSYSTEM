@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Recursive multi-definition compiler slice (2026-08-18)
+
+Added `examples/compiler-refal-general-subset.ref`, a Refal-authored recursive parser and emitter
+for arbitrary-length sequences of supported `Name = Name;` and `Name = 'literal';` definitions. The
+first definition becomes the generated `Go` dispatch target, remaining definitions are emitted
+recursively, generated source is checked and executed through the bootstrap runtime, and unsupported
+call-form definitions are rejected by an exact CLI regression. This is a post-95 incremental
+improvement; general Classic Refal parsing, complete Core Refal emission, corpus-wide differential
+verification, and full self-hosting remain open.
+
 ### Bounded three-stage fixpoint verification (2026-08-18)
 
 `refal fixpoint` now applies the canonical-output Refal-authored compiler three times and checks

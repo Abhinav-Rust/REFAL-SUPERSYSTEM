@@ -186,15 +186,18 @@ not claim Turchin's semantic graph cleaning.
 
 ## Refal-authored Compiler Slice
 
-Status: **Partial implementation; updated 2026-08-17**. `examples/compiler-refal-subset.ref` is a
+Status: **Partial implementation; updated 2026-08-18**. `examples/compiler-refal-subset.ref` is a
 Refal program that accepts a restricted character-string function name,
 `examples/compiler-refal-parser-subset.ref` recognizes `Name = Name;`, and
 `examples/compiler-refal-checker-subset.ref` validates two repeated-name definitions while rejecting
-a mismatch. The checker subset emits valid Refal programs containing a `Go` wrapper and multiple
-generated identity functions. Generated sources are checked and executed through the bootstrap
-runtime in end-to-end CLI regressions. The `refal fixpoint` command applies a canonical-output
-compiler subset three times and verifies successive byte-stable output, including the bounded
-`C2 ≡ C3` equality. General source lexing/parsing, Core Refal emission, differential compilation of
+a mismatch. Literal, forwarding, mixed call/literal, two-literal, and
+`examples/compiler-refal-general-subset.ref` extend the evidence; the latter recursively parses an
+arbitrary-length sequence of supported `Name = Name;` and `Name = 'literal';` definitions. The
+compiler emits valid multi-function Refal programs with a `Go` wrapper. Generated sources are
+checked and executed through the bootstrap runtime in end-to-end CLI regressions, and unsupported
+call-form definitions are rejected. The `refal fixpoint` command applies a canonical-output compiler
+subset three times and verifies successive byte-stable output, including the bounded `C2 ≡ C3`
+equality. General source lexing/parsing, complete Core Refal emission, differential compilation of
 the corpus, and the full Rust-to-Refal three-stage self-hosting proof remain open.
 
 ## Milestone 6: Production Backend
