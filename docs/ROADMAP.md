@@ -142,9 +142,10 @@ symbolic execution over known prefixes with symbolic expression tails, determini
 reachability/terminal/function/SCC analysis, and conservative pairwise sentence-pattern
 compatibility through `refal overlap` are implemented and tested. A supported-subset symbolic
 residual wrapper and `refal residualize-graph` emit checked Refal source; the latter reconstructs
-reachable multi-function Core Refal from the structurally cleaned seed graph. Complete symbolic
-Turchin driving, semantic graph cleaning, generalisation, whistle termination, and driven graph
-residualisation remain open.
+reachable multi-function Core Refal from the structurally cleaned seed graph. The bounded driven
+path now semantically closes over calls in patterns, conditions, and results, materializes missing
+call edges, and has a condition-call regression. Complete symbolic Turchin configuration driving,
+generalisation, whistle termination, and generalized driven graph residualisation remain open.
 
 Completed so far:
 

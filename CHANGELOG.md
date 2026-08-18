@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Bounded semantic cleaning for driven residual graphs (2026-08-18)
+
+Added `semantic_clean_driven_graph`, which closes a driven residual graph over user-function calls found
+in sentence patterns, condition results/patterns, and sentence results, materializes deterministic call
+edges omitted by the result-only seed graph, and preserves the helper referenced only by a condition-call
+regression. The driven residualizer now uses this bounded semantic closure before emitting checked Core
+Refal. This is a post-95 incremental improvement; full Turchin configuration equivalence, generalized
+residual graph construction, and self-hosting remain open.
+
 ### Driven symbolic residualization with whistle evidence (2026-08-18)
 
 Added `residualize_driven_graph` and the `refal residualize-driven` command. The new path runs the

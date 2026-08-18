@@ -1144,12 +1144,131 @@ pub fn residualize_symbolic(report: &SymbolicDriveReport) -> String {
     )
 }
 
-/// Reconstruct a Core Refal program from a structurally cleaned seed graph.
+/// Semantically clean a driven graph by closing over calls in retained configurations.
 ///
-/// The seed graph retains source sentence terms, so this projection preserves every supported
-/// Core Refal term, condition, and sentence-ending block while dropping functions removed by
-/// structural reachability cleanup. It is intentionally a graph-to-source projection, not yet
-/// Turchin's fully driven or semantically cleaned residual graph.
+/// The structural seed graph historically recorded result calls only. This bounded semantic
+/// projection also inspects patterns, condition results, condition patterns, and sentence
+/// results, closes over every user-function call reachable from the driven seed states, and
+/// materializes deterministic call transitions when the seed graph omitted one. It still works
+/// over source-preserved sentence states; full Turchin configuration equivalence and generalized
+/// graph minimization remain later phases.
+pub fn semantic_clean_driven_graph(
+    graph: &StateGraph,
+    seed_states: &[StateId],
+    seed_functions: &[String],
+) -> StateGraph {
+    let driven_states = seed_states.iter().copied().collect::<HashSet<_>>();
+    let mut driven_functions = seed_functions
+        .iter()
+        .map(|name| name.to_ascii_lowercase())
+        .collect::<HashSet<_>>();
+    for state_id in &driven_states {
+        if let Some(state) = graph.states.get(state_id.0) {
+            driven_functions.insert(state.function.to_ascii_lowercase());
+        }
+    }
+
+    loop {
+        let mut discovered = Vec::new();
+        for state in &graph.states {
+            if !driven_functions.contains(&state.function.to_ascii_lowercase()) {
+                continue;
+            }
+            collect_graph_state_call_names(state, &mut discovered);
+        }
+        let mut changed = false;
+        for name in discovered {
+            changed |= driven_functions.insert(name.to_ascii_lowercase());
+        }
+        if !changed {
+            break;
+        }
+    }
+
+    let retained_ids = graph
+        .states
+        .iter()
+        .filter(|state| {
+            driven_states.contains(&state.id)
+                || driven_functions.contains(&state.function.to_ascii_lowercase())
+        })
+        .map(|state| state.id)
+        .collect::<HashSet<_>>();
+    let first_states = graph
+        .states
+        .iter()
+        .filter(|state| retained_ids.contains(&state.id))
+        .fold(HashMap::new(), |mut first, state| {
+            first
+                .entry(state.function.to_ascii_lowercase())
+                .or_insert(state.id);
+            first
+        });
+    let mut transitions = graph
+        .transitions
+        .iter()
+        .filter(|transition| {
+            retained_ids.contains(&transition.from) && retained_ids.contains(&transition.to)
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    for state in &graph.states {
+        if !retained_ids.contains(&state.id) {
+            continue;
+        }
+        let mut callees = Vec::new();
+        collect_graph_state_call_names(state, &mut callees);
+        for callee in callees {
+            let Some(&to) = first_states.get(&callee.to_ascii_lowercase()) else {
+                continue;
+            };
+            if !transitions.iter().any(|transition| {
+                transition.from == state.id
+                    && transition.to == to
+                    && transition.callee.eq_ignore_ascii_case(&callee)
+            }) {
+                transitions.push(GraphTransition {
+                    from: state.id,
+                    to,
+                    callee,
+                });
+            }
+        }
+    }
+    transitions.sort_by_key(|transition| {
+        (
+            transition.from.0,
+            transition.to.0,
+            transition.callee.to_ascii_lowercase(),
+        )
+    });
+    let driven_graph = StateGraph {
+        entry: graph.entry,
+        states: graph
+            .states
+            .iter()
+            .filter(|state| retained_ids.contains(&state.id))
+            .cloned()
+            .collect(),
+        transitions,
+    };
+    clean_unreachable_states(&driven_graph)
+}
+
+fn collect_graph_state_call_names(state: &GraphState, names: &mut Vec<String>) {
+    collect_call_names(&state.pattern, names);
+    for condition in &state.conditions {
+        collect_call_names(&condition.result, names);
+        collect_call_names(&condition.pattern, names);
+    }
+    collect_call_names(&state.result, names);
+}
+
+/// Reconstruct a Core Refal program from a semantically cleaned driven graph.
+///
+/// The source sentence terms are preserved, while driven states and residual-call-reachable
+/// functions are projected into a checked Core Refal program. This remains bounded and
+/// source-preserving rather than claiming full Turchin graph equivalence.
 pub fn residualize_driven_graph(
     program: &CoreProgram,
     graph: &StateGraph,
@@ -1161,42 +1280,10 @@ pub fn residualize_driven_graph(
         .iter()
         .chain(&report.whistle_states)
         .copied()
-        .collect::<HashSet<_>>();
-    let mut driven_functions = report
-        .visited
-        .iter()
-        .chain(&report.whistle_states)
-        .filter_map(|state_id| graph.states.get(state_id.0))
-        .map(|state| state.function.to_ascii_lowercase())
-        .collect::<HashSet<_>>();
+        .collect::<Vec<_>>();
     let mut residual_calls = Vec::new();
     collect_call_names(&report.residual, &mut residual_calls);
-    driven_functions.extend(
-        residual_calls
-            .into_iter()
-            .map(|name| name.to_ascii_lowercase()),
-    );
-    let driven_graph = StateGraph {
-        entry: graph.entry,
-        states: graph
-            .states
-            .iter()
-            .filter(|state| {
-                driven_states.contains(&state.id)
-                    || driven_functions.contains(&state.function.to_ascii_lowercase())
-            })
-            .cloned()
-            .collect(),
-        transitions: graph
-            .transitions
-            .iter()
-            .filter(|transition| {
-                driven_states.contains(&transition.from) || driven_states.contains(&transition.to)
-            })
-            .cloned()
-            .collect(),
-    };
-    let cleaned = clean_unreachable_states(&driven_graph);
+    let cleaned = semantic_clean_driven_graph(graph, &driven_states, &residual_calls);
     let residual_program = residualize_cleaned_graph(program, &cleaned);
     Ok(DrivenResidualization {
         program: residual_program,
@@ -2220,6 +2307,68 @@ mod tests {
             vec!["Go", "Loop"]
         );
         assert!(format_program(&residual.program).contains("<Loop e.Input>"));
+    }
+
+    #[test]
+    fn semantically_cleans_calls_in_condition_results() {
+        let input = CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind: VariableKind::Expression,
+                name: "Input".to_string(),
+            },
+            span: span(),
+        };
+        let graph = StateGraph {
+            entry: Some(StateId(0)),
+            states: vec![
+                GraphState {
+                    id: StateId(0),
+                    function: "Go".to_string(),
+                    sentence: 0,
+                    pattern: vec![input.clone()],
+                    conditions: vec![CoreCondition {
+                        result: vec![CoreTerm {
+                            kind: CoreTermKind::Call {
+                                name: "Helper".to_string(),
+                                args: vec![input.clone()],
+                            },
+                            span: span(),
+                        }],
+                        pattern: vec![input.clone()],
+                        span: span(),
+                    }],
+                    result: vec![input.clone()],
+                    span: span(),
+                },
+                GraphState {
+                    id: StateId(1),
+                    function: "Helper".to_string(),
+                    sentence: 0,
+                    pattern: vec![input.clone()],
+                    conditions: vec![],
+                    result: vec![input],
+                    span: span(),
+                },
+            ],
+            transitions: vec![],
+        };
+        let cleaned = semantic_clean_driven_graph(&graph, &[StateId(0)], &[]);
+        assert_eq!(
+            cleaned
+                .states
+                .iter()
+                .map(|state| state.function.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Go", "Helper"]
+        );
+        assert_eq!(
+            cleaned.transitions,
+            vec![GraphTransition {
+                from: StateId(0),
+                to: StateId(1),
+                callee: "Helper".to_string(),
+            }]
+        );
     }
 
     #[test]
