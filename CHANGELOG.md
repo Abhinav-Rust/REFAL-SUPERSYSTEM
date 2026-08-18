@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Refal-authored external-declaration preservation (2026-08-18)
+
+The Refal-authored body compiler now recursively preserves leading `$EXTERN` declarations. An
+end-to-end CLI regression checks the generated declaration and executes the generated `Go` wrapper
+with the retained external interface. General Classic Refal coverage and self-hosting remain open;
+the audited score stays at 95%.
+
 ### Refal-authored exported-definition preservation (2026-08-18)
 
 The Refal-authored body compiler now accepts and preserves `$ENTRY` visibility markers on source

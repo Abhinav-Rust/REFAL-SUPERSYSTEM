@@ -8,6 +8,7 @@ $ENTRY Go {
 }
 
 Compile {
+  "$EXTERN " e.Names "; " e.Rest = "$EXTERN " e.Names "; " <Compile e.Rest>;
   "$ENTRY " e.Name " { " e.Body " } " e.Rest = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } $ENTRY " e.Name " { " e.Body " } " <Definitions e.Rest>;
   "$ENTRY " e.Name " { " e.Body " }" = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } $ENTRY " e.Name " { " e.Body " }";
   e.Name " { " e.Body " } " e.Rest = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { " e.Body " } " <Definitions e.Rest>;
