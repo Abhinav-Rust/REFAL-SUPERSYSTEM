@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Real-brace sentence-body compiler slice (2026-08-18)
+
+Added `examples/compiler-refal-sentence-subset.ref`, a Refal-authored compiler slice for real
+function-brace definitions with supported raw patterns and results. It emits a checked multi-function
+program containing a call result and literal function, executes the generated program through the
+bootstrap runtime, and rejects malformed sentence input. This is a post-95 incremental improvement;
+general Classic Refal compilation, complete driven residualization, and self-hosting remain open.
+
 ### Cleaned-graph Core Refal emission (2026-08-18)
 
 Added `residualize_cleaned_graph` and the `refal residualize-graph` command. The emitter reconstructs

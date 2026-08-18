@@ -192,16 +192,19 @@ Status: **Partial implementation; updated 2026-08-18**. `examples/compiler-refal
 Refal program that accepts a restricted character-string function name,
 `examples/compiler-refal-parser-subset.ref` recognizes `Name = Name;`, and
 `examples/compiler-refal-checker-subset.ref` validates two repeated-name definitions while rejecting
-a mismatch. Literal, forwarding, mixed call/literal, two-literal, and
-`examples/compiler-refal-general-subset.ref` extend the evidence; the latter recursively parses an
-arbitrary-length sequence of supported `Name = Name;` and `Name = 'literal';` definitions. The compiler emits valid multi-function Refal programs with a `Go` wrapper. Generated sources are
-checked and executed through the bootstrap runtime in end-to-end CLI regressions, and unsupported
-call-form definitions are rejected. The `refal residualize-graph` command provides a checked
-structural graph-to-Core-Refal projection for reachable functions, preserving supported terms,
-conditions, and sentence-ending blocks. The `refal fixpoint` command applies a canonical-output
-compiler subset three times and verifies successive byte-stable output, including the bounded
-`C2 ≡ C3` equality. General source lexing/parsing, driven Core Refal emission, differential
-compilation of the corpus, and the full Rust-to-Refal three-stage self-hosting proof remain open.
+a mismatch. Literal, forwarding, mixed call/literal, two-literal,
+`examples/compiler-refal-general-subset.ref`, and `examples/compiler-refal-sentence-subset.ref`
+extend the evidence; the former recursively parses an arbitrary-length sequence of supported
+`Name = Name;` and `Name = 'literal';` definitions, while the latter parses real-brace definitions
+with supported raw patterns/results, including a call result and literal function. The compiler emits
+valid multi-function Refal programs with a `Go` wrapper. Generated sources are checked and executed
+through the bootstrap runtime in end-to-end CLI regressions, and malformed sentence input is rejected.
+The `refal residualize-graph` command provides a checked structural graph-to-Core-Refal projection
+for reachable functions, preserving supported terms, conditions, and sentence-ending blocks. The
+`refal fixpoint` command applies a canonical-output compiler subset three times and verifies
+successive byte-stable output, including the bounded `C2 ≡ C3` equality. General source
+lexing/parsing, driven Core Refal emission, differential compilation of the corpus, and the full
+Rust-to-Refal three-stage self-hosting proof remain open.
 
 ## Milestone 6: Production Backend
 

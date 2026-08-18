@@ -1,0 +1,19 @@
+$EXTERN Prout;
+* Refal-authored compiler slice for real function-brace definitions.
+* Accepted source grammar: one or more definitions of the form
+* Name { pattern = result; }, separated by one space.
+* The pattern and result are preserved as raw supported Refal text.
+$ENTRY Go {
+  (e.Source) = <Prout <Compile e.Source>>;
+}
+
+Compile {
+  e.Name " { " e.Pattern " = " e.Result "; } " e.Rest = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { " e.Pattern " = " e.Result "; } " <Definitions e.Rest>;
+  e.Name " { " e.Pattern " = " e.Result "; }" = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { " e.Pattern " = " e.Result "; }";
+}
+
+Definitions {
+  e.Name " { " e.Pattern " = " e.Result "; } " e.Rest = e.Name " { " e.Pattern " = " e.Result "; } " <Definitions e.Rest>;
+  e.Name " { " e.Pattern " = " e.Result "; }" = e.Name " { " e.Pattern " = " e.Result "; }";
+}
+
