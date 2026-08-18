@@ -1176,6 +1176,56 @@ fn executes_refal_authored_body_compiler_with_external_declaration_end_to_end() 
 }
 
 #[test]
+fn executes_refal_authored_body_compiler_with_external_declaration_aliases_end_to_end() {
+    for directive in ["$EXTERNAL", "$EXTRN"] {
+        let source = format!("{directive} Prout; Main {{ e.Input = e.Input; }}");
+        let output = run_file("examples/compiler-refal-body-subset.ref", &[&source]);
+        assert!(
+            output.status.success(),
+            "unexpected stderr for {directive}:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let generated = String::from_utf8_lossy(&output.stdout).to_string();
+        assert_eq!(
+            generated,
+            format!(
+                "{directive} Prout; $ENTRY Go {{ e.Input = <Main e.Input>; }} Main {{ e.Input = e.Input; }}\n"
+            )
+        );
+
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock is after Unix epoch")
+            .as_nanos();
+        let path = env::temp_dir().join(format!(
+            "refal-compiled-{directive}-body-{}-{unique}.ref",
+            process::id()
+        ));
+        fs::write(&path, generated).expect("write generated alias source");
+        let checked = Command::new(refal_bin())
+            .args(["check", &path.to_string_lossy()])
+            .output()
+            .expect("check generated alias source");
+        assert!(
+            checked.status.success(),
+            "generated alias source should check for {directive}:\n{}",
+            String::from_utf8_lossy(&checked.stderr)
+        );
+        let executed = Command::new(refal_bin())
+            .args(["run", &path.to_string_lossy(), "payload"])
+            .output()
+            .expect("run generated alias source");
+        let _ = fs::remove_file(&path);
+        assert!(
+            executed.status.success(),
+            "generated alias source should run for {directive}:\n{}",
+            String::from_utf8_lossy(&executed.stderr)
+        );
+        assert_eq!(String::from_utf8_lossy(&executed.stdout), "(payload)\n");
+    }
+}
+
+#[test]
 fn executes_refal_authored_body_compiler_with_definition_separator_end_to_end() {
     let output = run_file(
         "examples/compiler-refal-body-subset.ref",
@@ -1307,7 +1357,7 @@ fn supercompiles_recursive_symbolic_program_with_a_whistle() {
 }
 
 #[test]
-fn supercompiles_a_differing_recursive_input_to_a_whistle_variable() {
+fn supercompiles_a_differing_recursive_input_without_a_whistle() {
     let output = Command::new(refal_bin())
         .args([
             "supercompile",
@@ -1324,7 +1374,29 @@ fn supercompiles_a_differing_recursive_input_to_a_whistle_variable() {
     );
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
-        "states: 2\ntransitions: 2\nsteps: 3\nvisited: S0 -> S1\nwhistles: S1\ngeneralized: S1: e.Whistle\nresidual:\n$ENTRY Go {\n  e.Input = <Loop 'b'>;\n}\n"
+        "states: 2\ntransitions: 2\nsteps: 4\nvisited: S0 -> S1\nwhistles: \ngeneralized: \nresidual:\n$ENTRY Go {\n  e.Input = <Loop 'b'>;\n}\n"
+    );
+}
+
+#[test]
+fn does_not_whistle_on_distinct_inputs_at_one_source_state() {
+    let output = Command::new(refal_bin())
+        .args([
+            "supercompile",
+            &workspace_path("examples/supercompile-generalize.ref"),
+            "--steps",
+            "20",
+        ])
+        .output()
+        .expect("run bounded supercompiler with distinct configurations");
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "states: 2\ntransitions: 2\nsteps: 4\nvisited: S0 -> S1\nwhistles: \ngeneralized: \nresidual:\n$ENTRY Go {\n  e.Input = <Loop 'b'>;\n}\n"
     );
 }
 

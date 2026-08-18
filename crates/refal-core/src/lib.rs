@@ -913,18 +913,32 @@ impl<'a> DriveContext<'a> {
                         self.record_whistle(state.id, &previous_input, input);
                         return Ok(SymbolicInvoke::Residual);
                     }
-                    if self.visited.contains(&state.id) {
-                        if let Some(previous_input) = self
-                            .visited_inputs
-                            .iter()
-                            .find(|(visited_state, _)| *visited_state == state.id)
-                            .map(|(_, previous_input)| previous_input.clone())
+                    if self
+                        .visited_inputs
+                        .iter()
+                        .any(|(visited_state, previous_input)| {
+                            *visited_state == state.id && previous_input.as_slice() == input
+                        })
+                    {
+                        // An exact symbolic configuration closes a recursive cycle and retains
+                        // the established whistle evidence. Exact ground repeats, however, are
+                        // already concrete residual calls and do not justify generalisation.
+                        if input.iter().any(contains_symbolic_variable)
+                            && let Some(previous_input) = self
+                                .visited_inputs
+                                .iter()
+                                .find(|(visited_state, previous_input)| {
+                                    *visited_state == state.id && previous_input.as_slice() == input
+                                })
+                                .map(|(_, previous_input)| previous_input.clone())
                         {
                             self.record_whistle(state.id, &previous_input, input);
                         }
                         return Ok(SymbolicInvoke::Residual);
                     }
-                    self.visited.push(state.id);
+                    if !self.visited.contains(&state.id) {
+                        self.visited.push(state.id);
+                    }
                     self.visited_inputs.push((state.id, input.to_vec()));
                     let previous_configuration = self.active_configuration;
                     self.active_configuration = Some(configuration_id);
@@ -3550,6 +3564,74 @@ mod tests {
         let generated_source = format_program(&generalized.program);
         assert!(generated_source.contains("<ResidualS1 e.Input>"));
         assert!(generated_source.contains("ResidualS1 {"));
+    }
+
+    #[test]
+    fn drives_distinct_inputs_at_one_state_without_a_false_whistle() {
+        let input = CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind: VariableKind::Expression,
+                name: "Input".to_string(),
+            },
+            span: span(),
+        };
+        let program = CoreProgram {
+            declarations: vec![],
+            functions: vec![
+                CoreFunction {
+                    name: "Go".to_string(),
+                    visibility: Visibility::Entry,
+                    sentences: vec![CoreSentence {
+                        pattern: vec![input.clone()],
+                        conditions: vec![],
+                        result: vec![CoreTerm {
+                            kind: CoreTermKind::Call {
+                                name: "Loop".to_string(),
+                                args: vec![CoreTerm {
+                                    kind: CoreTermKind::Char('a'),
+                                    span: span(),
+                                }],
+                            },
+                            span: span(),
+                        }],
+                        span: span(),
+                    }],
+                    span: span(),
+                },
+                CoreFunction {
+                    name: "Loop".to_string(),
+                    visibility: Visibility::Local,
+                    sentences: vec![CoreSentence {
+                        pattern: vec![input.clone()],
+                        conditions: vec![],
+                        result: vec![CoreTerm {
+                            kind: CoreTermKind::Call {
+                                name: "Loop".to_string(),
+                                args: vec![CoreTerm {
+                                    kind: CoreTermKind::Char('b'),
+                                    span: span(),
+                                }],
+                            },
+                            span: span(),
+                        }],
+                        span: span(),
+                    }],
+                    span: span(),
+                },
+            ],
+        };
+        let graph = build_seed_graph(&program);
+        let report = drive_symbolic_with_input(&graph, vec![input], 10).expect("drive");
+
+        assert!(report.whistle_events.is_empty());
+        assert_eq!(
+            report
+                .configurations
+                .iter()
+                .filter(|configuration| configuration.state == StateId(1))
+                .count(),
+            2
+        );
     }
 
     #[test]

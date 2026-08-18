@@ -9,6 +9,8 @@ $ENTRY Go {
 
 Compile {
   "$EXTERN " e.Names "; " e.Rest = "$EXTERN " e.Names "; " <Compile e.Rest>;
+  "$EXTERNAL " e.Names "; " e.Rest = "$EXTERNAL " e.Names "; " <Compile e.Rest>;
+  "$EXTRN " e.Names "; " e.Rest = "$EXTRN " e.Names "; " <Compile e.Rest>;
   "$ENTRY " e.Name " {" " " e.After = <CompileEntry e.Name <StartBody e.After>>;
   "$ENTRY " e.Name "{" e.After = <CompileEntryC e.Name <StartBody e.After>>;
   e.Name " {" " " e.After = <CompileLocal e.Name <StartBody e.After>>;
