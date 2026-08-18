@@ -207,6 +207,38 @@ fn rejects_the_traceable_negative_and_non_runnable_corpus() {
             "examples/bad-variable-kind-conflict.ref",
             "variable `X` is already bound as `s.X`",
         ),
+        (
+            "examples/bad-unterminated-block-comment.ref",
+            "unterminated block comment",
+        ),
+        (
+            "examples/bad-empty-character-literal.ref",
+            "empty character literal",
+        ),
+        (
+            "examples/bad-missing-variable-name.ref",
+            "variable `s.` is missing a name",
+        ),
+        (
+            "examples/bad-unsupported-directive.ref",
+            "unsupported directive `$IMPORT`",
+        ),
+        (
+            "examples/bad-unclosed-structural-bracket.ref",
+            "expected term, found Semicolon",
+        ),
+        (
+            "examples/bad-extern-missing-semicolon.ref",
+            "expected Semicolon, found Entry",
+        ),
+        (
+            "examples/bad-malformed-exponent.ref",
+            "real number requires digits after exponent marker",
+        ),
+        (
+            "examples/bad-top-level-sentence.ref",
+            "expected function name, found Equals",
+        ),
     ] {
         let output = check_file(path);
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -1377,6 +1409,14 @@ fn rejects_negative_examples() {
         "examples/bad-missing-colon.ref",
         "examples/bad-unclosed-call.ref",
         "examples/bad-unclosed-block.ref",
+        "examples/bad-unterminated-block-comment.ref",
+        "examples/bad-empty-character-literal.ref",
+        "examples/bad-missing-variable-name.ref",
+        "examples/bad-unsupported-directive.ref",
+        "examples/bad-unclosed-structural-bracket.ref",
+        "examples/bad-extern-missing-semicolon.ref",
+        "examples/bad-malformed-exponent.ref",
+        "examples/bad-top-level-sentence.ref",
         "examples/runtime-unimplemented-extern.ref",
     ] {
         let output = check_file(path);
@@ -1408,6 +1448,18 @@ fn reports_traceable_parser_diagnostics_for_malformed_grammar() {
         (
             "examples/bad-unclosed-block.ref",
             "parse error at 4:1: expected Semicolon, found Eof",
+        ),
+        (
+            "examples/bad-unclosed-structural-bracket.ref",
+            "parse error at 3:1: expected term, found Semicolon",
+        ),
+        (
+            "examples/bad-extern-missing-semicolon.ref",
+            "parse error at 2:1: expected Semicolon, found Entry",
+        ),
+        (
+            "examples/bad-top-level-sentence.ref",
+            "parse error at 1:2: expected function name, found Equals",
         ),
     ];
 

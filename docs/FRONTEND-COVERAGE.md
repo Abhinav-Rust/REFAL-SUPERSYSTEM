@@ -66,7 +66,7 @@ extensions must not silently enter the Classic Refal-5 frontend.
 | Sentence-ending blocks `, arg : { block }` | Complete | Recursive AST/parser/semantic/runtime/core implementation with nested-block, scope, fallthrough, CLI, and round-trip tests |
 | Calls prohibited in patterns | Complete | Semantic checker and CLI golden tests reject calls in patterns |
 | Optional semicolons between top-level definitions | Complete | Parser test covers separated definitions |
-| Full malformed-program golden suite | Partial | Negative fixtures now additionally cover missing sentence equals, missing condition colon, unclosed calls, and unclosed sentence-ending blocks with exact parser diagnostics and locations. The complete reference-clause-by-clause corpus remains outstanding |
+| Full malformed-program golden suite | Partial | The negative corpus now covers twelve distinct lexer/parser failure classes, including unterminated comments, empty literals, missing variable names, unsupported directives, malformed exponents, delimiter failures, and invalid top-level items; parser cases assert exact diagnostics and locations. A complete reference-clause-by-clause corpus remains outstanding |
 
 ## Milestone 2 Exit Criteria
 
@@ -74,8 +74,7 @@ extensions must not silently enter the Classic Refal-5 frontend.
 
 - [ ] Every row above is `Complete` — not met; the traceable corpus and remaining reference
       coverage are still outstanding.
-- [ ] Positive and negative golden fixtures cover every lexical and grammar category in
-      scope, each traceable to the clause of the reference it exercises.
+- [ ] Positive and negative golden fixtures cover every lexical and grammar category in scope, each traceable to the clause of the reference it exercises; the current twelve-case malformed corpus is broad but not yet clause-complete.
 - [x] `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` and
       `git diff --check` pass before each push.
 - [ ] The README and roadmap may report Milestone 2 as Complete only once the rows above

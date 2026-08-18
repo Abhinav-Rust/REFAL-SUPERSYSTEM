@@ -229,6 +229,111 @@ fn contains_expression_variable(term: &CoreTerm) -> bool {
     }
 }
 
+/// Return whether `previous` homeomorphically embeds `current` for the bounded whistle detector.
+///
+/// The relation is deliberately conservative. Expressions embed by subsequence, compound terms
+/// embed through an equal constructor with recursively embedded children, and a term may dive into
+/// a nested constructor. Refal variables are treated as embeddings of any term; this is the useful
+/// approximation for a symbolic configuration whose known shape is later enlarged.
+fn sequence_homeomorphic_embeds(previous: &[CoreTerm], current: &[CoreTerm]) -> bool {
+    let mut current_index = 0;
+    for previous_term in previous {
+        let Some(relative_index) = current[current_index..]
+            .iter()
+            .position(|current_term| term_homeomorphic_embeds(previous_term, current_term))
+        else {
+            return false;
+        };
+        current_index += relative_index + 1;
+    }
+    true
+}
+
+fn term_homeomorphic_embeds(previous: &CoreTerm, current: &CoreTerm) -> bool {
+    if matches!(previous.kind, CoreTermKind::Variable { .. }) {
+        return true;
+    }
+
+    let same_constructor = match (&previous.kind, &current.kind) {
+        (CoreTermKind::Char(left), CoreTermKind::Char(right)) => left == right,
+        (CoreTermKind::Identifier(left), CoreTermKind::Identifier(right)) => {
+            left.eq_ignore_ascii_case(right)
+        }
+        (CoreTermKind::Number(left), CoreTermKind::Number(right)) => left == right,
+        (CoreTermKind::Bracket(left), CoreTermKind::Bracket(right)) => {
+            sequence_homeomorphic_embeds(left, right)
+        }
+        (
+            CoreTermKind::Call {
+                name: left_name,
+                args: left_args,
+            },
+            CoreTermKind::Call {
+                name: right_name,
+                args: right_args,
+            },
+        ) => {
+            left_name.eq_ignore_ascii_case(right_name)
+                && sequence_homeomorphic_embeds(left_args, right_args)
+        }
+        (
+            CoreTermKind::Block {
+                argument: left_argument,
+                ..
+            },
+            CoreTermKind::Block {
+                argument: right_argument,
+                ..
+            },
+        ) => sequence_homeomorphic_embeds(left_argument, right_argument),
+        _ => false,
+    };
+    if same_constructor {
+        return true;
+    }
+
+    match &current.kind {
+        CoreTermKind::Bracket(inner) => inner
+            .iter()
+            .any(|child| term_homeomorphic_embeds(previous, child)),
+        CoreTermKind::Call { args, .. } => args
+            .iter()
+            .any(|child| term_homeomorphic_embeds(previous, child)),
+        CoreTermKind::Block {
+            argument,
+            sentences,
+        } => {
+            argument
+                .iter()
+                .any(|child| term_homeomorphic_embeds(previous, child))
+                || sentences.iter().any(|sentence| {
+                    sentence
+                        .pattern
+                        .iter()
+                        .any(|child| term_homeomorphic_embeds(previous, child))
+                        || sentence.conditions.iter().any(|condition| {
+                            condition
+                                .result
+                                .iter()
+                                .any(|child| term_homeomorphic_embeds(previous, child))
+                                || condition
+                                    .pattern
+                                    .iter()
+                                    .any(|child| term_homeomorphic_embeds(previous, child))
+                        })
+                        || sentence
+                            .result
+                            .iter()
+                            .any(|child| term_homeomorphic_embeds(previous, child))
+                })
+        }
+        CoreTermKind::Char(_)
+        | CoreTermKind::Identifier(_)
+        | CoreTermKind::Number(_)
+        | CoreTermKind::Variable { .. } => false,
+    }
+}
+
 /// Analyze structural graph properties that are useful before symbolic driving.
 ///
 /// This is a bounded Tier 1 pass: it reports deterministic reachability, terminal states,
@@ -689,6 +794,36 @@ impl<'a> DriveContext<'a> {
         }
     }
 
+    fn record_whistle(
+        &mut self,
+        state: StateId,
+        previous_input: &[CoreTerm],
+        repeated_input: &[CoreTerm],
+    ) {
+        if !self.whistle_states.contains(&state) {
+            self.whistle_states.push(state);
+        }
+        if !self
+            .whistle_inputs
+            .iter()
+            .any(|(whistle_state, _)| *whistle_state == state)
+        {
+            self.whistle_inputs.push((state, repeated_input.to_vec()));
+        }
+        if !self.whistle_events.iter().any(|event| {
+            event.state == state
+                && event.previous_input == previous_input
+                && event.repeated_input == repeated_input
+        }) {
+            self.whistle_events.push(WhistleEvent {
+                state,
+                previous_input: previous_input.to_vec(),
+                repeated_input: repeated_input.to_vec(),
+                generalized_input: generalize_term_sequence(previous_input, repeated_input),
+            });
+        }
+    }
+
     fn invoke(&mut self, function: &str, input: &[CoreTerm]) -> Result<Vec<CoreTerm>, DriveError> {
         if self.steps >= self.max_steps {
             return Err(DriveError::StepLimit {
@@ -765,32 +900,27 @@ impl<'a> DriveContext<'a> {
                         }
                         SymbolicMatch::Yes => {}
                     }
+                    if let Some(previous_input) = self
+                        .visited_inputs
+                        .iter()
+                        .find(|(visited_state, previous_input)| {
+                            *visited_state == state.id
+                                && previous_input.as_slice() != input
+                                && sequence_homeomorphic_embeds(previous_input, input)
+                        })
+                        .map(|(_, previous_input)| previous_input.clone())
+                    {
+                        self.record_whistle(state.id, &previous_input, input);
+                        return Ok(SymbolicInvoke::Residual);
+                    }
                     if self.visited.contains(&state.id) {
-                        if !self.whistle_states.contains(&state.id) {
-                            self.whistle_states.push(state.id);
-                        }
-                        if !self
-                            .whistle_inputs
+                        if let Some(previous_input) = self
+                            .visited_inputs
                             .iter()
-                            .any(|(whistle_state, _)| *whistle_state == state.id)
+                            .find(|(visited_state, _)| *visited_state == state.id)
+                            .map(|(_, previous_input)| previous_input.clone())
                         {
-                            self.whistle_inputs.push((state.id, input.to_vec()));
-                        }
-                        if !self
-                            .whistle_events
-                            .iter()
-                            .any(|event| event.state == state.id)
-                            && let Some((_, previous_input)) = self
-                                .visited_inputs
-                                .iter()
-                                .find(|(visited_state, _)| *visited_state == state.id)
-                        {
-                            self.whistle_events.push(WhistleEvent {
-                                state: state.id,
-                                previous_input: previous_input.clone(),
-                                repeated_input: input.to_vec(),
-                                generalized_input: generalize_term_sequence(previous_input, input),
-                            });
+                            self.record_whistle(state.id, &previous_input, input);
                         }
                         return Ok(SymbolicInvoke::Residual);
                     }
@@ -3157,6 +3287,96 @@ mod tests {
             format_term_sequence(&generalized[0].generalized_input),
             "e.Input"
         );
+    }
+
+    #[test]
+    fn whistles_on_a_homeomorphically_embedded_growing_expression() {
+        let expression = CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind: VariableKind::Expression,
+                name: "Input".to_string(),
+            },
+            span: span(),
+        };
+        let graph = StateGraph {
+            entry: Some(StateId(0)),
+            states: vec![GraphState {
+                id: StateId(0),
+                function: "Loop".to_string(),
+                sentence: 0,
+                pattern: vec![expression.clone()],
+                conditions: Vec::new(),
+                result: vec![CoreTerm {
+                    kind: CoreTermKind::Call {
+                        name: "Loop".to_string(),
+                        args: vec![
+                            expression.clone(),
+                            CoreTerm {
+                                kind: CoreTermKind::Char('a'),
+                                span: span(),
+                            },
+                        ],
+                    },
+                    span: span(),
+                }],
+                span: span(),
+            }],
+            transitions: vec![GraphTransition {
+                from: StateId(0),
+                to: StateId(0),
+                callee: "Loop".to_string(),
+            }],
+        };
+        let report = drive_symbolic_with_input(&graph, vec![expression], 10).expect("drive");
+        assert_eq!(report.steps, 2);
+        assert_eq!(report.whistle_states, vec![StateId(0)]);
+        assert_eq!(report.whistle_events.len(), 1);
+        assert_eq!(
+            format_term_sequence(&report.whistle_events[0].previous_input),
+            "e.Input"
+        );
+        assert_eq!(
+            format_term_sequence(&report.whistle_events[0].repeated_input),
+            "e.Input 'a'"
+        );
+        assert_eq!(
+            format_term_sequence(&report.whistle_events[0].generalized_input),
+            "e.Whistle"
+        );
+        assert_eq!(format_term_sequence(&report.residual), "<Loop e.Input 'a'>");
+    }
+
+    #[test]
+    fn homeomorphic_embedding_supports_subsequences_and_nested_terms() {
+        let term = |character| CoreTerm {
+            kind: CoreTermKind::Char(character),
+            span: span(),
+        };
+        let a = term('a');
+        let b = term('b');
+        let c = term('c');
+        assert!(sequence_homeomorphic_embeds(
+            std::slice::from_ref(&a),
+            &[b.clone(), a.clone(), c.clone()]
+        ));
+        assert!(sequence_homeomorphic_embeds(
+            &[a.clone(), c.clone()],
+            &[a.clone(), b.clone(), c.clone()]
+        ));
+        assert!(term_homeomorphic_embeds(
+            &a,
+            &CoreTerm {
+                kind: CoreTermKind::Bracket(vec![b.clone(), a.clone()]),
+                span: span(),
+            }
+        ));
+        assert!(!term_homeomorphic_embeds(
+            &a,
+            &CoreTerm {
+                kind: CoreTermKind::Bracket(vec![b, c]),
+                span: span(),
+            }
+        ));
     }
 
     #[test]

@@ -156,7 +156,9 @@ conditions, results, and nested blocks. Symbolic shape matching now backtracks e
 at arbitrary positions, recurses into brackets, and preserves repeated-variable consistency; nested
 block uncertainty detection includes condition terms. Complete symbolic Turchin configuration
 driving, generalisation termination, and whole-corpus generalized driven graph residualisation
-remain open. Symbolic reports now expose bounded configuration nodes and caller-aware transitions,
+remain open. The symbolic whistle now applies conservative homeomorphic embedding over expression
+subsequences and nested Core constructors before exact-repeat detection, with deduplicated whistle
+records and Core regressions for growth, subsequences, and nested-term diving. Symbolic reports now expose bounded configuration nodes and caller-aware transitions,
 including resolved recursive whistle edges through `refal drive-symbolic --configurations`; this is
 an explicit graph slice, not a claim of complete Turchin semantic cleaning.
 
@@ -225,10 +227,10 @@ Refal against original checked execution across the entire currently runnable po
 conformance corpus covering recursion, conditions, arithmetic, structural operations, metacode, and
 the Refal-authored body compiler. The CLI suite now traces every current negative fixture and
 intentionally non-runnable runtime fixture by expected failure mode, and proves byte-identical
-lowering after reparse/check across the valid runtime and Refal-authored compiler corpus. The
-frontend corpus additionally asserts exact parser diagnostics for missing sentence equals, missing
-condition colons, unclosed calls, and unclosed sentence-ending blocks; the full reference-clause
-malformed corpus remains partial. Complete whole-corpus semantic differential coverage, complete
+lowering after reparse/check across the valid runtime and Refal-authored compiler corpus. The frontend corpus now covers twelve lexer/parser failure classes, including unterminated comments,
+empty literals, missing variable names, unsupported directives, malformed exponents, invalid
+top-level items, and delimiter failures; parser cases assert exact diagnostics and locations. The
+full reference-clause malformed corpus remains partial. Complete whole-corpus semantic differential coverage, complete
 Turchin graph residualization, and Rust-to-Refal self-hosting remain open.
 The `refal drive-symbolic --configurations` command provides a checked bounded configuration
 projection with concrete nodes and resolved call edges. Calls made while evaluating condition

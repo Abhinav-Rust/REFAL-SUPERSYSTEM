@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Homeomorphic-embedding whistle and expanded frontend corpus (2026-08-18)
+
+The symbolic driver now detects conservative homeomorphic embedding across expression subsequences
+and nested Core constructors before falling back to exact repeated-configuration detection. Whistle
+recording is deduplicated, and Core regressions cover growing expression inputs, subsequence embedding,
+and nested-term diving. The malformed Classic Refal corpus gains eight additional lexer/parser
+fixtures, expanding it to twelve failure classes with focused CLI assertions and exact parser locations
+for delimiter errors. Complete Turchin configuration driving, clause-complete frontend coverage,
+general Refal-authored compilation, and the Rust-to-Refal self-hosting proof remain open; the audited
+score stays at 95%.
+
 ### Refal-authored definition-separator preservation (2026-08-18)
 
 The Refal-authored body compiler now accepts optional top-level semicolon separators between
@@ -41,9 +52,10 @@ audited score remains 95%.
 
 ### Traceable malformed-grammar frontend corpus (2026-08-18)
 
-Added four malformed Classic Refal fixtures with exact parser diagnostics and source locations for
-missing sentence equals, missing condition colons, unclosed calls, and unclosed sentence-ending
-blocks. They are included in the negative corpus and covered by a dedicated CLI regression. The
+Added eight further malformed Classic Refal fixtures, expanding the negative corpus to twelve
+failure classes. The CLI suite now covers unterminated comments, empty character literals, missing
+variable names, unsupported directives, malformed exponents, invalid top-level items, and additional
+delimiter/termination errors; parser cases retain exact diagnostics and source locations. The
 broader reference-clause-by-clause malformed corpus remains partial; the audited score remains 95%.
 
 ### Nested-block Refal-authored body compiler evidence (2026-08-18)
