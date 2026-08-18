@@ -82,6 +82,7 @@ fn main() {
         "residualize" => residualize_program(&program, &input_args),
         "residualize-graph" => residualize_graph_program(&program, &input_args),
         "residualize-driven" => residualize_driven_program(&program, &input_args),
+        "residualize-generalized" => residualize_generalized_program(&program, &input_args),
         "supercompile" => supercompile_program(&program, &input_args),
         "fixpoint" => fixpoint_program(&program, &input_args),
         "differential" => differential_program(&program, &input_args),
@@ -110,6 +111,7 @@ fn print_usage() {
     eprintln!("  residualize  Emit Refal for the supported symbolic residual subset [--steps N]");
     eprintln!("  residualize-graph  Emit structurally cleaned reachable Core Refal");
     eprintln!("  residualize-driven  Emit driven Core Refal with whistle evidence [--steps N]");
+    eprintln!("  residualize-generalized  Emit explicit generalized residual graph [--steps N]");
     eprintln!("  supercompile  Analyze, symbolically drive, whistle, and residualize [--steps N]");
     eprintln!("  fixpoint   Apply a source-to-source compiler twice and check byte stability");
     eprintln!("  differential  Compare original and lowered-source runtime outputs");
@@ -398,6 +400,51 @@ fn residualize_driven_program(program: &refal_ast::Program, args: &[String]) {
         .collect::<Vec<_>>()
         .join(", ");
     println!("generalized-states: {generalized_states}");
+    print!("{}", refal_core::format_program(&residual.program));
+}
+
+fn residualize_generalized_program(program: &refal_ast::Program, args: &[String]) {
+    let max_steps = match args {
+        [] => 10_000,
+        [flag, limit] if flag == "--steps" => match limit.parse::<usize>() {
+            Ok(limit) => limit,
+            Err(_) => {
+                eprintln!("Usage: refal residualize-generalized <file.ref> [--steps N]");
+                process::exit(2);
+            }
+        },
+        _ => {
+            eprintln!("Usage: refal residualize-generalized <file.ref> [--steps N]");
+            process::exit(2);
+        }
+    };
+    let core = refal_core::lower_program(program);
+    let graph = refal_core::clean_unreachable_states(&refal_core::build_seed_graph(&core));
+    let residual =
+        match refal_core::residualize_driven_with_generalization(&core, &graph, max_steps) {
+            Ok(residual) => residual,
+            Err(error) => {
+                eprintln!("generalized residualization error: {error}");
+                process::exit(1);
+            }
+        };
+    let generalized_graph = residual
+        .generalized_graph
+        .as_ref()
+        .expect("generalized API returns a graph");
+    let generated = residual
+        .generalized_states
+        .iter()
+        .map(|state| format!("ResidualS{}", state.state.0))
+        .collect::<Vec<_>>()
+        .join(", ");
+    println!("steps: {}", residual.report.steps);
+    println!("generalized-functions: {generated}");
+    println!(
+        "generalized-graph: states {} transitions {}",
+        generalized_graph.states.len(),
+        generalized_graph.transitions.len()
+    );
     print!("{}", refal_core::format_program(&residual.program));
 }
 

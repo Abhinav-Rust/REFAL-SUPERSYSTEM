@@ -158,8 +158,8 @@ Turchin Ch. 3–4. Replaces `refal-core`.
 
 - **2a** Driving — bounded ground execution, deterministic structural graph infrastructure, shape-aware symbolic execution for known prefixes with symbolic tails, and a deterministic Tier 1 graph-analysis report are implemented; complete Turchin configuration driving and graph construction (§4.2) remain open.
 - **2b** Function-aware structural reachability cleanup is implemented; semantic clean graphs (§4.3) and compilation strategy (§4.4) remain open.
-- **2c** SCC detection is implemented as graph infrastructure; the bounded symbolic driver now records repeated configurations, whistle events, and conservative generalized inputs. Driven residualization projects each whistle into an explicit deterministic generalized residual state carrying the whistle state, previous/repeated inputs, and computed LGG input. Full Turchin generalisation and whistle termination (§4.6; 1988 *Algorithm of Generalization*; 2013 Nepeivoda *On Turchin's Theorem*) remain open.
-- **2d** Residualisation — a supported-subset symbolic residual wrapper now emits checked Refal source; `residualize_cleaned_graph` / `refal residualize-graph` reconstruct a checked multi-function program from the structurally cleaned seed graph; and `residualize_driven_graph` / `refal residualize-driven` retain visited and whistle-triggering configurations, close over calls found in patterns, conditions, and results, materialize deterministic missing call edges, project explicit generalized residual states, and emit checked recursive Core Refal with deterministic metadata. Complete driven configuration → Refal residualisation with generalized residual graph construction and full Turchin equivalence remains open. **This is the bounded "emits Refal" deliverable.**
+- **2c** SCC detection is implemented as graph infrastructure; the bounded symbolic driver now records repeated configurations, whistle events, and conservative generalized inputs. Driven residualization projects each whistle into an explicit deterministic generalized residual state carrying the whistle state, previous/repeated inputs, and computed LGG input. The new generalized path constructs a bounded graph transition surface: each LGG becomes a generated residual function, the symbolic entry is redirected to it, and semantic cleaning materializes generated-to-source call transitions. Full Turchin generalisation, whistle termination, and complete configuration coverage (§4.6; 1988 *Algorithm of Generalization*; 2013 Nepeivoda *On Turchin's Theorem*) remain open.
+- **2d** Residualisation — a supported-subset symbolic residual wrapper now emits checked Refal source; `residualize_cleaned_graph` / `refal residualize-graph` reconstruct a checked multi-function program from the structurally cleaned seed graph; `residualize_driven_graph` / `refal residualize-driven` retain visited and whistle-triggering configurations, close over calls found in patterns, conditions, and results, materialize deterministic missing call edges, project explicit generalized residual states, and emit checked recursive Core Refal with deterministic metadata; and `residualize_driven_with_generalization` / `refal residualize-generalized` emit bounded `ResidualS<N>` functions plus explicit graph transitions. Complete driven configuration → Refal residualisation with generalized graph equivalence remains open. **This is the bounded "emits Refal" deliverable.**
 
 **Gate:** for every corpus program, symbolic `drive → clean → generalise → residualise → run` agrees with the Phase 1 interpreter on all test inputs. The current bounded ground driver is an intermediate regression surface, not this gate.
 
@@ -195,9 +195,11 @@ the whole corpus. The `refal differential` command now lowers, formats, reparses
 executes Core Refal against original checked execution across the entire currently runnable positive
 runtime-conformance corpus, covering recursion, conditions, arithmetic, structural operations,
 metacode, and the Refal-authored body compiler. `refal residualize-driven` additionally exercises
-bounded symbolic driving and emits checked recursive residual source with whistle metadata; negative
-cases, non-runnable sources, complete whole-corpus differential coverage, complete Turchin graph
-residualization, and byte-identical compiler-output proof remain open. Written under `--strict`:
+bounded symbolic driving and emits checked recursive residual source with whistle metadata, while
+`refal residualize-generalized` emits a bounded explicit generalized residual graph with generated
+`ResidualS<N>` functions and checked source. Negative cases, non-runnable sources, complete
+whole-corpus differential coverage, complete Turchin graph residualization, and byte-identical
+compiler-output proof remain open. Written under `--strict`:
 **the compiler is its own first user.**
 
 `lexer.ref` → `parser.ref` → `checker.ref` → `driver.ref` (driving + graph) → `emit.ref`

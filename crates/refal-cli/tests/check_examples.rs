@@ -68,6 +68,13 @@ fn residualize_driven_file(path: &str, args: &[&str]) -> std::process::Output {
     command.output().expect("run refal binary")
 }
 
+fn residualize_generalized_file(path: &str, args: &[&str]) -> std::process::Output {
+    let mut command = Command::new(refal_bin());
+    command.args(["residualize-generalized", &workspace_path(path)]);
+    command.args(args);
+    command.output().expect("run refal binary")
+}
+
 fn drive_file(path: &str, args: &[&str]) -> std::process::Output {
     let mut command = Command::new(refal_bin());
     command.args(["drive", &workspace_path(path)]);
@@ -244,6 +251,47 @@ fn emits_driven_recursive_residual_with_whistle_evidence() {
         String::from_utf8_lossy(&check.stderr)
     );
     assert!(source.contains("<Loop e.Input>"));
+}
+
+#[test]
+fn emits_an_explicit_generalized_residual_graph() {
+    let output = residualize_generalized_file("examples/supercompile-loop.ref", &["--steps", "20"]);
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let generated = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        generated.contains("steps: 3"),
+        "unexpected output:\n{generated}"
+    );
+    assert!(
+        generated.contains("generalized-functions: ResidualS1"),
+        "unexpected output:\n{generated}"
+    );
+    assert!(
+        generated.contains("generalized-graph: states 3 transitions 4"),
+        "unexpected output:\n{generated}"
+    );
+    assert!(
+        generated.contains("<ResidualS1 e.Input>"),
+        "entry should call the generated residual function:\n{generated}"
+    );
+    assert!(
+        generated.contains("ResidualS1 {\n  e.Input = <Loop e.Input>;"),
+        "generated function should resume the whistled configuration:\n{generated}"
+    );
+    let source = generated
+        .split_once("$ENTRY")
+        .map(|(_, source)| format!("$ENTRY{source}"))
+        .expect("emitted source marker");
+    let check = check_source(&source);
+    assert!(
+        check.status.success(),
+        "generalized residual should check:\n{}",
+        String::from_utf8_lossy(&check.stderr)
+    );
 }
 
 #[test]

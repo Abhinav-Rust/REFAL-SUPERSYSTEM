@@ -147,7 +147,10 @@ path now semantically closes over calls in patterns, conditions, and results, ma
 call edges, and has a condition-call regression. Driven residualization now projects each whistle
 into an explicit deterministic generalized residual state carrying the whistle state, previous and
 repeated inputs, and the computed LGG input; focused core and CLI regressions cover this metadata.
-Complete symbolic Turchin configuration driving, generalisation, whistle termination, and generalized
+The new generalized API and `refal residualize-generalized` command turn each bounded LGG record
+into a generated `ResidualS<N>` function, redirect the symbolic entry call, and materialize explicit
+generated-to-source graph transitions; the emitted source is checked by a CLI regression. Complete
+symbolic Turchin configuration driving, generalisation termination, and whole-corpus generalized
 driven graph residualisation remain open.
 
 Completed so far:
@@ -210,17 +213,18 @@ conformance corpus covering recursion, conditions, arithmetic, structural operat
 the Refal-authored body compiler; negative cases, non-runnable sources, complete whole-corpus
 differential coverage, and byte-identical compiler-output proof remain open.
 The `refal residualize-graph` command provides a checked structural graph-to-Core-Refal projection
-for reachable functions, preserving supported terms, conditions, and sentence-ending blocks. The
-`refal residualize-driven` command additionally runs bounded symbolic driving, retains visited and
+for reachable functions, preserving supported terms, conditions, and sentence-ending blocks. The `refal residualize-driven` command additionally runs bounded symbolic driving, retains visited and
 whistle-triggering configurations, projects deterministic `GeneralizedResidualState` records with
 previous/repeated/LGG inputs, preserves residual-call-reachable functions, and emits checked
-recursive Core Refal with whistle/generalization metadata; a recursive `Loop` regression covers
-whistle detection, explicit generalized-state output, and source validity. The `refal fixpoint` command applies a
-canonical-output compiler subset three times and verifies successive byte-stable output, including
-the bounded `C2 ≡ C3` equality. General source lexing/parsing, complete Turchin configuration
-driving and semantic cleaning, complete generalized driven Core Refal emission, complete differential
-compilation of all positive and negative corpus programs, and the full Rust-to-Refal three-stage
-self-hosting proof remain open.
+recursive Core Refal with whistle/generalization metadata; `refal residualize-generalized` adds a
+bounded explicit graph projection with generated `ResidualS<N>` functions, entry redirection, and
+source-to-generated transitions. Core and CLI regressions cover whistle detection, explicit
+transitions, generated source validity, and deterministic graph counts. The `refal fixpoint` command
+applies a canonical-output compiler subset three times and verifies successive byte-stable output,
+including the bounded `C2 ≡ C3` equality. General source lexing/parsing, complete Turchin
+configuration driving and semantic cleaning, complete generalized driven Core Refal emission,
+complete differential compilation of all positive and negative corpus programs, and the full
+Rust-to-Refal three-stage self-hosting proof remain open.
 
 ## Milestone 6: Production Backend
 

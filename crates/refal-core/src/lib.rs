@@ -384,6 +384,9 @@ pub struct DrivenResidualization {
     pub program: CoreProgram,
     pub report: SymbolicDriveReport,
     pub generalized_states: Vec<GeneralizedResidualState>,
+    /// The explicit bounded generalized configuration graph, when requested by the generalized
+    /// residualization API. The legacy API leaves this absent and preserves its source graph.
+    pub generalized_graph: Option<StateGraph>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1319,11 +1322,155 @@ pub fn residualize_driven_graph(
         program: residual_program,
         report,
         generalized_states,
+        generalized_graph: None,
     })
+}
+
+/// Build a bounded generalized configuration graph from whistle/LGG evidence and emit it as
+/// checked Core Refal.
+///
+/// Each whistle event becomes a deterministic residual function whose pattern is the event's
+/// least-general-generalization input and whose body resumes the whistled source function. The
+/// residual call at the symbolic entry is redirected to that generated function, and semantic
+/// cleaning then materializes transitions from the generated configuration to every called
+/// source configuration. This is an explicit, executable Turchin-style transition surface; it
+/// remains bounded by the supplied symbolic-drive step limit and does not claim whole-program
+/// completeness yet.
+pub fn residualize_driven_with_generalization(
+    program: &CoreProgram,
+    graph: &StateGraph,
+    max_steps: usize,
+) -> Result<DrivenResidualization, DriveError> {
+    let report = drive_symbolic(graph, max_steps)?;
+    let driven_states = report
+        .visited
+        .iter()
+        .chain(&report.whistle_states)
+        .copied()
+        .collect::<Vec<_>>();
+    let mut residual_calls = Vec::new();
+    collect_call_names(&report.residual, &mut residual_calls);
+    let cleaned = semantic_clean_driven_graph(graph, &driven_states, &residual_calls);
+    let generalized_states = generalized_residual_states(&report);
+    let generalized_graph =
+        build_generalized_residual_graph(&cleaned, &report, &generalized_states);
+    let residual_program = residualize_cleaned_graph(program, &generalized_graph);
+    Ok(DrivenResidualization {
+        program: residual_program,
+        report,
+        generalized_states,
+        generalized_graph: Some(generalized_graph),
+    })
+}
+
+fn build_generalized_residual_graph(
+    graph: &StateGraph,
+    report: &SymbolicDriveReport,
+    generalized_states: &[GeneralizedResidualState],
+) -> StateGraph {
+    let mut states = graph.states.clone();
+    let mut generated_names = HashMap::new();
+    for generalized in generalized_states {
+        let Some(source) = graph.states.get(generalized.state.0) else {
+            continue;
+        };
+        let function = generalized_function_name(generalized.state);
+        generated_names.insert(source.function.to_ascii_lowercase(), function.clone());
+        states.push(GraphState {
+            id: StateId(states.len()),
+            function,
+            sentence: 0,
+            pattern: generalized.generalized_input.clone(),
+            conditions: Vec::new(),
+            result: vec![CoreTerm {
+                kind: CoreTermKind::Call {
+                    name: source.function.clone(),
+                    args: generalized.generalized_input.clone(),
+                },
+                span: source.span,
+            }],
+            span: source.span,
+        });
+    }
+
+    let mut generalized_graph = StateGraph {
+        entry: graph.entry,
+        states,
+        transitions: graph.transitions.clone(),
+    };
+    if let Some(entry) = generalized_graph.entry
+        && let Some(state) = generalized_graph.states.get_mut(entry.0)
+    {
+        state.result = rewrite_residual_calls(&report.residual, &generated_names);
+    }
+    let mut seed_states = generalized_graph
+        .states
+        .iter()
+        .filter(|state| generated_names.values().any(|name| name == &state.function))
+        .map(|state| state.id)
+        .collect::<Vec<_>>();
+    seed_states.extend(
+        generalized_graph.entry.into_iter().chain(
+            generalized_graph
+                .transitions
+                .iter()
+                .map(|transition| transition.to),
+        ),
+    );
+    let seed_functions = generated_names.values().cloned().collect::<Vec<_>>();
+    semantic_clean_driven_graph(&generalized_graph, &seed_states, &seed_functions)
+}
+
+fn generalized_function_name(state: StateId) -> String {
+    format!("ResidualS{}", state.0)
+}
+
+fn rewrite_residual_calls(
+    terms: &[CoreTerm],
+    generated_names: &HashMap<String, String>,
+) -> Vec<CoreTerm> {
+    terms
+        .iter()
+        .map(|term| {
+            let kind = match &term.kind {
+                CoreTermKind::Call { name, args } => CoreTermKind::Call {
+                    name: generated_names
+                        .get(&name.to_ascii_lowercase())
+                        .cloned()
+                        .unwrap_or_else(|| name.clone()),
+                    args: rewrite_residual_calls(args, generated_names),
+                },
+                CoreTermKind::Bracket(inner) => {
+                    CoreTermKind::Bracket(rewrite_residual_calls(inner, generated_names))
+                }
+                CoreTermKind::Block {
+                    argument,
+                    sentences,
+                } => CoreTermKind::Block {
+                    argument: rewrite_residual_calls(argument, generated_names),
+                    sentences: sentences
+                        .iter()
+                        .map(|sentence| CoreSentence {
+                            pattern: sentence.pattern.clone(),
+                            conditions: sentence.conditions.clone(),
+                            result: rewrite_residual_calls(&sentence.result, generated_names),
+                            span: sentence.span,
+                        })
+                        .collect(),
+                },
+                _ => term.kind.clone(),
+            };
+            CoreTerm {
+                kind,
+                span: term.span,
+            }
+        })
+        .collect()
 }
 
 pub fn residualize_cleaned_graph(program: &CoreProgram, graph: &StateGraph) -> CoreProgram {
     let mut functions = Vec::new();
+    let mut emitted_names = HashSet::new();
     for function in &program.functions {
         let mut sentences = graph
             .states
@@ -1340,11 +1487,48 @@ pub fn residualize_cleaned_graph(program: &CoreProgram, graph: &StateGraph) -> C
             continue;
         }
         sentences.sort_by_key(|sentence| sentence.span.start);
+        emitted_names.insert(function.name.to_ascii_lowercase());
         functions.push(CoreFunction {
             name: function.name.clone(),
             visibility: function.visibility,
             sentences,
             span: function.span,
+        });
+    }
+    let mut generated = graph
+        .states
+        .iter()
+        .filter(|state| !emitted_names.contains(&state.function.to_ascii_lowercase()))
+        .fold(
+            HashMap::<String, Vec<&GraphState>>::new(),
+            |mut grouped, state| {
+                grouped
+                    .entry(state.function.to_ascii_lowercase())
+                    .or_default()
+                    .push(state);
+                grouped
+            },
+        )
+        .into_values()
+        .collect::<Vec<_>>();
+    generated.sort_by_key(|states| states[0].id.0);
+    for states in generated {
+        let first = states[0];
+        let mut sentences = states
+            .into_iter()
+            .map(|state| CoreSentence {
+                pattern: state.pattern.clone(),
+                conditions: state.conditions.clone(),
+                result: state.result.clone(),
+                span: state.span,
+            })
+            .collect::<Vec<_>>();
+        sentences.sort_by_key(|sentence| sentence.span.start);
+        functions.push(CoreFunction {
+            name: first.function.clone(),
+            visibility: Visibility::Local,
+            sentences,
+            span: first.span,
         });
     }
     CoreProgram {
@@ -2353,6 +2537,45 @@ mod tests {
             vec!["Go", "Loop"]
         );
         assert!(format_program(&residual.program).contains("<Loop e.Input>"));
+
+        let generalized =
+            residualize_driven_with_generalization(&program, &graph, 10).expect("generalize");
+        let generalized_graph = generalized
+            .generalized_graph
+            .as_ref()
+            .expect("explicit generalized graph");
+        let generated = generalized
+            .program
+            .functions
+            .iter()
+            .find(|function| function.name == "ResidualS1")
+            .expect("generated residual function");
+        assert_eq!(
+            format_term_sequence(&generated.sentences[0].pattern),
+            "e.Input"
+        );
+        assert_eq!(
+            format_term_sequence(&generated.sentences[0].result),
+            "<Loop e.Input>"
+        );
+        let entry = generalized_graph.entry.expect("generalized entry");
+        let generated_state = generalized_graph
+            .states
+            .iter()
+            .find(|state| state.function == "ResidualS1")
+            .expect("generated graph state");
+        assert!(generalized_graph.transitions.iter().any(|transition| {
+            transition.from == generated_state.id
+                && transition.callee == "Loop"
+                && generalized_graph
+                    .states
+                    .get(transition.to.0)
+                    .is_some_and(|state| state.function == "Loop")
+        }));
+        assert_eq!(generalized_graph.states[entry.0].function, "Go");
+        let generated_source = format_program(&generalized.program);
+        assert!(generated_source.contains("<ResidualS1 e.Input>"));
+        assert!(generated_source.contains("ResidualS1 {"));
     }
 
     #[test]

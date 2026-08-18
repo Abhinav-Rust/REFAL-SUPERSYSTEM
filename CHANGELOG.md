@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Explicit generalized residual graph transitions (2026-08-18)
+
+Added `residualize_driven_with_generalization` and `refal residualize-generalized`. Each bounded
+whistle/LGG record now becomes a generated `ResidualS<N>` configuration function; the symbolic
+entry call is redirected to that function, semantic cleaning materializes generated-to-source call
+transitions, and `residualize_cleaned_graph` emits the generated function as checked Core Refal.
+Focused core and CLI regressions verify deterministic graph counts, generated-function reachability,
+and emitted-source validity. This is a post-95 incremental improvement; complete Turchin
+configuration driving, generalisation termination, whole-corpus differential compilation, and
+self-hosting remain open.
+
 ### Explicit generalized residual states for driven whistles (2026-08-18)
 
 Added the `GeneralizedResidualState` projection to driven residualization. Each deterministic whistle
