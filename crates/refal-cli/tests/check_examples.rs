@@ -1951,6 +1951,27 @@ fn runs_runtime_conformance_examples() {
 }
 
 #[test]
+fn verifies_manifest_driven_whole_corpus_differential_modes() {
+    let output = Command::new(refal_bin())
+        .args([
+            "differential",
+            &workspace_path("examples/differential-corpus.manifest"),
+            "--corpus",
+        ])
+        .output()
+        .expect("run manifest-driven differential corpus");
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "differential-corpus: equal\ncases: 12\npositive: 5\ncheck-failure: 6\nruntime-failure: 1\n"
+    );
+}
+
+#[test]
 fn proves_byte_identical_lowering_across_the_valid_corpus() {
     for path in [
         "examples/hello.ref",

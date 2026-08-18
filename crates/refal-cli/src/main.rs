@@ -1,4 +1,4 @@
-use std::{env, fs, process};
+use std::{env, fs, path::Path, process};
 
 use refal_ast::Span as AstSpan;
 use refal_runtime::{Evaluator, Value};
@@ -23,6 +23,11 @@ fn main() {
         process::exit(2);
     };
     let input_args: Vec<String> = args.collect();
+
+    if command == "differential" && input_args.first().is_some_and(|flag| flag == "--corpus") {
+        differential_corpus(&path);
+        return;
+    }
 
     let source = match fs::read_to_string(&path) {
         Ok(source) => source,
@@ -116,7 +121,7 @@ fn print_usage() {
     eprintln!("  residualize-generalized  Emit explicit generalized residual graph [--steps N]");
     eprintln!("  supercompile  Analyze, symbolically drive, whistle, and residualize [--steps N]");
     eprintln!("  fixpoint   Apply a source-to-source compiler twice and check byte stability");
-    eprintln!("  differential  Compare original and lowered-source runtime outputs");
+    eprintln!("  differential  Compare original and lowered-source runtime outputs [--corpus]");
     eprintln!("  run        Run a Refal source file with the bootstrap interpreter");
 }
 
@@ -633,6 +638,141 @@ fn execute_program(
         outputs.push(render_values(&result));
     }
     Ok(outputs)
+}
+
+fn differential_corpus(manifest_path: &str) {
+    let manifest = match fs::read_to_string(manifest_path) {
+        Ok(manifest) => manifest,
+        Err(error) => {
+            eprintln!("failed to read differential corpus {manifest_path}: {error}");
+            process::exit(1);
+        }
+    };
+    let base = Path::new(manifest_path)
+        .parent()
+        .unwrap_or_else(|| Path::new("."));
+    let mut cases = 0usize;
+    let mut positive = 0usize;
+    let mut check_failures = 0usize;
+    let mut runtime_failures = 0usize;
+
+    for (line_index, line) in manifest.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let fields = line.splitn(3, '|').map(str::trim).collect::<Vec<_>>();
+        if fields.len() != 3 || fields[1].is_empty() {
+            eprintln!(
+                "invalid differential corpus row {}: expected mode|source|args",
+                line_index + 1
+            );
+            process::exit(2);
+        }
+        let mode = fields[0];
+        let source_path = base.join(fields[1]);
+        let source = match fs::read_to_string(&source_path) {
+            Ok(source) => source,
+            Err(error) => {
+                eprintln!(
+                    "failed to read differential corpus source {}: {error}",
+                    source_path.display()
+                );
+                process::exit(1);
+            }
+        };
+        let arguments = if fields[2].is_empty() {
+            Vec::new()
+        } else {
+            fields[2].split_whitespace().map(str::to_string).collect()
+        };
+        let result = match mode {
+            "positive" => {
+                positive += 1;
+                differential_case(&source, &arguments)
+            }
+            "check-failure" => {
+                check_failures += 1;
+                if parse_checked_source(&source).is_err() {
+                    Ok(())
+                } else {
+                    Err("source unexpectedly passed checking".to_string())
+                }
+            }
+            "runtime-failure" => {
+                runtime_failures += 1;
+                runtime_failure_case(&source, &arguments)
+            }
+            other => Err(format!("unknown differential corpus mode `{other}`")),
+        };
+        if let Err(error) = result {
+            eprintln!(
+                "differential corpus mismatch at row {} ({}): {}",
+                line_index + 1,
+                source_path.display(),
+                error
+            );
+            process::exit(1);
+        }
+        cases += 1;
+    }
+
+    println!("differential-corpus: equal");
+    println!("cases: {cases}");
+    println!("positive: {positive}");
+    println!("check-failure: {check_failures}");
+    println!("runtime-failure: {runtime_failures}");
+}
+
+fn differential_case(source: &str, input_args: &[String]) -> Result<(), String> {
+    let original = parse_checked_source(source)?;
+    let lowered_source = refal_core::format_program(&refal_core::lower_program(&original));
+    let lowered = parse_checked_source(&lowered_source)?;
+    let original_output = execute_program(&original, input_args)?;
+    let lowered_output = execute_program(&lowered, input_args)?;
+    if original_output == lowered_output {
+        Ok(())
+    } else {
+        Err(format!(
+            "output mismatch: original {:?}, lowered {:?}",
+            original_output, lowered_output
+        ))
+    }
+}
+
+fn runtime_failure_case(source: &str, input_args: &[String]) -> Result<(), String> {
+    let original = parse_checked_source(source)?;
+    let lowered_source = refal_core::format_program(&refal_core::lower_program(&original));
+    let lowered = parse_checked_source(&lowered_source)?;
+    let original_error = execute_program(&original, input_args)
+        .err()
+        .ok_or_else(|| "original program unexpectedly ran successfully".to_string())?;
+    let lowered_error = execute_program(&lowered, input_args)
+        .err()
+        .ok_or_else(|| "lowered program unexpectedly ran successfully".to_string())?;
+    let original_class = runtime_failure_class(&original_error);
+    let lowered_class = runtime_failure_class(&lowered_error);
+    if original_class == lowered_class {
+        Ok(())
+    } else {
+        Err(format!(
+            "failure-class mismatch: original {original_class} ({original_error}), lowered {lowered_class} ({lowered_error})"
+        ))
+    }
+}
+
+fn runtime_failure_class(error: &str) -> &'static str {
+    if error.starts_with("external function") {
+        "external-function"
+    } else if error.starts_with("invalid arguments for builtin ") {
+        "invalid-builtin-arguments"
+    } else if error.starts_with("no matching sentence") {
+        "no-matching-sentence"
+    } else if error.starts_with("function not found") {
+        "function-not-found"
+    } else {
+        "other-runtime-error"
+    }
 }
 
 fn run_program(program: &refal_ast::Program, input_args: &[String]) {

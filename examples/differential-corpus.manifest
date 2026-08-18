@@ -1,0 +1,13 @@
+# mode|source file relative to this manifest|space-separated runtime arguments
+positive|hello.ref|
+positive|runtime-structural.ref|cli-argument
+positive|runtime-recursion.ref|
+positive|runtime-condition.ref|
+positive|runtime-metacode.ref|
+check-failure|bad-missing-equals.ref|
+check-failure|bad-missing-colon.ref|
+check-failure|bad-unclosed-call.ref|
+check-failure|bad-unclosed-block.ref|
+check-failure|bad-unsupported-directive.ref|
+runtime-failure|runtime-invalid-numb.ref|
+check-failure|runtime-unimplemented-extern.ref|

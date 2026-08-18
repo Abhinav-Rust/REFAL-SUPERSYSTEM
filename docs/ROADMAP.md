@@ -227,7 +227,9 @@ The `refal differential`
 command now lowers, formats, reparses, checks, and executes Core
 Refal against original checked execution across the entire currently runnable positive runtime-
 conformance corpus covering recursion, conditions, arithmetic, structural operations, metacode, and
-the Refal-authored body compiler. The CLI suite now traces every current negative fixture and
+the Refal-authored body compiler. `refal differential --corpus` additionally reads the committed
+12-row manifest and verifies runnable output equality, check-time rejection, and runtime failure-class
+equivalence. The CLI suite now traces every current negative fixture and
 intentionally non-runnable runtime fixture by expected failure mode, and proves byte-identical
 lowering after reparse/check across the valid runtime and Refal-authored compiler corpus. The frontend corpus now covers twelve lexer/parser failure classes, including unterminated comments,
 empty literals, missing variable names, unsupported directives, malformed exponents, invalid

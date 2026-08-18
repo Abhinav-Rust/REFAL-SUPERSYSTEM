@@ -194,7 +194,9 @@ in Refal, run on the Phase 1 machine, and differentially tested against the Rust
 the whole corpus. The `refal differential` command now lowers, formats, reparses, checks, and
 executes Core Refal against original checked execution across the entire currently runnable positive
 runtime-conformance corpus, covering recursion, conditions, arithmetic, structural operations,
-metacode, and the Refal-authored body compiler. `refal residualize-driven` additionally exercises
+metacode, and the Refal-authored body compiler. `refal differential --corpus` additionally reads
+`examples/differential-corpus.manifest` and verifies 12 explicit rows across runnable equality,
+check-time failure, and runtime failure-class equivalence. `refal residualize-driven` additionally exercises
 bounded symbolic driving and emits checked recursive residual source with whistle metadata, while
 `refal residualize-generalized` emits a bounded explicit generalized residual graph with generated
 `ResidualS<N>` functions and checked source. Core ground and symbolic driving now evaluates ordered
@@ -265,8 +267,8 @@ milestones an audit then found to be Partial.
 bootstrap-runtime, deterministic graph infrastructure, bounded concrete driving,
 shape-aware symbolic driving, supported-subset Refal residualization, cleaned-graph Core Refal emission, restricted compiler-in-Refal emission/parsing/checking, bounded compiler fixpoint verification, and conformance work.
 Complete Turchin graph driving, graph residualisation, the general Refal compiler, and the three-stage
-self-hosting proof remain unimplemented; the new compact-source and all-term emission tests strengthen
-bounded evidence but do not change the weighted score.
+self-hosting proof remain unimplemented; the new compact-source, all-term emission, and manifest-driven failure-mode differential tests
+strengthen bounded evidence but do not change the weighted score.
 
 | Workstream | Weight | Now | After P1 | After P3 | After P5 |
 |---|---:|---:|---:|---:|---:|

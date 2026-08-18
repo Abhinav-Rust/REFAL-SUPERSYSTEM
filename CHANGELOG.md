@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Manifest-driven differential corpus verification (2026-08-18)
+
+The CLI now supports `refal differential <manifest> --corpus`. The committed
+`examples/differential-corpus.manifest` exercises 12 rows across runnable original/lowered output
+equality, check-time failures, and deterministic runtime failure classes; a CLI integration test
+asserts the category counts. This closes only the command-level corpus evidence surface: complete
+Refal-authored compiler coverage, full Turchin residualization, and Rust-to-Refal self-hosting remain
+open, so the audited score stays at 95%.
+
 ### Compact Refal definitions and complete supported-term emission evidence (2026-08-18)
 
 The Refal-authored body compiler now accepts compact brace definitions and explicit top-level
