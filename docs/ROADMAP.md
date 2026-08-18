@@ -201,15 +201,16 @@ multi-sentence function bodies. The compiler emits valid multi-function Refal pr
 wrapper. Generated sources are checked and executed through the bootstrap runtime in end-to-end CLI
 regressions, including branch-selecting execution of a preserved sentence, and malformed input is
 rejected. The `refal differential` command now lowers, formats, reparses, checks, and executes Core
-Refal against original checked execution across a representative supported corpus covering recursion,
-conditions, arithmetic, structural operations, metacode, and the Refal-authored body compiler; complete
-whole-corpus differential coverage remains open.
+Refal against original checked execution across the entire currently runnable positive runtime-
+conformance corpus covering recursion, conditions, arithmetic, structural operations, metacode, and
+the Refal-authored body compiler; negative cases, non-runnable sources, complete whole-corpus
+differential coverage, and byte-identical compiler-output proof remain open.
 The `refal residualize-graph` command provides a checked structural graph-to-Core-Refal projection
 for reachable functions, preserving supported terms, conditions, and sentence-ending blocks. The
 `refal fixpoint` command applies a canonical-output compiler subset three times and verifies
 successive byte-stable output, including the bounded `C2 ≡ C3` equality. General source
-lexing/parsing, driven Core Refal emission, complete differential compilation of the corpus, and the
-full Rust-to-Refal three-stage self-hosting proof remain open.
+lexing/parsing, driven Core Refal emission, complete differential compilation of all positive and
+negative corpus programs, and the full Rust-to-Refal three-stage self-hosting proof remain open.
 
 ## Milestone 6: Production Backend
 

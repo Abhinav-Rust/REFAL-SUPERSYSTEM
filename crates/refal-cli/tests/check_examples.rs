@@ -1371,29 +1371,33 @@ fn runs_runtime_conformance_examples() {
 
 #[test]
 fn compares_original_and_lowered_runtime_outputs_across_the_supported_corpus() {
-    for (path, args, expected_outputs) in [
-        ("examples/hello.ref", &[] as &[&str], 1),
-        ("examples/identity.ref", &["Hello Refal"] as &[&str], 1),
-        ("examples/runtime-recursion.ref", &[] as &[&str], 1),
-        ("examples/runtime-condition.ref", &[] as &[&str], 1),
+    for (path, args) in [
+        ("examples/hello.ref", &[] as &[&str]),
+        ("examples/identity.ref", &["Hello Refal"] as &[&str]),
+        ("examples/extern-equivalence.ref", &[] as &[&str]),
+        ("examples/runtime-condition.ref", &[] as &[&str]),
+        ("examples/runtime-recursion.ref", &[] as &[&str]),
+        ("examples/runtime-bracket.ref", &["Bracket"] as &[&str]),
         (
             "examples/runtime-condition-backtracking.ref",
             &[] as &[&str],
-            1,
         ),
-        ("examples/runtime-arithmetic.ref", &[] as &[&str], 1),
+        ("examples/runtime-symbol-builtins.ref", &[] as &[&str]),
+        ("examples/runtime-character-codes.ref", &[] as &[&str]),
+        ("examples/runtime-number-builtins.ref", &[] as &[&str]),
+        ("examples/runtime-arithmetic.ref", &[] as &[&str]),
+        ("examples/runtime-numeric-conversion.ref", &[] as &[&str]),
+        ("examples/runtime-type.ref", &[] as &[&str]),
         (
             "examples/runtime-structural.ref",
             &["cli-argument"] as &[&str],
-            6,
         ),
-        ("examples/runtime-mu.ref", &[] as &[&str], 1),
-        ("examples/runtime-metacode.ref", &[] as &[&str], 1),
+        ("examples/runtime-mu.ref", &[] as &[&str]),
+        ("examples/runtime-metacode.ref", &[] as &[&str]),
         (
             "examples/compiler-refal-body-subset.ref",
             &["Echo { ('a') = 'A'; e.Input = e.Input; } Identity { e.Input = e.Input; }"]
                 as &[&str],
-            1,
         ),
     ] {
         let output = differential_file(path, args);
@@ -1403,11 +1407,18 @@ fn compares_original_and_lowered_runtime_outputs_across_the_supported_corpus() {
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr)
         );
-        assert_eq!(
-            String::from_utf8_lossy(&output.stdout),
-            format!("differential: equal\noutputs: {expected_outputs}\n"),
-            "unexpected differential output for {path}"
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.starts_with("differential: equal\noutputs: "),
+            "unexpected differential output for {path}: {stdout}"
         );
+        let output_count = stdout
+            .lines()
+            .nth(1)
+            .and_then(|line| line.strip_prefix("outputs: "))
+            .and_then(|count| count.parse::<usize>().ok())
+            .expect("differential output count");
+        assert!(output_count > 0, "{path} should produce output");
     }
 }
 

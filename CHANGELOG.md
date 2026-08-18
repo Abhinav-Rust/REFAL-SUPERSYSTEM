@@ -6,9 +6,11 @@
 
 Added `refal differential`, which lowers a checked program to canonical Core Refal, formats and
 reparses that source, checks it again, then compares original and lowered runtime outputs. An exact
-CLI regression covers recursion, conditions, arithmetic, structural operations, metacode, and the
-Refal-authored multi-sentence compiler slice. Complete differential compilation of the entire corpus
-and byte-identical compiler-output proof remain open; this is a post-95 incremental improvement.
+CLI regression covers the entire currently runnable positive runtime-conformance corpus, including
+recursion, conditions, arithmetic, structural operations, metacode, and the Refal-authored
+multi-sentence compiler slice. Negative cases, non-runnable sources, complete differential compilation
+of the entire corpus, and byte-identical compiler-output proof remain open; this is a post-95
+incremental improvement.
 
 ### Multi-sentence Refal-authored body compiler slice (2026-08-18)
 

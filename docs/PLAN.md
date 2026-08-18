@@ -192,9 +192,10 @@ mismatches. Literal, forwarding, mixed call/literal, two-literal, and
 Each stage of the complete compiler must still be written
 in Refal, run on the Phase 1 machine, and differentially tested against the Rust implementation on
 the whole corpus. The `refal differential` command now lowers, formats, reparses, checks, and
-executes Core Refal against original checked execution across a representative supported corpus
-covering recursion, conditions, arithmetic, structural operations, metacode, and the Refal-authored
-body compiler; complete whole-corpus differential coverage remains open. Written under `--strict`:
+executes Core Refal against original checked execution across the entire currently runnable positive
+runtime-conformance corpus, covering recursion, conditions, arithmetic, structural operations,
+metacode, and the Refal-authored body compiler; negative cases, non-runnable sources, complete
+whole-corpus differential coverage, and byte-identical compiler-output proof remain open. Written under `--strict`:
 **the compiler is its own first user.**
 
 `lexer.ref` → `parser.ref` → `checker.ref` → `driver.ref` (driving + graph) → `emit.ref`
