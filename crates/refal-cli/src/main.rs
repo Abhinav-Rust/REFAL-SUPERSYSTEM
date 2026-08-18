@@ -362,6 +362,17 @@ fn fixpoint_program(program: &refal_ast::Program, args: &[String]) {
         eprintln!("fixpoint mismatch: compiler output changed on the second application");
         process::exit(1);
     }
+    let third = match apply_source_compiler(program, &second) {
+        Ok(output) => output,
+        Err(error) => {
+            eprintln!("fixpoint error on third application: {error}");
+            process::exit(1);
+        }
+    };
+    if second != third {
+        eprintln!("fixpoint mismatch: compiler output changed on the third application");
+        process::exit(1);
+    }
     println!("fixpoint: stable");
     println!("bytes: {}", first.len());
 }

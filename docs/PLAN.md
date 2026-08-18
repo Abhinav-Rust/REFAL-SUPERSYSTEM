@@ -183,7 +183,7 @@ soundness argument plus a differential test against the interpreter.
 ### Phase 4 — The compiler in Refal · effort XL
 A restricted compiler-in-Refal emitter, lexer/parser, and checker subset are now implemented and
 executed through the Phase 1 machine. A bounded fixpoint harness applies a canonical-output subset
-twice and verifies byte-stable output. The compiler slices are:
+three times and verifies successive byte-stable output, including the bounded `C2 ≡ C3` equality. The compiler slices are:
  `examples/compiler-refal-subset.ref` accepts a character-string
 function name, `examples/compiler-refal-parser-subset.ref` recognizes `Name = Name;`, and
 `examples/compiler-refal-checker-subset.ref` validates two repeated-name definitions while rejecting

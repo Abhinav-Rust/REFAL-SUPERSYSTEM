@@ -200,8 +200,8 @@ The guarantee this compiler intends to publish, once Tier 1 lands:
 That figure counts a compiler *written in Refal* that emits Refal and compiles its own
 sources, with the verification tiers above, as 100%. The fifteenth implementation milestone moves the weighted score from 90.0% to 95.0% by adding a
 bounded compiler fixpoint verifier. `refal fixpoint` applies the Refal-authored canonical-output
-compiler in `examples/compiler-refal-fixedpoint-subset.ref` twice to a source file and verifies
-byte-stable output (`fixpoint: stable`, `bytes: 32`). The previous milestone added repeated-name
+compiler in `examples/compiler-refal-fixedpoint-subset.ref` three times to a source file and verifies
+successive byte-stable output, including the bounded `C2 ≡ C3` check (`fixpoint: stable`, `bytes: 32`). The previous milestone added repeated-name
 checking and multi-function source emission. This is a tested subset stability result, not a claim
 of the full three-stage `C2 ≡ C3` self-hosting proof.
 
@@ -257,7 +257,7 @@ completeness.
 | 5 | Graph of states | 🔶 Partial | `refal-core` exposes deterministic sentence states, syntactic call edges, SCC detection, function-aware structural reachability cleanup, bounded ground driving, shape-aware symbolic driving, bounded Tier 1 reachability/terminal/SCC analysis, and a supported-subset Refal residual emitter; complete Turchin driving, semantic cleaning, generalization, and graph residualisation remain open |
 | 6 | Tier 1 analyses | 🔶 Partial | Deterministic structural reachability, terminal-state, function-coverage, and SCC recursion reports plus conservative pairwise sentence-pattern compatibility through `refal overlap`, with core and CLI regressions; semantic subsumption, binding analysis, and Turchin cleaning remain open |
 | 7 | Compiler written in Refal | 🔶 Partial | Refal-authored fixtures now cover restricted identity, forwarding-call, literal, mixed call/literal, repeated-name checker, and two-literal definitions; they generate checked Refal source and execute through the bootstrap runtime. General Refal parsing, complete Core Refal emission, and compiler completeness remain open |
-| 8 | Verified self-hosting | 🔶 Partial | Bounded byte-stable self-application of a canonical-output subset; three-stage fixpoint and `C2 ≡ C3` remain open |
+| 8 | Verified self-hosting | 🔶 Partial | Bounded three-application byte-stable self-application of a canonical-output subset now checks `C2 ≡ C3`; the full three-stage Rust-to-Refal self-hosting proof remains open |
 | 9 | Tier 2 metasystem analysis | ⬜ Research | Post-1.0 |
 
 Native code generation is deliberately **off the critical path**. It is §4.7 of Turchin's
@@ -270,6 +270,7 @@ The full phase plan, gates and completion accounting are in [`docs/PLAN.md`](doc
 
 | Date | Change |
 |---|---|
+| 2026-08-18 | Post-95 incremental improvement: bounded `refal fixpoint` now performs three compiler applications and checks successive stability including `C2 ≡ C3`; exact CLI regression passes, while the full Rust-to-Refal self-hosting proof remains open |
 | 2026-08-18 | Post-95 incremental improvement: conservative pairwise sentence-pattern compatibility analysis, the `refal overlap` command, and exact core/CLI regressions; the 95% score is unchanged because full semantic subsumption and Turchin cleaning remain open |
 | 2026-08-17 | Fifteenth 5-point implementation milestone: bounded `refal fixpoint` verification, byte-stable twice-applied canonical-output compiler subset, exact CLI regression, and synchronized self-hosting documentation; full workspace gates pass |
 | 2026-08-17 | Fourteenth 5-point implementation milestone: a Refal-authored two-definition checker/compiler subset with repeated-name validation, mismatch rejection, checked multi-function source emission, generated-program execution, and an end-to-end CLI regression; full workspace gates pass |

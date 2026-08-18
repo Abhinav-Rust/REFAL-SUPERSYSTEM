@@ -193,9 +193,9 @@ Refal program that accepts a restricted character-string function name,
 a mismatch. The checker subset emits valid Refal programs containing a `Go` wrapper and multiple
 generated identity functions. Generated sources are checked and executed through the bootstrap
 runtime in end-to-end CLI regressions. The `refal fixpoint` command applies a canonical-output
-compiler subset twice and verifies byte-stable output. General source lexing/parsing, Core Refal
-emission, differential compilation of the corpus, and the full three-stage self-hosting proof remain
-open.
+compiler subset three times and verifies successive byte-stable output, including the bounded
+`C2 ≡ C3` equality. General source lexing/parsing, Core Refal emission, differential compilation of
+the corpus, and the full Rust-to-Refal three-stage self-hosting proof remain open.
 
 ## Milestone 6: Production Backend
 

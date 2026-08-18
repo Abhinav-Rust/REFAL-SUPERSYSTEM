@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Bounded three-stage fixpoint verification (2026-08-18)
+
+`refal fixpoint` now applies the canonical-output Refal-authored compiler three times and checks
+both successive equalities, including bounded byte-identical `C2 ≡ C3` evidence. The exact CLI
+regression remains stable. This does not claim the full Rust-to-Refal self-hosting proof, which still
+requires a general compiler and corpus-wide differential verification.
+
 ### Conservative sentence-pattern overlap diagnostic (2026-08-18)
 
 The graph-analysis surface now includes conservative pairwise compatibility classification for
