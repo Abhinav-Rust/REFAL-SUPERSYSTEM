@@ -582,13 +582,10 @@ impl<'a> DriveContext<'a> {
             .iter()
             .filter(|state| state.function.eq_ignore_ascii_case(function))
         {
-            if !state.conditions.is_empty() {
-                return Err(DriveError::Unsupported {
-                    feature: "sentence conditions",
-                });
-            }
             let mut bindings = HashMap::new();
-            if match_ground_pattern(&state.pattern, input, &mut bindings) {
+            if match_ground_pattern(&state.pattern, input, &mut bindings)
+                && self.match_ground_conditions(&state.conditions, &mut bindings)?
+            {
                 self.visited.push(state.id);
                 return self.instantiate(&state.result, &bindings);
             }
@@ -620,16 +617,22 @@ impl<'a> DriveContext<'a> {
             .iter()
             .filter(|state| state.function.eq_ignore_ascii_case(function))
         {
-            if !state.conditions.is_empty() {
-                unknown_before = true;
-                continue;
-            }
             let mut bindings = HashMap::new();
             match match_symbolic_pattern(&state.pattern, input, &mut bindings) {
                 SymbolicMatch::No => {}
                 SymbolicMatch::Unknown => unknown_before = true,
-                SymbolicMatch::Yes if unknown_before => return Ok(SymbolicInvoke::Residual),
                 SymbolicMatch::Yes => {
+                    match self.match_symbolic_conditions(&state.conditions, &mut bindings)? {
+                        SymbolicMatch::No => continue,
+                        SymbolicMatch::Unknown => {
+                            unknown_before = true;
+                            continue;
+                        }
+                        SymbolicMatch::Yes if unknown_before => {
+                            return Ok(SymbolicInvoke::Residual);
+                        }
+                        SymbolicMatch::Yes => {}
+                    }
                     if self.visited.contains(&state.id) {
                         if !self.whistle_states.contains(&state.id) {
                             self.whistle_states.push(state.id);
@@ -662,6 +665,97 @@ impl<'a> DriveContext<'a> {
                     self.visited.push(state.id);
                     self.visited_inputs.push((state.id, input.to_vec()));
                     return self.instantiate_symbolic(&state.result, &bindings);
+                }
+            }
+        }
+        Ok(SymbolicInvoke::Residual)
+    }
+
+    fn match_ground_conditions(
+        &mut self,
+        conditions: &[CoreCondition],
+        bindings: &mut HashMap<String, Vec<CoreTerm>>,
+    ) -> Result<bool, DriveError> {
+        for condition in conditions {
+            let value = self.instantiate(&condition.result, bindings)?;
+            if !match_ground_pattern(&condition.pattern, &value, bindings) {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    fn match_symbolic_conditions(
+        &mut self,
+        conditions: &[CoreCondition],
+        bindings: &mut HashMap<String, Vec<CoreTerm>>,
+    ) -> Result<SymbolicMatch, DriveError> {
+        for condition in conditions {
+            let value = match self.instantiate_symbolic(&condition.result, bindings)? {
+                SymbolicInvoke::Reduced(value) => value,
+                SymbolicInvoke::Residual => return Ok(SymbolicMatch::Unknown),
+            };
+            match match_symbolic_pattern(&condition.pattern, &value, bindings) {
+                SymbolicMatch::Yes => {}
+                SymbolicMatch::No => return Ok(SymbolicMatch::No),
+                SymbolicMatch::Unknown => return Ok(SymbolicMatch::Unknown),
+            }
+        }
+        Ok(SymbolicMatch::Yes)
+    }
+
+    fn instantiate_block(
+        &mut self,
+        argument: &[CoreTerm],
+        sentences: &[CoreSentence],
+        bindings: &HashMap<String, Vec<CoreTerm>>,
+    ) -> Result<Vec<CoreTerm>, DriveError> {
+        let value = self.instantiate(argument, bindings)?;
+        for sentence in sentences {
+            let mut nested_bindings = bindings.clone();
+            if match_ground_pattern(&sentence.pattern, &value, &mut nested_bindings)
+                && self.match_ground_conditions(&sentence.conditions, &mut nested_bindings)?
+            {
+                return self.instantiate(&sentence.result, &nested_bindings);
+            }
+        }
+        Err(DriveError::NoMatchingSentence {
+            function: "<block>".to_string(),
+        })
+    }
+
+    fn instantiate_block_symbolic(
+        &mut self,
+        argument: &[CoreTerm],
+        sentences: &[CoreSentence],
+        bindings: &HashMap<String, Vec<CoreTerm>>,
+    ) -> Result<SymbolicInvoke, DriveError> {
+        let value = match self.instantiate_symbolic(argument, bindings)? {
+            SymbolicInvoke::Reduced(value) => value,
+            SymbolicInvoke::Residual => return Ok(SymbolicInvoke::Residual),
+        };
+        let mut unknown_before = false;
+        for sentence in sentences {
+            let mut nested_bindings = bindings.clone();
+            match match_symbolic_pattern(&sentence.pattern, &value, &mut nested_bindings) {
+                SymbolicMatch::No => {}
+                SymbolicMatch::Unknown => unknown_before = true,
+                SymbolicMatch::Yes => {
+                    match self
+                        .match_symbolic_conditions(&sentence.conditions, &mut nested_bindings)?
+                    {
+                        SymbolicMatch::No => continue,
+                        SymbolicMatch::Unknown => {
+                            unknown_before = true;
+                            continue;
+                        }
+                        SymbolicMatch::Yes if unknown_before => {
+                            return Ok(SymbolicInvoke::Residual);
+                        }
+                        SymbolicMatch::Yes => {
+                            return self.instantiate_symbolic(&sentence.result, &nested_bindings);
+                        }
+                    }
                 }
             }
         }
@@ -709,11 +803,13 @@ impl<'a> DriveContext<'a> {
                         }),
                     }
                 }
-                CoreTermKind::Block { .. } => {
-                    return Err(DriveError::Unsupported {
-                        feature: "sentence-ending blocks",
-                    });
-                }
+                CoreTermKind::Block {
+                    argument,
+                    sentences,
+                } => match self.instantiate_block_symbolic(argument, sentences, bindings)? {
+                    SymbolicInvoke::Reduced(inner) => output.extend(inner),
+                    SymbolicInvoke::Residual => return Ok(SymbolicInvoke::Residual),
+                },
                 CoreTermKind::Char(_) | CoreTermKind::Identifier(_) | CoreTermKind::Number(_) => {
                     output.push(term.clone())
                 }
@@ -748,11 +844,10 @@ impl<'a> DriveContext<'a> {
                     let arguments = self.instantiate(args, bindings)?;
                     output.extend(self.invoke(name, &arguments)?);
                 }
-                CoreTermKind::Block { .. } => {
-                    return Err(DriveError::Unsupported {
-                        feature: "sentence-ending blocks",
-                    });
-                }
+                CoreTermKind::Block {
+                    argument,
+                    sentences,
+                } => output.extend(self.instantiate_block(argument, sentences, bindings)?),
                 CoreTermKind::Char(_) | CoreTermKind::Identifier(_) | CoreTermKind::Number(_) => {
                     output.push(term.clone())
                 }
@@ -994,16 +1089,8 @@ pub fn build_seed_graph(program: &CoreProgram) -> StateGraph {
 
     let mut transitions = Vec::new();
     for state in &states {
-        let Some(function) = program
-            .functions
-            .iter()
-            .find(|function| function.name.eq_ignore_ascii_case(&state.function))
-        else {
-            continue;
-        };
-        let sentence = &function.sentences[state.sentence];
         let mut callees = Vec::new();
-        collect_call_names(&sentence.result, &mut callees);
+        collect_graph_state_call_names(state, &mut callees);
         for callee in callees {
             if let Some(&to) = first_states.get(&callee.to_ascii_uppercase()) {
                 transitions.push(GraphTransition {
@@ -1642,6 +1729,11 @@ fn collect_call_names(terms: &[CoreTerm], names: &mut Vec<String>) {
             } => {
                 collect_call_names(argument, names);
                 for sentence in sentences {
+                    collect_call_names(&sentence.pattern, names);
+                    for condition in &sentence.conditions {
+                        collect_call_names(&condition.result, names);
+                        collect_call_names(&condition.pattern, names);
+                    }
                     collect_call_names(&sentence.result, names);
                 }
             }
@@ -2131,6 +2223,90 @@ mod tests {
     }
 
     #[test]
+    fn seed_graph_collects_calls_from_all_core_term_positions() {
+        let expression = |name: &str| CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind: VariableKind::Expression,
+                name: name.to_string(),
+            },
+            span: span(),
+        };
+        let call = |name: &str| CoreTerm {
+            kind: CoreTermKind::Call {
+                name: name.to_string(),
+                args: vec![],
+            },
+            span: span(),
+        };
+        let program = CoreProgram {
+            declarations: vec![],
+            functions: vec![CoreFunction {
+                name: "Go".to_string(),
+                visibility: Visibility::Entry,
+                sentences: vec![CoreSentence {
+                    pattern: vec![call("PatternFn")],
+                    conditions: vec![CoreCondition {
+                        result: vec![call("ConditionResult")],
+                        pattern: vec![call("ConditionPattern")],
+                        span: span(),
+                    }],
+                    result: vec![CoreTerm {
+                        kind: CoreTermKind::Block {
+                            argument: vec![expression("Input")],
+                            sentences: vec![CoreSentence {
+                                pattern: vec![],
+                                conditions: vec![],
+                                result: vec![call("BlockResult")],
+                                span: span(),
+                            }],
+                        },
+                        span: span(),
+                    }],
+                    span: span(),
+                }],
+                span: span(),
+            }]
+            .into_iter()
+            .chain(
+                [
+                    "PatternFn",
+                    "ConditionResult",
+                    "ConditionPattern",
+                    "BlockResult",
+                ]
+                .map(|name| CoreFunction {
+                    name: name.to_string(),
+                    visibility: Visibility::Local,
+                    sentences: vec![CoreSentence {
+                        pattern: vec![],
+                        conditions: vec![],
+                        result: vec![],
+                        span: span(),
+                    }],
+                    span: span(),
+                }),
+            )
+            .collect(),
+        };
+        let graph = build_seed_graph(&program);
+        let mut callees = graph
+            .transitions
+            .iter()
+            .map(|transition| transition.callee.as_str())
+            .collect::<Vec<_>>();
+        callees.sort_unstable();
+        assert_eq!(
+            callees,
+            vec![
+                "BlockResult",
+                "ConditionPattern",
+                "ConditionResult",
+                "PatternFn",
+            ]
+        );
+    }
+
+    #[test]
     fn detects_recursive_graph_components_deterministically() {
         let graph = StateGraph {
             entry: Some(StateId(0)),
@@ -2410,6 +2586,139 @@ mod tests {
         assert_eq!(report.steps, 2);
         assert_eq!(report.visited, vec![StateId(0), StateId(1)]);
         assert_eq!(report.residual, vec![input[1].clone()]);
+    }
+
+    #[test]
+    fn drives_conditions_and_falls_through_after_condition_failure() {
+        let expression = |name: &str| CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind: VariableKind::Expression,
+                name: name.to_string(),
+            },
+            span: span(),
+        };
+        let character = |value: char| CoreTerm {
+            kind: CoreTermKind::Char(value),
+            span: span(),
+        };
+        let program = CoreProgram {
+            declarations: vec![],
+            functions: vec![
+                CoreFunction {
+                    name: "Go".to_string(),
+                    visibility: Visibility::Entry,
+                    sentences: vec![
+                        CoreSentence {
+                            pattern: vec![expression("Input")],
+                            conditions: vec![CoreCondition {
+                                result: vec![CoreTerm {
+                                    kind: CoreTermKind::Call {
+                                        name: "Check".to_string(),
+                                        args: vec![expression("Input")],
+                                    },
+                                    span: span(),
+                                }],
+                                pattern: vec![character('Y')],
+                                span: span(),
+                            }],
+                            result: vec![character('A')],
+                            span: span(),
+                        },
+                        CoreSentence {
+                            pattern: vec![expression("Input")],
+                            conditions: vec![],
+                            result: vec![character('B')],
+                            span: span(),
+                        },
+                    ],
+                    span: span(),
+                },
+                CoreFunction {
+                    name: "Check".to_string(),
+                    visibility: Visibility::Local,
+                    sentences: vec![CoreSentence {
+                        pattern: vec![expression("Value")],
+                        conditions: vec![],
+                        result: vec![character('Y')],
+                        span: span(),
+                    }],
+                    span: span(),
+                },
+            ],
+        };
+        let graph = build_seed_graph(&program);
+        let input = vec![character('x')];
+        let ground = drive_ground(&graph, &input, 10).expect("ground condition drive");
+        assert_eq!(ground.output, vec![character('A')]);
+        assert_eq!(ground.visited, vec![StateId(2), StateId(0)]);
+
+        let symbolic_input = vec![expression("Unknown")];
+        let symbolic = drive_symbolic_with_input(&graph, symbolic_input, 10)
+            .expect("symbolic condition drive");
+        assert_eq!(symbolic.residual, vec![character('A')]);
+        assert_eq!(symbolic.visited, vec![StateId(2), StateId(0)]);
+    }
+
+    #[test]
+    fn drives_block_endings_and_residualizes_uncertain_blocks() {
+        let expression = |name: &str| CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind: VariableKind::Expression,
+                name: name.to_string(),
+            },
+            span: span(),
+        };
+        let character = |value: char| CoreTerm {
+            kind: CoreTermKind::Char(value),
+            span: span(),
+        };
+        let block = CoreTerm {
+            kind: CoreTermKind::Block {
+                argument: vec![expression("Input")],
+                sentences: vec![
+                    CoreSentence {
+                        pattern: vec![character('x')],
+                        conditions: vec![],
+                        result: vec![character('Y')],
+                        span: span(),
+                    },
+                    CoreSentence {
+                        pattern: vec![expression("Rest")],
+                        conditions: vec![],
+                        result: vec![character('N')],
+                        span: span(),
+                    },
+                ],
+            },
+            span: span(),
+        };
+        let program = CoreProgram {
+            declarations: vec![],
+            functions: vec![CoreFunction {
+                name: "Go".to_string(),
+                visibility: Visibility::Entry,
+                sentences: vec![CoreSentence {
+                    pattern: vec![expression("Input")],
+                    conditions: vec![],
+                    result: vec![block],
+                    span: span(),
+                }],
+                span: span(),
+            }],
+        };
+        let graph = build_seed_graph(&program);
+        let ground = drive_ground(&graph, &[character('x')], 10).expect("ground block drive");
+        assert_eq!(ground.output, vec![character('Y')]);
+
+        let symbolic_input = vec![expression("Unknown")];
+        let symbolic = drive_symbolic_with_input(&graph, symbolic_input.clone(), 10)
+            .expect("symbolic block drive");
+        assert_eq!(symbolic.residual.len(), 1);
+        assert!(matches!(
+            &symbolic.residual[0].kind,
+            CoreTermKind::Call { name, args }
+                if name == "Go" && args == &symbolic_input
+        ));
     }
 
     #[test]

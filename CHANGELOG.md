@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Condition-aware Core driving and complete-term seed transitions (2026-08-18)
+
+Core ground and symbolic driving now evaluates ordered condition chains, executes decidable
+nested block-ending sentences, and preserves uncertain block choices as residual configurations.
+Seed-graph discovery now traverses calls in sentence patterns, condition result/pattern terms,
+results, and nested block sentences. Seventeen Core regressions and the full workspace quality
+gates pass. This is a post-95 incremental improvement; complete Turchin configuration driving,
+semantic cleaning, generalized graph compilation, whole-corpus differential proof, and
+Rust-to-Refal self-hosting remain open.
+
 ### Explicit generalized residual graph transitions (2026-08-18)
 
 Added `residualize_driven_with_generalization` and `refal residualize-generalized`. Each bounded

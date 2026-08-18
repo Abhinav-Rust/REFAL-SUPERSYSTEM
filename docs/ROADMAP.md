@@ -149,9 +149,11 @@ into an explicit deterministic generalized residual state carrying the whistle s
 repeated inputs, and the computed LGG input; focused core and CLI regressions cover this metadata.
 The new generalized API and `refal residualize-generalized` command turn each bounded LGG record
 into a generated `ResidualS<N>` function, redirect the symbolic entry call, and materialize explicit
-generated-to-source graph transitions; the emitted source is checked by a CLI regression. Complete
-symbolic Turchin configuration driving, generalisation termination, and whole-corpus generalized
-driven graph residualisation remain open.
+generated-to-source graph transitions; the emitted source is checked by a CLI regression. Core
+ground and symbolic driving now evaluates ordered condition chains, executes decidable nested block
+endings, preserves uncertain blocks as residuals, and discovers graph calls across patterns,
+conditions, results, and nested blocks. Complete symbolic Turchin configuration driving,
+generalisation termination, and whole-corpus generalized driven graph residualisation remain open.
 
 Completed so far:
 

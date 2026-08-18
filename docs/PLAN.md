@@ -197,7 +197,9 @@ runtime-conformance corpus, covering recursion, conditions, arithmetic, structur
 metacode, and the Refal-authored body compiler. `refal residualize-driven` additionally exercises
 bounded symbolic driving and emits checked recursive residual source with whistle metadata, while
 `refal residualize-generalized` emits a bounded explicit generalized residual graph with generated
-`ResidualS<N>` functions and checked source. Negative cases, non-runnable sources, complete
+`ResidualS<N>` functions and checked source. Core ground and symbolic driving now evaluates ordered
+condition chains, executes decidable nested blocks, preserves uncertain blocks as residuals, and
+collects graph call edges from patterns, conditions, results, and nested blocks. Negative cases, non-runnable sources, complete
 whole-corpus differential coverage, complete Turchin graph residualization, and byte-identical
 compiler-output proof remain open. Written under `--strict`:
 **the compiler is its own first user.**
