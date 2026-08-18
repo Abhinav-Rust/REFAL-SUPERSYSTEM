@@ -211,7 +211,9 @@ CLI projection and a recursive `C0 -> C1 -> C1` regression. The Refal-authored b
 has a nested sentence-ending block generation/check/execution regression. The frontend negative corpus
 now has exact parser diagnostics for four delimiter and termination errors, while full reference-clause
 coverage remains open. Symbolic configuration expansion now records condition-result calls under the
-active configuration, resolves their targets, and deduplicates repeated edges deterministically.
+active configuration, resolves their targets, and deduplicates repeated edges deterministically. The
+symbolic driver now also runs a bounded deterministic work-list over unresolved user-function edges,
+reusing existing configurations before invoking new targets and honoring the same step budget.
 Complete configuration expansion,
 semantic differential equivalence, complete Turchin graph residualization, and Rust-to-Refal
 self-hosting remain open. Written under `--strict`:

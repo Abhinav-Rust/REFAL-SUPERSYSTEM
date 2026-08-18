@@ -228,8 +228,9 @@ Turchin graph residualization, and Rust-to-Refal self-hosting remain open.
 The `refal drive-symbolic --configurations` command provides a checked bounded configuration
 projection with concrete nodes and resolved call edges. Calls made while evaluating condition
 results are now attributed to their active configuration and deduplicated deterministically, with
-Core regression evidence for a resolved `Go -> Check` edge; complete work-list expansion and
-semantic equivalence remain open. The `refal residualize-graph` command
+Core regression evidence for a resolved `Go -> Check` edge. The driver also performs a bounded
+work-list pass over unresolved user-function edges and reuses existing configurations before new
+invocation; complete Turchin work-list semantics and semantic equivalence remain open. The `refal residualize-graph` command
 provides a checked structural graph-to-Core-Refal projection
 for reachable functions, preserving supported terms, conditions, and sentence-ending blocks. The `refal residualize-driven` command additionally runs bounded symbolic driving, retains visited and
 whistle-triggering configurations, projects deterministic `GeneralizedResidualState` records with

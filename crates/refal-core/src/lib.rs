@@ -578,6 +578,39 @@ pub fn drive_symbolic_with_input(
             span: Span { start: 0, end: 0 },
         }],
     };
+    // Continue with a deterministic work-list over unresolved user-function edges. The initial
+    // invocation follows the first residual path; this pass independently expands each newly
+    // observed callee configuration so a residual branch does not hide the rest of the bounded
+    // configuration graph. The existing step budget remains the termination bound.
+    let mut transition_cursor = 0;
+    while transition_cursor < context.configuration_transitions.len() {
+        let transition = context.configuration_transitions[transition_cursor].clone();
+        if transition.to.is_none()
+            && let Some(target) = context.configurations.iter().find(|configuration| {
+                configuration.input == transition.input
+                    && graph
+                        .states
+                        .get(configuration.state.0)
+                        .is_some_and(|state| {
+                            state.function.eq_ignore_ascii_case(&transition.callee)
+                        })
+            })
+        {
+            context.configuration_transitions[transition_cursor].to = Some(target.id);
+        } else if transition.to.is_none()
+            && !transition.input.iter().any(contains_symbolic_variable)
+            && graph
+                .states
+                .iter()
+                .any(|state| state.function.eq_ignore_ascii_case(&transition.callee))
+        {
+            let previous_configuration = context.active_configuration;
+            context.active_configuration = Some(transition.from);
+            let _ = context.invoke_symbolic(&transition.callee, &transition.input)?;
+            context.active_configuration = previous_configuration;
+        }
+        transition_cursor += 1;
+    }
     let mut configuration_transitions = context.configuration_transitions;
     for transition in &mut configuration_transitions {
         transition.to = context

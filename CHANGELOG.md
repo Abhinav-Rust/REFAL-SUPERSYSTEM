@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Bounded symbolic configuration work-list (2026-08-18)
+
+The symbolic driver now performs a deterministic bounded work-list pass over unresolved
+user-function configuration edges. Existing materialized configurations are reused before a new
+invocation, and the original step limit remains the termination bound. Core regressions continue to
+pass; complete Turchin work-list semantics and graph equivalence remain open, so the audited score
+stays at 95%.
+
 ### Condition-edge symbolic configuration expansion (2026-08-18)
 
 Symbolic configuration expansion now keeps condition-result evaluation under the active
