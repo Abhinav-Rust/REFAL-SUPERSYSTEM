@@ -198,16 +198,19 @@ The guarantee this compiler intends to publish, once Tier 1 lands:
 ### Honest Completion: ~42%
 
 The goal — a Classic Refal-5 compiler **written in Refal**, emitting Refal, compiling its
-own full source, with Turchin's graph-of-states supercompiler and two verification tiers
-— counts as 100%. Against that target, the honest functional completion is **approximately
-42%**, based on what is tested and working end-to-end for the *general* case today.
+own full source, with Turchin's graph-of-states supercompiler and Tier 1 static
+verification — counts as 100%. **Tier 2 metasystem analysis (§5.5–5.9) is post-1.0
+research and is excluded from the 100% compiler target.** Against the 1.0 target,
+the honest functional completion is **approximately 42%**, based on what is tested and
+working end-to-end for the *general* case today. The full weighting rationale lives in
+[`docs/PLAN.md`](docs/PLAN.md).
 
 **Three lenses on the same codebase:**
 
 | Lens | Score | What it measures |
 |---|---|---|
-| Sub-task weighted credit (PLAN.md) | ~60% | Fraction of planned *effort* that has been coded and tested across ~16 sub-milestones |
-| Independent evidence-weighted score | **~42%** | Fraction of the *final goal* that is tested and working in the general case — the number used in this README |
+| Sub-task implementation credit (PLAN.md) | ~60% | Fraction of planned *effort* that has been coded and tested across ~16 sub-milestones |
+| Independent evidence-weighted score | **~42%** | Fraction of the *1.0 compiler goal* that is tested and working in the general case — the number used in this README |
 | Conservative architectural gate credit | ~19% | Strict: zero credit for any gate not fully closed (see `REFAL-FIRST-COMPLETION.md`) |
 
 The divergence exists because the two heaviest workstreams — **Compiler in Refal
@@ -217,14 +220,14 @@ bounded C2 ≡ C3 fixpoint has been proven at 4,780 bytes for that subset; the g
 self-hosting gate is still open. Scoring these at near-full credit produces the higher
 figures; scoring them at their true general-case completion produces ~42%.
 
-The project previously published a figure of 96%, derived from the sub-task weighted
-method. That figure is not fabricated — the methodology is described in detail in
-[`docs/PLAN.md`](docs/PLAN.md) — but it can be misread as meaning the compiler is
-nearly done. **It is not.** The two most architecturally critical items — the flat
-view-field rewriting machine that unblocks condition-bearing evaluation at scale, and
-the full general Refal compiler pipeline — are both still open. This README now leads
-with the ~42% figure because it is the most honest answer to the question "how much of
-a working Refal compiler exists today?"
+The project previously published a figure of 96%, derived from the sub-task
+implementation credit method. That figure is not fabricated — the methodology is
+described in detail in [`docs/PLAN.md`](docs/PLAN.md) — but it can be misread as meaning
+the compiler is nearly done. **It is not.** The two most architecturally critical open
+items are the general flat view-field rewriting machine (needed for condition-bearing
+evaluation at scale) and the full general Refal compiler pipeline in Refal. This README
+leads with the ~42% figure because it is the most honest answer to "how much of a working
+Refal compiler exists today?"
 
 The earlier score went *down* from an older published estimate of 38%, for two reasons:
 
@@ -243,17 +246,20 @@ does not yet compile arbitrary Classic Refal-5 source.
 
 ### Workstream Accounting
 
+Tier 2 metasystem analysis is excluded from the 100% denominator (post-1.0 research).
+The 15% weight below covers Tier 1 decidable analyses only.
+
 | Workstream | Weight | Credit today | Status summary |
 |---|---:|---:|---|
-| Bootstrap frontend | 8.5% | 8.0% | All lexical rows complete; clause-complete malformed corpus still partial |
+| Bootstrap frontend | 8.5% | 8.0% | Broad Classic Refal-5 lexer/parser coverage; clause-complete conformance corpus still partial |
 | Bootstrap semantics | 6.0% | 5.0% | Entry, bindings, call checks done; no exhaustiveness or graph-based analysis |
-| Refal machine / runtime | 19.5% | ~14% | Full builtin suite, worklist for block-free chains, blocks, `Dn`/`Up`; **flat rewriting machine and projecting matcher not done — live blocker for general compiler source** |
+| Refal machine / runtime | 19.5% | ~14% | Broad covered builtin suite, worklist for block-free chains, blocks, `Dn`/`Up`; **general flat view-field machine and projecting matcher not done — open for arbitrary program evaluation** |
 | Graph of states / Refal emission | 8.5% | ~6% | Seed graph, SCC, bounded driving, homeomorphic whistle, bounded residualization done; complete Turchin driving / cleaning / generalization open |
-| Static verification (Tier 1 + 2) | 15.0% | ~2% | Structural reachability and overlap done; sentence subsumption, function formats, builtin domain, `--strict` mode all open |
+| Static verification (Tier 1 only) | 15.0% | ~2% | Structural reachability and overlap done; sentence subsumption, function formats, builtin domain, `--strict` mode all open |
 | Compiler implemented in Refal | 25.5% | ~3% | Several restricted slices proven; general `lexer.ref → parser.ref → checker.ref → driver.ref → emit.ref` pipeline **not written** |
 | Verified self-hosting fixpoint | 13.0% | ~2% | Bounded C2 ≡ C3 proven at 4,780 bytes for body-compiler subset; **general-corpus fixpoint not demonstrated** |
 | Conformance / release evidence | 4.0% | ~1.5% | Solid automated foundation; no full Classic conformance claim or release packaging |
-| **Total** | **100%** | **~42%** | |
+| **Total (1.0 target)** | **100%** | **~42%** | |
 
 ---
 
@@ -261,55 +267,46 @@ does not yet compile arbitrary Classic Refal-5 source.
 
 **Complete** = every gate in that milestone is closed and tested.
 **Partial** = substantial tested implementation exists, but at least one material gate remains open.
-**Not started** = no functional implementation exists yet.
-**Research** = intentionally deferred post-1.0.
+**Research** = intentionally deferred post-1.0 and excluded from the 100% target.
 
 | # | Milestone | Status | What is done | What is NOT done |
 |---|---|---|---|---|
 | 1 | Public-grade foundation | ✅ Complete | Workspace, CI, clean-room policy, MIT licence | — |
-| 2 | Classic Refal-5 front end | 🔶 Partial | All lexical forms, `s.`/`t.`/`e.` variables, sentence-ending blocks, brackets, conditions, `$ENTRY`/`$EXTERN`, 12 negative fixture classes, spans and diagnostics | Clause-complete traceable conformance corpus; Milestone 2 exit criteria not met (see `FRONTEND-COVERAGE.md`) |
+| 2 | Classic Refal-5 front end | 🔶 Partial | Broad lexer/parser surface: `s.`/`t.`/`e.` variables, sentence-ending blocks, brackets, conditions, `$ENTRY`/`$EXTERN`, 12 negative fixture classes, spans and diagnostics | Clause-complete traceable conformance corpus; Milestone 2 exit criteria not met (see [`FRONTEND-COVERAGE.md`](docs/FRONTEND-COVERAGE.md)) |
 | 3 | Semantic checker | 🔶 Partial | Entry-point rules, duplicate checks, unresolved calls, variable binding, condition legality, pattern-call rejection | Exhaustiveness analysis; graph-based analyses; function-format inference |
-| 4 | Refal machine | 🔶 Partial | Full builtin suite (arithmetic, file I/O, buried data, structural ops, `Mu`, `Time`, `Dn`/`Up`), backtracking, conditions, sentence-ending blocks, explicit worklist for block-free call chains | **Flat view-field rewriting machine (open issue [#7](../../issues/7)) — direct cause of `TakeBody` timeout on ~4 KB source**; projecting compiled matcher; Chapter 6 metacode encoding |
+| 4 | Refal machine | 🔶 Partial | Broad covered builtin suite: arithmetic, file I/O (`Card`/`Open`/`Get`/`Put`/`Putout`), buried data (`Br`/`Dg`/`Cp`/`Rp`/`Dgall`), structural ops (`First`/`Last`/`Lenw`/`Lower`/`Upper`), `Arg`/`Step`/`Time`/`Mu`/`Dn`/`Up`/`Trunc`/`Real`, plus `Prout`/`Print`/`Explode`/`Implode`/`Ord`/`Chr`/`Numb`/`Symb`/`Type`; backtracking, conditions, sentence-ending blocks, explicit worklist for block-free call chains. The previously observed supported-body `TakeBody` scaling failure is resolved (C1→C2→C3 proven, 100-definition trial under 1 s) | **General flat view-field rewriting machine (issue [#7](../../issues/7)) — needed for arbitrary program evaluation**; projecting compiled matcher; Chapter 6 metacode encoding |
 | 5 | Graph of states | 🔶 Partial | Seed graph, SCC, structural cleanup, bounded ground driver, shape-aware symbolic driver, homeomorphic-embedding whistle, bounded Tier 1 analysis (`refal analyze`, `refal overlap`), cleaned-graph Core Refal emitter, bounded driven/generalized residualization | Complete Turchin configuration driving (§4.2); semantic graph cleaning (§4.3); generalization termination (§4.6); whole-graph residualization for general programs |
 | 6 | Tier 1 static analyses | 🔶 Partial | Structural reachability, terminal-state, SCC reports; conservative pairwise sentence-pattern compatibility | Semantic subsumption / dead-sentence detection; function-format inference; builtin domain errors; `--classic` / `--strict` severity model |
-| 7 | Compiler written in Refal | 🔶 Partial | Restricted body-compiler, parser-subset, checker-subset, general-subset fixtures in `examples/`; bounded C2 ≡ C3 fixpoint at 4,780 bytes; `refal fixpoint`; `refal differential` | General Classic Refal lexer, parser, checker, and driver written in Refal; complete `lexer.ref → parser.ref → checker.ref → driver.ref → emit.ref` pipeline; general source compilation |
-| 8 | Verified self-hosting | 🔶 Partial | Rust-bootstrap → C1 → C2 → C3 proven byte-identical for the restricted body-compiler subset (4,780 bytes) | **General-corpus self-hosting — the project's 100% gate — is not demonstrated** |
-| 9 | Tier 2 metasystem analysis | ⬜ Research | — | Entirely post-1.0: §5.5 differential metafunction, §5.6 integral metafunction, §5.7 metasystem analysis, §5.9 neighborhoods |
+| 7 | Compiler written in Refal | 🔶 Partial | Restricted body-compiler, parser-subset, checker-subset, general-subset fixtures; bounded C2 ≡ C3 fixpoint at 4,780 bytes; `refal fixpoint`; `refal differential` | General Classic Refal `lexer.ref → parser.ref → checker.ref → driver.ref → emit.ref` pipeline; general source compilation |
+| 8 | Verified self-hosting | 🔶 Partial | Rust-bootstrap → C1 → C2 → C3 proven byte-identical for restricted body-compiler subset (4,780 bytes) | **General-corpus self-hosting — the project's 100% gate — not demonstrated** |
+| 9 | Tier 2 metasystem analysis | ⬜ Research (post-1.0) | — | Excluded from 1.0 target: §5.5 differential metafunction, §5.6 integral metafunction, §5.7 metasystem analysis, §5.9 neighborhoods |
 
 Native code generation is deliberately **off the critical path**. It is §4.7 of Turchin's
 architecture and comes after self-hosting, because a compiler in Refal emitting Refal
 does not need it.
 
-The full phase plan, gates, and completion accounting are in [`docs/PLAN.md`](docs/PLAN.md).
+For the full gate definitions and completion accounting see [`docs/PLAN.md`](docs/PLAN.md).
+For lexer/parser coverage detail see [`docs/FRONTEND-COVERAGE.md`](docs/FRONTEND-COVERAGE.md).
 
 ---
 
-### What Is Concretely Done ✅
+### What Is Done and What Remains
 
-- Full Classic Refal-5 lexer and parser with all conformance fixes from `641ffc0`
-- Semantic checker: entry point, bindings, calls, conditions, variable kinds
-- Complete builtin runtime: arithmetic, file I/O (`Card`/`Open`/`Get`/`Put`/`Putout`), buried data (`Br`/`Dg`/`Rp`), structural ops, `Mu`, `Time`, `Dn`/`Up`
-- Sentence-ending blocks end-to-end (parse → check → execute → lower)
-- Explicit worklist evaluator for block-free calls — 5,000-deep regression passes without consuming host stack frames
-- `refal-core` seed graph, SCC decomposition, structural cleanup, bounded concrete driver
-- Conservative symbolic driver with homeomorphic-embedding whistle
-- Bounded residualization: `refal residualize-graph`, `refal residualize-driven`, `refal residualize-generalized`
-- Restricted Refal-authored compiler fixtures: body-compiler, parser-subset, checker-subset, general-subset
-- **Bounded C2 ≡ C3 self-hosting proof** at 4,780 bytes for the body-compiler subset
-- `refal differential` and `refal differential --corpus` (12-row manifest)
-- `refal fixpoint`, `refal analyze`, `refal overlap`, `refal drive`, `refal drive-symbolic`
-- 102+ passing tests across all crates; CI green
+The milestone table above is the authoritative source. A summary:
 
-### What Is Not Done ❌ (~58% remaining)
+**Working today:** broad Refal-5 lexer/parser coverage, semantic checker, a broad covered
+builtin suite (arithmetic, file I/O, buried data, structural ops, `Mu`/`Time`/`Dn`/`Up`),
+sentence-ending blocks end-to-end, explicit worklist evaluator, `refal-core` graph
+infrastructure, bounded symbolic driving with homeomorphic-embedding whistle, bounded
+residualizers, restricted Refal-authored compiler slices, bounded C2 ≡ C3 self-hosting
+proof at 4,780 bytes, 102+ passing tests, CI green.
 
-- **Flat view-field rewriting machine** — the live blocker; condition-bearing call trees still route through recursive Rust frames, causing timeout on ~4 KB compiler source (issue [#7](../../issues/7))
-- **Projecting algorithm compiled matcher** — open-`e` variable blowup on real compiler source
-- **General Classic Refal compiler pipeline in Refal** — `lexer.ref`, `parser.ref`, `checker.ref`, `driver.ref`, `emit.ref` are not written
-- **Complete Turchin graph driving, cleaning, and generalization** (§4.2–4.6)
-- **Tier 1 semantic analyses**: sentence subsumption, function-format inference, builtin domain errors, `--classic`/`--strict` severity model
-- **General-corpus self-hosting fixpoint** — the project's actual 100% gate
-- **Tier 2 metasystem analysis** (post-1.0)
-- **Release packaging, compatibility guarantees, native codegen**
+**Not yet done (~58% of 1.0 target):** general flat view-field rewriting machine (issue
+[#7](../../issues/7)); projecting compiled matcher; general Refal compiler pipeline
+(`lexer.ref`, `parser.ref`, `checker.ref`, `driver.ref`, `emit.ref`); complete Turchin
+graph driving/cleaning/generalization (§4.2–4.6); Tier 1 semantic analyses
+(`--classic`/`--strict`); general-corpus self-hosting fixpoint. Full detail in
+[`docs/PLAN.md`](docs/PLAN.md).
 
 ---
 
@@ -318,9 +315,9 @@ The full phase plan, gates, and completion accounting are in [`docs/PLAN.md`](do
 | Component | Functional status | Open gates |
 |---|---|---|
 | `refal-ast` | ✅ AST node types and Refal-5 name-equivalence helpers, each citing its spec clause | — |
-| `refal-syntax` | 🔶 Lexer and parser cover the Classic surface; blocks and macrodigit bound implemented | Clause-complete traceable conformance corpus |
+| `refal-syntax` | 🔶 Broad Classic Refal-5 lexer/parser coverage; blocks and macrodigit bound implemented | Clause-complete traceable conformance corpus |
 | `refal-semantics` | 🔶 Legality checks for the supported surface | Exhaustiveness; graph-based analyses |
-| `refal-runtime` | 🔶 Correct for the covered builtin subset; worklist handles block-free chains | **Flat view-field machine (issue [#7](../../issues/7)); projecting matcher; Chapter 6 metacode** |
+| `refal-runtime` | 🔶 Broad covered builtin suite; worklist handles block-free chains; supported-body `TakeBody` scaling resolved | **General flat view-field machine (issue [#7](../../issues/7)); projecting matcher; Chapter 6 metacode** |
 | `refal-core` | 🔶 Seed graph, SCC, cleanup, bounded driving, symbolic driving, bounded residualization | Complete Turchin driving (§4.2); semantic cleaning (§4.3); full generalization and residualization |
 | `refal-cli` | 🔶 `check`, `dump-ast`, `lower`, `run`, `differential`, `graph`, `analyze`, `overlap`, `drive`, `drive-symbolic`, `residualize`, `residualize-graph`, `residualize-driven`, `residualize-generalized`, `fixpoint` | No `compile` command yet |
 | CI and quality gates | ✅ `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` | — |
@@ -338,7 +335,8 @@ without a test or a gate that demonstrates the work.
 
 | Date | Change |
 |---|---|
-| 2026-08-18 | README rewritten: completion percentage corrected to ~42% (honest functional score); three-lens score table added; workstream accounting table added; milestone table rewritten with explicit "What is done" and "What is NOT done" columns; component map rewritten with open gates column |
+| 2026-08-18 | Agent-review corrections: stale issue #7 / TakeBody wording fixed; ‘complete builtin runtime’ replaced with ‘broad covered builtin suite’ and CLI paragraph updated; ‘full lexer/parser’ replaced with ‘broad coverage’; Tier 2 explicitly excluded from 100% denominator; ‘sub-task weighted credit’ renamed to ‘sub-task implementation credit’; repeated done/not-done lists condensed to links |
+| 2026-08-18 | README rewritten: completion percentage corrected to ~42%; three-lens score table; workstream accounting table; milestone table with What is done / What is NOT done columns; component map with open gates column |
 | 2026-08-18 | Sixteenth milestone: body compiler scans single-quoted character literals, preserves own `Go` entry, accepts terminal whitespace, passes Rust-bootstrap → C1 → C2 → C3 trial with byte-identical 4,780-byte C2/C3; 100-definition scaling completes in under one second |
 | 2026-08-18 | Post-milestone improvements: manifest-driven differential corpus (12 rows), homeomorphic-embedding whistle, compact brace definitions, `$EXTERN`/`$ENTRY` preservation, symbolic configuration worklist, malformed frontend corpus expanded to 12 failure classes, condition-edge attribution in symbolic driver |
 | 2026-08-17 | Fifteenth milestone: bounded `refal fixpoint` verification, byte-stable twice-applied canonical-output compiler subset |
@@ -450,10 +448,15 @@ Each extra command-line argument is passed to `Go` as a structural bracket term
 containing that argument's characters. A non-empty final expression is printed after any
 captured output.
 
-The bootstrap runtime implements `Prout`, `Print`, `Explode`, `Implode`, `Ord`, `Chr`,
-`Numb`, `Symb` and `Type`. Calls to any other declared external function are rejected by
-`check` rather than failing at runtime. A program-defined function takes precedence over
-a built-in with the same Classic-equivalent name.
+The bootstrap runtime implements a broad covered Classic Refal builtin suite. In addition
+to the basic builtins `Prout`, `Print`, `Explode`, `Implode`, `Ord`, `Chr`, `Numb`,
+`Symb`, and `Type`, the runtime also supports: integer arithmetic (`Add`, `Sub`, `Mul`,
+`Div`, `Mod`, `Divmod`, `Compare`), numeric conversion (`Trunc`, `Real`), descriptor-backed
+file I/O (`Card`, `Open`, `Get`, `Put`, `Putout`), structural expression operations
+(`First`, `Last`, `Lenw`, `Lower`, `Upper`), buried-data stack (`Br`, `Dg`, `Cp`, `Rp`,
+`Dgall`), program arguments and stepping (`Arg`, `Step`), elapsed time (`Time`), visible
+dynamic dispatch (`Mu`), and a tagged metacode subset (`Dn`, `Up`). Calls to any other
+declared external function are rejected by `check` rather than failing at runtime.
 
 Not all Refal-5 programs execute correctly yet. See the
 [frontend coverage matrix](docs/FRONTEND-COVERAGE.md) for what is supported, and the
