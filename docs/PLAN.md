@@ -211,7 +211,10 @@ CLI projection and a recursive `C0 -> C1 -> C1` regression. The Refal-authored b
 has a nested sentence-ending block generation/check/execution regression and now preserves
 `$ENTRY` visibility markers on exported source definitions and recursively preserves leading
 `$EXTERN` declarations and optional top-level semicolon separators between definitions, with
-end-to-end generated-source checks and runtime execution through the generated `Go` wrapper. The frontend negative corpus
+end-to-end generated-source checks and runtime execution through the generated `Go` wrapper. Compact
+brace definitions with explicit top-level separators are also covered end to end. A Core formatter
+regression exercises every supported non-block term constructor and a nested sentence-ending block.
+The frontend negative corpus
 now has exact parser diagnostics for four delimiter and termination errors, while full reference-clause
 coverage remains open. Symbolic configuration expansion now records condition-result calls under the
 active configuration, resolves their targets, and deduplicates repeated edges deterministically. The
@@ -262,7 +265,8 @@ milestones an audit then found to be Partial.
 bootstrap-runtime, deterministic graph infrastructure, bounded concrete driving,
 shape-aware symbolic driving, supported-subset Refal residualization, cleaned-graph Core Refal emission, restricted compiler-in-Refal emission/parsing/checking, bounded compiler fixpoint verification, and conformance work.
 Complete Turchin graph driving, graph residualisation, the general Refal compiler, and the three-stage
-self-hosting proof remain unimplemented.
+self-hosting proof remain unimplemented; the new compact-source and all-term emission tests strengthen
+bounded evidence but do not change the weighted score.
 
 | Workstream | Weight | Now | After P1 | After P3 | After P5 |
 |---|---:|---:|---:|---:|---:|

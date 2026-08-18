@@ -220,8 +220,10 @@ of a preserved sentence, a condition-bearing body, and a nested sentence-ending 
 input; malformed input is rejected. The body compiler also preserves `$ENTRY` visibility markers on
 exported source definitions and recursively preserves leading `$EXTERN` declarations, with
 generated-source checking and execution through the generated `Go` wrapper; optional top-level
-semicolon separators between definitions are covered by the same check-and-run regression. The
-`refal differential`
+semicolon separators between definitions are covered by the same check-and-run regression. Compact
+brace definitions with an explicit top-level separator are also covered end to end. The Core formatter
+has a regression for every supported non-block term constructor plus a nested sentence-ending block.
+The `refal differential`
 command now lowers, formats, reparses, checks, and executes Core
 Refal against original checked execution across the entire currently runnable positive runtime-
 conformance corpus covering recursion, conditions, arithmetic, structural operations, metacode, and
@@ -248,9 +250,8 @@ source-to-generated transitions. Core and CLI regressions cover whistle detectio
 transitions, generated source validity, and deterministic graph counts. The `refal fixpoint` command
 applies a canonical-output compiler subset three times and verifies successive byte-stable output,
 including the bounded `C2 ≡ C3` equality. General source lexing/parsing, complete Turchin
-configuration driving and semantic cleaning, complete generalized driven Core Refal emission,
-complete differential compilation of all positive and negative corpus programs, and the full
-Rust-to-Refal three-stage self-hosting proof remain open.
+configuration driving and semantic cleaning, complete generalized driven Core Refal emission, complete differential compilation of all positive
+and negative corpus programs, and the full Rust-to-Refal three-stage self-hosting proof remain open.
 
 ## Milestone 6: Production Backend
 

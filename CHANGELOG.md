@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Compact Refal definitions and complete supported-term emission evidence (2026-08-18)
+
+The Refal-authored body compiler now accepts compact brace definitions and explicit top-level
+semicolon separators, emits canonical checked Refal, and executes the generated `Go` wrapper. The
+positive differential corpus includes this compact source. A Core regression now exercises every
+supported non-block term constructor together with a nested sentence-ending block, strengthening
+emission evidence without claiming complete driven graph emission. General Classic Refal parsing,
+full Turchin residualization, and Rust-to-Refal self-hosting remain open; the audited score stays at
+95%.
+
 ### Homeomorphic-embedding whistle and expanded frontend corpus (2026-08-18)
 
 The symbolic driver now detects conservative homeomorphic embedding across expression subsequences

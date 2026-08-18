@@ -933,6 +933,56 @@ fn executes_refal_authored_body_compiler_subset_end_to_end() {
 }
 
 #[test]
+fn executes_refal_authored_body_compiler_with_compact_definitions_end_to_end() {
+    let output = run_file(
+        "examples/compiler-refal-body-subset.ref",
+        &["Echo{e.Input=e.Input;}; Identity{e.Input=e.Input;}"],
+    );
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let generated = String::from_utf8_lossy(&output.stdout).to_string();
+    assert_eq!(
+        generated,
+        "$ENTRY Go { e.Input = <Echo e.Input>; } Echo { e.Input=e.Input; } Identity { e.Input=e.Input; }\n"
+    );
+
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock after unix epoch")
+        .as_nanos();
+    let path = env::temp_dir().join(format!(
+        "refal-compiled-compact-body-{}-{unique}.ref",
+        process::id()
+    ));
+    fs::write(&path, generated).expect("write generated compact source");
+
+    let checked = Command::new(refal_bin())
+        .args(["check", &path.to_string_lossy()])
+        .output()
+        .expect("check generated compact source");
+    assert!(
+        checked.status.success(),
+        "generated compact source should check:\n{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+
+    let executed = Command::new(refal_bin())
+        .args(["run", &path.to_string_lossy(), "payload"])
+        .output()
+        .expect("run generated compact source");
+    let _ = fs::remove_file(&path);
+    assert!(
+        executed.status.success(),
+        "generated compact source should run:\n{}",
+        String::from_utf8_lossy(&executed.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&executed.stdout), "(payload)\n");
+}
+
+#[test]
 fn executes_refal_authored_body_compiler_with_condition_end_to_end() {
     let output = run_file(
         "examples/compiler-refal-body-subset.ref",
@@ -2005,6 +2055,10 @@ fn compares_original_and_lowered_runtime_outputs_across_the_supported_corpus() {
             "examples/compiler-refal-body-subset.ref",
             &["Echo { ('a') = 'A'; e.Input = e.Input; } Identity { e.Input = e.Input; }"]
                 as &[&str],
+        ),
+        (
+            "examples/compiler-refal-body-subset.ref",
+            &["Echo{e.Input=e.Input;}; Identity{e.Input=e.Input;}"] as &[&str],
         ),
     ] {
         let output = differential_file(path, args);

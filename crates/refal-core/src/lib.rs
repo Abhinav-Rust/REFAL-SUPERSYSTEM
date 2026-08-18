@@ -2442,6 +2442,76 @@ mod tests {
     }
 
     #[test]
+    fn formats_every_supported_core_term_constructor() {
+        let term = |kind| CoreTerm { kind, span: span() };
+        let core = CoreProgram {
+            declarations: vec![],
+            functions: vec![CoreFunction {
+                name: "Go".to_string(),
+                visibility: Visibility::Entry,
+                sentences: vec![
+                    CoreSentence {
+                        pattern: vec![
+                            term(CoreTermKind::Char('a')),
+                            term(CoreTermKind::Identifier("Ident".to_string())),
+                            term(CoreTermKind::Number("12.5".to_string())),
+                            term(CoreTermKind::Variable {
+                                kind: VariableKind::Symbol,
+                                name: "S".to_string(),
+                            }),
+                            term(CoreTermKind::Variable {
+                                kind: VariableKind::Term,
+                                name: "T".to_string(),
+                            }),
+                            term(CoreTermKind::Variable {
+                                kind: VariableKind::Expression,
+                                name: "E".to_string(),
+                            }),
+                            term(CoreTermKind::Bracket(vec![term(CoreTermKind::Char('x'))])),
+                            term(CoreTermKind::Call {
+                                name: "Helper".to_string(),
+                                args: vec![term(CoreTermKind::Variable {
+                                    kind: VariableKind::Expression,
+                                    name: "E".to_string(),
+                                })],
+                            }),
+                        ],
+                        conditions: vec![],
+                        result: vec![term(CoreTermKind::Variable {
+                            kind: VariableKind::Expression,
+                            name: "E".to_string(),
+                        })],
+                        span: span(),
+                    },
+                    CoreSentence {
+                        pattern: vec![],
+                        conditions: vec![],
+                        result: vec![term(CoreTermKind::Block {
+                            argument: vec![term(CoreTermKind::Variable {
+                                kind: VariableKind::Expression,
+                                name: "E".to_string(),
+                            })],
+                            sentences: vec![CoreSentence {
+                                pattern: vec![],
+                                conditions: vec![],
+                                result: vec![term(CoreTermKind::Char('d'))],
+                                span: span(),
+                            }],
+                        })],
+                        span: span(),
+                    },
+                ],
+                span: span(),
+            }],
+        };
+
+        assert_eq!(
+            format_program(&core),
+            "$ENTRY Go {\n  'a' Ident 12.5 s.S t.T e.E (\'x\') <Helper e.E> = e.E;\n  = , e.E : {\n    = \'d\';\n  };\n}\n"
+        );
+    }
+
+    #[test]
     fn residualizes_a_cleaned_graph_to_reachable_core_refal() {
         let expression = |name: &str| CoreTerm {
             kind: CoreTermKind::Variable {
