@@ -80,6 +80,7 @@ fn main() {
         "drive" => drive_program(&program, &input_args),
         "drive-symbolic" => drive_symbolic_program(&program, &input_args),
         "residualize" => residualize_program(&program, &input_args),
+        "residualize-graph" => residualize_graph_program(&program, &input_args),
         "supercompile" => supercompile_program(&program, &input_args),
         "fixpoint" => fixpoint_program(&program, &input_args),
         "run" => run_program(&program, &input_args),
@@ -105,6 +106,7 @@ fn print_usage() {
     eprintln!("  drive      Execute the bounded ground graph driver [--steps N] [args...]");
     eprintln!("  drive-symbolic  Partially drive from an expression variable [--steps N]");
     eprintln!("  residualize  Emit Refal for the supported symbolic residual subset [--steps N]");
+    eprintln!("  residualize-graph  Emit structurally cleaned reachable Core Refal");
     eprintln!("  supercompile  Analyze, symbolically drive, whistle, and residualize [--steps N]");
     eprintln!("  fixpoint   Apply a source-to-source compiler twice and check byte stability");
     eprintln!("  run        Run a Refal source file with the bootstrap interpreter");
@@ -330,6 +332,17 @@ fn residualize_program(program: &refal_ast::Program, args: &[String]) {
         }
     };
     print!("{}", refal_core::residualize_symbolic(&report));
+}
+
+fn residualize_graph_program(program: &refal_ast::Program, args: &[String]) {
+    if !args.is_empty() {
+        eprintln!("Usage: refal residualize-graph <file.ref>");
+        process::exit(2);
+    }
+    let core = refal_core::lower_program(program);
+    let graph = refal_core::clean_unreachable_states(&refal_core::build_seed_graph(&core));
+    let residual = refal_core::residualize_cleaned_graph(&core, &graph);
+    print!("{}", refal_core::format_program(&residual));
 }
 
 fn fixpoint_program(program: &refal_ast::Program, args: &[String]) {

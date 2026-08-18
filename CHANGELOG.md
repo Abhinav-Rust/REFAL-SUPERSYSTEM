@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Cleaned-graph Core Refal emission (2026-08-18)
+
+Added `residualize_cleaned_graph` and the `refal residualize-graph` command. The emitter reconstructs
+reachable multi-function Core Refal from the structurally cleaned seed graph, preserving supported
+terms, conditions, and sentence-ending blocks while deterministically dropping unreachable
+functions. The emitted source is checked by an exact CLI regression. This is a post-95 incremental
+improvement; complete driven Turchin graph residualisation remains open.
+
 ### Recursive multi-definition compiler slice (2026-08-18)
 
 Added `examples/compiler-refal-general-subset.ref`, a Refal-authored recursive parser and emitter

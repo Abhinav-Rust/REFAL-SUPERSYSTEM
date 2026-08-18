@@ -47,6 +47,13 @@ fn overlap_file(path: &str) -> std::process::Output {
         .expect("run refal binary")
 }
 
+fn residualize_graph_file(path: &str) -> std::process::Output {
+    Command::new(refal_bin())
+        .args(["residualize-graph", &workspace_path(path)])
+        .output()
+        .expect("run refal binary")
+}
+
 fn drive_file(path: &str, args: &[&str]) -> std::process::Output {
     let mut command = Command::new(refal_bin());
     command.args(["drive", &workspace_path(path)]);
@@ -160,6 +167,26 @@ fn reports_pattern_overlap_for_recursive_fixture() {
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
         "Reverse: S1 vs S2 = unknown\n"
+    );
+}
+
+#[test]
+fn emits_a_checked_reachable_core_refal_graph() {
+    let output = residualize_graph_file("examples/runtime-recursion.ref");
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "$EXTERN Prout;\n\n$ENTRY Go {\n  = <Prout <Reverse 'a' 'b' 'c'>>;\n}\n\nReverse {\n  =;\n  s.Head e.Tail = <Reverse e.Tail> s.Head;\n}\n"
+    );
+    let check = check_source(&String::from_utf8_lossy(&output.stdout));
+    assert!(
+        check.status.success(),
+        "emitted source should check:\n{}",
+        String::from_utf8_lossy(&check.stderr)
     );
 }
 

@@ -1138,6 +1138,43 @@ pub fn residualize_symbolic(report: &SymbolicDriveReport) -> String {
     )
 }
 
+/// Reconstruct a Core Refal program from a structurally cleaned seed graph.
+///
+/// The seed graph retains source sentence terms, so this projection preserves every supported
+/// Core Refal term, condition, and sentence-ending block while dropping functions removed by
+/// structural reachability cleanup. It is intentionally a graph-to-source projection, not yet
+/// Turchin's fully driven or semantically cleaned residual graph.
+pub fn residualize_cleaned_graph(program: &CoreProgram, graph: &StateGraph) -> CoreProgram {
+    let mut functions = Vec::new();
+    for function in &program.functions {
+        let mut sentences = graph
+            .states
+            .iter()
+            .filter(|state| state.function.eq_ignore_ascii_case(&function.name))
+            .map(|state| CoreSentence {
+                pattern: state.pattern.clone(),
+                conditions: state.conditions.clone(),
+                result: state.result.clone(),
+                span: state.span,
+            })
+            .collect::<Vec<_>>();
+        if sentences.is_empty() {
+            continue;
+        }
+        sentences.sort_by_key(|sentence| sentence.span.start);
+        functions.push(CoreFunction {
+            name: function.name.clone(),
+            visibility: function.visibility,
+            sentences,
+            span: function.span,
+        });
+    }
+    CoreProgram {
+        declarations: program.declarations.clone(),
+        functions,
+    }
+}
+
 pub fn format_graph_analysis(report: &GraphAnalysisReport) -> String {
     let states = |ids: &[StateId]| {
         ids.iter()
@@ -1602,6 +1639,67 @@ mod tests {
         assert_eq!(
             format_program(&core),
             "$EXTERN Prout;\n\n$ENTRY Go {\n  =;\n}\n"
+        );
+    }
+
+    #[test]
+    fn residualizes_a_cleaned_graph_to_reachable_core_refal() {
+        let expression = |name: &str| CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind: VariableKind::Expression,
+                name: name.to_string(),
+            },
+            span: span(),
+        };
+        let program = CoreProgram {
+            declarations: vec![],
+            functions: vec![
+                CoreFunction {
+                    name: "Go".to_string(),
+                    visibility: Visibility::Entry,
+                    sentences: vec![CoreSentence {
+                        pattern: vec![expression("Input")],
+                        conditions: vec![],
+                        result: vec![CoreTerm {
+                            kind: CoreTermKind::Call {
+                                name: "Worker".to_string(),
+                                args: vec![expression("Input")],
+                            },
+                            span: span(),
+                        }],
+                        span: span(),
+                    }],
+                    span: span(),
+                },
+                CoreFunction {
+                    name: "Worker".to_string(),
+                    visibility: Visibility::Local,
+                    sentences: vec![CoreSentence {
+                        pattern: vec![expression("Input")],
+                        conditions: vec![],
+                        result: vec![expression("Input")],
+                        span: span(),
+                    }],
+                    span: span(),
+                },
+                CoreFunction {
+                    name: "Unused".to_string(),
+                    visibility: Visibility::Local,
+                    sentences: vec![CoreSentence {
+                        pattern: vec![],
+                        conditions: vec![],
+                        result: vec![],
+                        span: span(),
+                    }],
+                    span: span(),
+                },
+            ],
+        };
+        let graph = clean_unreachable_states(&build_seed_graph(&program));
+        let residual = residualize_cleaned_graph(&program, &graph);
+        assert_eq!(
+            format_program(&residual),
+            "$ENTRY Go {\n  e.Input = <Worker e.Input>;\n}\n\nWorker {\n  e.Input = e.Input;\n}\n"
         );
     }
 

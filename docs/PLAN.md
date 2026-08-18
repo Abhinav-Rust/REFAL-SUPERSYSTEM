@@ -159,7 +159,7 @@ Turchin Ch. 3–4. Replaces `refal-core`.
 - **2a** Driving — bounded ground execution, deterministic structural graph infrastructure, shape-aware symbolic execution for known prefixes with symbolic tails, and a deterministic Tier 1 graph-analysis report are implemented; complete Turchin configuration driving and graph construction (§4.2) remain open.
 - **2b** Function-aware structural reachability cleanup is implemented; semantic clean graphs (§4.3) and compilation strategy (§4.4) remain open.
 - **2c** SCC detection is implemented as graph infrastructure; generalisation and the whistle (§4.6; 1988 *Algorithm of Generalization*; 2013 Nepeivoda *On Turchin's Theorem* for whistle termination) remain open.
-- **2d** Residualisation — a supported-subset residual wrapper now emits checked Refal source; complete graph → Refal residualisation remains open. **This is the "emits Refal" deliverable.**
+- **2d** Residualisation — a supported-subset symbolic residual wrapper now emits checked Refal source, and `residualize_cleaned_graph` / `refal residualize-graph` reconstruct a checked multi-function program from the structurally cleaned seed graph while preserving supported terms, conditions, and blocks. Complete driven graph → Refal residualisation remains open. **This is the "emits Refal" deliverable.**
 
 **Gate:** for every corpus program, symbolic `drive → clean → generalise → residualise → run` agrees with the Phase 1 interpreter on all test inputs. The current bounded ground driver is an intermediate regression surface, not this gate.
 
@@ -233,7 +233,7 @@ milestones an audit then found to be Partial.
 **~95% today**, after fifteen implementation milestones on 2026-08-17. The audited
 19.8% baseline remains the comparison point; the new score credits only tested frontend,
 bootstrap-runtime, deterministic graph infrastructure, bounded concrete driving,
-shape-aware symbolic driving, supported-subset Refal residualization, restricted compiler-in-Refal emission/parsing/checking, bounded compiler fixpoint verification, and conformance work.
+shape-aware symbolic driving, supported-subset Refal residualization, cleaned-graph Core Refal emission, restricted compiler-in-Refal emission/parsing/checking, bounded compiler fixpoint verification, and conformance work.
 Complete Turchin graph driving, graph residualisation, the general Refal compiler, and the three-stage
 self-hosting proof remain unimplemented.
 

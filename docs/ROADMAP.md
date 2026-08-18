@@ -140,9 +140,11 @@ one state per source sentence and syntactic call edges. SCC detection, condition
 states, function-aware structural reachability cleanup, bounded concrete driving, shape-aware
 symbolic execution over known prefixes with symbolic expression tails, deterministic Tier 1
 reachability/terminal/function/SCC analysis, and conservative pairwise sentence-pattern
-compatibility through `refal overlap` are implemented and tested. A supported-subset residual
-wrapper emits checked Refal source from the symbolic report. Complete symbolic Turchin driving,
-semantic graph cleaning, generalisation, whistle termination, and graph residualisation remain open.
+compatibility through `refal overlap` are implemented and tested. A supported-subset symbolic
+residual wrapper and `refal residualize-graph` emit checked Refal source; the latter reconstructs
+reachable multi-function Core Refal from the structurally cleaned seed graph. Complete symbolic
+Turchin driving, semantic graph cleaning, generalisation, whistle termination, and driven graph
+residualisation remain open.
 
 Completed so far:
 
@@ -192,13 +194,14 @@ Refal program that accepts a restricted character-string function name,
 `examples/compiler-refal-checker-subset.ref` validates two repeated-name definitions while rejecting
 a mismatch. Literal, forwarding, mixed call/literal, two-literal, and
 `examples/compiler-refal-general-subset.ref` extend the evidence; the latter recursively parses an
-arbitrary-length sequence of supported `Name = Name;` and `Name = 'literal';` definitions. The
-compiler emits valid multi-function Refal programs with a `Go` wrapper. Generated sources are
+arbitrary-length sequence of supported `Name = Name;` and `Name = 'literal';` definitions. The compiler emits valid multi-function Refal programs with a `Go` wrapper. Generated sources are
 checked and executed through the bootstrap runtime in end-to-end CLI regressions, and unsupported
-call-form definitions are rejected. The `refal fixpoint` command applies a canonical-output compiler
-subset three times and verifies successive byte-stable output, including the bounded `C2 ≡ C3`
-equality. General source lexing/parsing, complete Core Refal emission, differential compilation of
-the corpus, and the full Rust-to-Refal three-stage self-hosting proof remain open.
+call-form definitions are rejected. The `refal residualize-graph` command provides a checked
+structural graph-to-Core-Refal projection for reachable functions, preserving supported terms,
+conditions, and sentence-ending blocks. The `refal fixpoint` command applies a canonical-output
+compiler subset three times and verifies successive byte-stable output, including the bounded
+`C2 ≡ C3` equality. General source lexing/parsing, driven Core Refal emission, differential
+compilation of the corpus, and the full Rust-to-Refal three-stage self-hosting proof remain open.
 
 ## Milestone 6: Production Backend
 
