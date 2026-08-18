@@ -398,7 +398,7 @@ fn verifies_bounded_refal_compiler_fixpoint() {
     );
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
-        "fixpoint: stable\nbytes: 32\n"
+        "fixpoint: stable\nstages: 3\nbytes: 32\n"
     );
 }
 

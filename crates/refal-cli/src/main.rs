@@ -374,6 +374,7 @@ fn fixpoint_program(program: &refal_ast::Program, args: &[String]) {
         process::exit(1);
     }
     println!("fixpoint: stable");
+    println!("stages: 3");
     println!("bytes: {}", first.len());
 }
 

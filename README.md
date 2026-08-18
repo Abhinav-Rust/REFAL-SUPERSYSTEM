@@ -201,7 +201,7 @@ That figure counts a compiler *written in Refal* that emits Refal and compiles i
 sources, with the verification tiers above, as 100%. The fifteenth implementation milestone moves the weighted score from 90.0% to 95.0% by adding a
 bounded compiler fixpoint verifier. `refal fixpoint` applies the Refal-authored canonical-output
 compiler in `examples/compiler-refal-fixedpoint-subset.ref` three times to a source file and verifies
-successive byte-stable output, including the bounded `C2 ≡ C3` check (`fixpoint: stable`, `bytes: 32`). The previous milestone added repeated-name
+successive byte-stable output, including the bounded `C2 ≡ C3` check (`fixpoint: stable`, `stages: 3`, `bytes: 32`). The previous milestone added repeated-name
 checking and multi-function source emission. This is a tested subset stability result, not a claim
 of the full three-stage `C2 ≡ C3` self-hosting proof.
 
