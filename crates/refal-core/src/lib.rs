@@ -218,6 +218,10 @@ fn contains_expression_variable(term: &CoreTerm) -> bool {
             argument.iter().any(contains_expression_variable)
                 || sentences.iter().any(|sentence| {
                     sentence.pattern.iter().any(contains_expression_variable)
+                        || sentence.conditions.iter().any(|condition| {
+                            condition.result.iter().any(contains_expression_variable)
+                                || condition.pattern.iter().any(contains_expression_variable)
+                        })
                         || sentence.result.iter().any(contains_expression_variable)
                 })
         }
@@ -893,30 +897,49 @@ fn match_shape_pattern(
         input: &[CoreTerm],
         pattern_index: usize,
         input_index: usize,
-        bindings: &mut HashMap<String, Vec<CoreTerm>>,
-    ) -> SymbolicMatch {
+        bindings: &HashMap<String, Vec<CoreTerm>>,
+    ) -> (SymbolicMatch, Option<HashMap<String, Vec<CoreTerm>>>) {
         if pattern_index == pattern.len() {
-            if input_index == input.len() {
-                return SymbolicMatch::Yes;
-            }
-            return if input[input_index..].iter().any(contains_symbolic_variable) {
-                SymbolicMatch::Unknown
+            return if input_index == input.len() {
+                (SymbolicMatch::Yes, Some(bindings.clone()))
+            } else if input[input_index..].iter().any(contains_symbolic_variable) {
+                (SymbolicMatch::Unknown, None)
             } else {
-                SymbolicMatch::No
+                (SymbolicMatch::No, None)
             };
         }
+
         let pattern_term = &pattern[pattern_index];
         if let CoreTermKind::Variable { kind, name } = &pattern_term.kind {
             let key = name.to_ascii_lowercase();
             if *kind == VariableKind::Expression {
-                if pattern_index + 1 != pattern.len() {
-                    return SymbolicMatch::Unknown;
+                let mut saw_unknown = false;
+                for end in (input_index..=input.len()).rev() {
+                    let slice = input[input_index..end].to_vec();
+                    if let Some(previous) = bindings.get(&key)
+                        && previous != &slice
+                    {
+                        continue;
+                    }
+                    let mut candidate = bindings.clone();
+                    candidate.insert(key.clone(), slice);
+                    let (result, result_bindings) =
+                        match_at(pattern, input, pattern_index + 1, end, &candidate);
+                    match result {
+                        SymbolicMatch::Yes => return (result, result_bindings),
+                        SymbolicMatch::Unknown => saw_unknown = true,
+                        SymbolicMatch::No => {}
+                    }
                 }
-                bindings.insert(key, input[input_index..].to_vec());
-                return SymbolicMatch::Yes;
+                return if saw_unknown {
+                    (SymbolicMatch::Unknown, None)
+                } else {
+                    (SymbolicMatch::No, None)
+                };
             }
+
             let Some(input_term) = input.get(input_index) else {
-                return SymbolicMatch::No;
+                return (SymbolicMatch::No, None);
             };
             let compatible = match kind {
                 VariableKind::Symbol => matches!(
@@ -939,27 +962,69 @@ fn match_shape_pattern(
             };
             if !compatible {
                 return if contains_symbolic_variable(input_term) {
-                    SymbolicMatch::Unknown
+                    (SymbolicMatch::Unknown, None)
                 } else {
-                    SymbolicMatch::No
+                    (SymbolicMatch::No, None)
                 };
             }
-            bindings.insert(key, vec![input_term.clone()]);
-            return match_at(pattern, input, pattern_index + 1, input_index + 1, bindings);
+            if let Some(previous) = bindings.get(&key)
+                && previous != &vec![input_term.clone()]
+            {
+                return (SymbolicMatch::No, None);
+            }
+            let mut candidate = bindings.clone();
+            candidate.insert(key, vec![input_term.clone()]);
+            return match_at(
+                pattern,
+                input,
+                pattern_index + 1,
+                input_index + 1,
+                &candidate,
+            );
         }
+
         let Some(input_term) = input.get(input_index) else {
-            return SymbolicMatch::No;
+            return (SymbolicMatch::No, None);
         };
-        if contains_symbolic_variable(input_term) {
-            return SymbolicMatch::Unknown;
+        let mut candidate = bindings.clone();
+        match match_symbolic_term(pattern_term, input_term, &mut candidate) {
+            SymbolicMatch::Yes => match_at(
+                pattern,
+                input,
+                pattern_index + 1,
+                input_index + 1,
+                &candidate,
+            ),
+            SymbolicMatch::Unknown => (SymbolicMatch::Unknown, None),
+            SymbolicMatch::No => (SymbolicMatch::No, None),
         }
-        if !ground_term_matches(pattern_term, input_term) {
-            return SymbolicMatch::No;
-        }
-        match_at(pattern, input, pattern_index + 1, input_index + 1, bindings)
     }
 
-    match_at(pattern, input, 0, 0, bindings)
+    let (result, result_bindings) = match_at(pattern, input, 0, 0, bindings);
+    if let Some(result_bindings) = result_bindings {
+        *bindings = result_bindings;
+    }
+    result
+}
+
+fn match_symbolic_term(
+    pattern: &CoreTerm,
+    input: &CoreTerm,
+    bindings: &mut HashMap<String, Vec<CoreTerm>>,
+) -> SymbolicMatch {
+    if let (CoreTermKind::Bracket(pattern_inner), CoreTermKind::Bracket(input_inner)) =
+        (&pattern.kind, &input.kind)
+    {
+        return match_shape_pattern(pattern_inner, input_inner, bindings);
+    }
+    if contains_symbolic_variable(input) {
+        return SymbolicMatch::Unknown;
+    }
+    if ground_term_matches(pattern, input) {
+        SymbolicMatch::Yes
+    } else {
+        SymbolicMatch::No
+    }
 }
 
 fn contains_symbolic_variable(term: &CoreTerm) -> bool {
@@ -973,6 +1038,10 @@ fn contains_symbolic_variable(term: &CoreTerm) -> bool {
             argument.iter().any(contains_symbolic_variable)
                 || sentences.iter().any(|sentence| {
                     sentence.pattern.iter().any(contains_symbolic_variable)
+                        || sentence.conditions.iter().any(|condition| {
+                            condition.result.iter().any(contains_symbolic_variable)
+                                || condition.pattern.iter().any(contains_symbolic_variable)
+                        })
                         || sentence.result.iter().any(contains_symbolic_variable)
                 })
         }
@@ -2586,6 +2655,95 @@ mod tests {
         assert_eq!(report.steps, 2);
         assert_eq!(report.visited, vec![StateId(0), StateId(1)]);
         assert_eq!(report.residual, vec![input[1].clone()]);
+    }
+
+    #[test]
+    fn matches_symbolic_expression_variables_before_known_suffixes() {
+        let expression = |name: &str| CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind: VariableKind::Expression,
+                name: name.to_string(),
+            },
+            span: span(),
+        };
+        let character = |value: char| CoreTerm {
+            kind: CoreTermKind::Char(value),
+            span: span(),
+        };
+        let pattern = vec![expression("Prefix"), character('c')];
+        let input = vec![character('a'), expression("Unknown"), character('c')];
+        let mut bindings = HashMap::new();
+        assert_eq!(
+            match_shape_pattern(&pattern, &input, &mut bindings),
+            SymbolicMatch::Yes
+        );
+        assert_eq!(
+            bindings.get("prefix"),
+            Some(&vec![character('a'), expression("Unknown")])
+        );
+    }
+
+    #[test]
+    fn matches_symbolic_expression_variables_inside_brackets() {
+        let expression = |name: &str| CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind: VariableKind::Expression,
+                name: name.to_string(),
+            },
+            span: span(),
+        };
+        let character = |value: char| CoreTerm {
+            kind: CoreTermKind::Char(value),
+            span: span(),
+        };
+        let bracket = |terms: Vec<CoreTerm>| CoreTerm {
+            kind: CoreTermKind::Bracket(terms),
+            span: span(),
+        };
+        let pattern = vec![bracket(vec![expression("Inside"), character('c')])];
+        let input = vec![bracket(vec![
+            character('a'),
+            expression("Unknown"),
+            character('c'),
+        ])];
+        let mut bindings = HashMap::new();
+        assert_eq!(
+            match_shape_pattern(&pattern, &input, &mut bindings),
+            SymbolicMatch::Yes
+        );
+        assert_eq!(
+            bindings.get("inside"),
+            Some(&vec![character('a'), expression("Unknown")])
+        );
+    }
+
+    #[test]
+    fn detects_symbolic_variables_inside_block_conditions() {
+        let expression = |name: &str| CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind: VariableKind::Expression,
+                name: name.to_string(),
+            },
+            span: span(),
+        };
+        let block = CoreTerm {
+            kind: CoreTermKind::Block {
+                argument: vec![],
+                sentences: vec![CoreSentence {
+                    pattern: vec![],
+                    conditions: vec![CoreCondition {
+                        result: vec![expression("ConditionInput")],
+                        pattern: vec![],
+                        span: span(),
+                    }],
+                    result: vec![],
+                    span: span(),
+                }],
+            },
+            span: span(),
+        };
+        assert!(contains_symbolic_variable(&block));
+        assert!(contains_expression_variable(&block));
     }
 
     #[test]

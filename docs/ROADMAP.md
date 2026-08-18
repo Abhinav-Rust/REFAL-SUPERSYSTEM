@@ -152,8 +152,11 @@ into a generated `ResidualS<N>` function, redirect the symbolic entry call, and 
 generated-to-source graph transitions; the emitted source is checked by a CLI regression. Core
 ground and symbolic driving now evaluates ordered condition chains, executes decidable nested block
 endings, preserves uncertain blocks as residuals, and discovers graph calls across patterns,
-conditions, results, and nested blocks. Complete symbolic Turchin configuration driving,
-generalisation termination, and whole-corpus generalized driven graph residualisation remain open.
+conditions, results, and nested blocks. Symbolic shape matching now backtracks expression variables
+at arbitrary positions, recurses into brackets, and preserves repeated-variable consistency; nested
+block uncertainty detection includes condition terms. Complete symbolic Turchin configuration
+driving, generalisation termination, and whole-corpus generalized driven graph residualisation
+remain open.
 
 Completed so far:
 
@@ -206,10 +209,10 @@ a mismatch. Literal, forwarding, mixed call/literal, two-literal,
 `examples/compiler-refal-body-subset.ref` extend the evidence; the first recursively parses an
 arbitrary-length sequence of supported `Name = Name;` and `Name = 'literal';` definitions, the second
 parses real-brace definitions with supported raw patterns/results, and the third preserves complete
-multi-sentence function bodies. The compiler emits valid multi-function Refal programs with a `Go`
-wrapper. Generated sources are checked and executed through the bootstrap runtime in end-to-end CLI
-regressions, including branch-selecting execution of a preserved sentence, and malformed input is
-rejected. The `refal differential` command now lowers, formats, reparses, checks, and executes Core
+multi-sentence function bodies and condition-bearing sentences. The compiler emits valid
+multi-function Refal programs with a `Go` wrapper. Generated sources are checked and executed
+through the bootstrap runtime in end-to-end CLI regressions, including branch-selecting execution
+of a preserved sentence and a condition-bearing body, and malformed input is rejected. The `refal differential` command now lowers, formats, reparses, checks, and executes Core
 Refal against original checked execution across the entire currently runnable positive runtime-
 conformance corpus covering recursion, conditions, arithmetic, structural operations, metacode, and
 the Refal-authored body compiler; negative cases, non-runnable sources, complete whole-corpus

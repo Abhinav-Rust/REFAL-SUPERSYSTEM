@@ -199,9 +199,13 @@ bounded symbolic driving and emits checked recursive residual source with whistl
 `refal residualize-generalized` emits a bounded explicit generalized residual graph with generated
 `ResidualS<N>` functions and checked source. Core ground and symbolic driving now evaluates ordered
 condition chains, executes decidable nested blocks, preserves uncertain blocks as residuals, and
-collects graph call edges from patterns, conditions, results, and nested blocks. Negative cases, non-runnable sources, complete
-whole-corpus differential coverage, complete Turchin graph residualization, and byte-identical
-compiler-output proof remain open. Written under `--strict`:
+collects graph call edges from patterns, conditions, results, and nested blocks. Symbolic shape
+matching now backtracks expression variables at arbitrary positions, recurses into brackets, and
+preserves repeated-variable consistency; nested block uncertainty detection includes condition
+terms. The Refal-authored body compiler has an end-to-end conditioned-body generation/check/
+execution regression. Negative cases, non-runnable sources, complete whole-corpus differential
+coverage, complete Turchin graph residualization, and byte-identical compiler-output proof remain
+open. Written under `--strict`:
 **the compiler is its own first user.**
 
 `lexer.ref` → `parser.ref` → `checker.ref` → `driver.ref` (driving + graph) → `emit.ref`

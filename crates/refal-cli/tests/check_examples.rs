@@ -816,6 +816,56 @@ fn executes_refal_authored_body_compiler_subset_end_to_end() {
 }
 
 #[test]
+fn executes_refal_authored_body_compiler_with_condition_end_to_end() {
+    let output = run_file(
+        "examples/compiler-refal-body-subset.ref",
+        &["Echo { e.Text, e.Text : (e.Left 'x' e.Right) = 'Y'; e.Input = e.Input; }"],
+    );
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let generated = String::from_utf8_lossy(&output.stdout).to_string();
+    assert_eq!(
+        generated,
+        "$ENTRY Go { e.Input = <Echo e.Input>; } Echo { e.Text, e.Text : (e.Left 'x' e.Right) = 'Y'; e.Input = e.Input; }\n"
+    );
+
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock is after Unix epoch")
+        .as_nanos();
+    let path = env::temp_dir().join(format!(
+        "refal-compiled-condition-body-{}-{unique}.ref",
+        process::id()
+    ));
+    fs::write(&path, generated).expect("write generated condition source");
+
+    let checked = Command::new(refal_bin())
+        .args(["check", &path.to_string_lossy()])
+        .output()
+        .expect("check generated condition source");
+    assert!(
+        checked.status.success(),
+        "generated condition source should check:\n{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+
+    let executed = Command::new(refal_bin())
+        .args(["run", &path.to_string_lossy(), "ax"])
+        .output()
+        .expect("run generated condition source");
+    let _ = fs::remove_file(&path);
+    assert!(
+        executed.status.success(),
+        "generated condition source should run:\n{}",
+        String::from_utf8_lossy(&executed.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&executed.stdout), "Y\n");
+}
+
+#[test]
 fn executes_refal_authored_compiler_subset_end_to_end() {
     let output = run_file("examples/compiler-refal-subset.ref", &["Widget"]);
     assert!(

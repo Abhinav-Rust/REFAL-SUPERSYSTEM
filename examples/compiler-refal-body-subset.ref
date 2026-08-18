@@ -1,7 +1,7 @@
 $EXTERN Prout;
 * Refal-authored compiler slice for complete supported function bodies.
 * Accepted source grammar: one or more definitions of the form
-* Name { body }, separated by one space; body may contain multiple sentences.
+* Name { body }, separated by one space; body may contain multiple sentences and conditions.
 $ENTRY Go {
   (e.Source) = <Prout <Compile e.Source>>;
 }

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### General symbolic shape matching and conditioned Refal body compilation (2026-08-18)
+
+Symbolic expression variables now match arbitrary positions with deterministic backtracking,
+including nested brackets and repeated-variable consistency. Symbolic-variable detection now
+traverses condition terms nested inside block-ending sentences. The Refal-authored body compiler
+has a CLI regression that generates, checks, and executes a condition-bearing function body.
+Focused Core and CLI regressions pass. This is a post-95 incremental improvement; complete
+Turchin configuration driving, generalized graph compilation, whole-corpus differential proof,
+and Rust-to-Refal self-hosting remain open.
+
 ### Condition-aware Core driving and complete-term seed transitions (2026-08-18)
 
 Core ground and symbolic driving now evaluates ordered condition chains, executes decidable
