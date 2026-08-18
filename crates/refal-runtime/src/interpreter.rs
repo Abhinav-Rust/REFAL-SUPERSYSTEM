@@ -14,7 +14,7 @@ use refal_ast::{
 
 use crate::Value;
 use crate::matcher::{
-    Bindings, MatchError, VariableKey, match_pattern_candidates,
+    Bindings, MatchError, VariableKey, match_pattern_candidates, match_pattern_first,
     match_pattern_with_bindings_candidates,
 };
 
@@ -94,8 +94,21 @@ enum WorkTask<'a> {
         name: String,
         args: Vec<Value>,
         depth: usize,
+        sentence_index: usize,
     },
     Terms(WorkTermsFrame<'a>),
+    ConditionEval {
+        function_name: String,
+        function_args: Vec<Value>,
+        sentence_index: usize,
+        conditions: &'a [Condition],
+        result_terms: &'a [Term],
+        condition_index: usize,
+        pending_bindings: Vec<Bindings>,
+        matched_bindings: Vec<Bindings>,
+        current_bindings: Option<Bindings>,
+        depth: usize,
+    },
 }
 
 pub struct Evaluator<'a> {
@@ -319,9 +332,11 @@ impl<'a> Evaluator<'a> {
         let Some(function) = self.functions.get(&canonical_identifier(name)) else {
             return Ok(None);
         };
-        if function.sentences.iter().any(|sentence| {
-            !sentence.conditions.is_empty() || !terms_are_worklist_safe(&sentence.result)
-        }) {
+        if function
+            .sentences
+            .iter()
+            .any(|sentence| !terms_are_worklist_safe(&sentence.result))
+        {
             return Ok(None);
         }
 
@@ -329,6 +344,7 @@ impl<'a> Evaluator<'a> {
             name: name.to_string(),
             args: args.to_vec(),
             depth: 0,
+            sentence_index: 0,
         }];
         let mut returned: Option<Result<Vec<Value>, EvalError>> = None;
 
@@ -349,6 +365,7 @@ impl<'a> Evaluator<'a> {
                                 name: call_name,
                                 args: values,
                                 depth: call_depth,
+                                sentence_index: 0,
                             });
                         }
                         Some(PendingTerm::CallResult) => {
@@ -360,6 +377,43 @@ impl<'a> Evaluator<'a> {
                             tasks.push(WorkTask::Terms(frame));
                         }
                     },
+                    WorkTask::ConditionEval {
+                        function_name,
+                        function_args,
+                        sentence_index,
+                        conditions,
+                        result_terms,
+                        condition_index,
+                        pending_bindings,
+                        mut matched_bindings,
+                        current_bindings,
+                        depth,
+                    } => {
+                        let Some(bindings) = current_bindings else {
+                            return Ok(None);
+                        };
+                        match match_pattern_with_bindings_candidates(
+                            &conditions[condition_index].pattern,
+                            &values,
+                            bindings,
+                        ) {
+                            Ok(matches) => matched_bindings.extend(matches),
+                            Err(MatchError::NoMatch) => {}
+                            Err(error) => return Err(EvalError::Match(error)),
+                        }
+                        tasks.push(WorkTask::ConditionEval {
+                            function_name,
+                            function_args,
+                            sentence_index,
+                            conditions,
+                            result_terms,
+                            condition_index,
+                            pending_bindings,
+                            matched_bindings,
+                            current_bindings: None,
+                            depth,
+                        });
+                    }
                     WorkTask::Function { .. } => {
                         return Ok(Some(values));
                     }
@@ -368,7 +422,12 @@ impl<'a> Evaluator<'a> {
             }
 
             match task {
-                WorkTask::Function { name, args, depth } => {
+                WorkTask::Function {
+                    name,
+                    args,
+                    depth,
+                    sentence_index,
+                } => {
                     self.steps.set(self.steps.get().saturating_add(1));
                     if depth > self.max_call_depth {
                         return Err(EvalError::RecursionLimitExceeded {
@@ -382,40 +441,136 @@ impl<'a> Evaluator<'a> {
                             Some(self.evaluate_function_at_depth_without_step(&name, &args, depth));
                         continue;
                     };
-                    if function.sentences.iter().any(|sentence| {
-                        !sentence.conditions.is_empty()
-                            || !terms_are_worklist_safe(&sentence.result)
-                    }) {
+                    let Some(sentence) = function.sentences.get(sentence_index) else {
+                        returned = Some(Err(EvalError::NoMatchingSentence(name)));
+                        continue;
+                    };
+                    if !terms_are_worklist_safe(&sentence.result)
+                        || sentence
+                            .conditions
+                            .iter()
+                            .any(|condition| !terms_are_worklist_safe(&condition.result))
+                    {
                         returned =
                             Some(self.evaluate_function_at_depth_without_step(&name, &args, depth));
                         continue;
                     }
 
-                    let mut matched = false;
-                    for sentence in &function.sentences {
-                        match match_pattern_candidates(&sentence.pattern, &args) {
-                            Ok(mut candidates) => {
-                                if let Some(bindings) = candidates.drain(..).next() {
-                                    tasks.push(WorkTask::Terms(WorkTermsFrame {
-                                        terms: &sentence.result,
-                                        next: 0,
-                                        bindings,
-                                        output: Vec::new(),
-                                        depth,
-                                        pending: None,
-                                    }));
-                                    matched = true;
-                                    break;
-                                }
-                            }
-                            Err(MatchError::NoMatch) => {}
+                    let candidates = if sentence.conditions.is_empty() {
+                        match match_pattern_first(&sentence.pattern, &args) {
+                            Ok(bindings) => vec![bindings],
+                            Err(MatchError::NoMatch) => Vec::new(),
                             Err(error) => return Err(EvalError::Match(error)),
                         }
-                    }
-                    if !matched {
-                        returned = Some(Err(EvalError::NoMatchingSentence(name)));
+                    } else {
+                        match match_pattern_candidates(&sentence.pattern, &args) {
+                            Ok(candidates) => candidates,
+                            Err(MatchError::NoMatch) => Vec::new(),
+                            Err(error) => return Err(EvalError::Match(error)),
+                        }
+                    };
+                    if candidates.is_empty() {
+                        tasks.push(WorkTask::Function {
+                            name,
+                            args,
+                            depth,
+                            sentence_index: sentence_index + 1,
+                        });
+                    } else if sentence.conditions.is_empty() {
+                        tasks.push(WorkTask::Terms(WorkTermsFrame {
+                            terms: &sentence.result,
+                            next: 0,
+                            bindings: candidates[0].clone(),
+                            output: Vec::new(),
+                            depth,
+                            pending: None,
+                        }));
+                    } else {
+                        let mut pending_bindings = candidates;
+                        pending_bindings.reverse();
+                        tasks.push(WorkTask::ConditionEval {
+                            function_name: name,
+                            function_args: args,
+                            sentence_index,
+                            conditions: &sentence.conditions,
+                            result_terms: &sentence.result,
+                            condition_index: 0,
+                            pending_bindings,
+                            matched_bindings: Vec::new(),
+                            current_bindings: None,
+                            depth,
+                        });
                     }
                 }
+                WorkTask::ConditionEval {
+                    function_name,
+                    function_args,
+                    sentence_index,
+                    conditions,
+                    result_terms,
+                    condition_index,
+                    mut pending_bindings,
+                    mut matched_bindings,
+                    current_bindings: None,
+                    depth,
+                } => {
+                    if let Some(bindings) = pending_bindings.pop() {
+                        tasks.push(WorkTask::ConditionEval {
+                            function_name,
+                            function_args,
+                            sentence_index,
+                            conditions,
+                            result_terms,
+                            condition_index,
+                            pending_bindings,
+                            matched_bindings,
+                            current_bindings: Some(bindings.clone()),
+                            depth,
+                        });
+                        tasks.push(WorkTask::Terms(WorkTermsFrame {
+                            terms: &conditions[condition_index].result,
+                            next: 0,
+                            bindings,
+                            output: Vec::new(),
+                            depth,
+                            pending: None,
+                        }));
+                    } else if matched_bindings.is_empty() {
+                        tasks.push(WorkTask::Function {
+                            name: function_name,
+                            args: function_args,
+                            depth,
+                            sentence_index: sentence_index + 1,
+                        });
+                    } else if condition_index + 1 == conditions.len() {
+                        tasks.push(WorkTask::Terms(WorkTermsFrame {
+                            terms: result_terms,
+                            next: 0,
+                            bindings: matched_bindings.remove(0),
+                            output: Vec::new(),
+                            depth,
+                            pending: None,
+                        }));
+                    } else {
+                        matched_bindings.reverse();
+                        tasks.push(WorkTask::ConditionEval {
+                            function_name,
+                            function_args,
+                            sentence_index,
+                            conditions,
+                            result_terms,
+                            condition_index: condition_index + 1,
+                            pending_bindings: matched_bindings,
+                            matched_bindings: Vec::new(),
+                            current_bindings: None,
+                            depth,
+                        });
+                    }
+                }
+                WorkTask::ConditionEval {
+                    current_bindings: Some(_),
+                    ..
+                } => return Ok(None),
                 WorkTask::Terms(mut frame) => {
                     if frame.next == frame.terms.len() {
                         returned = Some(Ok(frame.output));

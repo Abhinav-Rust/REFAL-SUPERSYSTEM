@@ -9,30 +9,92 @@ $ENTRY Go {
 
 Compile {
   "$EXTERN " e.Names "; " e.Rest = "$EXTERN " e.Names "; " <Compile e.Rest>;
-  "$ENTRY " e.Name " { " e.Body " } " e.Rest = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } $ENTRY " e.Name " { " e.Body " } " <Definitions e.Rest>;
-  "$ENTRY " e.Name " { " e.Body " }" = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } $ENTRY " e.Name " { " e.Body " }";
-  "$ENTRY " e.Name "{" e.Body "}" ";" " " e.Rest = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } $ENTRY " e.Name " { " e.Body " } " <Definitions e.Rest>;
-  "$ENTRY " e.Name "{" e.Body "}" ";" = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } $ENTRY " e.Name " { " e.Body " }";
-  "$ENTRY " e.Name "{" e.Body "}" " " e.Rest = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } $ENTRY " e.Name " { " e.Body " } " <Definitions e.Rest>;
-  "$ENTRY " e.Name "{" e.Body "}" = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } $ENTRY " e.Name " { " e.Body " }";
-  e.Name " { " e.Body " } " e.Rest = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { " e.Body " } " <Definitions e.Rest>;
-  e.Name " { " e.Body " }" = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { " e.Body " }";
-  e.Name "{" e.Body "}" ";" " " e.Rest = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { " e.Body " } " <Definitions e.Rest>;
-  e.Name "{" e.Body "}" ";" = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { " e.Body " }";
-  e.Name "{" e.Body "}" " " e.Rest = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { " e.Body " } " <Definitions e.Rest>;
-  e.Name "{" e.Body "}" = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { " e.Body " }";
+  "$ENTRY " e.Name " {" " " e.After = <CompileEntry e.Name <StartBody e.After>>;
+  "$ENTRY " e.Name "{" e.After = <CompileEntryC e.Name <StartBody e.After>>;
+  e.Name " {" " " e.After = <CompileLocal e.Name <StartBody e.After>>;
+  e.Name "{" e.After = <CompileLocalC e.Name <StartBody e.After>>;
+}
+
+CompileEntry {
+  "Go" (e.Body) " " e.Rest = "$ENTRY Go { " e.Body " } " <Definitions e.Rest>;
+  "Go" (e.Body) ";" " " e.Rest = "$ENTRY Go { " e.Body " }; " <Definitions e.Rest>;
+  "Go" (e.Body) ";" = "$ENTRY Go { " e.Body " };";
+  "Go" (e.Body) = "$ENTRY Go { " e.Body " }";
+  e.Name (e.Body) " " e.Rest = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } $ENTRY " e.Name " { " e.Body " } " <Definitions e.Rest>;
+  e.Name (e.Body) ";" " " e.Rest = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } $ENTRY " e.Name " { " e.Body " }; " <Definitions e.Rest>;
+  e.Name (e.Body) ";" = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } $ENTRY " e.Name " { " e.Body " };";
+  e.Name (e.Body) = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } $ENTRY " e.Name " { " e.Body " }";
+}
+
+CompileLocal {
+  e.Name (e.Body) " " e.Rest = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { " e.Body " } " <Definitions e.Rest>;
+  e.Name (e.Body) ";" " " e.Rest = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { " e.Body " }; " <Definitions e.Rest>;
+  e.Name (e.Body) ";" = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { " e.Body " };";
+  e.Name (e.Body) = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { " e.Body " }";
+}
+
+CompileEntryC {
+  "Go" (e.Body) " " e.Rest = "$ENTRY Go { " e.Body " } " <Definitions e.Rest>;
+  "Go" (e.Body) ";" " " e.Rest = "$ENTRY Go { " e.Body " } " <Definitions ";" " " e.Rest>;
+  "Go" (e.Body) ";" = "$ENTRY Go { " e.Body " }";
+  "Go" (e.Body) = "$ENTRY Go { " e.Body " }";
+  e.Name (e.Body) " " e.Rest = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } $ENTRY " e.Name " { " e.Body " } " <Definitions e.Rest>;
+  e.Name (e.Body) ";" " " e.Rest = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } $ENTRY " e.Name " { " e.Body " } " <Definitions ";" " " e.Rest>;
+  e.Name (e.Body) ";" = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } $ENTRY " e.Name " { " e.Body " }";
+  e.Name (e.Body) = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } $ENTRY " e.Name " { " e.Body " }";
+}
+
+CompileLocalC {
+  e.Name (e.Body) " " e.Rest = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { " e.Body " } " <Definitions e.Rest>;
+  e.Name (e.Body) ";" " " e.Rest = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { " e.Body " } " <Definitions ";" " " e.Rest>;
+  e.Name (e.Body) ";" = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { " e.Body " }";
+  e.Name (e.Body) = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { " e.Body " }";
 }
 
 Definitions {
+  = ;
+  " " e.Rest = <Definitions e.Rest>;
   "; " e.Rest = <Definitions e.Rest>;
   ";" e.Rest = <Definitions e.Rest>;
-  "$ENTRY " e.Name " { " e.Body " } " e.Rest = "$ENTRY " e.Name " { " e.Body " } " <Definitions e.Rest>;
-  "$ENTRY " e.Name " { " e.Body " }" = "$ENTRY " e.Name " { " e.Body " }";
-  "$ENTRY " e.Name "{" e.Body "}" " " e.Rest = "$ENTRY " e.Name " { " e.Body " } " <Definitions e.Rest>;
-  "$ENTRY " e.Name "{" e.Body "}" = "$ENTRY " e.Name " { " e.Body " }";
-  e.Name " { " e.Body " } " e.Rest = e.Name " { " e.Body " } " <Definitions e.Rest>;
-  e.Name " { " e.Body " }" = e.Name " { " e.Body " }";
-  e.Name "{" e.Body "}" " " e.Rest = e.Name " { " e.Body " } " <Definitions e.Rest>;
-  e.Name "{" e.Body "}" = e.Name " { " e.Body " }";
+  "$ENTRY " e.Name " {" " " e.After = <EmitDefinition "$ENTRY " e.Name <StartBody e.After>>;
+  "$ENTRY " e.Name "{" e.After = <EmitDefC "$ENTRY " e.Name <StartBody e.After>>;
+  e.Name " {" " " e.After = <EmitDefinition e.Name <StartBody e.After>>;
+  e.Name "{" e.After = <EmitDefC e.Name <StartBody e.After>>;
+}
+
+EmitDefinition {
+  e.Prefix (e.Body) " " e.Rest = e.Prefix " { " e.Body " } " <Definitions e.Rest>;
+  e.Prefix (e.Body) ";" " " e.Rest = e.Prefix " { " e.Body " }; " <Definitions e.Rest>;
+  e.Prefix (e.Body) ";" = e.Prefix " { " e.Body " };";
+  e.Prefix (e.Body) = e.Prefix " { " e.Body " }";
+}
+
+EmitDefC {
+  e.Prefix (e.Body) " " e.Rest = e.Prefix " { " e.Body " } " <Definitions e.Rest>;
+  e.Prefix (e.Body) ";" " " e.Rest = e.Prefix " { " e.Body " } " <Definitions ";" " " e.Rest>;
+  e.Prefix (e.Body) ";" = e.Prefix " { " e.Body " }";
+  e.Prefix (e.Body) = e.Prefix " { " e.Body " }";
+}
+
+StartBody {
+  " " e.Rest = <TakeBody e.Rest () ()>;
+  e.Rest = <TakeBody e.Rest () ()>;
+}
+
+TakeBody {
+  " " '}' e.Rest (e.Acc) () = (e.Acc) e.Rest;
+  "'" s.C "'" e.Rest (e.Acc) (e.Depth) = <TakeBody e.Rest (e.Acc "'" s.C "'") (e.Depth)>;
+  '}' e.Rest (e.Acc) () = (e.Acc) e.Rest;
+  '}' e.Rest (e.Acc) ('d' e.Depth) = <TakeBody e.Rest (e.Acc '}') (e.Depth)>;
+  '{' e.Rest (e.Acc) (e.Depth) = <TakeBody e.Rest (e.Acc '{') ('d' e.Depth)>;
+  '"' '"' e.Rest (e.Acc) (e.Depth) = <TakeQuoted e.Rest (e.Acc '"' '"') (e.Depth)>;
+  '"' e.Rest (e.Acc) (e.Depth) = <TakeQuoted e.Rest (e.Acc '"') (e.Depth)>;
+  s.C e.Rest (e.Acc) (e.Depth) = <TakeBody e.Rest (e.Acc s.C) (e.Depth)>;
+}
+
+TakeQuoted {
+  '"' '"' e.Rest (e.Acc) (e.Depth) = <TakeBody e.Rest (e.Acc '"' '"') (e.Depth)>;
+  '"' e.Rest (e.Acc) (e.Depth) = <TakeBody e.Rest (e.Acc '"') (e.Depth)>;
+  s.C e.Rest (e.Acc) (e.Depth) = <TakeQuoted e.Rest (e.Acc s.C) (e.Depth)>;
 }
 

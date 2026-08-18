@@ -249,11 +249,14 @@ previous/repeated/LGG inputs, preserves residual-call-reachable functions, and e
 recursive Core Refal with whistle/generalization metadata; `refal residualize-generalized` adds a
 bounded explicit graph projection with generated `ResidualS<N>` functions, entry redirection, and
 source-to-generated transitions. Core and CLI regressions cover whistle detection, explicit
-transitions, generated source validity, and deterministic graph counts. The `refal fixpoint` command
-applies a canonical-output compiler subset three times and verifies successive byte-stable output,
-including the bounded `C2 ≡ C3` equality. General source lexing/parsing, complete Turchin
-configuration driving and semantic cleaning, complete generalized driven Core Refal emission, complete differential compilation of all positive
-and negative corpus programs, and the full Rust-to-Refal three-stage self-hosting proof remain open.
+transitions, generated source validity, and deterministic graph counts. The `refal fixpoint`
+command applies a canonical-output compiler subset three times and verifies successive byte-stable output,
+including the bounded `C2 ≡ C3` equality. The supported body-compiler slice now additionally passes a
+direct Rust-bootstrap → C1 → C2 → C3 trial: each artifact checks successfully and C2 ≡ C3 is
+byte-identical at 4,780 bytes. General source lexing/parsing, complete Turchin configuration driving
+and semantic cleaning, complete generalized driven Core Refal emission, complete differential
+compilation of all positive and negative corpus programs, and general-corpus Rust-to-Refal
+self-hosting remain open.
 
 ## Milestone 6: Production Backend
 

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Supported-body self-hosting fixpoint (2026-08-18)
+
+The matcher now uses a deterministic literal-prefix fast path for expression variables followed by
+known symbols, removing the split-enumeration bottleneck exercised by the Refal-authored body
+compiler. The compiler also scans single-quoted character literals, preserves its own `Go` entry,
+and tolerates terminal definition whitespace. A direct Rust-bootstrap → C1 → C2 → C3 trial now
+completes; C1, C2, and C3 each pass `refal check`, and C2 ≡ C3 is byte-identical at 4,780 bytes.
+The 100-definition scaling trial completes in under one second, and the full workspace quality gate
+passes. This closes the supported-body self-hosting gate and advances the audited score to 96%;
+general Classic Refal parsing, complete Turchin driving and semantic cleaning, complete driven Core
+emission, whole-corpus differential compilation, and general-corpus self-hosting remain open.
+
 ### Manifest-driven differential corpus verification (2026-08-18)
 
 The CLI now supports `refal differential <manifest> --corpus`. The committed

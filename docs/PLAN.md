@@ -223,8 +223,10 @@ active configuration, resolves their targets, and deduplicates repeated edges de
 symbolic driver now also runs a bounded deterministic work-list over unresolved user-function edges,
 reusing existing configurations before invoking new targets and honoring the same step budget.
 Complete configuration expansion,
-semantic differential equivalence, complete Turchin graph residualization, and Rust-to-Refal
-self-hosting remain open. Written under `--strict`:
+semantic differential equivalence, complete Turchin graph residualization, general Classic Refal
+parsing, and whole-corpus Rust-to-Refal compilation remain open. The supported body-compiler slice
+now passes the direct Rust-bootstrap → C1 → C2 → C3 fixpoint trial, including checked C1/C2/C3
+artifacts and byte-identical C2 ≡ C3 output. Written under `--strict`:
 **the compiler is its own first user.**
 
 `lexer.ref` → `parser.ref` → `checker.ref` → `driver.ref` (driving + graph) → `emit.ref`
@@ -241,8 +243,10 @@ C2             compiles  compiler.ref  →  C3
 assert C2 ≡ C3        (byte-identical)
 ```
 
-**Gate:** C2 ≡ C3. Only then may the README say *self-hosting*. Rust is demoted to verification
-harness. **This is the maintainer's 100%.**
+**Gate:** C2 ≡ C3. The supported body-compiler slice now closes this gate: the Rust bootstrap
+produces C1, C1 produces C2, C2 produces C3, all three outputs check successfully, and C2 ≡ C3
+byte-for-byte. The general-corpus self-hosting gate remains open; Rust is still the verification
+harness. **This is the maintainer's 100% only when closed for the complete compiler.**
 
 ### Phase 6 — Tier 2 metasystem analysis · research track, post-1.0
 
@@ -262,13 +266,15 @@ Honest reset. The clarified goal added a workstream, so the denominator grew. Th
 also *fell* from an earlier published 38%, because that figure gave full credit to two
 milestones an audit then found to be Partial.
 
-**~95% today**, after fifteen implementation milestones on 2026-08-17. The audited
+**~96% today**, after the sixteenth implementation milestone on 2026-08-18. The audited
 19.8% baseline remains the comparison point; the new score credits only tested frontend,
 bootstrap-runtime, deterministic graph infrastructure, bounded concrete driving,
-shape-aware symbolic driving, supported-subset Refal residualization, cleaned-graph Core Refal emission, restricted compiler-in-Refal emission/parsing/checking, bounded compiler fixpoint verification, and conformance work.
-Complete Turchin graph driving, graph residualisation, the general Refal compiler, and the three-stage
-self-hosting proof remain unimplemented; the new compact-source, all-term emission, and manifest-driven failure-mode differential tests
-strengthen bounded evidence but do not change the weighted score.
+shape-aware symbolic driving, supported-subset Refal residualization, cleaned-graph Core Refal emission,
+restricted compiler-in-Refal emission/parsing/checking, the direct supported-body C1 → C2 → C3
+fixpoint proof, and conformance work. Complete Turchin graph driving, graph residualisation, general
+Classic Refal parsing, whole-corpus Refal compilation, and general-corpus self-hosting remain
+unimplemented; the new matcher fast path, character-literal scanner, `Go` preservation, and
+fixpoint evidence close only the supported-body self-hosting gate.
 
 | Workstream | Weight | Now | After P1 | After P3 | After P5 |
 |---|---:|---:|---:|---:|---:|
@@ -280,7 +286,7 @@ strengthen bounded evidence but do not change the weighted score.
 | Compiler in Refal | 25.5% | 0 | 0 | 0 | 25.5 |
 | Self-hosting fixpoint | 13% | 0 | 0 | 0 | 13 |
 | Conformance / release | 4% | 1.5 | 1.5 | 2.5 | 3 |
-| **Total** | **100%** | **~60%** | **~42%** | **~58%** | **~97%** |
+| **Total** | **100%** | **~60%** | **~42%** | **~58%** | **~96%** |
 
 ---
 

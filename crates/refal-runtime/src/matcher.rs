@@ -27,6 +27,14 @@ pub fn match_pattern(pattern: &[Term], input: &[Value]) -> Result<Bindings, Matc
         .ok_or(MatchError::NoMatch)
 }
 
+/// Finds the first successful match without materializing later expression-variable splits.
+///
+/// This is valid for sentence dispatch when no conditions need alternate bindings. The
+/// candidate-enumerating APIs remain available for condition backtracking and matcher tests.
+pub fn match_pattern_first(pattern: &[Term], input: &[Value]) -> Result<Bindings, MatchError> {
+    match_first_from(pattern, input, Bindings::new())?.ok_or(MatchError::NoMatch)
+}
+
 pub fn match_pattern_with_bindings(
     pattern: &[Term],
     input: &[Value],
@@ -55,6 +63,153 @@ pub fn match_pattern_with_bindings_candidates(
         Err(MatchError::NoMatch)
     } else {
         Ok(candidates)
+    }
+}
+
+fn match_first_from(
+    pattern: &[Term],
+    input: &[Value],
+    bindings: Bindings,
+) -> Result<Option<Bindings>, MatchError> {
+    let Some((first, rest_pattern)) = pattern.split_first() else {
+        return Ok(input.is_empty().then_some(bindings));
+    };
+
+    match &first.kind {
+        TermKind::Symbol(symbol) => {
+            let Some((first_input, rest_input)) = input.split_first() else {
+                return Ok(None);
+            };
+            if symbol_matches(symbol, first_input) {
+                match_first_from(rest_pattern, rest_input, bindings)
+            } else {
+                Ok(None)
+            }
+        }
+        TermKind::Bracket(inner_pattern) => {
+            let Some((Value::Bracket(inner_input), rest_input)) = input.split_first() else {
+                return Ok(None);
+            };
+            for inner_bindings in match_all_from(inner_pattern, inner_input, bindings.clone())? {
+                if let Some(result) = match_first_from(rest_pattern, rest_input, inner_bindings)? {
+                    return Ok(Some(result));
+                }
+            }
+            Ok(None)
+        }
+        TermKind::Variable(variable) => match variable.kind {
+            VariableKind::Symbol => {
+                let Some((first_input, rest_input)) = input.split_first() else {
+                    return Ok(None);
+                };
+                if matches!(first_input, Value::Bracket(_)) {
+                    return Ok(None);
+                }
+                let key = VariableKey::from(variable);
+                let Ok(next_bindings) = bind_or_check(bindings, key, vec![first_input.clone()])
+                else {
+                    return Ok(None);
+                };
+                match_first_from(rest_pattern, rest_input, next_bindings)
+            }
+            VariableKind::Term => {
+                let Some((first_input, rest_input)) = input.split_first() else {
+                    return Ok(None);
+                };
+                let key = VariableKey::from(variable);
+                let Ok(next_bindings) = bind_or_check(bindings, key, vec![first_input.clone()])
+                else {
+                    return Ok(None);
+                };
+                match_first_from(rest_pattern, rest_input, next_bindings)
+            }
+            VariableKind::Expression => {
+                let key = VariableKey::from(variable);
+                if rest_pattern.is_empty() {
+                    if let Ok(bindings) = bind_or_check(bindings, key, input.to_vec()) {
+                        return Ok(Some(bindings));
+                    }
+                    return Ok(None);
+                }
+                if !bindings.contains_key(&key) {
+                    let leading_literal_count = rest_pattern
+                        .iter()
+                        .take_while(|term| matches!(&term.kind, TermKind::Symbol(_)))
+                        .count();
+                    if leading_literal_count > 0 {
+                        let literal_values: Vec<Value> = rest_pattern[..leading_literal_count]
+                            .iter()
+                            .map(|term| match &term.kind {
+                                TermKind::Symbol(symbol) => value_for_symbol(symbol),
+                                _ => unreachable!(),
+                            })
+                            .collect();
+                        for split in 0..=input.len().saturating_sub(literal_values.len()) {
+                            if input[split..].starts_with(&literal_values) {
+                                let value = input[..split].to_vec();
+                                let Ok(next_bindings) =
+                                    bind_or_check(bindings.clone(), key.clone(), value)
+                                else {
+                                    continue;
+                                };
+                                if let Some(result) =
+                                    match_first_from(rest_pattern, &input[split..], next_bindings)?
+                                {
+                                    return Ok(Some(result));
+                                }
+                            }
+                        }
+                        return Ok(None);
+                    }
+                }
+                let trailing_bracket_count = rest_pattern
+                    .iter()
+                    .take_while(|term| matches!(&term.kind, TermKind::Bracket(_)))
+                    .count();
+                if trailing_bracket_count > 0 && input.len() >= trailing_bracket_count {
+                    let split = input.len() - trailing_bracket_count;
+                    let prefix = &input[..split];
+                    let suffix = &input[split..];
+                    let suffix_is_brackets = suffix
+                        .iter()
+                        .all(|value| matches!(value, Value::Bracket(_)));
+                    let prefix_has_bracket = prefix
+                        .iter()
+                        .any(|value| matches!(value, Value::Bracket(_)));
+                    if suffix_is_brackets && !prefix_has_bracket {
+                        let value = prefix.to_vec();
+                        if let Ok(next_bindings) =
+                            bind_or_check(bindings.clone(), key.clone(), value)
+                            && let Some(result) =
+                                match_first_from(rest_pattern, suffix, next_bindings)?
+                        {
+                            return Ok(Some(result));
+                        }
+                        return Ok(None);
+                    }
+                }
+                if let Some(bound) = bindings.get(&key) {
+                    if input.starts_with(bound) {
+                        return match_first_from(rest_pattern, &input[bound.len()..], bindings);
+                    }
+                    return Ok(None);
+                }
+                for split in 0..=input.len() {
+                    let value = input[..split].to_vec();
+                    let Ok(next_bindings) = bind_or_check(bindings.clone(), key.clone(), value)
+                    else {
+                        continue;
+                    };
+                    if let Some(result) =
+                        match_first_from(rest_pattern, &input[split..], next_bindings)?
+                    {
+                        return Ok(Some(result));
+                    }
+                }
+                Ok(None)
+            }
+        },
+        TermKind::Call { .. } | TermKind::Block { .. } => Err(MatchError::CallsAreNotPatterns),
     }
 }
 
@@ -102,10 +257,25 @@ fn match_all_from(
                 match_single_all(variable, input, rest_pattern, bindings, |_| true)
             }
             VariableKind::Expression => {
+                if rest_pattern.is_empty() {
+                    let key = VariableKey::from(variable);
+                    return match bind_or_check(bindings, key, input.to_vec()) {
+                        Ok(bindings) => Ok(vec![bindings]),
+                        Err(_) => Ok(Vec::new()),
+                    };
+                }
                 match_expression_all(variable, input, rest_pattern, bindings)
             }
         },
         TermKind::Call { .. } | TermKind::Block { .. } => Err(MatchError::CallsAreNotPatterns),
+    }
+}
+
+fn value_for_symbol(symbol: &Symbol) -> Value {
+    match symbol {
+        Symbol::Char(character) => Value::Char(*character),
+        Symbol::Identifier(identifier) => Value::Identifier(identifier.clone()),
+        Symbol::Number(number) => Value::Number(number.clone()),
     }
 }
 
@@ -299,6 +469,32 @@ mod tests {
         assert_eq!(
             bindings[&key(VariableKind::Expression, "Right")],
             vec![Value::Char('c')]
+        );
+    }
+
+    #[test]
+    fn first_match_selects_the_leftmost_successful_expression_split() {
+        let pattern = vec![
+            var(VariableKind::Expression, "Left"),
+            char_term('x'),
+            var(VariableKind::Expression, "Right"),
+        ];
+        let input = vec![
+            Value::Char('a'),
+            Value::Char('x'),
+            Value::Char('b'),
+            Value::Char('x'),
+            Value::Char('c'),
+        ];
+        let bindings = match_pattern_first(&pattern, &input).unwrap();
+
+        assert_eq!(
+            bindings[&key(VariableKind::Expression, "Left")],
+            vec![Value::Char('a')]
+        );
+        assert_eq!(
+            bindings[&key(VariableKind::Expression, "Right")],
+            vec![Value::Char('b'), Value::Char('x'), Value::Char('c')]
         );
     }
 
