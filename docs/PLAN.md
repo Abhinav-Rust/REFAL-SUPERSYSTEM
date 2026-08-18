@@ -208,7 +208,9 @@ non-runnable runtime fixture by expected failure mode, and proves byte-identical
 reparse/check across the valid runtime and Refal-authored compiler corpus. Symbolic reports now
 also expose concrete bounded configuration nodes and caller-aware call transitions, with an opt-in
 CLI projection and a recursive `C0 -> C1 -> C1` regression. The Refal-authored body compiler also
-has a nested sentence-ending block generation/check/execution regression. Complete configuration expansion,
+has a nested sentence-ending block generation/check/execution regression. The frontend negative corpus
+now has exact parser diagnostics for four delimiter and termination errors, while full reference-clause
+coverage remains open. Complete configuration expansion,
 semantic differential equivalence, complete Turchin graph residualization, and Rust-to-Refal
 self-hosting remain open. Written under `--strict`:
 **the compiler is its own first user.**

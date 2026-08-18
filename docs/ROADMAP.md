@@ -220,9 +220,11 @@ Refal against original checked execution across the entire currently runnable po
 conformance corpus covering recursion, conditions, arithmetic, structural operations, metacode, and
 the Refal-authored body compiler. The CLI suite now traces every current negative fixture and
 intentionally non-runnable runtime fixture by expected failure mode, and proves byte-identical
-lowering after reparse/check across the valid runtime and Refal-authored compiler corpus. Complete
-whole-corpus semantic differential coverage, complete Turchin graph residualization, and
-Rust-to-Refal self-hosting remain open.
+lowering after reparse/check across the valid runtime and Refal-authored compiler corpus. The
+frontend corpus additionally asserts exact parser diagnostics for missing sentence equals, missing
+condition colons, unclosed calls, and unclosed sentence-ending blocks; the full reference-clause
+malformed corpus remains partial. Complete whole-corpus semantic differential coverage, complete
+Turchin graph residualization, and Rust-to-Refal self-hosting remain open.
 The `refal drive-symbolic --configurations` command provides a checked bounded configuration
 projection with concrete nodes and resolved call edges. The `refal residualize-graph` command
 provides a checked structural graph-to-Core-Refal projection

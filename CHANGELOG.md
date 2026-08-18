@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Traceable malformed-grammar frontend corpus (2026-08-18)
+
+Added four malformed Classic Refal fixtures with exact parser diagnostics and source locations for
+missing sentence equals, missing condition colons, unclosed calls, and unclosed sentence-ending
+blocks. They are included in the negative corpus and covered by a dedicated CLI regression. The
+broader reference-clause-by-clause malformed corpus remains partial; the audited score remains 95%.
+
 ### Nested-block Refal-authored body compiler evidence (2026-08-18)
 
 Added an end-to-end regression in which the Refal-authored body compiler preserves a sentence-ending

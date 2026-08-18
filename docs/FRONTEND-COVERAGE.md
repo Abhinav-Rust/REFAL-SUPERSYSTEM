@@ -66,7 +66,7 @@ extensions must not silently enter the Classic Refal-5 frontend.
 | Sentence-ending blocks `, arg : { block }` | Complete | Recursive AST/parser/semantic/runtime/core implementation with nested-block, scope, fallthrough, CLI, and round-trip tests |
 | Calls prohibited in patterns | Complete | Semantic checker and CLI golden tests reject calls in patterns |
 | Optional semicolons between top-level definitions | Complete | Parser test covers separated definitions |
-| Full malformed-program golden suite | Partial | Negative fixtures cover unresolved calls, unbound variables, lexical errors, malformed numbers, signed macrodigits and pattern calls. The suite is not yet traceable clause by clause to the reference |
+| Full malformed-program golden suite | Partial | Negative fixtures now additionally cover missing sentence equals, missing condition colon, unclosed calls, and unclosed sentence-ending blocks with exact parser diagnostics and locations. The complete reference-clause-by-clause corpus remains outstanding |
 
 ## Milestone 2 Exit Criteria
 

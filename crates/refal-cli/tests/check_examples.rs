@@ -1229,6 +1229,10 @@ fn rejects_negative_examples() {
         "examples/bad-missing-entry.ref",
         "examples/bad-empty-function.ref",
         "examples/bad-signed-macrodigit.ref",
+        "examples/bad-missing-equals.ref",
+        "examples/bad-missing-colon.ref",
+        "examples/bad-unclosed-call.ref",
+        "examples/bad-unclosed-block.ref",
         "examples/runtime-unimplemented-extern.ref",
     ] {
         let output = check_file(path);
@@ -1238,6 +1242,41 @@ fn rejects_negative_examples() {
             "{path} should fail\nstdout:\n{}\nstderr:\n{}",
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[test]
+fn reports_traceable_parser_diagnostics_for_malformed_grammar() {
+    let cases = [
+        (
+            "examples/bad-missing-equals.ref",
+            "parse error at 3:1: expected term, found Semicolon",
+        ),
+        (
+            "examples/bad-missing-colon.ref",
+            "parse error at 2:22: expected term, found Equals",
+        ),
+        (
+            "examples/bad-unclosed-call.ref",
+            "parse error at 3:1: expected term, found Semicolon",
+        ),
+        (
+            "examples/bad-unclosed-block.ref",
+            "parse error at 4:1: expected Semicolon, found Eof",
+        ),
+    ];
+
+    for (path, expected) in cases {
+        let output = Command::new(refal_bin())
+            .args(["check", &workspace_path(path)])
+            .output()
+            .expect("run refal binary");
+        assert!(!output.status.success(), "{path} should fail");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains(expected),
+            "{path} diagnostic should contain {expected:?}, got:\n{stderr}"
         );
     }
 }
