@@ -170,8 +170,8 @@ an artefact that does not currently exist in any modern toolchain.
 
 Queries over the Phase 2 graph.
 
-- Structural reachability, terminal-state, function-coverage, and SCC recursion reporting are implemented by `refal analyze`; semantic recognition-impossible reachability (exhaustiveness) remains open.
-- Sentence subsumption / semantic dead-sentence detection remains open; the current report only identifies structural unreachable states.
+- Structural reachability, terminal-state, function-coverage, and SCC recursion reporting are implemented by `refal analyze`; conservative pairwise sentence-pattern compatibility is implemented by `refal overlap`; semantic recognition-impossible reachability (exhaustiveness) remains open.
+- Sentence subsumption / semantic dead-sentence detection remains open; the current reports identify structural unreachable states and conservative compatibility pairs, not full semantic dead-sentence proofs.
 - Function formats (§2.3) — shape inference across call boundaries.
 - Builtin domain errors — `<Div e 0>`, `Numb` on non-digits, bad file descriptor, macrodigit overflow.
 - Open-`e` complexity lint — no other Refal toolchain has this.

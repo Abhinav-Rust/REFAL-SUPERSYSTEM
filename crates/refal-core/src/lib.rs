@@ -62,6 +62,169 @@ pub struct GraphAnalysisReport {
     pub recursive_components: Vec<usize>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PatternCompatibility {
+    Disjoint,
+    Overlap,
+    Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PatternOverlap {
+    pub function: String,
+    pub first: StateId,
+    pub second: StateId,
+    pub compatibility: PatternCompatibility,
+}
+
+/// Compare sentence patterns conservatively within each function.
+///
+/// This is a deterministic Tier 1 diagnostic. It identifies obvious disjoint and overlapping
+/// concrete shapes, while expression variables and unsupported structural cases remain Unknown;
+/// it does not claim full sentence subsumption or Turchin semantic graph cleaning.
+pub fn analyze_pattern_overlap(graph: &StateGraph) -> Vec<PatternOverlap> {
+    let mut report = Vec::new();
+    for (index, first) in graph.states.iter().enumerate() {
+        for second in graph.states.iter().skip(index + 1) {
+            if !first.function.eq_ignore_ascii_case(&second.function) {
+                continue;
+            }
+            report.push(PatternOverlap {
+                function: first.function.clone(),
+                first: first.id,
+                second: second.id,
+                compatibility: pattern_sequence_compatibility(&first.pattern, &second.pattern),
+            });
+        }
+    }
+    report
+}
+
+pub fn format_pattern_overlap(report: &[PatternOverlap]) -> String {
+    let mut output = String::new();
+    for pair in report {
+        let compatibility = match pair.compatibility {
+            PatternCompatibility::Disjoint => "disjoint",
+            PatternCompatibility::Overlap => "overlap",
+            PatternCompatibility::Unknown => "unknown",
+        };
+        output.push_str(&format!(
+            "{}: S{} vs S{} = {compatibility}\n",
+            pair.function, pair.first.0, pair.second.0
+        ));
+    }
+    output
+}
+
+fn pattern_sequence_compatibility(first: &[CoreTerm], second: &[CoreTerm]) -> PatternCompatibility {
+    if first.iter().any(contains_expression_variable)
+        || second.iter().any(contains_expression_variable)
+    {
+        return PatternCompatibility::Unknown;
+    }
+    if first.len() != second.len() {
+        return PatternCompatibility::Disjoint;
+    }
+    let mut unknown = false;
+    for (left, right) in first.iter().zip(second) {
+        match pattern_term_compatibility(left, right) {
+            PatternCompatibility::Disjoint => return PatternCompatibility::Disjoint,
+            PatternCompatibility::Unknown => unknown = true,
+            PatternCompatibility::Overlap => {}
+        }
+    }
+    if unknown {
+        PatternCompatibility::Unknown
+    } else {
+        PatternCompatibility::Overlap
+    }
+}
+
+fn pattern_term_compatibility(first: &CoreTerm, second: &CoreTerm) -> PatternCompatibility {
+    match (&first.kind, &second.kind) {
+        (CoreTermKind::Variable { kind, .. }, _) | (_, CoreTermKind::Variable { kind, .. }) => {
+            match kind {
+                VariableKind::Expression => PatternCompatibility::Unknown,
+                VariableKind::Symbol => match &second.kind {
+                    CoreTermKind::Char(_) | CoreTermKind::Variable { .. } => {
+                        PatternCompatibility::Overlap
+                    }
+                    _ => PatternCompatibility::Disjoint,
+                },
+                VariableKind::Term => match &second.kind {
+                    CoreTermKind::Bracket(_) | CoreTermKind::Variable { .. } => {
+                        PatternCompatibility::Overlap
+                    }
+                    _ => PatternCompatibility::Disjoint,
+                },
+            }
+        }
+        (CoreTermKind::Char(left), CoreTermKind::Char(right)) => {
+            if left == right {
+                PatternCompatibility::Overlap
+            } else {
+                PatternCompatibility::Disjoint
+            }
+        }
+        (CoreTermKind::Identifier(left), CoreTermKind::Identifier(right)) => {
+            if left.eq_ignore_ascii_case(right) {
+                PatternCompatibility::Overlap
+            } else {
+                PatternCompatibility::Disjoint
+            }
+        }
+        (CoreTermKind::Number(left), CoreTermKind::Number(right)) => {
+            if left == right {
+                PatternCompatibility::Overlap
+            } else {
+                PatternCompatibility::Disjoint
+            }
+        }
+        (CoreTermKind::Bracket(left), CoreTermKind::Bracket(right)) => {
+            pattern_sequence_compatibility(left, right)
+        }
+        (
+            CoreTermKind::Call {
+                name: left_name,
+                args: left_args,
+            },
+            CoreTermKind::Call {
+                name: right_name,
+                args: right_args,
+            },
+        ) => {
+            if !left_name.eq_ignore_ascii_case(right_name) {
+                PatternCompatibility::Disjoint
+            } else {
+                pattern_sequence_compatibility(left_args, right_args)
+            }
+        }
+        _ => PatternCompatibility::Disjoint,
+    }
+}
+
+fn contains_expression_variable(term: &CoreTerm) -> bool {
+    match &term.kind {
+        CoreTermKind::Variable {
+            kind: VariableKind::Expression,
+            ..
+        } => true,
+        CoreTermKind::Bracket(inner) => inner.iter().any(contains_expression_variable),
+        CoreTermKind::Call { args, .. } => args.iter().any(contains_expression_variable),
+        CoreTermKind::Block {
+            argument,
+            sentences,
+        } => {
+            argument.iter().any(contains_expression_variable)
+                || sentences.iter().any(|sentence| {
+                    sentence.pattern.iter().any(contains_expression_variable)
+                        || sentence.result.iter().any(contains_expression_variable)
+                })
+        }
+        _ => false,
+    }
+}
+
 /// Analyze structural graph properties that are useful before symbolic driving.
 ///
 /// This is a bounded Tier 1 pass: it reports deterministic reachability, terminal states,
@@ -1619,6 +1782,109 @@ mod tests {
         assert_eq!(
             format_graph_analysis(&report),
             "states: 4\ntransitions: 3\nreachable: S0, S1, S2\nunreachable: S3\nterminal: S3\nfunctions: Go, Loop, Dead\ncomponents: C0=[S0]; C1=[S1, S2] recursive; C2=[S3]\nrecursive-components: C1\n"
+        );
+    }
+
+    #[test]
+    fn reports_conservative_sentence_pattern_compatibility() {
+        let char_term = |value: char| CoreTerm {
+            kind: CoreTermKind::Char(value),
+            span: span(),
+        };
+        let expression = |name: &str| CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind: VariableKind::Expression,
+                name: name.to_string(),
+            },
+            span: span(),
+        };
+        let graph = StateGraph {
+            entry: Some(StateId(0)),
+            states: vec![
+                GraphState {
+                    id: StateId(0),
+                    function: "Go".to_string(),
+                    sentence: 0,
+                    pattern: vec![char_term('a')],
+                    conditions: Vec::new(),
+                    result: Vec::new(),
+                    span: span(),
+                },
+                GraphState {
+                    id: StateId(1),
+                    function: "Go".to_string(),
+                    sentence: 1,
+                    pattern: vec![char_term('a')],
+                    conditions: Vec::new(),
+                    result: Vec::new(),
+                    span: span(),
+                },
+                GraphState {
+                    id: StateId(2),
+                    function: "Go".to_string(),
+                    sentence: 2,
+                    pattern: vec![char_term('b')],
+                    conditions: Vec::new(),
+                    result: Vec::new(),
+                    span: span(),
+                },
+                GraphState {
+                    id: StateId(3),
+                    function: "Go".to_string(),
+                    sentence: 3,
+                    pattern: vec![expression("Input")],
+                    conditions: Vec::new(),
+                    result: Vec::new(),
+                    span: span(),
+                },
+            ],
+            transitions: Vec::new(),
+        };
+        let report = analyze_pattern_overlap(&graph);
+        assert_eq!(
+            report,
+            vec![
+                PatternOverlap {
+                    function: "Go".to_string(),
+                    first: StateId(0),
+                    second: StateId(1),
+                    compatibility: PatternCompatibility::Overlap,
+                },
+                PatternOverlap {
+                    function: "Go".to_string(),
+                    first: StateId(0),
+                    second: StateId(2),
+                    compatibility: PatternCompatibility::Disjoint,
+                },
+                PatternOverlap {
+                    function: "Go".to_string(),
+                    first: StateId(0),
+                    second: StateId(3),
+                    compatibility: PatternCompatibility::Unknown,
+                },
+                PatternOverlap {
+                    function: "Go".to_string(),
+                    first: StateId(1),
+                    second: StateId(2),
+                    compatibility: PatternCompatibility::Disjoint,
+                },
+                PatternOverlap {
+                    function: "Go".to_string(),
+                    first: StateId(1),
+                    second: StateId(3),
+                    compatibility: PatternCompatibility::Unknown,
+                },
+                PatternOverlap {
+                    function: "Go".to_string(),
+                    first: StateId(2),
+                    second: StateId(3),
+                    compatibility: PatternCompatibility::Unknown,
+                },
+            ]
+        );
+        assert_eq!(
+            format_pattern_overlap(&report),
+            "Go: S0 vs S1 = overlap\nGo: S0 vs S2 = disjoint\nGo: S0 vs S3 = unknown\nGo: S1 vs S2 = disjoint\nGo: S1 vs S3 = unknown\nGo: S2 vs S3 = unknown\n"
         );
     }
 

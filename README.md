@@ -255,7 +255,7 @@ completeness.
 | 3 | Semantic checker | 🔶 Partial | Entry points, declarations, name equivalence, call checks, variable binding, condition legality. Entry-point rules corrected in `641ffc0` |
 | 4 | Refal machine | 🔶 Partial | Object-expression runtime, `s.`/`t.`/`e.` matching with backtracking, conditions, recursion guard, arithmetic, `Trunc`/`Real`, descriptor-backed file I/O, structural stack operations, expression splitting, case conversion, `Arg`, `Step`, `Time`, visible dynamic `Mu` dispatch, and a tagged `Dn`/`Up` metacode subset. An explicit work-list path now handles eligible deep block-free call chains; conditions, blocks, symbolic matching plans, the official Chapter 6 metacode encoding, and the full flat view-field machine remain open ([#7](../../issues/7)) |
 | 5 | Graph of states | 🔶 Partial | `refal-core` exposes deterministic sentence states, syntactic call edges, SCC detection, function-aware structural reachability cleanup, bounded ground driving, shape-aware symbolic driving, bounded Tier 1 reachability/terminal/SCC analysis, and a supported-subset Refal residual emitter; complete Turchin driving, semantic cleaning, generalization, and graph residualisation remain open |
-| 6 | Tier 1 analyses | 🔶 Partial | Deterministic structural reachability, terminal-state, function-coverage, and SCC recursion reports; semantic pattern overlap, binding analysis, and Turchin cleaning remain open |
+| 6 | Tier 1 analyses | 🔶 Partial | Deterministic structural reachability, terminal-state, function-coverage, and SCC recursion reports plus conservative pairwise sentence-pattern compatibility through `refal overlap`, with core and CLI regressions; semantic subsumption, binding analysis, and Turchin cleaning remain open |
 | 7 | Compiler written in Refal | 🔶 Partial | Refal-authored fixtures now cover restricted identity, forwarding-call, literal, mixed call/literal, repeated-name checker, and two-literal definitions; they generate checked Refal source and execute through the bootstrap runtime. General Refal parsing, complete Core Refal emission, and compiler completeness remain open |
 | 8 | Verified self-hosting | 🔶 Partial | Bounded byte-stable self-application of a canonical-output subset; three-stage fixpoint and `C2 ≡ C3` remain open |
 | 9 | Tier 2 metasystem analysis | ⬜ Research | Post-1.0 |
@@ -270,6 +270,7 @@ The full phase plan, gates and completion accounting are in [`docs/PLAN.md`](doc
 
 | Date | Change |
 |---|---|
+| 2026-08-18 | Post-95 incremental improvement: conservative pairwise sentence-pattern compatibility analysis, the `refal overlap` command, and exact core/CLI regressions; the 95% score is unchanged because full semantic subsumption and Turchin cleaning remain open |
 | 2026-08-17 | Fifteenth 5-point implementation milestone: bounded `refal fixpoint` verification, byte-stable twice-applied canonical-output compiler subset, exact CLI regression, and synchronized self-hosting documentation; full workspace gates pass |
 | 2026-08-17 | Fourteenth 5-point implementation milestone: a Refal-authored two-definition checker/compiler subset with repeated-name validation, mismatch rejection, checked multi-function source emission, generated-program execution, and an end-to-end CLI regression; full workspace gates pass |
 | 2026-08-17 | Thirteenth 5-point implementation milestone: a Refal-authored `Name = Name;` lexer/parser subset, mismatch rejection, checked source emission, generated-program execution, and an end-to-end CLI regression; full workspace gates pass |
@@ -298,8 +299,8 @@ The full phase plan, gates and completion accounting are in [`docs/PLAN.md`](doc
 | `refal-syntax` | 🔶 Lexer and parser; blocks and macrodigit-bound tests are implemented; full traceable conformance remains |
 | `refal-semantics` | 🔶 Legality checks for the supported surface |
 | `refal-runtime` | 🔶 Correct for the covered subset; arithmetic, `Trunc`/`Real`, descriptor-backed file I/O, structural splitting/case/stack operations, `Arg`, `Step`, `Time`, visible dynamic `Mu`, and tagged `Dn`/`Up` metacode for supported values are implemented; an explicit work-list path handles eligible deep call chains, but the full machine is not complete |
-| `refal-core` | 🔶 Normalised formatter, deterministic sentence-state/call-edge seed graph, SCC detection, structural cleanup, bounded ground driving, shape-aware symbolic driving, bounded Tier 1 reachability/terminal/SCC analysis, and supported-subset Refal residualization; complete Turchin driving and graph residualization are not implemented |
-| `refal-cli` | 🔶 `check`, `dump-ast`, `lower`, `graph`, `analyze`, `drive`, `drive-symbolic`, `residualize`, `supercompile`, `fixpoint`, `run`; the Refal-authored compiler subsets are exercised as source fixtures |
+| `refal-core` | 🔶 Normalised formatter, deterministic sentence-state/call-edge seed graph, SCC detection, structural cleanup, bounded ground driving, shape-aware symbolic driving, conservative sentence-pattern overlap analysis, bounded Tier 1 reachability/terminal/SCC analysis, and supported-subset Refal residualization; complete Turchin driving and graph residualization are not implemented |
+| `refal-cli` | 🔶 `check`, `dump-ast`, `lower`, `graph`, `analyze`, `overlap`, `drive`, `drive-symbolic`, `residualize`, `supercompile`, `fixpoint`, `run`; the Refal-authored compiler subsets are exercised as source fixtures |
 | CI and quality gates | ✅ `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` |
 
 ### Reporting rules

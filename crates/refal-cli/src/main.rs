@@ -76,6 +76,7 @@ fn main() {
         "lower" => lower_program(&program, &input_args),
         "graph" => graph_program(&program, &input_args),
         "analyze" => analyze_program(&program, &input_args),
+        "overlap" => overlap_program(&program, &input_args),
         "drive" => drive_program(&program, &input_args),
         "drive-symbolic" => drive_symbolic_program(&program, &input_args),
         "residualize" => residualize_program(&program, &input_args),
@@ -100,6 +101,7 @@ fn print_usage() {
     eprintln!("  lower      Lower checked Refal source to normalized Core Refal");
     eprintln!("  graph      Print the deterministic seed graph of sentence states and calls");
     eprintln!("  analyze    Report bounded Tier 1 reachability, terminals, and SCCs");
+    eprintln!("  overlap    Report conservative sentence-pattern compatibility pairs");
     eprintln!("  drive      Execute the bounded ground graph driver [--steps N] [args...]");
     eprintln!("  drive-symbolic  Partially drive from an expression variable [--steps N]");
     eprintln!("  residualize  Emit Refal for the supported symbolic residual subset [--steps N]");
@@ -145,6 +147,17 @@ fn analyze_program(program: &refal_ast::Program, args: &[String]) {
     let graph = refal_core::build_seed_graph(&core);
     let report = refal_core::analyze_graph(&graph);
     print!("{}", refal_core::format_graph_analysis(&report));
+}
+
+fn overlap_program(program: &refal_ast::Program, args: &[String]) {
+    if !args.is_empty() {
+        eprintln!("Usage: refal overlap <file.ref>");
+        process::exit(2);
+    }
+    let core = refal_core::lower_program(program);
+    let graph = refal_core::build_seed_graph(&core);
+    let report = refal_core::analyze_pattern_overlap(&graph);
+    print!("{}", refal_core::format_pattern_overlap(&report));
 }
 
 fn drive_program(program: &refal_ast::Program, args: &[String]) {

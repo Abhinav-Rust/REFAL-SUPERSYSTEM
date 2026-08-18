@@ -135,13 +135,14 @@ Completed so far:
 - Preserve source maps for diagnostics.
 - Emit stable formatted Refal/Core Refal output.
 
-Status: **Partial implementation; updated 2026-08-17**. The deterministic seed graph now has
+Status: **Partial implementation; updated 2026-08-18**. The deterministic seed graph now has
 one state per source sentence and syntactic call edges. SCC detection, condition-preserving
 states, function-aware structural reachability cleanup, bounded concrete driving, shape-aware
-symbolic execution over known prefixes with symbolic expression tails, and deterministic Tier 1
-reachability/terminal/function/SCC analysis are implemented and tested. A supported-subset residual wrapper emits checked Refal source from
-the symbolic report. Complete symbolic Turchin driving, semantic graph cleaning,
-generalisation, whistle termination, and graph residualisation remain open.
+symbolic execution over known prefixes with symbolic expression tails, deterministic Tier 1
+reachability/terminal/function/SCC analysis, and conservative pairwise sentence-pattern
+compatibility through `refal overlap` are implemented and tested. A supported-subset residual
+wrapper emits checked Refal source from the symbolic report. Complete symbolic Turchin driving,
+semantic graph cleaning, generalisation, whistle termination, and graph residualisation remain open.
 
 Completed so far:
 
@@ -161,6 +162,9 @@ Completed so far:
 - Deterministic Tier 1 graph analysis, exposed as `refal analyze`, reporting reachable and
   structurally unreachable states, terminal states, functions, SCC components, and recursive
   components. Core and CLI regressions cover the exact report.
+- Conservative pairwise sentence-pattern compatibility, exposed as `refal overlap`, classifying
+  obvious concrete pairs as disjoint or overlapping and preserving `unknown` for uncertain
+  expression-variable cases. Core and CLI regressions cover the exact deterministic report.
 - Shape-aware symbolic driving through `drive_symbolic_with_input`, which can reduce a known
   symbol prefix followed by a symbolic expression tail; the core suite covers this reduction.
 - Supported-subset residualization through `residualize_symbolic` and `refal residualize`,
@@ -174,11 +178,11 @@ Completed so far:
 
 ## Tier 1 Analysis Slice
 
-Status: **Partial implementation; updated 2026-08-17**. The analyzer reports structural graph
-facts deterministically and is suitable for bounded diagnostics before symbolic driving. Semantic
-pattern overlap, sentence subsumption, function-format inference, builtin-domain diagnostics,
-and the strict severity model remain open; this slice does not claim Turchin's semantic graph
-cleaning.
+Status: **Partial implementation; updated 2026-08-18**. The analyzer reports structural graph
+facts deterministically and now includes conservative pairwise sentence-pattern compatibility,
+suitable for bounded diagnostics before symbolic driving. Sentence subsumption, function-format
+inference, builtin-domain diagnostics, and the strict severity model remain open; this slice does
+not claim Turchin's semantic graph cleaning.
 
 ## Refal-authored Compiler Slice
 

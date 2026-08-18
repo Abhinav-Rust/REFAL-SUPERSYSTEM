@@ -40,6 +40,13 @@ fn analyze_file(path: &str) -> std::process::Output {
         .expect("run refal binary")
 }
 
+fn overlap_file(path: &str) -> std::process::Output {
+    Command::new(refal_bin())
+        .args(["overlap", &workspace_path(path)])
+        .output()
+        .expect("run refal binary")
+}
+
 fn drive_file(path: &str, args: &[&str]) -> std::process::Output {
     let mut command = Command::new(refal_bin());
     command.args(["drive", &workspace_path(path)]);
@@ -139,6 +146,20 @@ fn prints_deterministic_tier_one_graph_analysis() {
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
         "states: 3\ntransitions: 2\nreachable: S0, S1, S2\nunreachable: \nterminal: S1\nfunctions: Go, Reverse\ncomponents: C0=[S0]; C1=[S1]; C2=[S2]\nrecursive-components: \n"
+    );
+}
+
+#[test]
+fn reports_pattern_overlap_for_recursive_fixture() {
+    let output = overlap_file("examples/runtime-recursion.ref");
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "Reverse: S1 vs S2 = unknown\n"
     );
 }
 

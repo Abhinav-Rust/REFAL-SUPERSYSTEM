@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Conservative sentence-pattern overlap diagnostic (2026-08-18)
+
+The graph-analysis surface now includes conservative pairwise compatibility classification for
+sentence patterns within each function. `refal overlap` reports obvious disjoint and overlapping
+concrete shapes while preserving `unknown` for expression-variable or unsupported cases. Core and
+CLI regressions lock the deterministic report. This is a post-95 incremental improvement; full
+sentence subsumption, binding analysis, semantic graph cleaning, and Turchin generalisation remain
+open.
+
 ### Post-95 incremental compiler analysis (2026-08-17)
 
 The Refal-authored compiler subset now has an additional checked fixture for one literal definition,
