@@ -107,7 +107,9 @@ fn print_usage() {
     eprintln!("  analyze    Report bounded Tier 1 reachability, terminals, and SCCs");
     eprintln!("  overlap    Report conservative sentence-pattern compatibility pairs");
     eprintln!("  drive      Execute the bounded ground graph driver [--steps N] [args...]");
-    eprintln!("  drive-symbolic  Partially drive from an expression variable [--steps N]");
+    eprintln!(
+        "  drive-symbolic  Partially drive from an expression variable [--steps N] [--configurations]"
+    );
     eprintln!("  residualize  Emit Refal for the supported symbolic residual subset [--steps N]");
     eprintln!("  residualize-graph  Emit structurally cleaned reachable Core Refal");
     eprintln!("  residualize-driven  Emit driven Core Refal with whistle evidence [--steps N]");
@@ -217,17 +219,31 @@ fn drive_program(program: &refal_ast::Program, args: &[String]) {
 }
 
 fn drive_symbolic_program(program: &refal_ast::Program, args: &[String]) {
-    let max_steps = match args {
-        [] => 10_000,
+    let (max_steps, show_configurations) = match args {
+        [] => (10_000, false),
+        [flag] if flag == "--configurations" => (10_000, true),
         [flag, limit] if flag == "--steps" => match limit.parse::<usize>() {
-            Ok(limit) => limit,
+            Ok(limit) => (limit, false),
             Err(_) => {
-                eprintln!("Usage: refal drive-symbolic <file.ref> [--steps N]");
+                eprintln!("Usage: refal drive-symbolic <file.ref> [--steps N] [--configurations]");
                 process::exit(2);
             }
         },
+        [steps_flag, limit, configurations_flag]
+            if steps_flag == "--steps" && configurations_flag == "--configurations" =>
+        {
+            match limit.parse::<usize>() {
+                Ok(limit) => (limit, true),
+                Err(_) => {
+                    eprintln!(
+                        "Usage: refal drive-symbolic <file.ref> [--steps N] [--configurations]"
+                    );
+                    process::exit(2);
+                }
+            }
+        }
         _ => {
-            eprintln!("Usage: refal drive-symbolic <file.ref> [--steps N]");
+            eprintln!("Usage: refal drive-symbolic <file.ref> [--steps N] [--configurations]");
             process::exit(2);
         }
     };
@@ -248,6 +264,33 @@ fn drive_symbolic_program(program: &refal_ast::Program, args: &[String]) {
         .join(" -> ");
     println!("steps: {}", report.steps);
     println!("visited: {visited}");
+    if show_configurations {
+        println!("configurations: {}", report.configurations.len());
+        for configuration in &report.configurations {
+            println!(
+                "C{}: S{} {}",
+                configuration.id,
+                configuration.state.0,
+                refal_core::format_term_sequence(&configuration.input)
+            );
+        }
+        println!(
+            "configuration-transitions: {}",
+            report.configuration_transitions.len()
+        );
+        for transition in &report.configuration_transitions {
+            let target = transition
+                .to
+                .map_or_else(|| "residual".to_string(), |id| format!("C{id}"));
+            println!(
+                "C{} -{} {}-> {}",
+                transition.from,
+                transition.callee,
+                refal_core::format_term_sequence(&transition.input),
+                target
+            );
+        }
+    }
     println!(
         "residual: {}",
         refal_core::format_term_sequence(&report.residual)

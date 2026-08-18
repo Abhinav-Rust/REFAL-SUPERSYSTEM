@@ -158,30 +158,65 @@ fn reports_usage_for_missing_input_file() {
 
 #[test]
 fn rejects_the_traceable_negative_and_non_runnable_corpus() {
-    for path in [
-        "examples/bad-call-in-pattern.ref",
-        "examples/bad-condition-unbound-variable.ref",
-        "examples/bad-duplicate-extern.ref",
-        "examples/bad-duplicate-function.ref",
-        "examples/bad-empty-function.ref",
-        "examples/bad-lowercase-identifier.ref",
-        "examples/bad-malformed-real.ref",
-        "examples/bad-missing-entry.ref",
-        "examples/bad-signed-macrodigit.ref",
-        "examples/bad-unbound-variable.ref",
-        "examples/bad-unresolved-call.ref",
-        "examples/bad-variable-kind-conflict.ref",
+    for (path, expected_diagnostic) in [
+        (
+            "examples/bad-call-in-pattern.ref",
+            "function calls are not allowed in patterns",
+        ),
+        (
+            "examples/bad-condition-unbound-variable.ref",
+            "unbound variable `e.Missing` in result expression",
+        ),
+        (
+            "examples/bad-duplicate-extern.ref",
+            "duplicate function or declaration `Prout`",
+        ),
+        (
+            "examples/bad-duplicate-function.ref",
+            "duplicate function or declaration `FOO_BAR`",
+        ),
+        (
+            "examples/bad-empty-function.ref",
+            "function `Go` has no sentences",
+        ),
+        (
+            "examples/bad-lowercase-identifier.ref",
+            "identifiers must start with an uppercase letter",
+        ),
+        (
+            "examples/bad-malformed-real.ref",
+            "real number requires digits after decimal point",
+        ),
+        (
+            "examples/bad-missing-entry.ref",
+            "program does not define a `Go` function to start from",
+        ),
+        (
+            "examples/bad-signed-macrodigit.ref",
+            "a sign is only permitted on a real number",
+        ),
+        (
+            "examples/bad-unbound-variable.ref",
+            "unbound variable `e.Missing` in result expression",
+        ),
+        (
+            "examples/bad-unresolved-call.ref",
+            "unresolved function call `Missing`",
+        ),
+        (
+            "examples/bad-variable-kind-conflict.ref",
+            "variable `X` is already bound as `s.X`",
+        ),
     ] {
         let output = check_file(path);
+        let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(
             !output.status.success(),
-            "{path} should be rejected by check\nstdout:\n{}\nstderr:\n{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
+            "{path} should be rejected by check"
         );
         assert!(
-            !output.stderr.is_empty(),
-            "{path} should provide a diagnostic"
+            stderr.contains(expected_diagnostic),
+            "{path} should report `{expected_diagnostic}`, got:\n{stderr}"
         );
     }
 
@@ -1031,6 +1066,23 @@ fn drives_a_symbolic_identity_to_a_residual_expression_variable() {
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
         "steps: 2\nvisited: S0 -> S1\nresidual: e.Input\n"
+    );
+}
+
+#[test]
+fn exposes_explicit_symbolic_configurations_and_transitions() {
+    let output = symbolic_drive_file(
+        "examples/supercompile-loop.ref",
+        &["--steps", "10", "--configurations"],
+    );
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "steps: 3\nvisited: S0 -> S1\nconfigurations: 2\nC0: S0 e.Input\nC1: S1 e.Input\nconfiguration-transitions: 2\nC0 -Loop e.Input-> C1\nC1 -Loop e.Input-> C1\nresidual: <Loop e.Input>\n"
     );
 }
 

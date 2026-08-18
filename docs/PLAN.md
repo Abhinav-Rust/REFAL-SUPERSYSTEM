@@ -205,7 +205,9 @@ preserves repeated-variable consistency; nested block uncertainty detection incl
 terms. The Refal-authored body compiler has an end-to-end conditioned-body generation/check/
 execution regression. The CLI integration suite now traces every current negative fixture and intentionally
 non-runnable runtime fixture by expected failure mode, and proves byte-identical lowering after
-reparse/check across the valid runtime and Refal-authored compiler corpus. Complete whole-corpus
+reparse/check across the valid runtime and Refal-authored compiler corpus. Symbolic reports now
+also expose concrete bounded configuration nodes and caller-aware call transitions, with an opt-in
+CLI projection and a recursive `C0 -> C1 -> C1` regression. Complete configuration expansion,
 semantic differential equivalence, complete Turchin graph residualization, and Rust-to-Refal
 self-hosting remain open. Written under `--strict`:
 **the compiler is its own first user.**

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Explicit bounded symbolic configuration graph (2026-08-18)
+
+`SymbolicDriveReport` now exposes concrete bounded configuration nodes and caller-aware call
+transitions with resolved targets. The opt-in `refal drive-symbolic --configurations` mode prints
+these nodes and edges; recursive whistle regressions verify the deterministic `C0 -> C1 -> C1`
+graph. This is a concrete Turchin configuration-graph slice, not complete semantic cleaning,
+generalized graph equivalence, or self-hosting, so the audited score remains 95%.
+
 ### Corpus failure-mode and byte-stability verification (2026-08-18)
 
 The CLI integration suite now traces all current negative fixtures and intentionally non-runnable

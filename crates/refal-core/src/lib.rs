@@ -380,7 +380,32 @@ pub struct SymbolicDriveReport {
     pub whistle_states: Vec<StateId>,
     pub whistle_inputs: Vec<(StateId, Vec<CoreTerm>)>,
     pub whistle_events: Vec<WhistleEvent>,
+    /// Concrete symbolic configurations reached by the bounded driver, in discovery order.
+    pub configurations: Vec<SymbolicConfiguration>,
+    /// Calls made while expanding configurations, resolved to configuration IDs when the target
+    /// configuration was also reached within the bound.
+    pub configuration_transitions: Vec<SymbolicConfigurationTransition>,
     pub steps: usize,
+}
+
+/// A bounded symbolic configuration consisting of a source sentence state and its partially known
+/// input. Unlike the structural seed graph, this node records the actual configuration being
+/// driven and therefore distinguishes repeated calls with different inputs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SymbolicConfiguration {
+    pub id: usize,
+    pub state: StateId,
+    pub input: Vec<CoreTerm>,
+}
+
+/// An explicit call edge between bounded symbolic configurations. `to` is `None` when the call
+/// remained residual or exceeded the driving bound; the callee and input are retained as evidence.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SymbolicConfigurationTransition {
+    pub from: usize,
+    pub callee: String,
+    pub input: Vec<CoreTerm>,
+    pub to: Option<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -477,6 +502,9 @@ pub fn drive_ground(
         whistle_inputs: Vec::new(),
         whistle_events: Vec::new(),
         visited_inputs: Vec::new(),
+        configurations: Vec::new(),
+        configuration_transitions: Vec::new(),
+        active_configuration: None,
         steps: 0,
         max_steps,
     };
@@ -534,6 +562,9 @@ pub fn drive_symbolic_with_input(
         whistle_inputs: Vec::new(),
         whistle_events: Vec::new(),
         visited_inputs: Vec::new(),
+        configurations: Vec::new(),
+        configuration_transitions: Vec::new(),
+        active_configuration: None,
         steps: 0,
         max_steps,
     };
@@ -547,12 +578,30 @@ pub fn drive_symbolic_with_input(
             span: Span { start: 0, end: 0 },
         }],
     };
+    let mut configuration_transitions = context.configuration_transitions;
+    for transition in &mut configuration_transitions {
+        transition.to = context
+            .configurations
+            .iter()
+            .find(|configuration| {
+                configuration.input == transition.input
+                    && graph
+                        .states
+                        .get(configuration.state.0)
+                        .is_some_and(|state| {
+                            state.function.eq_ignore_ascii_case(&transition.callee)
+                        })
+            })
+            .map(|configuration| configuration.id);
+    }
     Ok(SymbolicDriveReport {
         residual,
         visited: context.visited,
         whistle_states: context.whistle_states,
         whistle_inputs: context.whistle_inputs,
         whistle_events: context.whistle_events,
+        configurations: context.configurations,
+        configuration_transitions,
         steps: context.steps,
     })
 }
@@ -564,17 +613,50 @@ struct DriveContext<'a> {
     whistle_inputs: Vec<(StateId, Vec<CoreTerm>)>,
     whistle_events: Vec<WhistleEvent>,
     visited_inputs: Vec<(StateId, Vec<CoreTerm>)>,
+    configurations: Vec<SymbolicConfiguration>,
+    configuration_transitions: Vec<SymbolicConfigurationTransition>,
+    active_configuration: Option<usize>,
     steps: usize,
     max_steps: usize,
 }
 
 impl<'a> DriveContext<'a> {
+    fn record_configuration(&mut self, state: StateId, input: &[CoreTerm]) -> usize {
+        if let Some(configuration) = self
+            .configurations
+            .iter()
+            .find(|configuration| configuration.state == state && configuration.input == input)
+        {
+            return configuration.id;
+        }
+        let id = self.configurations.len();
+        self.configurations.push(SymbolicConfiguration {
+            id,
+            state,
+            input: input.to_vec(),
+        });
+        id
+    }
+
+    fn record_call(&mut self, callee: &str, input: &[CoreTerm]) {
+        if let Some(from) = self.active_configuration {
+            self.configuration_transitions
+                .push(SymbolicConfigurationTransition {
+                    from,
+                    callee: callee.to_string(),
+                    input: input.to_vec(),
+                    to: None,
+                });
+        }
+    }
+
     fn invoke(&mut self, function: &str, input: &[CoreTerm]) -> Result<Vec<CoreTerm>, DriveError> {
         if self.steps >= self.max_steps {
             return Err(DriveError::StepLimit {
                 limit: self.max_steps,
             });
         }
+        self.record_call(function, input);
         if function.eq_ignore_ascii_case("Prout") {
             self.steps += 1;
             return Ok(input.to_vec());
@@ -609,6 +691,7 @@ impl<'a> DriveContext<'a> {
                 limit: self.max_steps,
             });
         }
+        self.record_call(function, input);
         if function.eq_ignore_ascii_case("Prout") {
             self.steps += 1;
             return Ok(SymbolicInvoke::Reduced(input.to_vec()));
@@ -637,6 +720,7 @@ impl<'a> DriveContext<'a> {
                         }
                         SymbolicMatch::Yes => {}
                     }
+                    let configuration_id = self.record_configuration(state.id, input);
                     if self.visited.contains(&state.id) {
                         if !self.whistle_states.contains(&state.id) {
                             self.whistle_states.push(state.id);
@@ -668,7 +752,11 @@ impl<'a> DriveContext<'a> {
                     }
                     self.visited.push(state.id);
                     self.visited_inputs.push((state.id, input.to_vec()));
-                    return self.instantiate_symbolic(&state.result, &bindings);
+                    let previous_configuration = self.active_configuration;
+                    self.active_configuration = Some(configuration_id);
+                    let result = self.instantiate_symbolic(&state.result, &bindings);
+                    self.active_configuration = previous_configuration;
+                    return result;
                 }
             }
         }
@@ -1607,8 +1695,22 @@ fn rewrite_residual_calls(
                     sentences: sentences
                         .iter()
                         .map(|sentence| CoreSentence {
-                            pattern: sentence.pattern.clone(),
-                            conditions: sentence.conditions.clone(),
+                            pattern: rewrite_residual_calls(&sentence.pattern, generated_names),
+                            conditions: sentence
+                                .conditions
+                                .iter()
+                                .map(|condition| CoreCondition {
+                                    result: rewrite_residual_calls(
+                                        &condition.result,
+                                        generated_names,
+                                    ),
+                                    pattern: rewrite_residual_calls(
+                                        &condition.pattern,
+                                        generated_names,
+                                    ),
+                                    span: condition.span,
+                                })
+                                .collect(),
                             result: rewrite_residual_calls(&sentence.result, generated_names),
                             span: sentence.span,
                         })
@@ -2925,6 +3027,17 @@ mod tests {
             "e.Input"
         );
         assert_eq!(format_term_sequence(&report.residual), "<Loop e.Input>");
+        assert_eq!(report.configurations.len(), 1);
+        assert_eq!(report.configurations[0].id, 0);
+        assert_eq!(report.configurations[0].state, StateId(0));
+        assert_eq!(
+            format_term_sequence(&report.configurations[0].input),
+            "e.Input"
+        );
+        assert_eq!(report.configuration_transitions.len(), 1);
+        assert_eq!(report.configuration_transitions[0].from, 0);
+        assert_eq!(report.configuration_transitions[0].callee, "Loop");
+        assert_eq!(report.configuration_transitions[0].to, Some(0));
         let generalized = generalized_residual_states(&report);
         assert_eq!(generalized.len(), 1);
         assert_eq!(generalized[0].state, StateId(0));
@@ -3121,7 +3234,9 @@ mod tests {
             whistle_states: vec![],
             whistle_inputs: vec![],
             whistle_events: vec![],
-            steps: 2,
+            configurations: vec![],
+            configuration_transitions: vec![],
+            steps: 0,
         };
         assert_eq!(
             residualize_symbolic(&report),

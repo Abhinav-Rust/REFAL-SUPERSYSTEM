@@ -156,7 +156,9 @@ conditions, results, and nested blocks. Symbolic shape matching now backtracks e
 at arbitrary positions, recurses into brackets, and preserves repeated-variable consistency; nested
 block uncertainty detection includes condition terms. Complete symbolic Turchin configuration
 driving, generalisation termination, and whole-corpus generalized driven graph residualisation
-remain open.
+remain open. Symbolic reports now expose bounded configuration nodes and caller-aware transitions,
+including resolved recursive whistle edges through `refal drive-symbolic --configurations`; this is
+an explicit graph slice, not a claim of complete Turchin semantic cleaning.
 
 Completed so far:
 
@@ -220,7 +222,9 @@ intentionally non-runnable runtime fixture by expected failure mode, and proves 
 lowering after reparse/check across the valid runtime and Refal-authored compiler corpus. Complete
 whole-corpus semantic differential coverage, complete Turchin graph residualization, and
 Rust-to-Refal self-hosting remain open.
-The `refal residualize-graph` command provides a checked structural graph-to-Core-Refal projection
+The `refal drive-symbolic --configurations` command provides a checked bounded configuration
+projection with concrete nodes and resolved call edges. The `refal residualize-graph` command
+provides a checked structural graph-to-Core-Refal projection
 for reachable functions, preserving supported terms, conditions, and sentence-ending blocks. The `refal residualize-driven` command additionally runs bounded symbolic driving, retains visited and
 whistle-triggering configurations, projects deterministic `GeneralizedResidualState` records with
 previous/repeated/LGG inputs, preserves residual-call-reachable functions, and emits checked
