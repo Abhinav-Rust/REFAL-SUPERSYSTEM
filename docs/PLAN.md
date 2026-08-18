@@ -207,7 +207,8 @@ execution regression. The CLI integration suite now traces every current negativ
 non-runnable runtime fixture by expected failure mode, and proves byte-identical lowering after
 reparse/check across the valid runtime and Refal-authored compiler corpus. Symbolic reports now
 also expose concrete bounded configuration nodes and caller-aware call transitions, with an opt-in
-CLI projection and a recursive `C0 -> C1 -> C1` regression. Complete configuration expansion,
+CLI projection and a recursive `C0 -> C1 -> C1` regression. The Refal-authored body compiler also
+has a nested sentence-ending block generation/check/execution regression. Complete configuration expansion,
 semantic differential equivalence, complete Turchin graph residualization, and Rust-to-Refal
 self-hosting remain open. Written under `--strict`:
 **the compiler is its own first user.**

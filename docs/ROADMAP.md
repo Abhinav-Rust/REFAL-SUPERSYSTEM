@@ -214,7 +214,8 @@ parses real-brace definitions with supported raw patterns/results, and the third
 multi-sentence function bodies and condition-bearing sentences. The compiler emits valid
 multi-function Refal programs with a `Go` wrapper. Generated sources are checked and executed
 through the bootstrap runtime in end-to-end CLI regressions, including branch-selecting execution
-of a preserved sentence and a condition-bearing body, and malformed input is rejected. The `refal differential` command now lowers, formats, reparses, checks, and executes Core
+of a preserved sentence, a condition-bearing body, and a nested sentence-ending block on bracketed
+input; malformed input is rejected. The `refal differential` command now lowers, formats, reparses, checks, and executes Core
 Refal against original checked execution across the entire currently runnable positive runtime-
 conformance corpus covering recursion, conditions, arithmetic, structural operations, metacode, and
 the Refal-authored body compiler. The CLI suite now traces every current negative fixture and

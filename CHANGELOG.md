@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Nested-block Refal-authored body compiler evidence (2026-08-18)
+
+Added an end-to-end regression in which the Refal-authored body compiler preserves a sentence-ending
+block, emits valid Refal, passes checking, and executes the generated source on bracketed input.
+This extends supported-body preservation beyond multi-sentence and condition-bearing bodies, but does
+not claim general source parsing or full compiler semantics; the audited score remains 95%.
+
 ### Explicit bounded symbolic configuration graph (2026-08-18)
 
 `SymbolicDriveReport` now exposes concrete bounded configuration nodes and caller-aware call
