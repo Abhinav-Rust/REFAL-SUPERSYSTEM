@@ -38,12 +38,13 @@ verification harness; it must not contain the production compiler's logic.
 - Execute that subset through the bootstrap runtime. The generated multi-function source is checked and executed end to end, and mismatched restricted definitions are rejected.
 - Use it to compile real Refal programs to Core Refal/Refal output. General source parsing and complete Core Refal emission remain open.
 
-### 6. Self-Hosting Bootstrap — Not Started
+### 6. Self-Hosting Bootstrap — Partial bounded evidence
 
-- Compile the Refal compiler sources through the Refal compiler.
-- Verify the generated compiler produces equivalent output.
-- Retain Rust only as a reproducible verification harness, not as the compiler
-  implementation.
+- A bounded canonical-output subset now applies three compiler stages and verifies byte-identical
+  successive output, including `C2 ≡ C3`.
+- Compile the complete Refal compiler sources through the Refal compiler.
+- Verify the generated compiler produces equivalent output across the full corpus.
+- Retain Rust only as a reproducible verification harness, not as the compiler implementation.
 
 ### 7. Release and Compatibility Evidence — Not Started
 
@@ -53,7 +54,7 @@ verification harness; it must not contain the production compiler's logic.
 
 ## Quantitative Scorecard
 
-The live accounting is [`PLAN.md`](PLAN.md) section 5. The repository milestone log currently reports **80%** against the broader completion target; this contract’s workstream table remains a conservative architectural breakdown and is updated only when a gate changes.
+The live accounting is [`PLAN.md`](PLAN.md) section 5. The repository milestone log currently reports **95%** against the broader completion target; this contract’s workstream table remains a conservative architectural gate breakdown, not a replacement for the live weighted score. It is updated only when a gate changes.
 
 It went *down* from an earlier 38%, deliberately, for two reasons:
 
@@ -72,9 +73,9 @@ It went *down* from an earlier 38%, deliberately, for two reasons:
 | Graph of states and Refal emission | 8.5% | 2.1% |
 | Static verification | 15% | 0.8% |
 | Compiler implemented in Refal | 25.5% | partial restricted emitter/parser/checker; general compiler 0% |
-| Verified self-hosting bootstrap | 13% | 0% |
+| Verified self-hosting bootstrap | 13% | bounded canonical-subset `C2 ≡ C3` evidence; full gate 0% |
 | Conformance, release and compatibility evidence | 4% | 0.6% |
-| **Total** | **100%** | **~19%** |
+| **Total** | **100%** | **~19% conservative gate credit; live weighted score: 95%** |
 
 ## Reporting Rule
 
