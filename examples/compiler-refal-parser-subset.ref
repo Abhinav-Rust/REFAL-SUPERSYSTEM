@@ -1,8 +1,90 @@
-$EXTERN Prout;
+$EXTERN Prout, Chr;
 
-* Restricted source grammar: a character-string function definition of the form
-* Name = Name; where both names must be identical.
+* Refal-authored token-consuming parser subset for the Core-emitter grammar.
+* Input: space-separated lexer token stream from compiler-refal-lexer-subset.ref:
+*   [KwExtern Ident(Name) Semicolon]
+*   (Ident(Name) Equal (Ident(Name) | Lit(chars) | Call(Name)) Semicolon)+
+* Identity bodies require both Ident names to match.
+* Output: Core Refal via the same EmitCore IR/layout as emit-core-subset
+* (byte-identical to Rust `refal lower` for this restricted grammar).
 $ENTRY Go {
-  (e.Name " = " e.Name ";") = <Prout "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { e.Input = e.Input; }">;
+  (e.Tokens) = <Prout <EmitCore <Parse <TrimRight e.Tokens>>>>;
 }
 
+TrimRight {
+  e.X " " = <TrimRight e.X>;
+  e.X = e.X;
+}
+
+Parse {
+  "KwExtern Ident(" e.Ext ") Semicolon " e.Rest = ('x') (e.Ext) <ParseDefs e.Rest>;
+  e.Rest = ('x') () <ParseDefs e.Rest>;
+}
+
+ParseDefs {
+  "Ident(" e.Name ") Equal Ident(" e.Name ") Semicolon " e.Rest =
+    (e.Name) ('i') () <ParseRest e.Rest>;
+  "Ident(" e.Name ") Equal Lit(" e.Text ") Semicolon " e.Rest =
+    (e.Name) ('l') (<Explode e.Text>) <ParseRest e.Rest>;
+  "Ident(" e.Name ") Equal Call(" e.Callee ") Semicolon " e.Rest =
+    (e.Name) ('c') (e.Callee) <ParseRest e.Rest>;
+  "Ident(" e.Name ") Equal Ident(" e.Name ") Semicolon" =
+    (e.Name) ('i') ();
+  "Ident(" e.Name ") Equal Lit(" e.Text ") Semicolon" =
+    (e.Name) ('l') (<Explode e.Text>);
+  "Ident(" e.Name ") Equal Call(" e.Callee ") Semicolon" =
+    (e.Name) ('c') (e.Callee);
+}
+
+ParseRest {
+  "Ident(" e.Name ") Equal Ident(" e.Name ") Semicolon " e.Rest =
+    (e.Name) ('i') () <ParseRest e.Rest>;
+  "Ident(" e.Name ") Equal Lit(" e.Text ") Semicolon " e.Rest =
+    (e.Name) ('l') (<Explode e.Text>) <ParseRest e.Rest>;
+  "Ident(" e.Name ") Equal Call(" e.Callee ") Semicolon " e.Rest =
+    (e.Name) ('c') (e.Callee) <ParseRest e.Rest>;
+  "Ident(" e.Name ") Equal Ident(" e.Name ") Semicolon" =
+    (e.Name) ('i') ();
+  "Ident(" e.Name ") Equal Lit(" e.Text ") Semicolon" =
+    (e.Name) ('l') (<Explode e.Text>);
+  "Ident(" e.Name ") Equal Call(" e.Callee ") Semicolon" =
+    (e.Name) ('c') (e.Callee);
+}
+
+Explode {
+  = ;
+  s.C e.Rest = "'" s.C "'" <ExplodeSep e.Rest>;
+}
+
+ExplodeSep {
+  = ;
+  s.C e.Rest = ' ' "'" s.C "'" <ExplodeSep e.Rest>;
+}
+
+EmitCore {
+  ('x') (e.Ext) (e.First) t.Kind (e.Payload) e.Rest =
+    <EmitExtern e.Ext>
+    "$ENTRY Go {" <Chr 10> "  e.Input = <" e.First " e.Input>;" <Chr 10> "}" <Chr 10> <Chr 10>
+    <EmitFunction e.First t.Kind (e.Payload)>
+    <EmitRest e.Rest>;
+}
+
+EmitExtern {
+  = ;
+  e.Name = "$EXTERN " e.Name ";" <Chr 10> <Chr 10>;
+}
+
+EmitRest {
+  = ;
+  (e.Name) t.Kind (e.Payload) e.Rest =
+    <Chr 10> <Chr 10> <EmitFunction e.Name t.Kind (e.Payload)> <EmitRest e.Rest>;
+}
+
+EmitFunction {
+  e.Name ('i') () =
+    e.Name " {" <Chr 10> "  e.Input = e.Input;" <Chr 10> "}";
+  e.Name ('l') (e.Chars) =
+    e.Name " {" <Chr 10> "  e.Input = " e.Chars ";" <Chr 10> "}";
+  e.Name ('c') (e.Callee) =
+    e.Name " {" <Chr 10> "  e.Input = <" e.Callee " e.Input>;" <Chr 10> "}";
+}

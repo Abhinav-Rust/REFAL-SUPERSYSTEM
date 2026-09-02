@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Token-consuming Refal parser subset (2026-09-02)
+
+Upgraded `examples/compiler-refal-parser-subset.ref` from a character-level identity-only emitter
+into a token-consuming parser for the same identity/literal/call grammar as the lexer and Core
+emitter. It builds EmitCore IR from the lexer token stream, emits Core Refal, and is proven
+byte-identical to Rust `refal lower` and to `compiler-refal-emit-core-subset.ref` on three fixture
+classes. The bootstrap-stage harness now pipes lexer stdout into the parser. General Classic Refal
+parsing, braces/multi-sentence bodies in the token pipeline, complete Turchin driving, whole-corpus
+differential compilation, and general-corpus self-hosting remain open; the honest ~42%
+evidence-weighted score is unchanged.
+
 ### Refal Core emitter and lexer subsets (2026-09-02)
 
 Added `examples/compiler-refal-emit-core-subset.ref`, a Refal-authored Core Refal emitter for a

@@ -36,7 +36,7 @@ verification harness; it must not contain the production compiler's logic.
 
 - Implement a useful compiler subset in Refal source. Restricted identity-function emitter, parser, and repeated-name checker fixtures now exist in `examples/`.
 - Execute that subset through the bootstrap runtime. The generated multi-function source is checked and executed end to end, and mismatched restricted definitions are rejected.
-- Use it to compile real Refal programs to Core Refal/Refal output. A restricted Core emitter now matches Rust `lower` for identity/literal/call programs; a lexer subset tokenizes the same grammar. General source parsing and complete Core Refal emission remain open.
+- Use it to compile real Refal programs to Core Refal/Refal output. A restricted Core emitter now matches Rust `lower` for identity/literal/call programs; a lexer subset tokenizes the same grammar; a token-consuming parser subset builds EmitCore IR from that stream and matches `lower`. General source parsing and complete Core Refal emission remain open.
 
 ### 6. Self-Hosting Bootstrap — Partial bounded evidence
 
@@ -72,7 +72,7 @@ It went *down* from an earlier 38%, deliberately, for two reasons:
 | Refal machine | 19.5% | 4.3% |
 | Graph of states and Refal emission | 8.5% | 2.1% |
 | Static verification | 15% | 0.8% |
-| Compiler implemented in Refal | 25.5% | partial restricted emitter/parser/checker/lexer/Core-emit; general compiler 0% |
+| Compiler implemented in Refal | 25.5% | partial restricted emitter/parser/checker/lexer/token-parser/Core-emit; general compiler 0% |
 | Verified self-hosting bootstrap | 13% | bounded canonical-subset `C2 ≡ C3` evidence; full gate 0% |
 | Conformance, release and compatibility evidence | 4% | 0.6% |
 | **Total** | **100%** | **~19% conservative gate credit; live weighted score: 95%** |

@@ -708,10 +708,8 @@ fn executes_refal_authored_checker_subset_end_to_end() {
 
 #[test]
 fn executes_refal_authored_parser_subset_end_to_end() {
-    let output = run_file(
-        "examples/compiler-refal-parser-subset.ref",
-        &["Widget = Widget;"],
-    );
+    let tokens = "Ident(Widget) Equal Ident(Widget) Semicolon";
+    let output = run_file("examples/compiler-refal-parser-subset.ref", &[tokens]);
     assert!(
         output.status.success(),
         "unexpected stderr:\n{}",
@@ -720,7 +718,14 @@ fn executes_refal_authored_parser_subset_end_to_end() {
     let generated = String::from_utf8_lossy(&output.stdout).to_string();
     assert_eq!(
         generated,
-        "$ENTRY Go { e.Input = <Widget e.Input>; } Widget { e.Input = e.Input; }\n"
+        concat!(
+            "$ENTRY Go {\n",
+            "  e.Input = <Widget e.Input>;\n",
+            "}\n\n",
+            "Widget {\n",
+            "  e.Input = e.Input;\n",
+            "}\n"
+        )
     );
 
     let unique = SystemTime::now()
@@ -731,7 +736,7 @@ fn executes_refal_authored_parser_subset_end_to_end() {
         "refal-compiled-parser-widget-{}-{unique}.ref",
         process::id()
     ));
-    fs::write(&path, generated).expect("write generated Refal source");
+    fs::write(&path, &generated).expect("write generated Refal source");
 
     let checked = Command::new(refal_bin())
         .args(["check", &path.to_string_lossy()])
@@ -757,9 +762,111 @@ fn executes_refal_authored_parser_subset_end_to_end() {
 
     let rejected = run_file(
         "examples/compiler-refal-parser-subset.ref",
-        &["Widget = Other;"],
+        &["Ident(Widget) Equal Ident(Other) Semicolon"],
     );
     assert!(!rejected.status.success());
+}
+
+#[test]
+fn refal_authored_token_parser_matches_rust_lower_for_supported_subset() {
+    let cases = [
+        (
+            "Echo = 'Hi'; Identity = Identity;",
+            concat!(
+                "$ENTRY Go {\n",
+                "  e.Input = <Echo e.Input>;\n",
+                "}\n\n",
+                "Echo {\n",
+                "  e.Input = 'Hi';\n",
+                "}\n\n",
+                "Identity {\n",
+                "  e.Input = e.Input;\n",
+                "}\n"
+            ),
+        ),
+        (
+            "$EXTERN Prout; Echo = 'Hi';",
+            concat!(
+                "$EXTERN Prout;\n\n",
+                "$ENTRY Go {\n",
+                "  e.Input = <Echo e.Input>;\n",
+                "}\n\n",
+                "Echo {\n",
+                "  e.Input = 'Hi';\n",
+                "}\n"
+            ),
+        ),
+        (
+            "Main = <Echo e.Input>; Echo = 'OK';",
+            concat!(
+                "$ENTRY Go {\n",
+                "  e.Input = <Main e.Input>;\n",
+                "}\n\n",
+                "Main {\n",
+                "  e.Input = <Echo e.Input>;\n",
+                "}\n\n",
+                "Echo {\n",
+                "  e.Input = 'OK';\n",
+                "}\n"
+            ),
+        ),
+    ];
+
+    for (source, classic) in cases {
+        let lexed = run_file("examples/compiler-refal-lexer-subset.ref", &[source]);
+        assert!(
+            lexed.status.success(),
+            "lexer failed for {source:?}:\n{}",
+            String::from_utf8_lossy(&lexed.stderr)
+        );
+        let tokens = String::from_utf8_lossy(&lexed.stdout);
+        let tokens = tokens.trim_end();
+
+        let parsed = run_file("examples/compiler-refal-parser-subset.ref", &[tokens]);
+        assert!(
+            parsed.status.success(),
+            "token parser failed for {source:?}:\n{}",
+            String::from_utf8_lossy(&parsed.stderr)
+        );
+
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock is after Unix epoch")
+            .as_nanos();
+        let classic_path = env::temp_dir().join(format!(
+            "refal-token-parser-classic-{}-{unique}.ref",
+            process::id()
+        ));
+        fs::write(&classic_path, classic).expect("write classic source for lower");
+
+        let lowered = Command::new(refal_bin())
+            .args(["lower", &classic_path.to_string_lossy()])
+            .output()
+            .expect("lower classic source");
+        let _ = fs::remove_file(&classic_path);
+        assert!(
+            lowered.status.success(),
+            "lower failed for {source:?}:\n{}",
+            String::from_utf8_lossy(&lowered.stderr)
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&parsed.stdout),
+            String::from_utf8_lossy(&lowered.stdout),
+            "token parser+EmitCore should match Rust lower for {source:?}"
+        );
+
+        let emitted = run_file("examples/compiler-refal-emit-core-subset.ref", &[source]);
+        assert!(
+            emitted.status.success(),
+            "emit-core failed for {source:?}:\n{}",
+            String::from_utf8_lossy(&emitted.stderr)
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&parsed.stdout),
+            String::from_utf8_lossy(&emitted.stdout),
+            "token parser should match char-based emit-core for {source:?}"
+        );
+    }
 }
 
 #[test]
@@ -1466,11 +1573,25 @@ fn bootstrap_stages_lexer_then_core_emitter_for_supported_subset() {
         "lexer should tokenize Echo"
     );
 
-    let core = run_file("examples/compiler-refal-emit-core-subset.ref", &[source]);
+    let token_line = String::from_utf8_lossy(&tokens.stdout);
+    let token_line = token_line.trim_end();
+    let core = run_file("examples/compiler-refal-parser-subset.ref", &[token_line]);
     assert!(
         core.status.success(),
-        "emit-core stage failed:\n{}",
+        "token parser stage failed:\n{}",
         String::from_utf8_lossy(&core.stderr)
+    );
+
+    let direct = run_file("examples/compiler-refal-emit-core-subset.ref", &[source]);
+    assert!(
+        direct.status.success(),
+        "emit-core stage failed:\n{}",
+        String::from_utf8_lossy(&direct.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&core.stdout),
+        String::from_utf8_lossy(&direct.stdout),
+        "lexer|parser EmitCore should match char-based emit-core"
     );
 
     let unique = SystemTime::now()
