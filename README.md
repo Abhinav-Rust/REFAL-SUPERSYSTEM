@@ -256,7 +256,7 @@ The 15% weight below covers Tier 1 decidable analyses only.
 | Refal machine / runtime | 19.5% | ~14% | Broad covered builtin suite, worklist for block-free chains, blocks, `Dn`/`Up`; **general flat view-field machine and projecting matcher not done — open for arbitrary program evaluation** |
 | Graph of states / Refal emission | 8.5% | ~6% | Seed graph, SCC, bounded driving, homeomorphic whistle, bounded residualization done; complete Turchin driving / cleaning / generalization open |
 | Static verification (Tier 1 only) | 15.0% | ~2% | Structural reachability and overlap done; sentence subsumption, function formats, builtin domain, `--strict` mode all open |
-| Compiler implemented in Refal | 25.5% | ~3% | Several restricted slices proven; general `lexer.ref → parser.ref → checker.ref → driver.ref → emit.ref` pipeline **not written** |
+| Compiler implemented in Refal | 25.5% | ~4% | Restricted slices plus lexer + Core-emit subsets proven against Rust `lower`; general `lexer.ref → parser.ref → checker.ref → driver.ref → emit.ref` pipeline **not written** |
 | Verified self-hosting fixpoint | 13.0% | ~2% | Bounded C2 ≡ C3 proven at 4,780 bytes for body-compiler subset; **general-corpus fixpoint not demonstrated** |
 | Conformance / release evidence | 4.0% | ~1.5% | Solid automated foundation; no full Classic conformance claim or release packaging |
 | **Total (1.0 target)** | **100%** | **~42%** | |
@@ -277,7 +277,7 @@ The 15% weight below covers Tier 1 decidable analyses only.
 | 4 | Refal machine | 🔶 Partial | Broad covered builtin suite: arithmetic, file I/O (`Card`/`Open`/`Get`/`Put`/`Putout`), buried data (`Br`/`Dg`/`Cp`/`Rp`/`Dgall`), structural ops (`First`/`Last`/`Lenw`/`Lower`/`Upper`), `Arg`/`Step`/`Time`/`Mu`/`Dn`/`Up`/`Trunc`/`Real`, plus `Prout`/`Print`/`Explode`/`Implode`/`Ord`/`Chr`/`Numb`/`Symb`/`Type`; backtracking, conditions, sentence-ending blocks, explicit worklist for block-free call chains. The previously observed supported-body `TakeBody` scaling failure is resolved (C1→C2→C3 proven, 100-definition trial under 1 s) | **General flat view-field rewriting machine (issue [#7](../../issues/7)) — needed for arbitrary program evaluation**; projecting compiled matcher; Chapter 6 metacode encoding |
 | 5 | Graph of states | 🔶 Partial | Seed graph, SCC, structural cleanup, bounded ground driver, shape-aware symbolic driver, homeomorphic-embedding whistle, bounded Tier 1 analysis (`refal analyze`, `refal overlap`), cleaned-graph Core Refal emitter, bounded driven/generalized residualization | Complete Turchin configuration driving (§4.2); semantic graph cleaning (§4.3); generalization termination (§4.6); whole-graph residualization for general programs |
 | 6 | Tier 1 static analyses | 🔶 Partial | Structural reachability, terminal-state, SCC reports; conservative pairwise sentence-pattern compatibility | Semantic subsumption / dead-sentence detection; function-format inference; builtin domain errors; `--classic` / `--strict` severity model |
-| 7 | Compiler written in Refal | 🔶 Partial | Restricted body-compiler, parser-subset, checker-subset, general-subset fixtures; bounded C2 ≡ C3 fixpoint at 4,780 bytes; `refal fixpoint`; `refal differential` | General Classic Refal `lexer.ref → parser.ref → checker.ref → driver.ref → emit.ref` pipeline; general source compilation |
+| 7 | Compiler written in Refal | ?? Partial | Restricted body/parser/checker/general subsets; Refal-authored lexer subset + Core emitter subset with byte-identical Rust `lower` differential for identity/literal/call programs; bounded C2 ≡ C3 at 4,780 bytes; `refal fixpoint`; `refal differential` | General Classic Refal `lexer.ref -> parser.ref -> checker.ref -> driver.ref -> emit.ref` pipeline; general source compilation; token-consuming parser stage |
 | 8 | Verified self-hosting | 🔶 Partial | Rust-bootstrap → C1 → C2 → C3 proven byte-identical for restricted body-compiler subset (4,780 bytes) | **General-corpus self-hosting — the project's 100% gate — not demonstrated** |
 | 9 | Tier 2 metasystem analysis | ⬜ Research (post-1.0) | — | Excluded from 1.0 target: §5.5 differential metafunction, §5.6 integral metafunction, §5.7 metasystem analysis, §5.9 neighborhoods |
 
@@ -298,7 +298,7 @@ The milestone table above is the authoritative source. A summary:
 builtin suite (arithmetic, file I/O, buried data, structural ops, `Mu`/`Time`/`Dn`/`Up`),
 sentence-ending blocks end-to-end, explicit worklist evaluator, `refal-core` graph
 infrastructure, bounded symbolic driving with homeomorphic-embedding whistle, bounded
-residualizers, restricted Refal-authored compiler slices, bounded C2 ≡ C3 self-hosting
+residualizers, restricted Refal-authored compiler slices (including lexer + Core-emit subsets with Rust `lower` differential), bounded C2 ≡ C3 self-hosting
 proof at 4,780 bytes, 102+ passing tests, CI green.
 
 **Not yet done (~58% of 1.0 target):** general flat view-field rewriting machine (issue
@@ -335,6 +335,7 @@ without a test or a gate that demonstrates the work.
 
 | Date | Change |
 |---|---|
+| 2026-09-02 | Seventeenth milestone: Refal-authored Core emitter (`compiler-refal-emit-core-subset.ref`) explodes literals and matches Rust `lower` layout for identity/literal/call programs; lexer subset (`compiler-refal-lexer-subset.ref`) tokenizes the same grammar; bootstrap-stage harness test runs lexer then emit-core end to end. General Classic pipeline and general-corpus self-hosting remain open |
 | 2026-08-18 | Agent-review corrections: stale issue #7 / TakeBody wording fixed; ‘complete builtin runtime’ replaced with ‘broad covered builtin suite’ and CLI paragraph updated; ‘full lexer/parser’ replaced with ‘broad coverage’; Tier 2 explicitly excluded from 100% denominator; ‘sub-task weighted credit’ renamed to ‘sub-task implementation credit’; repeated done/not-done lists condensed to links |
 | 2026-08-18 | README rewritten: completion percentage corrected to ~42%; three-lens score table; workstream accounting table; milestone table with What is done / What is NOT done columns; component map with open gates column |
 | 2026-08-18 | Sixteenth milestone: body compiler scans single-quoted character literals, preserves own `Go` entry, accepts terminal whitespace, passes Rust-bootstrap → C1 → C2 → C3 trial with byte-identical 4,780-byte C2/C3; 100-definition scaling completes in under one second |

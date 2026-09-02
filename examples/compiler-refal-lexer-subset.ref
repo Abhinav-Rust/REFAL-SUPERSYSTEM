@@ -1,0 +1,55 @@
+$EXTERN Prout;
+
+* Refal-authored lexer subset for the Core-emitter grammar.
+* Tokenizes a character source into a space-separated token stream:
+*   Ident(Name)  KwExtern  Equal  Semicolon  Lit(chars)  Call(Name)
+* Example: Echo = 'Hi';  ->  Ident(Echo) Equal Lit(Hi) Semicolon
+$ENTRY Go {
+  (e.Source) = <Prout <Lex e.Source>>;
+}
+
+Lex {
+  = ;
+  " " e.Rest = <Lex e.Rest>;
+  "$EXTERN " e.Rest = "KwExtern " <LexNameExtern e.Rest>;
+  " = " e.Rest = "Equal " <Lex e.Rest>;
+  "=" e.Rest = "Equal " <Lex e.Rest>;
+  "; " e.Rest = "Semicolon " <Lex e.Rest>;
+  ";" e.Rest = "Semicolon";
+  "<" e.Rest = <LexCall e.Rest>;
+  "'" e.Rest = <LexLit e.Rest>;
+  s.C e.Rest = <LexIdent (s.C) e.Rest>;
+}
+
+LexNameExtern {
+  e.Name "; " e.Rest = "Ident(" e.Name ") Semicolon " <Lex e.Rest>;
+  e.Name ";" = "Ident(" e.Name ") Semicolon";
+}
+
+LexIdent {
+  (e.Acc) " = " e.Rest = "Ident(" e.Acc ") Equal " <Lex e.Rest>;
+  (e.Acc) "=" e.Rest = "Ident(" e.Acc ") Equal " <Lex e.Rest>;
+  (e.Acc) "; " e.Rest = "Ident(" e.Acc ") Semicolon " <Lex e.Rest>;
+  (e.Acc) ";" e.Rest = "Ident(" e.Acc ") Semicolon";
+  (e.Acc) " " e.Rest = "Ident(" e.Acc ") " <Lex e.Rest>;
+  (e.Acc) s.C e.Rest = <LexIdent (e.Acc s.C) e.Rest>;
+  (e.Acc) = "Ident(" e.Acc ")";
+}
+
+LexLit {
+  "'" e.Rest = "Lit() " <Lex e.Rest>;
+  s.C e.Rest = <LexLitAcc (s.C) e.Rest>;
+}
+
+LexLitAcc {
+  (e.Acc) "'" "; " e.Rest = "Lit(" e.Acc ") Semicolon " <Lex e.Rest>;
+  (e.Acc) "'" ";" = "Lit(" e.Acc ") Semicolon";
+  (e.Acc) "'" e.Rest = "Lit(" e.Acc ") " <Lex e.Rest>;
+  (e.Acc) s.C e.Rest = <LexLitAcc (e.Acc s.C) e.Rest>;
+}
+
+LexCall {
+  e.Name " e.Input>; " e.Rest = "Call(" e.Name ") Semicolon " <Lex e.Rest>;
+  e.Name " e.Input>;" = "Call(" e.Name ") Semicolon";
+  e.Name " e.Input>" e.Rest = "Call(" e.Name ") " <Lex e.Rest>;
+}

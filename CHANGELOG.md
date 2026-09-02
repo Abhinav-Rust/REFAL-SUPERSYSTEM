@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Refal Core emitter and lexer subsets (2026-09-02)
+
+Added `examples/compiler-refal-emit-core-subset.ref`, a Refal-authored Core Refal emitter for a
+restricted identity/literal/call grammar. It explodes character literals, emits the Rust bootstrap
+`refal lower` layout, and is proven byte-identical to `lower` on three fixture classes. Added
+`examples/compiler-refal-lexer-subset.ref` for the same grammar, plus a bootstrap-stage integration
+test that runs lexer then emit-core and executes the generated Core. General Classic Refal parsing,
+complete Turchin driving, whole-corpus differential compilation, and general-corpus self-hosting
+remain open; the honest ~42% evidence-weighted score is unchanged.
+
 ### Supported-body self-hosting fixpoint (2026-08-18)
 
 The matcher now uses a deterministic literal-prefix fast path for expression variables followed by

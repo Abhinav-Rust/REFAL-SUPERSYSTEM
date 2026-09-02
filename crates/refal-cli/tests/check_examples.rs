@@ -1274,6 +1274,237 @@ fn executes_refal_authored_body_compiler_with_definition_separator_end_to_end() 
 }
 
 #[test]
+fn executes_refal_authored_core_emitter_subset_end_to_end() {
+    let output = run_file(
+        "examples/compiler-refal-emit-core-subset.ref",
+        &["Echo = 'Hi'; Identity = Identity;"],
+    );
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let generated = String::from_utf8_lossy(&output.stdout).to_string();
+    assert_eq!(
+        generated,
+        "$ENTRY Go {\n  e.Input = <Echo e.Input>;\n}\n\nEcho {\n  e.Input = 'H' 'i';\n}\n\nIdentity {\n  e.Input = e.Input;\n}\n"
+    );
+
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock is after Unix epoch")
+        .as_nanos();
+    let path = env::temp_dir().join(format!(
+        "refal-compiled-emit-core-{}-{unique}.ref",
+        process::id()
+    ));
+    fs::write(&path, &generated).expect("write generated core source");
+
+    let checked = Command::new(refal_bin())
+        .args(["check", &path.to_string_lossy()])
+        .output()
+        .expect("check generated core source");
+    assert!(
+        checked.status.success(),
+        "generated core source should check:\n{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+
+    let executed = Command::new(refal_bin())
+        .args(["run", &path.to_string_lossy(), "payload"])
+        .output()
+        .expect("run generated core source");
+    let _ = fs::remove_file(&path);
+    assert!(
+        executed.status.success(),
+        "generated core source should run:\n{}",
+        String::from_utf8_lossy(&executed.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&executed.stdout), "Hi\n");
+}
+
+#[test]
+fn refal_authored_core_emitter_matches_rust_lower_for_supported_subset() {
+    let cases = [
+        (
+            "Echo = 'Hi'; Identity = Identity;",
+            concat!(
+                "$ENTRY Go {\n",
+                "  e.Input = <Echo e.Input>;\n",
+                "}\n\n",
+                "Echo {\n",
+                "  e.Input = 'Hi';\n",
+                "}\n\n",
+                "Identity {\n",
+                "  e.Input = e.Input;\n",
+                "}\n"
+            ),
+        ),
+        (
+            "$EXTERN Prout; Echo = 'Hi';",
+            concat!(
+                "$EXTERN Prout;\n\n",
+                "$ENTRY Go {\n",
+                "  e.Input = <Echo e.Input>;\n",
+                "}\n\n",
+                "Echo {\n",
+                "  e.Input = 'Hi';\n",
+                "}\n"
+            ),
+        ),
+        (
+            "Main = <Echo e.Input>; Echo = 'OK';",
+            concat!(
+                "$ENTRY Go {\n",
+                "  e.Input = <Main e.Input>;\n",
+                "}\n\n",
+                "Main {\n",
+                "  e.Input = <Echo e.Input>;\n",
+                "}\n\n",
+                "Echo {\n",
+                "  e.Input = 'OK';\n",
+                "}\n"
+            ),
+        ),
+    ];
+
+    for (source, classic) in cases {
+        let emitted = run_file("examples/compiler-refal-emit-core-subset.ref", &[source]);
+        assert!(
+            emitted.status.success(),
+            "emit-core failed for {source:?}:\n{}",
+            String::from_utf8_lossy(&emitted.stderr)
+        );
+
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock is after Unix epoch")
+            .as_nanos();
+        let classic_path = env::temp_dir().join(format!(
+            "refal-emit-core-classic-{}-{unique}.ref",
+            process::id()
+        ));
+        fs::write(&classic_path, classic).expect("write classic source for lower");
+
+        let lowered = Command::new(refal_bin())
+            .args(["lower", &classic_path.to_string_lossy()])
+            .output()
+            .expect("lower classic source");
+        let _ = fs::remove_file(&classic_path);
+        assert!(
+            lowered.status.success(),
+            "lower failed for {source:?}:\n{}",
+            String::from_utf8_lossy(&lowered.stderr)
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&emitted.stdout),
+            String::from_utf8_lossy(&lowered.stdout),
+            "Refal Core emitter should match Rust lower for {source:?}"
+        );
+    }
+}
+
+#[test]
+fn executes_refal_authored_lexer_subset_end_to_end() {
+    let output = run_file(
+        "examples/compiler-refal-lexer-subset.ref",
+        &["Echo = 'Hi'; Identity = Identity;"],
+    );
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "Ident(Echo) Equal Lit(Hi) Semicolon Ident(Identity) Equal Ident(Identity) Semicolon\n"
+    );
+
+    let with_call = run_file(
+        "examples/compiler-refal-lexer-subset.ref",
+        &["Main = <Echo e.Input>; Echo = 'OK';"],
+    );
+    assert!(
+        with_call.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&with_call.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&with_call.stdout),
+        "Ident(Main) Equal Call(Echo) Semicolon Ident(Echo) Equal Lit(OK) Semicolon\n"
+    );
+
+    let with_extern = run_file(
+        "examples/compiler-refal-lexer-subset.ref",
+        &["$EXTERN Prout; Echo = 'Hi';"],
+    );
+    assert!(
+        with_extern.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&with_extern.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&with_extern.stdout),
+        "KwExtern Ident(Prout) Semicolon Ident(Echo) Equal Lit(Hi) Semicolon\n"
+    );
+
+    let rejected = run_file("examples/compiler-refal-lexer-subset.ref", &["Echo = 'Hi"]);
+    assert!(!rejected.status.success());
+}
+
+#[test]
+fn bootstrap_stages_lexer_then_core_emitter_for_supported_subset() {
+    let source = "Echo = 'Hi'; Identity = Identity;";
+    let tokens = run_file("examples/compiler-refal-lexer-subset.ref", &[source]);
+    assert!(
+        tokens.status.success(),
+        "lexer stage failed:\n{}",
+        String::from_utf8_lossy(&tokens.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&tokens.stdout).contains("Ident(Echo)"),
+        "lexer should tokenize Echo"
+    );
+
+    let core = run_file("examples/compiler-refal-emit-core-subset.ref", &[source]);
+    assert!(
+        core.status.success(),
+        "emit-core stage failed:\n{}",
+        String::from_utf8_lossy(&core.stderr)
+    );
+
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock is after Unix epoch")
+        .as_nanos();
+    let path = env::temp_dir().join(format!(
+        "refal-bootstrap-stage-core-{}-{unique}.ref",
+        process::id()
+    ));
+    fs::write(&path, &core.stdout).expect("write staged core source");
+    let checked = Command::new(refal_bin())
+        .args(["check", &path.to_string_lossy()])
+        .output()
+        .expect("check staged core source");
+    let executed = Command::new(refal_bin())
+        .args(["run", &path.to_string_lossy(), "x"])
+        .output()
+        .expect("run staged core source");
+    let _ = fs::remove_file(&path);
+    assert!(
+        checked.status.success(),
+        "staged core should check:\n{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+    assert!(
+        executed.status.success(),
+        "staged core should run:\n{}",
+        String::from_utf8_lossy(&executed.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&executed.stdout), "Hi\n");
+}
+
+#[test]
 fn executes_refal_authored_compiler_subset_end_to_end() {
     let output = run_file("examples/compiler-refal-subset.ref", &["Widget"]);
     assert!(
@@ -1498,6 +1729,8 @@ fn accepts_positive_examples() {
         "examples/compiler-refal-two-literals-subset.ref",
         "examples/compiler-refal-sentence-subset.ref",
         "examples/compiler-refal-body-subset.ref",
+        "examples/compiler-refal-emit-core-subset.ref",
+        "examples/compiler-refal-lexer-subset.ref",
         "examples/supercompile-loop.ref",
         "examples/supercompile-generalize.ref",
     ] {
@@ -2073,6 +2306,8 @@ fn proves_byte_identical_lowering_across_the_valid_corpus() {
         "examples/compiler-refal-general-subset.ref",
         "examples/compiler-refal-sentence-subset.ref",
         "examples/compiler-refal-body-subset.ref",
+        "examples/compiler-refal-emit-core-subset.ref",
+        "examples/compiler-refal-lexer-subset.ref",
     ] {
         let first = lower_file(path);
         assert!(
