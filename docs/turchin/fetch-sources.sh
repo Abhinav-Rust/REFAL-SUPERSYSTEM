@@ -38,7 +38,31 @@ UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/126.0 Safari/537.3
 
 ok=0; fail=0
 
-have_pages() { pdfinfo "$1" 2>/dev/null | awk '/^Pages/{print $2}'; }
+# Page count of a PDF, used both to validate a download and to check it against
+# the catalogue. poppler is the usual tool but is far from universal, so fall
+# back to reading /Count out of the page tree, which every conforming PDF has.
+# Without a fallback, a machine with no pdfinfo reports every download as
+# FAILED and deletes it, even though the bytes arrived intact.
+have_pages() {
+  if command -v pdfinfo >/dev/null 2>&1; then
+    pdfinfo "$1" 2>/dev/null | awk '/^Pages/{print $2}'
+    return
+  fi
+  python3 -c '
+import io, re, sys
+try:
+    data = io.open(sys.argv[1], "rb").read()
+except OSError:
+    sys.exit(0)
+if not data.startswith(b"%PDF"):
+    sys.exit(0)
+counts = [int(n) for n in re.findall(rb"/Count\s+(\d+)", data)]
+if counts:
+    print(max(counts))
+else:
+    print(len(re.findall(rb"/Type\s*/Page[^s]", data)))
+' "$1" 2>/dev/null
+}
 
 # get <url> <local> <expected-pages>
 get() {
