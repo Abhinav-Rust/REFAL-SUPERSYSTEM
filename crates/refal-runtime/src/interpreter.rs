@@ -18,7 +18,15 @@ use crate::matcher::{
     match_pattern_with_bindings_candidates,
 };
 
-const DEFAULT_MAX_CALL_DEPTH: usize = 1_024;
+/// Refal call depth is bounded by memory, not by a constant. Turchin's machine
+/// has no fixed stack: compilation is driving a configuration through a graph of
+/// states, and a compiler written in Refal recurses far deeper than any constant
+/// we could pick. The evaluator is work-list driven, so deep Refal recursion
+/// costs heap, not host stack.
+///
+/// `with_max_call_depth` still exists for tests and for callers that want an
+/// explicit ceiling, but it is not applied by default.
+const DEFAULT_MAX_CALL_DEPTH: usize = usize::MAX;
 
 /// Name used when evaluating the sentences of a block. It appears in
 /// recognition-impossible errors raised by the block itself, which a block
@@ -85,18 +93,29 @@ struct WorkTermsFrame<'a> {
     bindings: Bindings,
     output: Vec<Value>,
     depth: usize,
-    pending: Option<PendingTerm>,
+    pending: Option<PendingTerm<'a>>,
 }
 
-enum PendingTerm {
+enum PendingTerm<'a> {
     Bracket,
     CallArguments(String),
     CallResult,
+    BlockArgument(&'a [refal_ast::Sentence]),
+    BlockResult,
 }
 
 enum WorkTask<'a> {
     Function {
         name: String,
+        args: Vec<Value>,
+        depth: usize,
+        sentence_index: usize,
+    },
+    /// A block applied to an argument. Blocks are anonymous functions, so they
+    /// are driven by the same work list as named calls; `BLOCK_SENTINEL` is the
+    /// name reported when no sentence of the block matches.
+    Block {
+        sentences: &'a [refal_ast::Sentence],
         args: Vec<Value>,
         depth: usize,
         sentence_index: usize,
@@ -377,6 +396,21 @@ impl<'a> Evaluator<'a> {
                             frame.output.extend(values);
                             tasks.push(WorkTask::Terms(frame));
                         }
+                        Some(PendingTerm::BlockArgument(sentences)) => {
+                            frame.pending = Some(PendingTerm::BlockResult);
+                            let block_depth = frame.depth;
+                            tasks.push(WorkTask::Terms(frame));
+                            tasks.push(WorkTask::Block {
+                                sentences,
+                                args: values,
+                                depth: block_depth,
+                                sentence_index: 0,
+                            });
+                        }
+                        Some(PendingTerm::BlockResult) => {
+                            frame.output.extend(values);
+                            tasks.push(WorkTask::Terms(frame));
+                        }
                         None => {
                             returned = Some(Ok(values));
                             tasks.push(WorkTask::Terms(frame));
@@ -422,6 +456,9 @@ impl<'a> Evaluator<'a> {
                     WorkTask::Function { .. } => {
                         return Ok(Some(values));
                     }
+                    WorkTask::Block { .. } => {
+                        return Ok(Some(values));
+                    }
                 }
                 continue;
             }
@@ -453,7 +490,7 @@ impl<'a> Evaluator<'a> {
                     if !terms_are_worklist_safe(&sentence.result)
                         || sentence.conditions.iter().any(|condition| {
                             !terms_are_worklist_safe(&condition.result)
-                                || !terms_are_worklist_safe(&condition.pattern)
+                                || !condition_pattern_is_matchable(&condition.pattern)
                         })
                     {
                         returned =
@@ -505,6 +542,55 @@ impl<'a> Evaluator<'a> {
                             current_bindings: None,
                             depth,
                         });
+                    }
+                }
+                WorkTask::Block {
+                    sentences,
+                    args,
+                    depth,
+                    sentence_index,
+                } => {
+                    self.steps.set(self.steps.get().saturating_add(1));
+                    if depth > self.max_call_depth {
+                        return Err(EvalError::RecursionLimitExceeded {
+                            function: BLOCK_SENTINEL.to_string(),
+                            limit: self.max_call_depth,
+                        });
+                    }
+                    let Some(sentence) = sentences.get(sentence_index) else {
+                        returned = Some(Err(EvalError::NoMatchingSentence(
+                            BLOCK_SENTINEL.to_string(),
+                        )));
+                        continue;
+                    };
+                    // Block sentences carrying conditions still take the
+                    // recursive path; the common case is a plain sentence.
+                    if !sentence.conditions.is_empty() || !terms_are_worklist_safe(&sentence.result)
+                    {
+                        returned =
+                            Some(self.evaluate_sentences(BLOCK_SENTINEL, sentences, &args, depth));
+                        continue;
+                    }
+                    match match_pattern_first(&sentence.pattern, &args) {
+                        Ok(bindings) => {
+                            tasks.push(WorkTask::Terms(WorkTermsFrame {
+                                terms: &sentence.result,
+                                next: 0,
+                                bindings,
+                                output: Vec::new(),
+                                depth,
+                                pending: None,
+                            }));
+                        }
+                        Err(MatchError::NoMatch) => {
+                            tasks.push(WorkTask::Block {
+                                sentences,
+                                args,
+                                depth,
+                                sentence_index: sentence_index + 1,
+                            });
+                        }
+                        Err(error) => return Err(EvalError::Match(error)),
                     }
                 }
                 WorkTask::ConditionEval {
@@ -620,8 +706,21 @@ impl<'a> Evaluator<'a> {
                             tasks.push(WorkTask::Terms(frame));
                             tasks.push(WorkTask::Terms(child));
                         }
-                        TermKind::Block { .. } => {
-                            return Ok(None);
+                        TermKind::Block {
+                            argument,
+                            sentences,
+                        } => {
+                            frame.pending = Some(PendingTerm::BlockArgument(sentences));
+                            let child = WorkTermsFrame {
+                                terms: argument,
+                                next: 0,
+                                bindings: frame.bindings.clone(),
+                                output: Vec::new(),
+                                depth: frame.depth,
+                                pending: None,
+                            };
+                            tasks.push(WorkTask::Terms(frame));
+                            tasks.push(WorkTask::Terms(child));
                         }
                     }
                 }
@@ -1083,6 +1182,30 @@ fn terms_are_worklist_safe(terms: &[Term]) -> bool {
         TermKind::Symbol(_) | TermKind::Variable(_) => true,
         TermKind::Bracket(inner) => terms_are_worklist_safe(inner),
         TermKind::Call { args, .. } => terms_are_worklist_safe(args),
+        TermKind::Block {
+            argument,
+            sentences,
+        } => {
+            terms_are_worklist_safe(argument)
+                && sentences.iter().all(|sentence| {
+                    // A block sentence carrying conditions still takes the
+                    // recursive path; the work list handles the plain case.
+                    sentence.conditions.is_empty()
+                        && terms_are_worklist_safe(&sentence.pattern)
+                        && terms_are_worklist_safe(&sentence.result)
+                })
+        }
+    })
+}
+
+/// A condition pattern must be matchable by the structural matcher. A block in
+/// condition position is an anonymous function rather than a pattern, so its
+/// presence keeps the sentence on the recursive path.
+fn condition_pattern_is_matchable(terms: &[Term]) -> bool {
+    terms.iter().all(|term| match &term.kind {
+        TermKind::Symbol(_) | TermKind::Variable(_) => true,
+        TermKind::Bracket(inner) => condition_pattern_is_matchable(inner),
+        TermKind::Call { args, .. } => condition_pattern_is_matchable(args),
         TermKind::Block { .. } => false,
     })
 }
@@ -1646,6 +1769,64 @@ mod tests {
         assert_eq!(
             evaluator.evaluate_entry(&[Value::Char('B')]).unwrap(),
             vec![Value::Char('N')]
+        );
+    }
+
+    #[test]
+    fn recurses_far_deeper_than_any_constant_call_limit() {
+        // Turchin's machine has no fixed stack: a compiler written in Refal
+        // recurses far deeper than any constant we could pick. Depth must be
+        // bounded by memory, not by a constant (PLAN phase 1a).
+        let depth = 50_000;
+        let program = program(vec![
+            function(
+                "Go",
+                Visibility::Entry,
+                vec![Sentence {
+                    pattern: vec![],
+                    conditions: vec![],
+                    result: vec![call(
+                        "Loop",
+                        vec![term(TermKind::Symbol(Symbol::Number(depth.to_string())))],
+                    )],
+                    span: span(),
+                }],
+            ),
+            function(
+                "Loop",
+                Visibility::Local,
+                vec![
+                    Sentence {
+                        pattern: vec![term(TermKind::Symbol(Symbol::Number("0".to_string())))],
+                        conditions: vec![],
+                        result: vec![term(TermKind::Symbol(Symbol::Identifier(
+                            "Bottom".to_string(),
+                        )))],
+                        span: span(),
+                    },
+                    Sentence {
+                        pattern: vec![var(VariableKind::Symbol, "N")],
+                        conditions: vec![],
+                        result: vec![call(
+                            "Loop",
+                            vec![call(
+                                "Sub",
+                                vec![
+                                    var(VariableKind::Symbol, "N"),
+                                    term(TermKind::Symbol(Symbol::Number("1".to_string()))),
+                                ],
+                            )],
+                        )],
+                        span: span(),
+                    },
+                ],
+            ),
+        ]);
+        let evaluator = Evaluator::new(&program);
+
+        assert_eq!(
+            evaluator.evaluate_entry(&[]).unwrap(),
+            vec![Value::identifier("Bottom")]
         );
     }
 

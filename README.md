@@ -195,7 +195,7 @@ The guarantee this compiler intends to publish, once Tier 1 lands:
 
 ## Project Status
 
-### Honest Completion: ~42%
+### Honest Completion: ~43.5%
 
 The goal — a Classic Refal-5 compiler **written in Refal**, emitting Refal, compiling its
 own full source, with Turchin's graph-of-states supercompiler and Tier 1 static
@@ -253,13 +253,13 @@ The 15% weight below covers Tier 1 decidable analyses only.
 |---|---:|---:|---|
 | Bootstrap frontend | 8.5% | 8.0% | Broad Classic Refal-5 lexer/parser coverage; clause-complete conformance corpus still partial |
 | Bootstrap semantics | 6.0% | 5.0% | Entry, bindings, call checks done; no exhaustiveness or graph-based analysis |
-| Refal machine / runtime | 19.5% | ~14% | Broad covered builtin suite, worklist for block-free chains, blocks, `Dn`/`Up`; **general flat view-field machine and projecting matcher not done — open for arbitrary program evaluation** |
+| Refal machine / runtime | 19.5% | ~15.5% | Broad covered builtin suite; **no fixed call-depth limit** — work-list driven for named calls and blocks, 50,000 frames in under a second; `Dn`/`Up`; **heap-allocated single view field and projecting matcher not done**; block sentences carrying conditions still take the recursive path |
 | Graph of states / Refal emission | 8.5% | ~6% | Seed graph, SCC, bounded driving, homeomorphic whistle, bounded residualization done; complete Turchin driving / cleaning / generalization open |
 | Static verification (Tier 1 only) | 15.0% | ~2% | Structural reachability and overlap done; sentence subsumption, function formats, builtin domain, `--strict` mode all open |
 | Compiler implemented in Refal | 25.5% | ~4.5% | Restricted slices plus lexer + token parser + Core-emit subsets proven against Rust `lower`; general `lexer.ref → parser.ref → checker.ref → driver.ref → emit.ref` pipeline **not written** |
 | Verified self-hosting fixpoint | 13.0% | ~2% | Bounded C2 ≡ C3 proven at 4,780 bytes for body-compiler subset; **general-corpus fixpoint not demonstrated** |
 | Conformance / release evidence | 4.0% | ~1.5% | Solid automated foundation; no full Classic conformance claim or release packaging |
-| **Total (1.0 target)** | **100%** | **~42%** | |
+| **Total (1.0 target)** | **100%** | **~43.5%** | |
 
 ---
 
@@ -335,6 +335,7 @@ without a test or a gate that demonstrates the work.
 
 | Date | Change |
 |---|---|
+| 2026-09-08 | Nineteenth milestone, phase 1a: the fixed 1,024-frame call-depth cap is **gone**. The evaluator now drives named calls and blocks through the explicit work list, so Refal recursion depth is bounded by memory rather than by a constant — 50,000 frames completes in under a second, against a hard failure at 1,100 before. This was the gate blocking the whole "compiler in Refal" goal. Still open for a complete flat view-field machine: a heap-allocated single view field, and block sentences carrying conditions |
 | 2026-09-08 | Blocks in condition position: `pattern , expression : { block } = result;` now parses, checks, evaluates, and round-trips through `lower`. Previously only the sentence-ending block form was accepted. Added `examples/condition-block.ref`, wired into the differential corpus. Tests 186 → 191. `docs/PLAN.md` §5 prose corrected (it claimed ~96% while its own table said ~60%), and the C2 ≡ C3 evidence now carries an explicit caveat that both current fixpoint artifacts are source-preserving rather than compiling |
 | 2026-09-02 | Eighteenth milestone: token-consuming parser subset (`compiler-refal-parser-subset.ref`) builds EmitCore IR from lexer tokens for identity/literal/call programs, matches Rust `lower` and char-based emit-core; bootstrap harness pipes lexer|parser end to end. General Classic pipeline and general-corpus self-hosting remain open |
 | 2026-09-02 | Seventeenth milestone: Refal-authored Core emitter (`compiler-refal-emit-core-subset.ref`) explodes literals and matches Rust `lower` layout for identity/literal/call programs; lexer subset (`compiler-refal-lexer-subset.ref`) tokenizes the same grammar; bootstrap-stage harness test runs lexer then emit-core end to end. General Classic pipeline and general-corpus self-hosting remain open |

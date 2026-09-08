@@ -89,7 +89,7 @@ toolchain makes.
 
 | Current | Proposed | Why |
 |---|---|---|
-| M4 tree-walking interpreter | **Flat view-field rewriting machine** | Host recursion caps depth at 1024; `Rev` over 1,500 symbols already fails. A Refal-written compiler cannot run on it. |
+| M4 tree-walking interpreter | **Flat view-field rewriting machine** | Host recursion capped depth at 1024, so a Refal-written compiler could not run on it. The cap is now removed: the evaluator is work-list driven and 50,000 frames completes in under a second. |
 | M5 `refal-core` = AST clone + pretty-printer | **Graph of states** (§4.2–4.6) | The current Core is isomorphic to the AST; nothing is lowered. It cannot carry a backend or an analysis. |
 | M6 native backend, before self-hosting | **Deferred off the critical path** | Not needed for "compiler in Refal emitting Refal." Becomes §4.7 inside the graph architecture, after self-hosting. |
 | M7 self-hosting last | **Moved ahead of native codegen** | Self-host on the machine; codegen after. Removes the largest chunk of work from the path to the goal. |
@@ -133,7 +133,11 @@ pass before the next begins.
 Turchin Ch. 1–2. Replaces `refal-runtime`.
 
 - **1a** Flat view-field rewriting machine. Explicit expression heap and work list; no host-stack
-  recursion; the 1024-depth cap disappears rather than being raised.
+  recursion. **Partly done (2026-09-08):** the evaluator is work-list driven for named calls and
+  for blocks, and the fixed call-depth cap is gone — 50,000 frames completes in under a second,
+  so depth is bounded by memory rather than by a constant. Still open: the heap-allocated single
+  view field (the work list still copies term slices) and blocks whose sentences carry
+  conditions, which fall back to the recursive path.
 - **1b** Compiled matching plan — Turchin's **projecting algorithm** (§2.2). Classify `e`-variables
   open vs closed at compile time; order deterministic bindings (literals, `s.`, brackets, closed
   `e.`) before open splits; generate candidates lazily. Removes the measured blowup
