@@ -4,7 +4,7 @@ This compiler is built to Valentin Turchin's own design. This directory indexes 
 sources that design is drawn from, so that any claim in this repository can be checked against
 the original text.
 
-Run `./fetch-sources.sh` to download all nineteen documents (~53 MB) into `docs/turchin/pdf/`.
+Run `./fetch-sources.sh` to download all nineteen CS documents (~53 MB) into `docs/turchin/pdf/`.
 Every one has a machine-readable text layer; extract with `pdftotext <file>.pdf -`.
 
 ## Why the PDFs are not committed
@@ -50,6 +50,35 @@ separate archive repository. Say so and we will set one up.
 
 **1,010 pages.** OCR on the Soviet-era scans (1971 parts, 1975) is noisy Cyrillic but workable.
 The English documents are clean.
+
+## The philosophical works (PW)
+
+The CS corpus above fixes *how* the compiler is built. Turchin's philosophical
+works fix *what it is for*, and this repository treats them as part of the
+conformance target: a compiler that matches the manual but defeats the purpose
+has not conformed.
+
+| Document | Year | Pages | Source |
+|---|---:|---:|---|
+| **The Phenomenon of Science: A Cybernetic Approach to Human Evolution** | 1977 | 321 | live |
+
+This is the book that introduces **metasystem transition** — Turchin's account of
+how a new level of control arises above an existing one, in evolution, in
+culture, and in computing. Refal was never only a pattern-matching language to
+him; it was the concrete apparatus for the self-referential control relationship
+he spent his life generalising. Supercompilation is metasystem transition applied
+to a program: an interpreter is driven, and a compiler falls out.
+
+What this obliges us to demonstrate, beyond syntax conformance:
+
+- A **metasystem transition actually occurs** — an interpreter driven over a
+  program yields a specialised residual program. This is the same move that gets
+  a compiler out of an interpreter, and it is the heart of the claim.
+- The compiler can be **applied to itself**, meaning the tool operates at the
+  level above the one it was written at.
+- The **honest limit is published**, not papered over (§5.8, Theorem 5.1).
+  Turchin proved no algorithm perfects every graph of states. A system that
+  claims otherwise has misunderstood him.
 
 ## The 1980 monograph — chapter map
 
