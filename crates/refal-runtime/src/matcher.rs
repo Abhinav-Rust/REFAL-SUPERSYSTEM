@@ -131,70 +131,13 @@ fn match_first_from(
                     }
                     return Ok(None);
                 }
-                if !bindings.contains_key(&key) {
-                    let leading_literal_count = rest_pattern
-                        .iter()
-                        .take_while(|term| matches!(&term.kind, TermKind::Symbol(_)))
-                        .count();
-                    if leading_literal_count > 0 {
-                        let literal_values: Vec<Value> = rest_pattern[..leading_literal_count]
-                            .iter()
-                            .map(|term| match &term.kind {
-                                TermKind::Symbol(symbol) => value_for_symbol(symbol),
-                                _ => unreachable!(),
-                            })
-                            .collect();
-                        for split in 0..=input.len().saturating_sub(literal_values.len()) {
-                            if input[split..].starts_with(&literal_values) {
-                                let value = input[..split].to_vec();
-                                let Ok(next_bindings) =
-                                    bind_or_check(bindings.clone(), key.clone(), value)
-                                else {
-                                    continue;
-                                };
-                                if let Some(result) =
-                                    match_first_from(rest_pattern, &input[split..], next_bindings)?
-                                {
-                                    return Ok(Some(result));
-                                }
-                            }
-                        }
-                        return Ok(None);
-                    }
-                }
-                let trailing_bracket_count = rest_pattern
-                    .iter()
-                    .take_while(|term| matches!(&term.kind, TermKind::Bracket(_)))
-                    .count();
-                if trailing_bracket_count > 0 && input.len() >= trailing_bracket_count {
-                    let split = input.len() - trailing_bracket_count;
-                    let prefix = &input[..split];
-                    let suffix = &input[split..];
-                    let suffix_is_brackets = suffix
-                        .iter()
-                        .all(|value| matches!(value, Value::Bracket(_)));
-                    let prefix_has_bracket = prefix
-                        .iter()
-                        .any(|value| matches!(value, Value::Bracket(_)));
-                    if suffix_is_brackets && !prefix_has_bracket {
-                        let value = prefix.to_vec();
-                        if let Ok(next_bindings) =
-                            bind_or_check(bindings.clone(), key.clone(), value)
-                            && let Some(result) =
-                                match_first_from(rest_pattern, suffix, next_bindings)?
-                        {
-                            return Ok(Some(result));
-                        }
-                        return Ok(None);
-                    }
-                }
                 if let Some(bound) = bindings.get(&key) {
                     if input.starts_with(bound) {
                         return match_first_from(rest_pattern, &input[bound.len()..], bindings);
                     }
                     return Ok(None);
                 }
-                for split in 0..=input.len() {
+                for split in expression_splits(input, rest_pattern, &bindings) {
                     let value = input[..split].to_vec();
                     let Ok(next_bindings) = bind_or_check(bindings.clone(), key.clone(), value)
                     else {
@@ -271,14 +214,6 @@ fn match_all_from(
     }
 }
 
-fn value_for_symbol(symbol: &Symbol) -> Value {
-    match symbol {
-        Symbol::Char(character) => Value::Char(*character),
-        Symbol::Identifier(identifier) => Value::Identifier(identifier.clone()),
-        Symbol::Number(number) => Value::Number(number.clone()),
-    }
-}
-
 fn symbol_matches(symbol: &Symbol, value: &Value) -> bool {
     match (symbol, value) {
         (Symbol::Char(left), Value::Char(right)) => left == right,
@@ -327,7 +262,7 @@ fn match_expression_all(
     }
 
     let mut candidates = Vec::new();
-    for split in 0..=input.len() {
+    for split in expression_splits(input, rest_pattern, &bindings) {
         let value = input[..split].to_vec();
         if let Ok(attempt) = bind_or_check(bindings.clone(), key.clone(), value) {
             candidates.extend(match_all_from(rest_pattern, &input[split..], attempt)?);
@@ -335,6 +270,111 @@ fn match_expression_all(
     }
 
     Ok(candidates)
+}
+
+/// Width, in top-level terms, that a pattern item occupies when it can be
+/// determined without guessing a split. `None` marks an unbound expression
+/// variable, whose extent is exactly what has to be chosen.
+///
+/// This is Turchin's open/closed distinction (reference 2.2). An `e`-variable
+/// followed by items of determinate width is *closed*: those items project onto
+/// the input and pin down where the variable ends, so the matcher tries only the
+/// positions where the projection actually lands instead of every split.
+fn determinate_width(term: &Term, bindings: &Bindings) -> Option<usize> {
+    match &term.kind {
+        TermKind::Symbol(_) => Some(1),
+        TermKind::Bracket(_) => Some(1),
+        TermKind::Variable(variable) => match variable.kind {
+            VariableKind::Symbol | VariableKind::Term => Some(1),
+            VariableKind::Expression => bindings.get(&VariableKey::from(variable)).map(Vec::len),
+        },
+        TermKind::Call { .. } | TermKind::Block { .. } => None,
+    }
+}
+
+/// How many leading terms after a variable have determinate width. The run ends
+/// at the first unbound expression variable, because past it nothing is pinned.
+fn rigid_prefix_len(rest: &[Term], bindings: &Bindings) -> usize {
+    rest.iter()
+        .take_while(|term| determinate_width(term, bindings).is_some())
+        .count()
+}
+
+/// Tests a rigid run against the input at `start` without binding anything. A
+/// bracket is only checked to *be* a bracket here; its contents are matched by
+/// the ordinary recursion once the split has been chosen.
+fn rigid_run_matches(input: &[Value], start: usize, run: &[Term], bindings: &Bindings) -> bool {
+    let mut position = start;
+    for term in run {
+        let Some(width) = determinate_width(term, bindings) else {
+            return false;
+        };
+        if position + width > input.len() {
+            return false;
+        }
+        match &term.kind {
+            TermKind::Symbol(symbol) => {
+                if !symbol_matches(symbol, &input[position]) {
+                    return false;
+                }
+            }
+            TermKind::Bracket(_) => {
+                if !matches!(input[position], Value::Bracket(_)) {
+                    return false;
+                }
+            }
+            TermKind::Variable(variable) => match variable.kind {
+                VariableKind::Symbol => {
+                    if matches!(input[position], Value::Bracket(_)) {
+                        return false;
+                    }
+                }
+                VariableKind::Term => {}
+                VariableKind::Expression => {
+                    let Some(bound) = bindings.get(&VariableKey::from(variable)) else {
+                        return false;
+                    };
+                    if &input[position..position + width] != bound.as_slice() {
+                        return false;
+                    }
+                }
+            },
+            TermKind::Call { .. } | TermKind::Block { .. } => return false,
+        }
+        position += width;
+    }
+    true
+}
+
+/// The splits to try for an expression variable, in the order Refal enumerates
+/// them: shortest value first.
+///
+/// With nothing determinate ahead there is no projection to make and every split
+/// is a candidate. With a rigid run ahead, only positions where that run matches
+/// can lead to a match, and those are usually far fewer than the length of the
+/// input. Five open `e`-variables over sixty symbols is the case that matters:
+/// enumerating every split is O(n^5), while projecting is closer to O(n) per
+/// variable because the anchors pin nearly all of them down.
+fn expression_splits(input: &[Value], rest: &[Term], bindings: &Bindings) -> Vec<usize> {
+    let rigid = rigid_prefix_len(rest, bindings);
+    if rigid == 0 {
+        return (0..=input.len()).collect();
+    }
+    let run = &rest[..rigid];
+    let width: usize = run
+        .iter()
+        .map(|term| determinate_width(term, bindings).unwrap_or(0))
+        .sum();
+    if width == 0 {
+        return (0..=input.len()).collect();
+    }
+    let mut splits = Vec::new();
+    for split in 0..=(input.len().saturating_sub(width)) {
+        if rigid_run_matches(input, split, run, bindings) {
+            splits.push(split);
+        }
+    }
+    splits
 }
 
 fn bind_or_check(
@@ -549,5 +589,58 @@ mod tests {
         let input = vec![Value::Bracket(vec![Value::Char('A')])];
 
         assert!(match_pattern(&pattern, &input).is_ok());
+    }
+
+    #[test]
+    fn expression_variable_before_a_bracket_may_contain_brackets() {
+        // The trailing-bracket heuristic this replaced refused to let the
+        // variable swallow a bracket, so this shape used to fail.
+        let pattern = vec![
+            var(VariableKind::Expression, "X"),
+            Term {
+                kind: TermKind::Bracket(vec![char_term('A')]),
+                span: span(),
+            },
+        ];
+        let input = vec![
+            Value::Bracket(vec![Value::Char('A')]),
+            Value::Bracket(vec![Value::Char('A')]),
+        ];
+
+        let bindings = match_pattern(&pattern, &input).unwrap();
+        assert_eq!(
+            bindings[&key(VariableKind::Expression, "X")],
+            vec![Value::Bracket(vec![Value::Char('A')])]
+        );
+    }
+
+    #[test]
+    fn projects_determinate_runs_onto_the_input_to_find_splits() {
+        // Expression variables separated by anchors. Enumerating every split is
+        // exponential in their number; projecting the anchors onto the input
+        // tries only the positions where they actually occur.
+        let pattern = vec![
+            var(VariableKind::Expression, "A"),
+            char_term('p'),
+            var(VariableKind::Expression, "B"),
+            char_term('q'),
+            var(VariableKind::Expression, "C"),
+        ];
+        let input: Vec<Value> = "aabpaacqbb".chars().map(Value::Char).collect();
+
+        let bindings = match_pattern_first(&pattern, &input).unwrap();
+
+        assert_eq!(
+            bindings[&key(VariableKind::Expression, "A")],
+            vec![Value::Char('a'), Value::Char('a'), Value::Char('b')]
+        );
+        assert_eq!(
+            bindings[&key(VariableKind::Expression, "B")],
+            vec![Value::Char('a'), Value::Char('a'), Value::Char('c')]
+        );
+        assert_eq!(
+            bindings[&key(VariableKind::Expression, "C")],
+            vec![Value::Char('b'), Value::Char('b')]
+        );
     }
 }
