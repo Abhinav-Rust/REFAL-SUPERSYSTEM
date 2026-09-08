@@ -1,0 +1,131 @@
+$EXTERN Prout, Chr;
+
+* Refal-authored lexer for Classic Refal-5.
+*
+* This replaces the three-shape lexer subset: it tokenises the real grammar
+* rather than one hardcoded template. Token stream, space separated:
+*
+*   IDENT <name>   NUM <digits>   STR <chars>   VAR <s|t|e> <index>
+*   LP RP LB RB LA RA EQ SEMI COMMA COLON   EXTERN ENTRY
+*
+* The newline character cannot be written in a Classic Refal-5 pattern, so it
+* is passed in as an argument and used both to skip end-of-line and to
+* terminate * line comments.
+*
+* Not yet handled: sX one-character variable shorthand, /* */ block comments.
+* Words are taken as maximal runs up to a delimiter, so '-' and '_' are
+* ordinary word characters here.
+
+$ENTRY Go {
+  (e.Source) = <Prout <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>;
+}
+
+* Carriage returns are not significant in Refal-5, but sources on machines
+* that produce them arrive with \r\n line endings, and a bare \r would
+* otherwise lex as an identifier. Strip them first.
+StripCR {
+  (e.CR) = ;
+  (e.CR) e.CR e.R = <StripCR (e.CR) e.R>;
+  (e.CR) s.C e.R = s.C <StripCR (e.CR) e.R>;
+}
+
+Lex {
+  (e.NL) = ;
+  (e.NL) " " e.R = <Lex (e.NL) e.R>;
+  (e.NL) e.NL e.R = <Lex (e.NL) e.R>;
+  (e.NL) '*' e.R = <SkipLine (e.NL) e.R>;
+  (e.NL) '(' e.R = "LP " <Lex (e.NL) e.R>;
+  (e.NL) ')' e.R = "RP " <Lex (e.NL) e.R>;
+  (e.NL) '{' e.R = "LB " <Lex (e.NL) e.R>;
+  (e.NL) '}' e.R = "RB " <Lex (e.NL) e.R>;
+  (e.NL) '<' e.R = "LA " <Lex (e.NL) e.R>;
+  (e.NL) '>' e.R = "RA " <Lex (e.NL) e.R>;
+  (e.NL) '=' e.R = "EQ " <Lex (e.NL) e.R>;
+  (e.NL) ';' e.R = "SEMI " <Lex (e.NL) e.R>;
+  (e.NL) ',' e.R = "COMMA " <Lex (e.NL) e.R>;
+  (e.NL) ':' e.R = "COLON " <Lex (e.NL) e.R>;
+  (e.NL) '$EXTERNAL' e.R = "EXTERN " <Lex (e.NL) e.R>;
+  (e.NL) '$EXTRN' e.R = "EXTERN " <Lex (e.NL) e.R>;
+  (e.NL) '$ENTRY' e.R = "ENTRY " <Lex (e.NL) e.R>;
+  (e.NL) '$EXTERN' e.R = "EXTERN " <Lex (e.NL) e.R>;
+  (e.NL) 's.' e.R = <VarEmit (e.NL) ('s') <TakeWord (e.NL) () e.R>>;
+  (e.NL) 't.' e.R = <VarEmit (e.NL) ('t') <TakeWord (e.NL) () e.R>>;
+  (e.NL) 'e.' e.R = <VarEmit (e.NL) ('e') <TakeWord (e.NL) () e.R>>;
+  (e.NL) "'" e.R = <StrTok (e.NL) ("'") () e.R>;
+  (e.NL) '"' e.R = <StrTok (e.NL) ('"') () e.R>;
+  (e.NL) s.C e.R = <WordTok (e.NL) s.C e.R>;
+}
+
+* A comment runs to the passed newline, or to the end of the source.
+SkipLine {
+  (e.NL) = ;
+  (e.NL) e.NL e.R = <Lex (e.NL) e.R>;
+  (e.NL) s.C e.R = <SkipLine (e.NL) e.R>;
+}
+
+* Takes the maximal run of word characters. Returns (word) followed by the
+* rest, which begins with the delimiter that stopped the run.
+TakeWord {
+  (e.NL) (e.Acc) = (e.Acc);
+  (e.NL) (e.Acc) " " e.R = (e.Acc) " " e.R;
+  (e.NL) (e.Acc) e.NL e.R = (e.Acc) e.NL e.R;
+  (e.NL) (e.Acc) '(' e.R = (e.Acc) '(' e.R;
+  (e.NL) (e.Acc) ')' e.R = (e.Acc) ')' e.R;
+  (e.NL) (e.Acc) '{' e.R = (e.Acc) '{' e.R;
+  (e.NL) (e.Acc) '}' e.R = (e.Acc) '}' e.R;
+  (e.NL) (e.Acc) '<' e.R = (e.Acc) '<' e.R;
+  (e.NL) (e.Acc) '>' e.R = (e.Acc) '>' e.R;
+  (e.NL) (e.Acc) '=' e.R = (e.Acc) '=' e.R;
+  (e.NL) (e.Acc) ';' e.R = (e.Acc) ';' e.R;
+  (e.NL) (e.Acc) ',' e.R = (e.Acc) ',' e.R;
+  (e.NL) (e.Acc) ':' e.R = (e.Acc) ':' e.R;
+  (e.NL) (e.Acc) '.' e.R = (e.Acc) '.' e.R;
+  (e.NL) (e.Acc) "'" e.R = (e.Acc) "'" e.R;
+  (e.NL) (e.Acc) '"' e.R = (e.Acc) '"' e.R;
+  (e.NL) (e.Acc) '$' e.R = (e.Acc) '$' e.R;
+  (e.NL) (e.Acc) s.C e.R = <TakeWord (e.NL) (e.Acc s.C) e.R>;
+}
+
+* A word is a number when it starts with a digit, and an identifier otherwise.
+WordTok {
+  (e.NL) s.C e.R, <IsDigit s.C> : '1' =
+    <NumEmit (e.NL) <TakeWord (e.NL) (s.C) e.R>>;
+  (e.NL) s.C e.R =
+    <IdentEmit (e.NL) <TakeWord (e.NL) (s.C) e.R>>;
+}
+
+IsDigit {
+  '0' = '1';
+  '1' = '1';
+  '2' = '1';
+  '3' = '1';
+  '4' = '1';
+  '5' = '1';
+  '6' = '1';
+  '7' = '1';
+  '8' = '1';
+  '9' = '1';
+  s.C = ;
+}
+
+VarEmit {
+  (e.NL) (e.K) (e.W) e.Rest = "VAR " e.K " " e.W " " <Lex (e.NL) e.Rest>;
+}
+
+NumEmit {
+  (e.NL) (e.W) e.Rest = "NUM " e.W " " <Lex (e.NL) e.Rest>;
+}
+
+IdentEmit {
+  (e.NL) (e.W) e.Rest = "IDENT " e.W " " <Lex (e.NL) e.Rest>;
+}
+
+* Reads a quoted string. A doubled quote inside is an escaped quote, so it is
+* tried before the closing quote; a lone quote at the end of input closes an
+* unterminated string rather than hanging.
+StrTok {
+  (e.NL) (e.Q) (e.Acc) = "STR " e.Acc " ";
+  (e.NL) (e.Q) (e.Acc) e.Q e.Q e.R = <StrTok (e.NL) (e.Q) (e.Acc e.Q) e.R>;
+  (e.NL) (e.Q) (e.Acc) e.Q e.R = "STR " e.Acc " " <Lex (e.NL) e.R>;
+  (e.NL) (e.Q) (e.Acc) s.C e.R = <StrTok (e.NL) (e.Q) (e.Acc s.C) e.R>;
+}

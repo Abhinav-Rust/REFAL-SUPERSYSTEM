@@ -1512,6 +1512,78 @@ fn refal_authored_core_emitter_matches_rust_lower_for_supported_subset() {
 }
 
 #[test]
+fn executes_refal_authored_lexer_end_to_end() {
+    let output = run_file("examples/lexer.ref", &["Go { = 'Hi'; }"]);
+    assert!(
+        output.status.success(),
+        "unexpected stderr://n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "IDENT Go LB EQ STR Hi SEMI RB \n"
+    );
+
+    let with_terms = run_file(
+        "examples/lexer.ref",
+        &["F { e.X s.A t.B = <G e.X> 42 (e.Y); }"],
+    );
+    assert!(
+        with_terms.status.success(),
+        "unexpected stderr://n{}",
+        String::from_utf8_lossy(&with_terms.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&with_terms.stdout),
+        "IDENT F LB VAR e X VAR s A VAR t B EQ LA IDENT G VAR e X RA NUM 42 LP VAR e Y RP SEMI RB \n"
+    );
+
+    let with_comment = run_file("examples/lexer.ref", &["* a comment\nGo { = 1; }"]);
+    assert!(
+        with_comment.status.success(),
+        "unexpected stderr://n{}",
+        String::from_utf8_lossy(&with_comment.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&with_comment.stdout),
+        "IDENT Go LB EQ NUM 1 SEMI RB \n"
+    );
+
+    let escaped = run_file("examples/lexer.ref", &["F = 'a''b';"]);
+    assert!(
+        escaped.status.success(),
+        "unexpected stderr://n{}",
+        String::from_utf8_lossy(&escaped.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&escaped.stdout),
+        "IDENT F EQ STR a'b SEMI \n"
+    );
+}
+
+#[test]
+fn refal_authored_lexer_lexes_its_own_source() {
+    let source =
+        fs::read_to_string(workspace_path("examples/lexer.ref")).expect("read the lexer source");
+    let output = run_file("examples/lexer.ref", &[&source]);
+    assert!(
+        output.status.success(),
+        "the lexer should tokenise its own source://n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let tokens = String::from_utf8_lossy(&output.stdout);
+    assert!(tokens.contains("ENTRY IDENT Go"), "entry not tokenised");
+    assert!(
+        tokens.contains("VAR e Source"),
+        "the e.Source variable was not tokenised"
+    );
+    assert!(
+        !tokens.contains("IDENT \r"),
+        "carriage returns must be stripped, not lexed"
+    );
+}
+
+#[test]
 fn executes_refal_authored_lexer_subset_end_to_end() {
     let output = run_file(
         "examples/compiler-refal-lexer-subset.ref",

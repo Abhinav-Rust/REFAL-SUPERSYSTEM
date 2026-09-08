@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### A real Refal-authored lexer (2026-09-08)
+
+Phase 4. `examples/lexer.ref` tokenises Classic Refal-5 where the earlier lexer
+subset accepted one hardcoded template. It handles identifiers, numbers,
+single- and double-quoted strings with the doubled-quote escape, dotted
+`s.`/`t.`/`e.` variables, all brackets and delimiters, `$EXTERN`/`$EXTERNAL`/
+`$EXTRN`/`$ENTRY`, and `*` line comments. Classic Refal-5 has no escape syntax
+for control characters in patterns, so the newline is passed in as an argument
+and used to terminate comments; carriage returns are stripped first, since
+sources on CRLF machines would otherwise lex `\r` as an identifier. The lexer
+tokenises its own source. Not yet handled: `sX` one-character variable
+shorthand and `/* */` block comments. Added `executes_refal_authored_lexer_end_to_end`
+and `refal_authored_lexer_lexes_its_own_source`. Tests 194 -> 196.
+
 ### Blocks in condition position (2026-09-08)
 
 Classic Refal-5 allows a block in condition position, not only as a sentence-ending
