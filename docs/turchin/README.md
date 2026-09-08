@@ -82,6 +82,20 @@ What this obliges us to demonstrate, beyond syntax conformance:
   Turchin proved no algorithm perfects every graph of states. A system that
   claims otherwise has misunderstood him.
 
+## Online references (Principia Cybernetica nodes)
+
+HTML nodes from the Principia Cybernetica Project, pointing at Turchin's own
+definitions of the concepts the PW sources develop. Linked, not mirrored.
+
+- [MANIFESTO](https://pespmc1.vub.ac.be/MANIFESTO.html) — *The Cybernetic Manifesto* (Turchin & Joslyn, 1990): the charter.
+- [MST](https://pespmc1.vub.ac.be/MST.html) — the canonical definition of a metasystem transition.
+- [CONTROL](https://pespmc1.vub.ac.be/CONTROL.html) — control and control asymmetry.
+- [CONTHIER](https://pespmc1.vub.ac.be/CONTHIER.html) — control hierarchies.
+- [PENULTIM](https://pespmc1.vub.ac.be/PENULTIM.html) — the law of branching growth of the penultimate level.
+- [FREECONS](https://pespmc1.vub.ac.be/FREECONS.html) — freedom and constraint in an MST.
+- [TRIALMST](https://pespmc1.vub.ac.be/TRIALMST.html) — trial-and-error and why control hierarchies are necessary.
+- [WFISSUE](https://pespmc1.vub.ac.be/WFISSUE.html) — *The Quantum of Evolution* special issue (World Futures 45, 1995).
+
 ## The 1980 monograph — chapter map
 
 This is the design document for this compiler.
