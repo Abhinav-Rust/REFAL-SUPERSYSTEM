@@ -4,7 +4,7 @@ This compiler is built to Valentin Turchin's own design. This directory indexes 
 sources that design is drawn from, so that any claim in this repository can be checked against
 the original text.
 
-Run `./fetch-sources.sh` to download all nineteen CS documents (~53 MB) into `docs/turchin/pdf/`.
+Run `./fetch-sources.sh` to download the nineteen scripted CS documents (~53 MB) into `docs/turchin/pdf/`. Three further documents were added from the maintainer's collection on 2026-09-08: the 1986 TOPLAS supercompiler paper, the 1993 JFP metasystem-transition paper, and the 1995 Dialogue. **22 documents, ~34 MB on disk.**
 Every one has a machine-readable text layer; extract with `pdftotext <file>.pdf -`.
 
 ## Why the PDFs are not committed
@@ -24,7 +24,7 @@ Every one has a machine-readable text layer; extract with `pdftotext <file>.pdf 
 If you want them versioned anyway, the options are Git LFS, a GitHub release asset, or a
 separate archive repository. Say so and we will set one up.
 
-## The corpus
+## The corpus (computer science)
 
 | Document | Year | Pages | Source |
 |---|---:|---:|---|
@@ -40,12 +40,14 @@ separate archive repository. Say so and we will set one up.
 | REFAL macrocode | 1975 | 19 | Wayback |
 | Romanenko — Machine-independent compiler for a recursive-function language (PhD) | 1978 | 148 | live |
 | **The Language REFAL — The Theory of Compilation and Metasystem Analysis** (Courant #20) | 1980 | 261 | live |
+| **The Concept of a Supercompiler** (TOPLAS 8:3) | 1986 | 34 | the maintainer's collection |
 | The Algorithm of Generalization in the Supercompiler | 1988 | 19 | Wayback |
 | The Basics of Metacomputation (Obninsk ch. 3) | 1990 | 63 | Wayback |
 | The Supercompiler (Obninsk ch. 6) | 1990 | 48 | Wayback |
 | On Generalization of Lists and Strings in Supercompilation | 1996 | 28 | Wayback |
 | Metacomputation: Metasystem Transitions plus Supercompilation (LNCS 1110) | 1996 | 34 | live |
 | Nemytykh, Pinchuk, Turchin — A Self-Applicable Supercompiler (LNCS 1110) | 1996 | 20 | live |
+| Program Transformation with Metasystem Transitions (JFP 3:3) | 1993 | 31 | the maintainer's collection |
 | Nepeivoda — On Turchin's Theorem | 2013 | 13 | live |
 
 **1,010 pages.** OCR on the Soviet-era scans (1971 parts, 1975) is noisy Cyrillic but workable.
