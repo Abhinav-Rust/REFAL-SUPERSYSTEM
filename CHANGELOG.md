@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### Blocks in condition position (2026-09-08)
+
+Classic Refal-5 allows a block in condition position, not only as a sentence-ending
+expression; previously only the sentence-ending form parsed and anything of the form
+`pattern , expression : { block } = result;` failed with `expected term, found LBrace`.
+
+The parser now accepts a block after the colon of a condition, the semantic checker treats
+the block as an anonymous function whose variables stay local to it, the runtime evaluates
+it as a gating condition that falls through to the next sentence when no block sentence
+matches, and the Core formatter emits it so lowered source round-trips. Added
+`examples/condition-block.ref` and wired it into the differential corpus as a positive case.
+Tests 186 -> 191.
+
+Known limitation: variables bound by a block's own sentence patterns do not bind in the
+enclosing sentence. This is the conservative reading of block scope; it may be revisited
+against the reference.
+
 ### Token-consuming Refal parser subset (2026-09-02)
 
 Upgraded `examples/compiler-refal-parser-subset.ref` from a character-level identity-only emitter

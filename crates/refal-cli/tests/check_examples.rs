@@ -1836,6 +1836,7 @@ fn accepts_positive_examples() {
         "examples/identifier-equivalence.ref",
         "examples/variable-index-equivalence.ref",
         "examples/block-ending.ref",
+        "examples/condition-block.ref",
         "examples/runtime-arithmetic.ref",
         "examples/runtime-numeric-conversion.ref",
         "examples/symbolic-identity.ref",
@@ -2377,6 +2378,20 @@ fn runs_runtime_conformance_examples() {
 }
 
 #[test]
+fn executes_a_block_in_condition_position_end_to_end() {
+    let output = run_file("examples/condition-block.ref", &[]);
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "ACCEPTED\nREJECTED\n"
+    );
+}
+
+#[test]
 fn verifies_manifest_driven_whole_corpus_differential_modes() {
     let output = Command::new(refal_bin())
         .args([
@@ -2393,7 +2408,7 @@ fn verifies_manifest_driven_whole_corpus_differential_modes() {
     );
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
-        "differential-corpus: equal\ncases: 12\npositive: 5\ncheck-failure: 6\nruntime-failure: 1\n"
+        "differential-corpus: equal\ncases: 13\npositive: 6\ncheck-failure: 6\nruntime-failure: 1\n"
     );
 }
 

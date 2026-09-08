@@ -123,7 +123,7 @@ impl Checker {
         self.check_pattern_terms(&sentence.pattern);
         for condition in &sentence.conditions {
             self.check_expression_terms(&condition.result);
-            self.check_pattern_terms(&condition.pattern);
+            self.check_condition_pattern_terms(&condition.pattern);
         }
         self.check_expression_terms(&sentence.result);
     }
@@ -185,6 +185,26 @@ impl Checker {
         }
     }
 
+    fn check_condition_pattern_terms(&mut self, terms: &[Term]) {
+        for term in terms {
+            match &term.kind {
+                TermKind::Block {
+                    argument,
+                    sentences,
+                } => {
+                    // A block in condition position is an anonymous function applied to
+                    // the condition argument, so its argument is an expression and its
+                    // sentences are ordinary sentences.
+                    self.check_expression_terms(argument);
+                    for sentence in sentences {
+                        self.check_sentence_calls(sentence);
+                    }
+                }
+                _ => self.check_pattern_terms(std::slice::from_ref(term)),
+            }
+        }
+    }
+
     fn check_variables(&mut self, program: &Program) {
         for item in &program.items {
             let Item::Function(function) = item else {
@@ -207,10 +227,34 @@ impl Checker {
 
         for condition in &sentence.conditions {
             self.require_bound_variables(&condition.result, &bound);
-            self.collect_pattern_bindings(&condition.pattern, &mut bound);
+            self.collect_condition_pattern_bindings(&condition.pattern, &mut bound);
         }
 
         self.require_bound_variables(&sentence.result, &bound);
+    }
+
+    fn collect_condition_pattern_bindings(
+        &mut self,
+        terms: &[Term],
+        bound: &mut HashSet<VariableKey>,
+    ) {
+        for term in terms {
+            match &term.kind {
+                TermKind::Block {
+                    argument,
+                    sentences,
+                } => {
+                    // Variables bound inside a block are local to that block, so they do
+                    // not bind in the enclosing sentence. The block inherits the bindings
+                    // visible at the point it appears.
+                    self.require_bound_variables(argument, bound);
+                    for sentence in sentences {
+                        self.check_sentence_variables(sentence, bound);
+                    }
+                }
+                _ => self.collect_pattern_bindings(std::slice::from_ref(term), bound),
+            }
+        }
     }
 
     fn collect_pattern_bindings(&mut self, terms: &[Term], bound: &mut HashSet<VariableKey>) {
@@ -568,6 +612,96 @@ mod tests {
                         }),
                         span,
                     }],
+                    span,
+                }],
+                span,
+            })],
+        };
+
+        assert!(check_program(&program).is_ok());
+    }
+
+    #[test]
+    fn rejects_a_block_condition_variable_used_in_the_sentence_result() {
+        let span = empty_span();
+        let variable = |kind: VariableKind, name: &str| Term {
+            kind: TermKind::Variable(Variable {
+                kind,
+                name: name.to_string(),
+            }),
+            span,
+        };
+        let program = Program {
+            items: vec![Item::Function(Function {
+                name: "Go".to_string(),
+                visibility: Visibility::Entry,
+                sentences: vec![Sentence {
+                    pattern: vec![variable(VariableKind::Expression, "Input")],
+                    conditions: vec![refal_ast::Condition {
+                        result: vec![variable(VariableKind::Expression, "Input")],
+                        pattern: vec![Term {
+                            kind: TermKind::Block {
+                                argument: vec![variable(VariableKind::Expression, "Input")],
+                                sentences: vec![Sentence {
+                                    pattern: vec![variable(VariableKind::Expression, "Inner")],
+                                    conditions: vec![],
+                                    result: vec![],
+                                    span,
+                                }],
+                            },
+                            span,
+                        }],
+                        span,
+                    }],
+                    result: vec![variable(VariableKind::Expression, "Inner")],
+                    span,
+                }],
+                span,
+            })],
+        };
+
+        let diagnostics = check_program(&program).unwrap_err();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.message.contains("unbound variable `e.Inner`")),
+            "expected `e.Inner` to stay local to the block, got {diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn accepts_a_block_in_condition_position() {
+        let span = empty_span();
+        let variable = |kind: VariableKind, name: &str| Term {
+            kind: TermKind::Variable(Variable {
+                kind,
+                name: name.to_string(),
+            }),
+            span,
+        };
+        let program = Program {
+            items: vec![Item::Function(Function {
+                name: "Go".to_string(),
+                visibility: Visibility::Entry,
+                sentences: vec![Sentence {
+                    pattern: vec![variable(VariableKind::Expression, "Input")],
+                    conditions: vec![refal_ast::Condition {
+                        result: vec![variable(VariableKind::Expression, "Input")],
+                        pattern: vec![Term {
+                            kind: TermKind::Block {
+                                argument: vec![variable(VariableKind::Expression, "Input")],
+                                sentences: vec![Sentence {
+                                    pattern: vec![variable(VariableKind::Expression, "Inner")],
+                                    conditions: vec![],
+                                    result: vec![variable(VariableKind::Expression, "Inner")],
+                                    span,
+                                }],
+                            },
+                            span,
+                        }],
+                        span,
+                    }],
+                    result: vec![variable(VariableKind::Expression, "Input")],
                     span,
                 }],
                 span,

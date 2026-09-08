@@ -20,6 +20,11 @@ use crate::matcher::{
 
 const DEFAULT_MAX_CALL_DEPTH: usize = 1_024;
 
+/// Name used when evaluating the sentences of a block. It appears in
+/// recognition-impossible errors raised by the block itself, which a block
+/// condition treats as a failed condition rather than a program error.
+const BLOCK_SENTINEL: &str = "<block>";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EvalError {
     FunctionNotFound(String),
@@ -446,10 +451,10 @@ impl<'a> Evaluator<'a> {
                         continue;
                     };
                     if !terms_are_worklist_safe(&sentence.result)
-                        || sentence
-                            .conditions
-                            .iter()
-                            .any(|condition| !terms_are_worklist_safe(&condition.result))
+                        || sentence.conditions.iter().any(|condition| {
+                            !terms_are_worklist_safe(&condition.result)
+                                || !terms_are_worklist_safe(&condition.pattern)
+                        })
                     {
                         returned =
                             Some(self.evaluate_function_at_depth_without_step(&name, &args, depth));
@@ -876,6 +881,21 @@ impl<'a> Evaluator<'a> {
         for condition in conditions {
             let mut next_candidates = Vec::new();
             for bindings in candidates {
+                if condition.pattern.len() == 1
+                    && matches!(condition.pattern[0].kind, TermKind::Block { .. })
+                {
+                    // A block in condition position is an anonymous function applied to
+                    // the condition argument. It gates the sentence: if no sentence of
+                    // the block matches, the condition fails. Variables bound inside the
+                    // block are local to it, so the outer bindings carry through
+                    // unchanged.
+                    match self.eval_terms(&condition.pattern, &bindings, call_depth) {
+                        Ok(_) => next_candidates.push(bindings),
+                        Err(EvalError::NoMatchingSentence(name)) if name == BLOCK_SENTINEL => {}
+                        Err(error) => return Err(error),
+                    }
+                    continue;
+                }
                 let condition_value = self.eval_terms(&condition.result, &bindings, call_depth)?;
                 match match_pattern_with_bindings_candidates(
                     &condition.pattern,
@@ -920,7 +940,7 @@ impl<'a> Evaluator<'a> {
                 } => {
                     let evaluated_argument = self.eval_terms(argument, bindings, call_depth)?;
                     output.extend(self.evaluate_sentences(
-                        "<block>",
+                        BLOCK_SENTINEL,
                         sentences,
                         &evaluated_argument,
                         call_depth,
@@ -1626,6 +1646,72 @@ mod tests {
         assert_eq!(
             evaluator.evaluate_entry(&[Value::Char('B')]).unwrap(),
             vec![Value::Char('N')]
+        );
+    }
+
+    #[test]
+    fn evaluates_block_condition_and_falls_through_when_it_fails() {
+        let check = call("Check", vec![var(VariableKind::Expression, "Input")]);
+        let block = term(TermKind::Block {
+            argument: vec![check.clone()],
+            sentences: vec![Sentence {
+                pattern: vec![term(TermKind::Symbol(Symbol::Char('Y')))],
+                conditions: vec![],
+                result: vec![term(TermKind::Symbol(Symbol::Char('P')))],
+                span: span(),
+            }],
+        });
+        let accepted = Sentence {
+            pattern: vec![var(VariableKind::Expression, "Input")],
+            conditions: vec![Condition {
+                result: vec![check],
+                pattern: vec![block],
+                span: span(),
+            }],
+            result: vec![term(TermKind::Symbol(Symbol::Identifier(
+                "Pass".to_string(),
+            )))],
+            span: span(),
+        };
+        let rejected = Sentence {
+            pattern: vec![var(VariableKind::Expression, "Input")],
+            conditions: vec![],
+            result: vec![term(TermKind::Symbol(Symbol::Identifier(
+                "Fail".to_string(),
+            )))],
+            span: span(),
+        };
+        let check_function = function(
+            "Check",
+            Visibility::Local,
+            vec![
+                Sentence {
+                    pattern: vec![term(TermKind::Symbol(Symbol::Char('A')))],
+                    conditions: vec![],
+                    result: vec![term(TermKind::Symbol(Symbol::Char('Y')))],
+                    span: span(),
+                },
+                Sentence {
+                    pattern: vec![var(VariableKind::Expression, "Rest")],
+                    conditions: vec![],
+                    result: vec![term(TermKind::Symbol(Symbol::Char('N')))],
+                    span: span(),
+                },
+            ],
+        );
+        let program = program(vec![
+            function("Go", Visibility::Entry, vec![accepted, rejected]),
+            check_function,
+        ]);
+        let evaluator = Evaluator::new(&program);
+
+        assert_eq!(
+            evaluator.evaluate_entry(&[Value::Char('A')]).unwrap(),
+            vec![Value::identifier("Pass")]
+        );
+        assert_eq!(
+            evaluator.evaluate_entry(&[Value::Char('B')]).unwrap(),
+            vec![Value::identifier("Fail")]
         );
     }
 

@@ -248,6 +248,14 @@ produces C1, C1 produces C2, C2 produces C3, all three outputs check successfull
 byte-for-byte. The general-corpus self-hosting gate remains open; Rust is still the verification
 harness. **This is the maintainer's 100% only when closed for the complete compiler.**
 
+> **Caveat on the current evidence, stated for the record.** The two artifacts that today
+> demonstrate C2 ≡ C3 are source-preserving, not compiling, transformations. The
+> `compiler-refal-fixedpoint-subset.ref` slice discards its input and emits a constant string,
+> so its fixpoint is that of `f(x) = c`; the 4,780-byte body-compiler fixpoint is that of a
+> text-preserving reformatter. Both are legitimate tests of the *harness*, and neither is
+> evidence that a compiler compiles itself. The gate above is not closed until the fixpoint is
+> demonstrated on a slice that actually parses, analyses, and emits.
+
 ### Phase 6 — Tier 2 metasystem analysis · research track, post-1.0
 
 §5.5 differential metafunction, §5.6 integral metafunction, §5.7 metasystem analysis, §5.9
@@ -266,8 +274,14 @@ Honest reset. The clarified goal added a workstream, so the denominator grew. Th
 also *fell* from an earlier published 38%, because that figure gave full credit to two
 milestones an audit then found to be Partial.
 
-**~96% today**, after the sixteenth implementation milestone on 2026-08-18. The audited
-19.8% baseline remains the comparison point; the new score credits only tested frontend,
+**~60% today by the sub-task implementation credit method**, after the eighteenth
+implementation milestone on 2026-09-02. This is *not* the headline figure: the README leads
+with the **~42% evidence-weighted** score, which counts only what is tested and working for
+the general case. Both numbers are reproduced from the same underlying work; they differ
+because this method credits planned effort coded and tested, while the README's method
+credits functional completion of the 1.0 goal. When in doubt, quote the 42%.
+
+The audited 19.8% baseline remains the comparison point; the new score credits only tested frontend,
 bootstrap-runtime, deterministic graph infrastructure, bounded concrete driving,
 shape-aware symbolic driving, supported-subset Refal residualization, cleaned-graph Core Refal emission,
 restricted compiler-in-Refal emission/parsing/checking, the direct supported-body C1 → C2 → C3

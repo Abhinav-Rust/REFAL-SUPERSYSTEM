@@ -105,7 +105,13 @@ impl Parser {
             let condition_start = self.peek().span.start;
             let result = self.parse_terms_until(&[TokenKind::Colon])?;
             self.expect(TokenKind::Colon)?;
-            let pattern = self.parse_terms_until(&[TokenKind::Comma, TokenKind::Equals])?;
+            let pattern = if self.at(TokenKind::LBrace) {
+                // Classic Refal-5 allows a block in condition position:
+                // `pattern , expression : { sentences } = result;`
+                vec![self.parse_block(result.clone(), condition_start)?]
+            } else {
+                self.parse_terms_until(&[TokenKind::Comma, TokenKind::Equals])?
+            };
             let condition_end = self.previous_span().end;
             conditions.push(refal_ast::Condition {
                 result,
@@ -137,6 +143,10 @@ impl Parser {
         let start = self.peek().span.start;
         let argument = self.parse_terms_until(&[TokenKind::Colon])?;
         self.expect(TokenKind::Colon)?;
+        self.parse_block(argument, start)
+    }
+
+    fn parse_block(&mut self, argument: Vec<Term>, start: usize) -> Result<Term, ParseError> {
         self.expect(TokenKind::LBrace)?;
 
         let mut sentences = Vec::new();
@@ -352,6 +362,27 @@ mod tests {
             &sentences[1].result[0].kind,
             TermKind::Block { .. }
         ));
+    }
+
+    #[test]
+    fn parses_block_in_condition_position_followed_by_a_result() {
+        let tokens = Lexer::new("F { e.X , <G e.X> : { 'A' = 'Y'; } = 'D'; }")
+            .tokenize()
+            .unwrap();
+        let mut parser = Parser::new(tokens);
+        let program = parser.parse_program().unwrap();
+        let sentence = &first_function(&program).sentences[0];
+
+        assert_eq!(sentence.conditions.len(), 1);
+        assert!(matches!(
+            &sentence.conditions[0].result[0].kind,
+            TermKind::Call { name, .. } if name == "G"
+        ));
+        let TermKind::Block { sentences, .. } = &sentence.conditions[0].pattern[0].kind else {
+            panic!("expected a block in the condition pattern")
+        };
+        assert_eq!(sentences.len(), 1);
+        assert_eq!(sentence.result.len(), 1);
     }
 
     #[test]

@@ -64,6 +64,7 @@ extensions must not silently enter the Classic Refal-5 frontend.
 | Empty patterns and results | Complete | Hello example |
 | Condition chains | Complete | Parser and interpreter tests |
 | Sentence-ending blocks `, arg : { block }` | Complete | Recursive AST/parser/semantic/runtime/core implementation with nested-block, scope, fallthrough, CLI, and round-trip tests |
+| Blocks in condition position `, arg : { block } = result` | Complete | Parser, semantic, runtime, and core formatter support; variables bound inside the block stay local to it. `examples/condition-block.ref` plus parser, semantics, runtime, and CLI round-trip tests |
 | Calls prohibited in patterns | Complete | Semantic checker and CLI golden tests reject calls in patterns |
 | Optional semicolons between top-level definitions | Complete | Parser test covers separated definitions |
 | Full malformed-program golden suite | Partial | The negative corpus now covers twelve distinct lexer/parser failure classes, including unterminated comments, empty literals, missing variable names, unsupported directives, malformed exponents, delimiter failures, and invalid top-level items; parser cases assert exact diagnostics and locations. A complete reference-clause-by-clause corpus remains outstanding |

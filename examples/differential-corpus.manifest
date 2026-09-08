@@ -3,6 +3,7 @@ positive|hello.ref|
 positive|runtime-structural.ref|cli-argument
 positive|runtime-recursion.ref|
 positive|runtime-condition.ref|
+positive|condition-block.ref|
 positive|runtime-metacode.ref|
 check-failure|bad-missing-equals.ref|
 check-failure|bad-missing-colon.ref|

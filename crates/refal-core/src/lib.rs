@@ -2221,7 +2221,13 @@ fn format_sentence(sentence: &CoreSentence, output: &mut String, indent: usize) 
         output.push_str(", ");
         format_terms(&condition.result, output);
         output.push_str(" : ");
-        format_terms(&condition.pattern, output);
+        if condition.pattern.len() == 1
+            && let CoreTermKind::Block { sentences, .. } = &condition.pattern[0].kind
+        {
+            format_block_body(sentences, output, indent);
+        } else {
+            format_terms(&condition.pattern, output);
+        }
     }
     if !sentence.pattern.is_empty() || !sentence.conditions.is_empty() {
         output.push(' ');
@@ -2239,12 +2245,9 @@ fn format_sentence(sentence: &CoreSentence, output: &mut String, indent: usize) 
             output.push(' ');
             format_terms(argument, output);
         }
-        output.push_str(" : {\n");
-        for nested in sentences {
-            format_sentence(nested, output, indent + 2);
-        }
-        output.push_str(&" ".repeat(indent));
-        output.push_str("};\n");
+        output.push_str(" : ");
+        format_block_body(sentences, output, indent);
+        output.push_str(";\n");
         return;
     }
 
@@ -2253,6 +2256,15 @@ fn format_sentence(sentence: &CoreSentence, output: &mut String, indent: usize) 
         format_terms(&sentence.result, output);
     }
     output.push_str(";\n");
+}
+
+fn format_block_body(sentences: &[CoreSentence], output: &mut String, indent: usize) {
+    output.push_str("{\n");
+    for nested in sentences {
+        format_sentence(nested, output, indent + 2);
+    }
+    output.push_str(&" ".repeat(indent));
+    output.push('}');
 }
 
 fn lower_sentence(sentence: &refal_ast::Sentence) -> CoreSentence {
