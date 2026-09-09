@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### A Refal-authored parser (2026-09-09)
+
+Phase 4, second stage. `examples/parser.ref` lexes and parses Classic Refal-5
+into an AST: `$EXTERN` declarations, `$ENTRY` and local functions, multi-sentence
+functions, patterns, conditions (`, expr : pattern`), results, calls and
+structural brackets. It parses `identity`, `runtime-recursion`,
+`runtime-arithmetic` and `condition` correctly, and it parses
+`examples/lexer.ref` — the previous stage of its own pipeline — producing
+5,945 bytes of AST in under three seconds.
+
+Refal-5 has no module system, so the lexer is duplicated into this file; the
+stages will be merged into `compiler.ref` alongside the checker and emitter.
+Blocks are not yet parsed, as sentence endings or in conditions. Added
+`executes_refal_authored_parser_end_to_end` and
+`refal_authored_parser_parses_the_refal_lexer`. Tests 196 -> 198.
+
 ### A real Refal-authored lexer (2026-09-08)
 
 Phase 4. `examples/lexer.ref` tokenises Classic Refal-5 where the earlier lexer

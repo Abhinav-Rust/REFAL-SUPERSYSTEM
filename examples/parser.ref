@@ -1,0 +1,260 @@
+$EXTERN Prout, Chr;
+
+* Refal-authored lexer + parser for Classic Refal-5.
+*
+* The lexer is the same tokeniser as examples/lexer.ref, but it emits token
+* TERMS rather than display text:
+*   (Ident W)  (Num D)  (Str C)  (Var s X)
+*   LP RP LB RB LA RA EQ SEMI COMMA COLON EXTERN ENTRY
+* Refal-5 has no module system, so the two stages live in one file here rather
+* than the parser importing the lexer. They will be merged into compiler.ref
+* alongside the checker and emitter.
+*
+* The AST is printed by Prout, which renders structural brackets as
+* parentheses:
+*   (PROG item...)
+*   (EXT name...)                        an $EXTERN declaration
+*   (FUN (Ident Name) (VIS ENTRY) s...)  a function; VIS is ENTRY or LOCAL
+*   (SENT (pattern...) (cond...) (result...))
+*   (COND (expr...) (pattern...))
+*   (SYM c) (ID Name) (NUM d) (Var s X) (BR term...) (CALL (ID N) term...)
+*
+* Grammar covered: $EXTERN, $ENTRY and local functions, multi-sentence
+* functions, patterns, conditions (, expr : pattern), results, calls and
+* structural brackets. Not yet: blocks, as sentence endings or in conditions.
+
+$ENTRY Go {
+  (e.Source) = <Prout <Parse <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>>;
+}
+
+* ---------------------------------------------------------------- lexer
+
+* Carriage returns are not significant, but CRLF sources would otherwise lex
+* a bare \r as an identifier.
+StripCR {
+  (e.CR) = ;
+  (e.CR) e.CR e.R = <StripCR (e.CR) e.R>;
+  (e.CR) s.C e.R = s.C <StripCR (e.CR) e.R>;
+}
+
+Lex {
+  (e.NL) = ;
+  (e.NL) " " e.R = <Lex (e.NL) e.R>;
+  (e.NL) e.NL e.R = <Lex (e.NL) e.R>;
+  (e.NL) '*' e.R = <SkipLine (e.NL) e.R>;
+  (e.NL) '(' e.R = LP <Lex (e.NL) e.R>;
+  (e.NL) ')' e.R = RP <Lex (e.NL) e.R>;
+  (e.NL) '{' e.R = LB <Lex (e.NL) e.R>;
+  (e.NL) '}' e.R = RB <Lex (e.NL) e.R>;
+  (e.NL) '<' e.R = LA <Lex (e.NL) e.R>;
+  (e.NL) '>' e.R = RA <Lex (e.NL) e.R>;
+  (e.NL) '=' e.R = EQ <Lex (e.NL) e.R>;
+  (e.NL) ';' e.R = SEMI <Lex (e.NL) e.R>;
+  (e.NL) ',' e.R = COMMA <Lex (e.NL) e.R>;
+  (e.NL) ':' e.R = COLON <Lex (e.NL) e.R>;
+  (e.NL) '$EXTERNAL' e.R = EXTERN <Lex (e.NL) e.R>;
+  (e.NL) '$EXTRN' e.R = EXTERN <Lex (e.NL) e.R>;
+  (e.NL) '$ENTRY' e.R = ENTRY <Lex (e.NL) e.R>;
+  (e.NL) '$EXTERN' e.R = EXTERN <Lex (e.NL) e.R>;
+  (e.NL) 's.' e.R = <VarEmit (e.NL) ('s') <TakeWord (e.NL) () e.R>>;
+  (e.NL) 't.' e.R = <VarEmit (e.NL) ('t') <TakeWord (e.NL) () e.R>>;
+  (e.NL) 'e.' e.R = <VarEmit (e.NL) ('e') <TakeWord (e.NL) () e.R>>;
+  (e.NL) "'" e.R = <StrTok (e.NL) ("'") () e.R>;
+  (e.NL) '"' e.R = <StrTok (e.NL) ('"') () e.R>;
+  (e.NL) s.C e.R = <WordTok (e.NL) s.C e.R>;
+}
+
+SkipLine {
+  (e.NL) = ;
+  (e.NL) e.NL e.R = <Lex (e.NL) e.R>;
+  (e.NL) s.C e.R = <SkipLine (e.NL) e.R>;
+}
+
+TakeWord {
+  (e.NL) (e.Acc) = (e.Acc);
+  (e.NL) (e.Acc) " " e.R = (e.Acc) " " e.R;
+  (e.NL) (e.Acc) e.NL e.R = (e.Acc) e.NL e.R;
+  (e.NL) (e.Acc) '(' e.R = (e.Acc) '(' e.R;
+  (e.NL) (e.Acc) ')' e.R = (e.Acc) ')' e.R;
+  (e.NL) (e.Acc) '{' e.R = (e.Acc) '{' e.R;
+  (e.NL) (e.Acc) '}' e.R = (e.Acc) '}' e.R;
+  (e.NL) (e.Acc) '<' e.R = (e.Acc) '<' e.R;
+  (e.NL) (e.Acc) '>' e.R = (e.Acc) '>' e.R;
+  (e.NL) (e.Acc) '=' e.R = (e.Acc) '=' e.R;
+  (e.NL) (e.Acc) ';' e.R = (e.Acc) ';' e.R;
+  (e.NL) (e.Acc) ',' e.R = (e.Acc) ',' e.R;
+  (e.NL) (e.Acc) ':' e.R = (e.Acc) ':' e.R;
+  (e.NL) (e.Acc) '.' e.R = (e.Acc) '.' e.R;
+  (e.NL) (e.Acc) "'" e.R = (e.Acc) "'" e.R;
+  (e.NL) (e.Acc) '"' e.R = (e.Acc) '"' e.R;
+  (e.NL) (e.Acc) '$' e.R = (e.Acc) '$' e.R;
+  (e.NL) (e.Acc) s.C e.R = <TakeWord (e.NL) (e.Acc s.C) e.R>;
+}
+
+WordTok {
+  (e.NL) s.C e.R, <IsDigit s.C> : '1' =
+    <NumEmit (e.NL) <TakeWord (e.NL) (s.C) e.R>>;
+  (e.NL) s.C e.R =
+    <IdentEmit (e.NL) <TakeWord (e.NL) (s.C) e.R>>;
+}
+
+IsDigit {
+  '0' = '1';
+  '1' = '1';
+  '2' = '1';
+  '3' = '1';
+  '4' = '1';
+  '5' = '1';
+  '6' = '1';
+  '7' = '1';
+  '8' = '1';
+  '9' = '1';
+  s.C = ;
+}
+
+VarEmit {
+  (e.NL) (e.K) (e.W) e.Rest = (Var e.K e.W) <Lex (e.NL) e.Rest>;
+}
+
+NumEmit {
+  (e.NL) (e.W) e.Rest = (Num e.W) <Lex (e.NL) e.Rest>;
+}
+
+IdentEmit {
+  (e.NL) (e.W) e.Rest = (Ident e.W) <Lex (e.NL) e.Rest>;
+}
+
+StrTok {
+  (e.NL) (e.Q) (e.Acc) = (Str e.Acc);
+  (e.NL) (e.Q) (e.Acc) e.Q e.Q e.R = <StrTok (e.NL) (e.Q) (e.Acc e.Q) e.R>;
+  (e.NL) (e.Q) (e.Acc) e.Q e.R = (Str e.Acc) <Lex (e.NL) e.R>;
+  (e.NL) (e.Q) (e.Acc) s.C e.R = <StrTok (e.NL) (e.Q) (e.Acc s.C) e.R>;
+}
+
+* --------------------------------------------------------------- parser
+
+Parse {
+  e.Tokens = (PROG <Items e.Tokens>);
+}
+
+Items {
+  = ;
+  EXTERN e.Rest = <JoinItem <OneExtern e.Rest>>;
+  ENTRY e.Rest = <JoinItem <OneFun (VIS ENTRY) e.Rest>>;
+  (Ident e.N) e.Rest = <JoinItem <OneFun (VIS LOCAL) (Ident e.N) e.Rest>>;
+}
+
+JoinItem {
+  (e.Item) e.Rest = e.Item <Items e.Rest>;
+}
+
+OneExtern {
+  e.Tokens = <OneExtern2 <Names () e.Tokens>>;
+}
+
+OneExtern2 {
+  (e.Names) SEMI e.Rest = (EXT e.Names) e.Rest;
+}
+
+Names {
+  (e.Acc) (Ident e.N) e.R = <Names (e.Acc (Ident e.N)) e.R>;
+  (e.Acc) COMMA (Ident e.N) e.R = <Names (e.Acc (Ident e.N)) e.R>;
+  (e.Acc) e.Rest = (e.Acc) e.Rest;
+}
+
+OneFun {
+  (e.V) (Ident e.N) e.Tokens = <OneFun2 (e.V) (Ident e.N) <FunBody e.Tokens>>;
+}
+
+OneFun2 {
+  (e.V) (Ident e.N) (e.Sents) e.Rest = (FUN (Ident e.N) (e.V) e.Sents) e.Rest;
+}
+
+FunBody {
+  LB e.Tokens = <Sentences () e.Tokens>;
+}
+
+Sentences {
+  (e.Acc) RB e.Rest = (e.Acc) e.Rest;
+  (e.Acc) e.Tokens = <SentencesJoin (e.Acc) <Sentence e.Tokens>>;
+}
+
+SentencesJoin {
+  (e.Acc) (e.Sent) e.Rest = <Sentences (e.Acc (e.Sent)) e.Rest>;
+}
+
+Sentence {
+  e.Tokens = <Sent1 <Terms () e.Tokens>>;
+}
+
+Sent1 {
+  (e.Pat) COMMA e.Rest = <SentCond (e.Pat) () e.Rest>;
+  (e.Pat) EQ e.Rest = <SentRes (e.Pat) () e.Rest>;
+}
+
+* Sent1 has already consumed the comma that separates the pattern from the
+* conditions, so SentCond starts on the condition's expression.
+SentCond {
+  (e.Pat) (e.Conds) e.Rest = <SentCond2 (e.Pat) (e.Conds) <Terms () e.Rest>>;
+}
+
+SentCond2 {
+  (e.Pat) (e.Conds) (e.Expr) COLON e.Rest =
+    <SentCond3 (e.Pat) (e.Conds) (e.Expr) <Terms () e.Rest>>;
+}
+
+SentCond3 {
+  (e.Pat) (e.Conds) (e.Expr) (e.CPat) COMMA e.Rest =
+    <SentCond (e.Pat) (e.Conds (COND (e.Expr) (e.CPat))) e.Rest>;
+  (e.Pat) (e.Conds) (e.Expr) (e.CPat) EQ e.Rest =
+    <SentRes (e.Pat) (e.Conds (COND (e.Expr) (e.CPat))) e.Rest>;
+}
+
+SentRes {
+  (e.Pat) (e.Conds) e.Rest = <SentRes2 (e.Pat) (e.Conds) <Terms () e.Rest>>;
+}
+
+SentRes2 {
+  (e.Pat) (e.Conds) (e.Res) SEMI e.Rest = (SENT (e.Pat) (e.Conds) (e.Res)) e.Rest;
+}
+
+* A term sequence stops at any token that cannot begin or continue a term.
+Terms {
+  (e.Acc) EQ e.R = (e.Acc) EQ e.R;
+  (e.Acc) COMMA e.R = (e.Acc) COMMA e.R;
+  (e.Acc) COLON e.R = (e.Acc) COLON e.R;
+  (e.Acc) SEMI e.R = (e.Acc) SEMI e.R;
+  (e.Acc) RB e.R = (e.Acc) RB e.R;
+  (e.Acc) RP e.R = (e.Acc) RP e.R;
+  (e.Acc) RA e.R = (e.Acc) RA e.R;
+  (e.Acc) LB e.R = (e.Acc) LB e.R;
+  (e.Acc) (Str e.C) e.R = <Terms (e.Acc <Chars e.C>) e.R>;
+  (e.Acc) (Num e.D) e.R = <Terms (e.Acc (NUM e.D)) e.R>;
+  (e.Acc) (Ident e.W) e.R = <Terms (e.Acc (ID e.W)) e.R>;
+  (e.Acc) (Var e.K e.I) e.R = <Terms (e.Acc (VAR e.K e.I)) e.R>;
+  (e.Acc) LP e.R = <TermsBr (e.Acc) e.R>;
+  (e.Acc) LA e.R = <TermsCall (e.Acc) e.R>;
+  (e.Acc) = (e.Acc);
+}
+
+* A quoted string is a sequence of character symbols, not one symbol.
+Chars {
+  = ;
+  s.C e.R = (SYM s.C) <Chars e.R>;
+}
+
+TermsBr {
+  (e.Acc) e.R = <TermsBr2 (e.Acc) <Terms () e.R>>;
+}
+
+TermsBr2 {
+  (e.Acc) (e.Inner) RP e.R = <Terms (e.Acc (BR e.Inner)) e.R>;
+}
+
+TermsCall {
+  (e.Acc) (Ident e.N) e.R = <TermsCall2 (e.Acc) (e.N) <Terms () e.R>>;
+}
+
+TermsCall2 {
+  (e.Acc) (e.N) (e.Args) RA e.R = <Terms (e.Acc (CALL (ID e.N) e.Args)) e.R>;
+}

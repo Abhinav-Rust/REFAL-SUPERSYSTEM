@@ -1584,6 +1584,60 @@ fn refal_authored_lexer_lexes_its_own_source() {
 }
 
 #[test]
+fn executes_refal_authored_parser_end_to_end() {
+    let cases = [
+        (
+            "F { e.X s.A = 1; }",
+            "(PROGFUN(IdentF)(VISLOCAL)(SENT((VAReX)(VARsA))()((NUM1))))
+",
+        ),
+        (
+            "$EXTERN Prout;
+$ENTRY Go { = <Prout 'Hi'>; }",
+            "(PROGEXT(IdentProut)FUN(IdentGo)(VISENTRY)(SENT()()((CALL(IDProut)(SYMH)(SYMi)))))
+",
+        ),
+        (
+            "F { e.T, e.T : e.L 'x' e.R = 'Y'; }",
+            "(PROGFUN(IdentF)(VISLOCAL)(SENT((VAReT))((COND((VAReT))((VAReL)(SYMx)(VAReR))))((SYMY))))
+",
+        ),
+        (
+            "G { (e.A) = (<H e.A>); }",
+            "(PROGFUN(IdentG)(VISLOCAL)(SENT((BR(VAReA)))()((BR(CALL(IDH)(VAReA))))))
+",
+        ),
+    ];
+    for (source, expected) in cases {
+        let output = run_file("examples/parser.ref", &[source]);
+        assert!(
+            output.status.success(),
+            "parser failed on {source:?}:
+{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(String::from_utf8_lossy(&output.stdout), expected);
+    }
+}
+
+#[test]
+fn refal_authored_parser_parses_the_refal_lexer() {
+    let source =
+        fs::read_to_string(workspace_path("examples/lexer.ref")).expect("read the lexer source");
+    let output = run_file("examples/parser.ref", &[&source]);
+    assert!(
+        output.status.success(),
+        "the parser should parse the previous pipeline stage:
+{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let ast = String::from_utf8_lossy(&output.stdout);
+    assert!(ast.starts_with("(PROG"), "expected a program, got {ast}");
+    assert!(ast.contains("FUN(IdentGo)(VISENTRY)"), "entry not parsed");
+    assert!(ast.contains("FUN(IdentLex)(VISLOCAL)"), "Lex not parsed");
+}
+
+#[test]
 fn executes_refal_authored_lexer_subset_end_to_end() {
     let output = run_file(
         "examples/compiler-refal-lexer-subset.ref",
