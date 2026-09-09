@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### A Refal-authored emitter, byte-identical to the Rust bootstrap (2026-09-09)
+
+Phase 4, fourth stage. `examples/compiler.ref` now lexes, parses, checks and
+**emits**: a Refal program compiled by Refal produces Core Refal identical to
+`refal lower`, byte for byte, on `hello`, `identity`, `runtime-recursion`,
+`runtime-arithmetic` and `condition`, and on edge cases — a no-argument call,
+nested structural brackets, a two-condition sentence, a doubled quote inside a
+string, and a double-quoted space.
+
+`Go` is now the compiler and emits; passing `CHECK` as a first argument returns
+the checker's verdict instead, which is what the checker tests drive.
+
+One subtlety worth recording: `refal lower` prints with `print!`, not
+`println!`, so the formatted program ends at the last brace with no trailing
+newline, while `Prout` always adds one. The emitter therefore stops at `}` and
+puts the blank line separating two functions only between them.
+
+Tests 201 -> 203.
+
 ### A Refal-authored checker, and a real AST (2026-09-09)
 
 Phase 4, third stage. `examples/compiler.ref` is now the integrated pipeline:

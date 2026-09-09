@@ -1605,7 +1605,7 @@ fn executes_refal_authored_checker_end_to_end() {
         ),
     ];
     for (source, expected) in cases {
-        let output = run_file("examples/compiler.ref", &[source]);
+        let output = run_file("examples/compiler.ref", &["CHECK", source]);
         assert!(
             output.status.success(),
             "checker failed on {source:?}:\n{}",
@@ -1626,7 +1626,7 @@ fn refal_authored_checker_accepts_valid_examples() {
     ] {
         let path = format!("examples/{name}.ref");
         let source = fs::read_to_string(workspace_path(&path)).expect("read example");
-        let output = run_file("examples/compiler.ref", &[&source]);
+        let output = run_file("examples/compiler.ref", &["CHECK", &source]);
         assert!(
             output.status.success(),
             "checker failed on {path}:\n{}",
@@ -1658,13 +1658,88 @@ fn refal_authored_checker_rejects_negative_fixtures() {
     ] {
         let path = format!("examples/{name}.ref");
         let source = fs::read_to_string(workspace_path(&path)).expect("read fixture");
-        let output = run_file("examples/compiler.ref", &[&source]);
+        let output = run_file("examples/compiler.ref", &["CHECK", &source]);
         assert!(
             output.status.success(),
             "checker failed on {path}:\n{}",
             String::from_utf8_lossy(&output.stderr)
         );
         assert_eq!(String::from_utf8_lossy(&output.stdout), expected);
+    }
+}
+
+#[test]
+fn refal_authored_emitter_matches_rust_lower_byte_for_byte() {
+    for name in [
+        "hello",
+        "identity",
+        "runtime-recursion",
+        "runtime-arithmetic",
+        "condition",
+    ] {
+        let path = workspace_path(&format!("examples/{name}.ref"));
+        let expected = Command::new(refal_bin())
+            .args(["lower", &path])
+            .output()
+            .expect("run the Rust lowerer");
+        let source = fs::read_to_string(&path).expect("read example");
+        let actual = run_file("examples/compiler.ref", &[&source]);
+        assert!(
+            actual.status.success(),
+            "the Refal compiler failed on {name}:
+{}",
+            String::from_utf8_lossy(&actual.stderr)
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&actual.stdout),
+            String::from_utf8_lossy(&expected.stdout),
+            "{name}: Refal emitter differs from the Rust bootstrap"
+        );
+    }
+}
+
+#[test]
+fn refal_authored_emitter_matches_lower_on_edge_cases() {
+    let cases = [
+        "$EXTERN Prout;
+$ENTRY Go { = <Prout>; }
+",
+        "$ENTRY Go { (e.A (e.B)) = ((e.A) e.B); }
+",
+        "$ENTRY Go { e.X, e.X : e.A, e.A : e.B = e.B; e.X = 0; }
+",
+        "$ENTRY Go { 'a''b' = 1; }
+",
+        "$ENTRY Go { = \" X \"; }
+",
+    ];
+    for source in cases {
+        let dir = std::env::temp_dir().join(format!(
+            "refal-emit-{:?}.ref",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        fs::write(&dir, source).expect("write scratch source");
+        let expected = Command::new(refal_bin())
+            .args(["lower"])
+            .arg(&dir)
+            .output()
+            .expect("run the Rust lowerer");
+        let actual = run_file("examples/compiler.ref", &[source]);
+        assert!(
+            actual.status.success(),
+            "failed on {source:?}:
+{}",
+            String::from_utf8_lossy(&actual.stderr)
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&actual.stdout),
+            String::from_utf8_lossy(&expected.stdout),
+            "emitter differs from the Rust bootstrap on {source:?}"
+        );
+        let _ = fs::remove_file(&dir);
     }
 }
 

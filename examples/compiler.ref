@@ -1,6 +1,6 @@
 $EXTERN Prout, Chr, Ord, Add, Compare;
 
-* Refal-authored lexer + parser + checker for Classic Refal-5.
+* Refal-authored lexer + parser + checker + emitter for Classic Refal-5.
 *
 * The lexer is the same tokeniser as examples/lexer.ref, but it emits token
 * TERMS rather than display text:
@@ -23,8 +23,23 @@ $EXTERN Prout, Chr, Ord, Add, Compare;
 * functions, patterns, conditions (, expr : pattern), results, calls and
 * structural brackets. Not yet: blocks, as sentence endings or in conditions.
 
+* The CLI runs Go, so Go is the compiler: it emits. Passing CHECK as a first
+* argument asks for the checker's verdict instead, which is what the checker
+* tests drive.
 $ENTRY Go {
-  (e.Source) = <Prout <Check <Parse <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>>>;
+  ('CHECK') (e.Source) =
+    <Prout <Check <Parse <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>>>;
+  (e.Source) = <Compile <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>;
+}
+
+* Check first, and emit only what checks.
+Compile {
+  e.Tokens = <OnChecked <Check <Parse e.Tokens>> <Parse e.Tokens>>;
+}
+
+OnChecked {
+  "OK" (PROG e.Items) = <Prout <Emit (PROG e.Items)>>;
+  e.Msg (PROG e.Items) = <Prout e.Msg>;
 }
 
 * ---------------------------------------------------------------- lexer
@@ -376,4 +391,108 @@ IsBound {
 EqBracket {
   (e.X) (e.X) = '1';
   (e.X) (e.Y) = ;
+}
+
+* --------------------------------------------------------------- emitter
+*
+* Emits Core Refal matching the Rust bootstrap's `refal lower` byte for byte:
+*   $EXTERN a, b;            then a blank line, per declaration
+*   $ENTRY Name {            sentences indented two spaces
+*     pattern, expr : pat = result;
+*   }                        a blank line between functions, one newline after
+
+NL {
+  = <Chr 10>;
+}
+
+Emit {
+  (PROG e.Items) = <EmitDecls e.Items> <EmitFnList <OnlyFuns e.Items>>;
+}
+
+EmitDecls {
+  = ;
+  (EXT e.Names) e.Rest = "$EXTERN " <NameList e.Names> ";" <NL> <NL> <EmitDecls e.Rest>;
+  t.Item e.Rest = <EmitDecls e.Rest>;
+}
+
+NameList {
+  (Ident e.N) = e.N;
+  (Ident e.N) e.Rest = e.N ", " <NameList e.Rest>;
+}
+
+OnlyFuns {
+  = ;
+  (FUN e.Body) e.Rest = (FUN e.Body) <OnlyFuns e.Rest>;
+  t.Item e.Rest = <OnlyFuns e.Rest>;
+}
+
+* `refal lower` prints with print!, not println!, so the formatted program ends
+* at the last closing brace with no trailing newline. Prout supplies the final
+* newline, so the emitter must stop at '}' and put the blank line that separates
+* two functions only between them.
+EmitFnList {
+  = ;
+  (FUN e.Body) e.Rest = <EmitFun e.Body> <IfMore e.Rest>;
+}
+
+IfMore {
+  = ;
+  e.Rest = <NL> <NL> <EmitFnList e.Rest>;
+}
+
+EmitFun {
+  (Ident e.N) (VIS ENTRY) e.Sents = "$ENTRY " e.N " {" <NL> <EmitSents e.Sents> "}";
+  (Ident e.N) (VIS LOCAL) e.Sents = e.N " {" <NL> <EmitSents e.Sents> "}";
+}
+
+EmitSents {
+  = ;
+  (SENT (e.Pat) (e.Conds) (e.Res)) e.Rest =
+    "  " <EmitTerms e.Pat> <EmitConds e.Conds>
+    <EmitSpace (e.Pat) (e.Conds)> "=" <EmitResult (e.Res)> ";" <NL>
+    <EmitSents e.Rest>;
+}
+
+* A space before the = only when the pattern or a condition precedes it.
+EmitSpace {
+  () () = ;
+  (e.Pat) (e.Conds) = " ";
+}
+
+EmitResult {
+  () = ;
+  (e.Res) = " " <EmitTerms e.Res>;
+}
+
+EmitConds {
+  = ;
+  (COND (e.Expr) (e.CPat)) e.Rest =
+    ", " <EmitTerms e.Expr> " : " <EmitTerms e.CPat> <EmitConds e.Rest>;
+}
+
+EmitTerms {
+  = ;
+  (SYM s.C) = <EmitChar s.C>;
+  (SYM s.C) e.Rest = <EmitChar s.C> " " <EmitTerms e.Rest>;
+  (ID e.N) = e.N;
+  (ID e.N) e.Rest = e.N " " <EmitTerms e.Rest>;
+  (NUM e.D) = e.D;
+  (NUM e.D) e.Rest = e.D " " <EmitTerms e.Rest>;
+  (VAR s.K e.I) = s.K "." e.I;
+  (VAR s.K e.I) e.Rest = s.K "." e.I " " <EmitTerms e.Rest>;
+  (BR e.Inner) = "(" <EmitTerms e.Inner> ")";
+  (BR e.Inner) e.Rest = "(" <EmitTerms e.Inner> ") " <EmitTerms e.Rest>;
+  (CALL (ID e.N) e.Args) = "<" e.N <EmitCallArgs e.Args> ">";
+  (CALL (ID e.N) e.Args) e.Rest = "<" e.N <EmitCallArgs e.Args> "> " <EmitTerms e.Rest>;
+}
+
+EmitCallArgs {
+  = ;
+  e.Args = " " <EmitTerms e.Args>;
+}
+
+* A character is quoted with ' unless it is itself a quote, and then with ".
+EmitChar {
+  "'" = '"' "'" '"';
+  s.C = "'" s.C "'";
 }

@@ -34,9 +34,9 @@ objective to a gate. Not another Refal implementation.
 
 | | |
 |---|---|
-| Honest completion | **~50%** |
-| Tests | 201 passing, 0 clippy, fmt clean |
-| Last commit | `5e6aecf` |
+| Honest completion | **~52%** |
+| Tests | 203 passing, 0 clippy, fmt clean |
+| Last commit | `c8bf9a9` then this commit |
 | Working tree | clean |
 
 ### Workstream credit
@@ -48,10 +48,10 @@ objective to a gate. Not another Refal implementation.
 | Refal machine / runtime | 19.5% | 17.0 |
 | Graph of states / Refal emission | 8.5% | 6.0 |
 | Static verification (Tier 1) | 15.0% | 2.0 |
-| Compiler implemented in Refal | 25.5% | 9.0 |
+| Compiler implemented in Refal | 25.5% | 11.0 |
 | Verified self-hosting fixpoint | 13.0% | 2.0 |
 | Conformance / release evidence | 4.0% | 1.5 |
-| **Total** | **100%** | **~50%** |
+| **Total** | **100%** | **~52%** |
 
 ### Done
 
@@ -70,6 +70,8 @@ objective to a gate. Not another Refal implementation.
   `lexer.ref` (`594ae75`).
 - Refal-authored checker in `examples/compiler.ref`, the integrated pipeline
   (`b3588ad`).
+- Refal-authored emitter: `compiler.ref` emits Core Refal byte-identical to the
+  Rust bootstrap's `lower` across the valid corpus and edge cases.
 
 ### Open
 
@@ -87,28 +89,23 @@ objective to a gate. Not another Refal implementation.
 
 ## NEXT ACTION
 
-**Write `emit.ref`: emit Core Refal from the AST, byte-identical to the Rust
-bootstrap's `refal lower`.**
+**Close T-10, the general self-hosting gate.** The pipeline now lexes, parses,
+checks and emits, and its emitter is byte-identical to the Rust bootstrap across
+the valid corpus — so the first real fixpoint is within reach.
 
-Target grammar of `format_program` / `format_sentence` in
-`crates/refal-core/src/lib.rs` (read it before starting):
+1. Grow `compiler.ref` until it can lex, parse, check and emit **its own
+   source**. That needs blocks in the parser (sentence endings and conditions)
+   and `sX` shorthand in the lexer, because compiler.ref uses both.
+2. Run Rust -> C1 -> C2 -> C3 and require C2 == C3 byte for byte. This is a
+   genuine fixpoint, not the source-preserving artifacts we have today, and it
+   is the row that actually closes T-10.
+3. Then **T-9**: make a metasystem transition actually happen — an interpreter
+   driven over a program yielding a specialised residual program.
 
-- `$EXTERN a, b;` then a blank line, per declaration.
-- `$ENTRY Name {` / `Name {`, sentences indented two spaces, `}`.
-  A blank line *between* functions, a single newline after the last.
-- Sentence: `pattern` then `, expr : pattern` per condition, then ` =`,
-  then ` result` if non-empty, then `;`.
-- Terms space-separated. Char quoted with `'` unless it *is* `'`, then `"`.
-  Variable as `s.Name` / `t.Name` / `e.Name`. Bracket `( ... )`.
-  Call `<Name arg...>`.
-
-Then:
-
-1. Blocks in the parser — sentence endings and conditions.
-2. `sX` variable shorthand and `/* */` comments in the lexer.
-3. Close **T-10** with a self-hosting slice that genuinely lexes, parses,
-   checks and emits — not the source-preserving artifacts we have now.
-4. Then **T-9**: make a metasystem transition actually happen.
+Reference: `format_program` / `format_sentence` in
+`crates/refal-core/src/lib.rs` define the exact output grammar. Note that
+`refal lower` uses `print!`, not `println!`, so the formatted program ends at
+the last brace; `Prout` adds the final newline.
 
 ## Pitfalls already paid for
 
