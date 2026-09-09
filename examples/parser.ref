@@ -144,8 +144,10 @@ Items {
   (Ident e.N) e.Rest = <JoinItem <OneFun (VIS LOCAL) (Ident e.N) e.Rest>>;
 }
 
+* e.Item holds the *contents* of the item bracket, so it must be re-wrapped.
+* Emitting it flat drops the brackets and flattens the whole AST.
 JoinItem {
-  (e.Item) e.Rest = e.Item <Items e.Rest>;
+  (e.Item) e.Rest = (e.Item) <Items e.Rest>;
 }
 
 OneExtern {

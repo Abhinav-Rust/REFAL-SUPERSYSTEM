@@ -1584,28 +1584,108 @@ fn refal_authored_lexer_lexes_its_own_source() {
 }
 
 #[test]
+fn executes_refal_authored_checker_end_to_end() {
+    let cases = [
+        ("$ENTRY Go { = 1; }", "OK\n"),
+        (
+            "F { = 1; }",
+            "ERRORS: the program must define an exported Go entry point; \n",
+        ),
+        (
+            "Go { = 1; }",
+            "ERRORS: Go is defined but not exported with $ENTRY; \n",
+        ),
+        (
+            "$ENTRY Go { = e.Missing; }",
+            "ERRORS: unbound variable e.Missing; \n",
+        ),
+        (
+            "$ENTRY Go { = 1; }\nG { = 2; }\nG { = 3; }",
+            "ERRORS: duplicate function G; \n",
+        ),
+    ];
+    for (source, expected) in cases {
+        let output = run_file("examples/compiler.ref", &[source]);
+        assert!(
+            output.status.success(),
+            "checker failed on {source:?}:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(String::from_utf8_lossy(&output.stdout), expected);
+    }
+}
+
+#[test]
+fn refal_authored_checker_accepts_valid_examples() {
+    for name in [
+        "identity",
+        "runtime-recursion",
+        "runtime-arithmetic",
+        "condition",
+        "hello",
+    ] {
+        let path = format!("examples/{name}.ref");
+        let source = fs::read_to_string(workspace_path(&path)).expect("read example");
+        let output = run_file("examples/compiler.ref", &[&source]);
+        assert!(
+            output.status.success(),
+            "checker failed on {path}:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout),
+            "OK\n",
+            "false positive on {path}"
+        );
+    }
+}
+
+#[test]
+fn refal_authored_checker_rejects_negative_fixtures() {
+    for (name, expected) in [
+        (
+            "bad-missing-entry",
+            "ERRORS: the program must define an exported Go entry point; \n",
+        ),
+        (
+            "bad-unbound-variable",
+            "ERRORS: unbound variable e.Missing; \n",
+        ),
+        (
+            "bad-duplicate-function",
+            "ERRORS: duplicate function FOO_BAR; \n",
+        ),
+    ] {
+        let path = format!("examples/{name}.ref");
+        let source = fs::read_to_string(workspace_path(&path)).expect("read fixture");
+        let output = run_file("examples/compiler.ref", &[&source]);
+        assert!(
+            output.status.success(),
+            "checker failed on {path}:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(String::from_utf8_lossy(&output.stdout), expected);
+    }
+}
+
+#[test]
 fn executes_refal_authored_parser_end_to_end() {
     let cases = [
         (
             "F { e.X s.A = 1; }",
-            "(PROGFUN(IdentF)(VISLOCAL)(SENT((VAReX)(VARsA))()((NUM1))))
-",
+            "(PROG(FUN(IdentF)(VISLOCAL)(SENT((VAReX)(VARsA))()((NUM1)))))\n",
         ),
         (
-            "$EXTERN Prout;
-$ENTRY Go { = <Prout 'Hi'>; }",
-            "(PROGEXT(IdentProut)FUN(IdentGo)(VISENTRY)(SENT()()((CALL(IDProut)(SYMH)(SYMi)))))
-",
+            "$EXTERN Prout;\n$ENTRY Go { = <Prout 'Hi'>; }",
+            "(PROG(EXT(IdentProut))(FUN(IdentGo)(VISENTRY)(SENT()()((CALL(IDProut)(SYMH)(SYMi))))))\n",
         ),
         (
             "F { e.T, e.T : e.L 'x' e.R = 'Y'; }",
-            "(PROGFUN(IdentF)(VISLOCAL)(SENT((VAReT))((COND((VAReT))((VAReL)(SYMx)(VAReR))))((SYMY))))
-",
+            "(PROG(FUN(IdentF)(VISLOCAL)(SENT((VAReT))((COND((VAReT))((VAReL)(SYMx)(VAReR))))((SYMY)))))\n",
         ),
         (
             "G { (e.A) = (<H e.A>); }",
-            "(PROGFUN(IdentG)(VISLOCAL)(SENT((BR(VAReA)))()((BR(CALL(IDH)(VAReA))))))
-",
+            "(PROG(FUN(IdentG)(VISLOCAL)(SENT((BR(VAReA)))()((BR(CALL(IDH)(VAReA)))))))\n",
         ),
     ];
     for (source, expected) in cases {

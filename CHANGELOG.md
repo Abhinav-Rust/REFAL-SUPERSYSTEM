@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+### A Refal-authored checker, and a real AST (2026-09-09)
+
+Phase 4, third stage. `examples/compiler.ref` is now the integrated pipeline:
+lexer, parser and checker in one file, since Refal-5 has no module system and
+each stage would otherwise have to re-contain the ones before it. The checker
+reports the exported Go entry point, duplicate function names under Classic
+name equivalence, and unbound variables in results. It accepts `identity`,
+`runtime-recursion`, `runtime-arithmetic`, `condition` and `hello`, and rejects
+`bad-missing-entry`, `bad-unbound-variable` and `bad-duplicate-function`.
+
+Fixing the checker exposed a real bug in the parser: `JoinItem` bound the
+*contents* of each item bracket and re-emitted them flat, so `(FUN ...)`
+was never actually bracketed and the AST was one level too shallow. The
+printed shape changed from `(PROGFUN(IdentGo)...)` to
+`(PROG(FUN(IdentGo)...))`, and the parser tests were updated to match.
+
+Two further traps, both recorded in the file: the parser stores a name as its
+characters, so a literal `Go` in a pattern never matches `(Ident 'Go')`; and a
+bound-variable record is a bracket of several atoms, so it cannot be matched
+with `(t.V)`, which is a bracket holding exactly one term.
+
+Tests 198 -> 201.
+
 ### A Refal-authored parser (2026-09-09)
 
 Phase 4, second stage. `examples/parser.ref` lexes and parses Classic Refal-5
