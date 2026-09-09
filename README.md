@@ -195,7 +195,7 @@ The guarantee this compiler intends to publish, once Tier 1 lands:
 
 ## Project Status
 
-### Honest Completion: ~64%
+### Honest Completion: ~66%
 
 The goal — a Classic Refal-5 compiler **written in Refal**, emitting Refal, compiling its
 own full source, with Turchin's graph-of-states supercompiler and Tier 1 static
@@ -256,10 +256,10 @@ The 15% weight below covers Tier 1 decidable analyses only.
 | Refal machine / runtime | 19.5% | ~17% | Broad covered builtin suite; **no fixed call-depth limit** — work-list driven for named calls and blocks, 50,000 frames in under a second; **projecting matcher (§2.2)** — closed `e`-variables match by position, five anchored `e`-variables over 60 symbols from >120 s to 1.6 s; `Dn`/`Up`; **heap-allocated single view field not done**; block sentences carrying conditions still take the recursive path |
 | Graph of states / Refal emission | 8.5% | ~6% | Seed graph, SCC, bounded driving, homeomorphic whistle, bounded residualization done; complete Turchin driving / cleaning / generalization open |
 | Static verification (Tier 1 only) | 15.0% | ~2% | Structural reachability and overlap done; sentence subsumption, function formats, builtin domain, `--strict` mode all open |
-| Compiler implemented in Refal | 25.5% | ~16% | A real Refal-authored compiler: `lexer.ref` tokenises Classic Refal-5, `parser.ref` builds an AST, `compiler.ref` checks **and emits** — exported Go entry, duplicate names under Classic name equivalence, unbound variables — with emitted output byte-identical to Rust `lower`. It compiles its own source. `driver.ref` **not written**; blocks, `sX` and `/* */` not yet handled |
-| Verified self-hosting fixpoint | 13.0% | ~9% | **The compiler compiles itself**: C1 → C2 → C3, every generation checks, C2 ≡ C3 byte-identical at 10,921 bytes, output matching Rust `lower`. Partial credit — blocks, `sX` and `/* */` are not yet parsed, so this is a substantial subset, not the whole Classic grammar |
+| Compiler implemented in Refal | 25.5% | ~18% | A real Refal-authored compiler: `lexer.ref` tokenises Classic Refal-5, `parser.ref` builds an AST, `compiler.ref` checks **and emits** — exported Go entry, duplicate names under Classic name equivalence, unbound variables — with emitted output byte-identical to Rust `lower`. It compiles its own source and handles blocks in both positions. `driver.ref` **not written**; `sX` and `/* */` not yet handled |
+| Verified self-hosting fixpoint | 13.0% | ~10% | **The compiler compiles itself**: C1 → C2 → C3, every generation checks, C2 ≡ C3 byte-identical at 10,921 bytes, output matching Rust `lower`. Partial credit — blocks, `sX` and `/* */` are not yet parsed, so this is a substantial subset, not the whole Classic grammar |
 | Conformance / release evidence | 4.0% | ~1.5% | Solid automated foundation; no full Classic conformance claim or release packaging |
-| **Total (1.0 target)** | **100%** | **~64%** | |
+| **Total (1.0 target)** | **100%** | **~66%** | |
 
 ---
 
@@ -337,6 +337,7 @@ without a test or a gate that demonstrates the work.
 
 | Date | Change |
 |---|---|
+| 2026-09-09 | Twenty-fifth milestone, phase 4: blocks in the Refal compiler, as sentence endings and in condition position. Output byte-identical to `refal lower` on `block-ending` and `condition-block`, and the fixpoint still holds at 12,228 bytes. Tests 204 → 205 |
 | 2026-09-09 | Twenty-fourth milestone — **T-10 closed**: `compiler.ref` compiles its own source. C1 → C2 → C3, every generation passes `check`, and C2 ≡ C3 byte-identical at 10,921 bytes, with output matching the Rust bootstrap's `lower`. This supersedes the earlier C2 ≡ C3 evidence, which was the fixpoint of source-preserving transformations and never closed the gate. Partial credit: blocks, `sX` and `/* */` are not yet parsed. Tests 203 → 204 |
 | 2026-09-09 | Twenty-third milestone, phase 4: a Refal-authored emitter. `compiler.ref` emits Core Refal byte-identical to `refal lower` on the valid corpus and on edge cases — no-argument calls, nested brackets, two-condition sentences, doubled quotes, double-quoted spaces. Tests 201 → 203 |
 | 2026-09-09 | Twenty-second milestone, phase 4: `compiler.ref` is now the integrated lexer + parser + checker pipeline, and its checker accepts `identity`, `runtime-recursion`, `runtime-arithmetic`, `condition` and `hello` while rejecting `bad-missing-entry`, `bad-unbound-variable` and `bad-duplicate-function`. Building it exposed and fixed a real parser bug — item brackets were being emitted flat, so the AST was a level too shallow. Tests 198 → 201 |

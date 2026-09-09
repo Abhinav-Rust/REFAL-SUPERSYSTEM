@@ -34,8 +34,8 @@ objective to a gate. Not another Refal implementation.
 
 | | |
 |---|---|
-| Honest completion | **~64%** |
-| Tests | 204 passing, 0 clippy, fmt clean |
+| Honest completion | **~66%** |
+| Tests | 205 passing, 0 clippy, fmt clean |
 | Last commit | `c8bf9a9` then this commit |
 | Working tree | clean |
 
@@ -48,10 +48,10 @@ objective to a gate. Not another Refal implementation.
 | Refal machine / runtime | 19.5% | 17.0 |
 | Graph of states / Refal emission | 8.5% | 6.0 |
 | Static verification (Tier 1) | 15.0% | 2.0 |
-| Compiler implemented in Refal | 25.5% | 16.0 |
-| Verified self-hosting fixpoint | 13.0% | 9.0 |
+| Compiler implemented in Refal | 25.5% | 18.0 |
+| Verified self-hosting fixpoint | 13.0% | 10.0 |
 | Conformance / release evidence | 4.0% | 1.5 |
-| **Total** | **100%** | **~64%** |
+| **Total** | **100%** | **~66%** |
 
 ### Done
 
@@ -96,16 +96,15 @@ T-10 is closed for a substantial subset: `compiler.ref` compiles its own source
 and reaches a fixpoint. It does not yet parse blocks, `sX` shorthand or
 `/* */` comments, and until it does the grammar coverage claim cannot be made.
 
-1. **Blocks in the parser** — sentence endings (`= , arg : { ... }`) and
-   conditions (`, expr : { ... }`). The Rust side already supports both; mirror
-   `format_block_body` in the emitter and `TermKind::Block` in the AST.
-2. **`sX` shorthand** in the lexer — a one-character variable index with no dot.
+Blocks are done. Remaining for a full-grammar T-10:
+
+1. **`sX` shorthand** in the lexer — a one-character variable index with no dot.
    Needs the juxtaposition case (`s1s2s3` is three variables) from FRONTEND-
    COVERAGE.md.
-3. **`/* */` block comments** in the lexer.
-4. Re-run the fixpoint. C2 == C3 must still hold with the fuller grammar, and
-   `compiler.ref` should then compile sources that use blocks.
-5. Then **T-9**: make a metasystem transition actually happen — an interpreter
+2. **`/* */` block comments** in the lexer.
+3. Re-run the fixpoint and extend the byte-for-byte corpus to every example the
+   grammar now covers.
+4. Then **T-9**: make a metasystem transition actually happen — an interpreter
    driven over a program yielding a specialised residual program. This is the
    heart of Turchin's claim and the largest remaining piece.
 

@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Blocks in the Refal compiler (2026-09-09)
+
+The largest gap in the Refal compiler's grammar is closed. `compiler.ref` now
+parses and emits blocks both as sentence endings (`= , argument : { ... }`) and
+in condition position (`, expression : { ... }`), and its output is byte-identical
+to `refal lower` on `block-ending` and `condition-block`. The fixpoint still
+holds with the fuller grammar: C1 = C2 = C3 at 12,228 bytes.
+
+Indentation is carried as a run of spaces rather than a count, so nested blocks
+widen it by two and work to any depth, matching `format_block_body`.
+
+Three shape bugs were found and fixed while doing this: `SentResBlock3` did not
+consume the sentence's semicolon; `SentCond3` could not see the opening brace
+because the condition pattern had already been parsed; and `EmitConds` was passed
+the condition list wrapped, leaving its pattern a level short.
+
+Added `refal_authored_compiler_handles_blocks`, and extended the byte-for-byte
+corpus with the two block examples. Tests 204 -> 205.
+
 ### Self-hosting fixpoint: the compiler compiles itself (2026-09-09)
 
 T-10 is closed. `examples/compiler.ref` lexes, parses, checks and emits, and it

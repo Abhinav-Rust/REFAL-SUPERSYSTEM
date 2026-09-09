@@ -206,14 +206,43 @@ SentCond2 {
 }
 
 SentCond3 {
+  (e.Pat) (e.Conds) (e.Expr) () LB e.Rest =
+    <SentCondBlk (e.Pat) (e.Conds) (e.Expr) <Sentences () e.Rest>>;
   (e.Pat) (e.Conds) (e.Expr) (e.CPat) COMMA e.Rest =
     <SentCond (e.Pat) (e.Conds (COND (e.Expr) (e.CPat))) e.Rest>;
   (e.Pat) (e.Conds) (e.Expr) (e.CPat) EQ e.Rest =
     <SentRes (e.Pat) (e.Conds (COND (e.Expr) (e.CPat))) e.Rest>;
 }
 
+* A block in condition position: `, expression : { sentences }`. The block's
+* argument is the condition's expression, as it is in the Rust AST.
+SentCondBlk {
+  (e.Pat) (e.Conds) (e.Expr) (e.Sents) COMMA e.Rest =
+    <SentCond (e.Pat) (e.Conds (COND (e.Expr) ((BLK (e.Expr) e.Sents)))) e.Rest>;
+  (e.Pat) (e.Conds) (e.Expr) (e.Sents) EQ e.Rest =
+    <SentRes (e.Pat) (e.Conds (COND (e.Expr) ((BLK (e.Expr) e.Sents)))) e.Rest>;
+}
+
 SentRes {
+  (e.Pat) (e.Conds) COMMA e.Rest = <SentResBlock (e.Pat) (e.Conds) e.Rest>;
   (e.Pat) (e.Conds) e.Rest = <SentRes2 (e.Pat) (e.Conds) <Terms () e.Rest>>;
+}
+
+* A sentence-ending block: `= , argument : { sentences } ;`
+SentResBlock {
+  (e.Pat) (e.Conds) e.Rest = <SentResBlock2 (e.Pat) (e.Conds) <Terms () e.Rest>>;
+}
+
+SentResBlock2 {
+  (e.Pat) (e.Conds) (e.Arg) COLON LB e.Rest =
+    <SentResBlock3 (e.Pat) (e.Conds) (e.Arg) <Sentences () e.Rest>>;
+}
+
+* The block's closing brace is consumed by Sentences; the sentence's own
+* semicolon still has to be taken here, as it is in the plain path.
+SentResBlock3 {
+  (e.Pat) (e.Conds) (e.Arg) (e.Sents) SEMI e.Rest =
+    (SENT (e.Pat) (e.Conds) ((BLK (e.Arg) e.Sents))) e.Rest;
 }
 
 SentRes2 {

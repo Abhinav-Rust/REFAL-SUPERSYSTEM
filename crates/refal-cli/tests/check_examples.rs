@@ -1669,6 +1669,32 @@ fn refal_authored_checker_rejects_negative_fixtures() {
 }
 
 #[test]
+fn refal_authored_compiler_handles_blocks() {
+    // Blocks, both as sentence endings and in condition position, were the
+    // largest gap in the Refal compiler's grammar coverage.
+    for name in ["block-ending", "condition-block"] {
+        let path = workspace_path(&format!("examples/{name}.ref"));
+        let expected = Command::new(refal_bin())
+            .args(["lower", &path])
+            .output()
+            .expect("run the Rust lowerer");
+        let source = fs::read_to_string(&path).expect("read example");
+        let actual = run_file("examples/compiler.ref", &[&source]);
+        assert!(
+            actual.status.success(),
+            "the Refal compiler failed on {name}:
+{}",
+            String::from_utf8_lossy(&actual.stderr)
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&actual.stdout),
+            String::from_utf8_lossy(&expected.stdout),
+            "{name}: Refal emitter differs from the Rust bootstrap"
+        );
+    }
+}
+
+#[test]
 fn refal_authored_emitter_matches_rust_lower_byte_for_byte() {
     for name in [
         "hello",
@@ -1676,6 +1702,8 @@ fn refal_authored_emitter_matches_rust_lower_byte_for_byte() {
         "runtime-recursion",
         "runtime-arithmetic",
         "condition",
+        "block-ending",
+        "condition-block",
     ] {
         let path = workspace_path(&format!("examples/{name}.ref"));
         let expected = Command::new(refal_bin())
