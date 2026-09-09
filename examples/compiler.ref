@@ -76,7 +76,21 @@ Lex {
   (e.NL) 'e.' e.R = <VarEmit (e.NL) ('e') <TakeWord (e.NL) () e.R>>;
   (e.NL) "'" e.R = <StrTok (e.NL) ("'") () e.R>;
   (e.NL) '"' e.R = <StrTok (e.NL) ('"') () e.R>;
+* One-character variable shorthand: s1, tA, eX. Identifiers cannot begin with a
+* lower-case letter, so a leading s/t/e is always a variable. Juxtaposition
+* falls out: s1s2s3 is three variables, because the next 's' starts a new one.
+  (e.NL) 's' s.I e.R = (Var 's' s.I) <Lex (e.NL) e.R>;
+  (e.NL) 't' s.I e.R = (Var 't' s.I) <Lex (e.NL) e.R>;
+  (e.NL) 'e' s.I e.R = (Var 'e' s.I) <Lex (e.NL) e.R>;
+  (e.NL) '/' '*' e.R = <SkipBlock (e.NL) e.R>;
   (e.NL) s.C e.R = <WordTok (e.NL) s.C e.R>;
+}
+
+* A block comment runs to the closing */, or to the end of the source.
+SkipBlock {
+  (e.NL) = ;
+  (e.NL) '*' '/' e.R = <Lex (e.NL) e.R>;
+  (e.NL) s.C e.R = <SkipBlock (e.NL) e.R>;
 }
 
 SkipLine {
@@ -96,10 +110,11 @@ TakeWord {
   (e.NL) (e.Acc) '<' e.R = (e.Acc) '<' e.R;
   (e.NL) (e.Acc) '>' e.R = (e.Acc) '>' e.R;
   (e.NL) (e.Acc) '=' e.R = (e.Acc) '=' e.R;
+* '.' is not a terminator: a real such as 12.5 or +4E2 is one token. The s./t./e.
+* variable rules above have already taken the dot that separates kind from index.
   (e.NL) (e.Acc) ';' e.R = (e.Acc) ';' e.R;
   (e.NL) (e.Acc) ',' e.R = (e.Acc) ',' e.R;
   (e.NL) (e.Acc) ':' e.R = (e.Acc) ':' e.R;
-  (e.NL) (e.Acc) '.' e.R = (e.Acc) '.' e.R;
   (e.NL) (e.Acc) "'" e.R = (e.Acc) "'" e.R;
   (e.NL) (e.Acc) '"' e.R = (e.Acc) '"' e.R;
   (e.NL) (e.Acc) '$' e.R = (e.Acc) '$' e.R;
@@ -154,6 +169,8 @@ Parse {
 
 Items {
   = ;
+* A semicolon may separate top-level definitions.
+  SEMI e.Rest = <Items e.Rest>;
   EXTERN e.Rest = <JoinItem <OneExtern e.Rest>>;
   ENTRY e.Rest = <JoinItem <OneFun (VIS ENTRY) e.Rest>>;
   (Ident e.N) e.Rest = <JoinItem <OneFun (VIS LOCAL) (Ident e.N) e.Rest>>;
@@ -390,7 +407,7 @@ CondVars {
 
 VarsOf {
   = ;
-  (VAR s.K e.I) e.Rest = (V s.K e.I) <VarsOf e.Rest>;
+  (VAR s.K e.I) e.Rest = (V s.K <Canon e.I>) <VarsOf e.Rest>;
   (BR e.Inner) e.Rest = <VarsOf e.Inner> <VarsOf e.Rest>;
   (CALL (ID e.N) e.Args) e.Rest = <VarsOf e.Args> <VarsOf e.Rest>;
   t.Item e.Rest = <VarsOf e.Rest>;

@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### Reals, case-folded variable indices, and top-level semicolons (2026-09-09)
+
+Sweeping every example against `refal lower` found two real divergences and one
+parse gap, all now fixed and byte-identical:
+- `12.5` lexed as three tokens, because `.` terminated a word. `.` is no longer
+  a terminator: the `s.`/`t.`/`e.` rules consume the dot that separates kind
+  from index, so any other dot belongs to a real.
+- `e.Text` and `e.text` were treated as different variables. Variable indices
+  are case-insensitive (reference 1.3), so the index is folded before comparison.
+- A semicolon following a function's closing brace was not skipped.
+
+### Variable shorthand and block comments in the lexer (2026-09-09)
+
+`s1`, `tA`, `eX` now lex as variables. Identifiers cannot begin with a lower-case
+letter, so a leading s/t/e is unambiguous, and juxtaposition falls out: `s1s2s3`
+is three variables. `/* */` block comments are skipped.
+
 ### Blocks in the Refal compiler (2026-09-09)
 
 The largest gap in the Refal compiler's grammar is closed. `compiler.ref` now

@@ -53,7 +53,21 @@ Lex {
   (e.NL) 'e.' e.R = <VarEmit (e.NL) ('e') <TakeWord (e.NL) () e.R>>;
   (e.NL) "'" e.R = <StrTok (e.NL) ("'") () e.R>;
   (e.NL) '"' e.R = <StrTok (e.NL) ('"') () e.R>;
+* One-character variable shorthand: s1, tA, eX. Identifiers cannot begin with a
+* lower-case letter, so a leading s/t/e is always a variable. Juxtaposition
+* falls out: s1s2s3 is three variables, because the next 's' starts a new one.
+  (e.NL) 's' s.I e.R = (Var 's' s.I) <Lex (e.NL) e.R>;
+  (e.NL) 't' s.I e.R = (Var 't' s.I) <Lex (e.NL) e.R>;
+  (e.NL) 'e' s.I e.R = (Var 'e' s.I) <Lex (e.NL) e.R>;
+  (e.NL) '/' '*' e.R = <SkipBlock (e.NL) e.R>;
   (e.NL) s.C e.R = <WordTok (e.NL) s.C e.R>;
+}
+
+* A block comment runs to the closing */, or to the end of the source.
+SkipBlock {
+  (e.NL) = ;
+  (e.NL) '*' '/' e.R = <Lex (e.NL) e.R>;
+  (e.NL) s.C e.R = <SkipBlock (e.NL) e.R>;
 }
 
 * A comment runs to the passed newline, or to the end of the source.
@@ -76,10 +90,11 @@ TakeWord {
   (e.NL) (e.Acc) '<' e.R = (e.Acc) '<' e.R;
   (e.NL) (e.Acc) '>' e.R = (e.Acc) '>' e.R;
   (e.NL) (e.Acc) '=' e.R = (e.Acc) '=' e.R;
+* '.' is not a terminator: a real such as 12.5 or +4E2 is one token. The s./t./e.
+* variable rules above have already taken the dot that separates kind from index.
   (e.NL) (e.Acc) ';' e.R = (e.Acc) ';' e.R;
   (e.NL) (e.Acc) ',' e.R = (e.Acc) ',' e.R;
   (e.NL) (e.Acc) ':' e.R = (e.Acc) ':' e.R;
-  (e.NL) (e.Acc) '.' e.R = (e.Acc) '.' e.R;
   (e.NL) (e.Acc) "'" e.R = (e.Acc) "'" e.R;
   (e.NL) (e.Acc) '"' e.R = (e.Acc) '"' e.R;
   (e.NL) (e.Acc) '$' e.R = (e.Acc) '$' e.R;

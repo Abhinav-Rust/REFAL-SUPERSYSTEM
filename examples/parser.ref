@@ -81,10 +81,11 @@ TakeWord {
   (e.NL) (e.Acc) '<' e.R = (e.Acc) '<' e.R;
   (e.NL) (e.Acc) '>' e.R = (e.Acc) '>' e.R;
   (e.NL) (e.Acc) '=' e.R = (e.Acc) '=' e.R;
+* '.' is not a terminator: a real such as 12.5 or +4E2 is one token. The s./t./e.
+* variable rules above have already taken the dot that separates kind from index.
   (e.NL) (e.Acc) ';' e.R = (e.Acc) ';' e.R;
   (e.NL) (e.Acc) ',' e.R = (e.Acc) ',' e.R;
   (e.NL) (e.Acc) ':' e.R = (e.Acc) ':' e.R;
-  (e.NL) (e.Acc) '.' e.R = (e.Acc) '.' e.R;
   (e.NL) (e.Acc) "'" e.R = (e.Acc) "'" e.R;
   (e.NL) (e.Acc) '"' e.R = (e.Acc) '"' e.R;
   (e.NL) (e.Acc) '$' e.R = (e.Acc) '$' e.R;
@@ -139,6 +140,8 @@ Parse {
 
 Items {
   = ;
+* A semicolon may separate top-level definitions.
+  SEMI e.Rest = <Items e.Rest>;
   EXTERN e.Rest = <JoinItem <OneExtern e.Rest>>;
   ENTRY e.Rest = <JoinItem <OneFun (VIS ENTRY) e.Rest>>;
   (Ident e.N) e.Rest = <JoinItem <OneFun (VIS LOCAL) (Ident e.N) e.Rest>>;
