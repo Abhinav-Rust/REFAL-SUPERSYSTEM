@@ -195,7 +195,7 @@ The guarantee this compiler intends to publish, once Tier 1 lands:
 
 ## Project Status
 
-### Honest Completion: ~50%
+### Honest Completion: ~64%
 
 The goal — a Classic Refal-5 compiler **written in Refal**, emitting Refal, compiling its
 own full source, with Turchin's graph-of-states supercompiler and Tier 1 static
@@ -256,10 +256,10 @@ The 15% weight below covers Tier 1 decidable analyses only.
 | Refal machine / runtime | 19.5% | ~17% | Broad covered builtin suite; **no fixed call-depth limit** — work-list driven for named calls and blocks, 50,000 frames in under a second; **projecting matcher (§2.2)** — closed `e`-variables match by position, five anchored `e`-variables over 60 symbols from >120 s to 1.6 s; `Dn`/`Up`; **heap-allocated single view field not done**; block sentences carrying conditions still take the recursive path |
 | Graph of states / Refal emission | 8.5% | ~6% | Seed graph, SCC, bounded driving, homeomorphic whistle, bounded residualization done; complete Turchin driving / cleaning / generalization open |
 | Static verification (Tier 1 only) | 15.0% | ~2% | Structural reachability and overlap done; sentence subsumption, function formats, builtin domain, `--strict` mode all open |
-| Compiler implemented in Refal | 25.5% | ~9% | A real Refal-authored lexer, parser and checker: `lexer.ref` tokenises Classic Refal-5, `parser.ref` builds an AST, `compiler.ref` checks it — exported Go entry, duplicate names under Classic name equivalence, unbound variables — and accepts the valid corpus while rejecting the negative fixtures; `driver.ref` and `emit.ref` **not written** |
-| Verified self-hosting fixpoint | 13.0% | ~2% | Bounded C2 ≡ C3 proven at 4,780 bytes for body-compiler subset; **general-corpus fixpoint not demonstrated** |
+| Compiler implemented in Refal | 25.5% | ~16% | A real Refal-authored compiler: `lexer.ref` tokenises Classic Refal-5, `parser.ref` builds an AST, `compiler.ref` checks **and emits** — exported Go entry, duplicate names under Classic name equivalence, unbound variables — with emitted output byte-identical to Rust `lower`. It compiles its own source. `driver.ref` **not written**; blocks, `sX` and `/* */` not yet handled |
+| Verified self-hosting fixpoint | 13.0% | ~9% | **The compiler compiles itself**: C1 → C2 → C3, every generation checks, C2 ≡ C3 byte-identical at 10,921 bytes, output matching Rust `lower`. Partial credit — blocks, `sX` and `/* */` are not yet parsed, so this is a substantial subset, not the whole Classic grammar |
 | Conformance / release evidence | 4.0% | ~1.5% | Solid automated foundation; no full Classic conformance claim or release packaging |
-| **Total (1.0 target)** | **100%** | **~50%** | |
+| **Total (1.0 target)** | **100%** | **~64%** | |
 
 ---
 
@@ -301,8 +301,10 @@ blocks end-to-end in both positions, explicit worklist evaluator, `refal-core` g
 infrastructure, bounded symbolic driving with homeomorphic-embedding whistle, bounded
 residualizers, a Refal-authored lexer and parser written in Refal — the lexer tokenises Classic Refal-5 and its own source, the parser builds an AST and parses the lexer — restricted checker/Core-emit slices with Rust `lower` differential, bounded C2 ≡ C3 self-hosting proof at 4,780 bytes, 198 passing tests, CI green.
 
-**Not yet done (~51.5% of 1.0 target):** heap-allocated single view field (issue
-[#7](../../issues/7)); the rest of the Refal compiler pipeline
+**Not yet done (~36% of 1.0 target):** heap-allocated single view field (issue
+[#7](../../issues/7)); blocks, `sX` and `/* */` in the Refal compiler; complete Turchin
+driving/cleaning/generalization (§4.2–4.6) and a demonstrated metasystem transition
+(T-9); Tier 1 semantic analyses (`--classic`/`--strict`); function formats and metacodes
 (`lexer.ref`, `parser.ref`, `checker.ref`, `driver.ref`, `emit.ref`); complete Turchin
 graph driving/cleaning/generalization (§4.2–4.6); Tier 1 semantic analyses
 (`--classic`/`--strict`); general-corpus self-hosting fixpoint. Full detail in
@@ -335,6 +337,8 @@ without a test or a gate that demonstrates the work.
 
 | Date | Change |
 |---|---|
+| 2026-09-09 | Twenty-fourth milestone — **T-10 closed**: `compiler.ref` compiles its own source. C1 → C2 → C3, every generation passes `check`, and C2 ≡ C3 byte-identical at 10,921 bytes, with output matching the Rust bootstrap's `lower`. This supersedes the earlier C2 ≡ C3 evidence, which was the fixpoint of source-preserving transformations and never closed the gate. Partial credit: blocks, `sX` and `/* */` are not yet parsed. Tests 203 → 204 |
+| 2026-09-09 | Twenty-third milestone, phase 4: a Refal-authored emitter. `compiler.ref` emits Core Refal byte-identical to `refal lower` on the valid corpus and on edge cases — no-argument calls, nested brackets, two-condition sentences, doubled quotes, double-quoted spaces. Tests 201 → 203 |
 | 2026-09-09 | Twenty-second milestone, phase 4: `compiler.ref` is now the integrated lexer + parser + checker pipeline, and its checker accepts `identity`, `runtime-recursion`, `runtime-arithmetic`, `condition` and `hello` while rejecting `bad-missing-entry`, `bad-unbound-variable` and `bad-duplicate-function`. Building it exposed and fixed a real parser bug — item brackets were being emitted flat, so the AST was a level too shallow. Tests 198 → 201 |
 | 2026-09-09 | Twenty-first milestone, phase 4: a Refal-authored parser (`examples/parser.ref`) builds an AST for `$EXTERN`, `$ENTRY`/local functions, multi-sentence functions, patterns, conditions, results, calls and brackets. It parses `identity`, `runtime-recursion`, `runtime-arithmetic`, `condition`, and `lexer.ref` — the previous stage of its own pipeline. Tests 196 → 198 |
 | 2026-09-08 | Twentieth milestone, phase 4: a real Refal-authored lexer (`examples/lexer.ref`) tokenises Classic Refal-5 — identifiers, numbers, quoted strings with the doubled-quote escape, dotted variables, all delimiters, `$EXTERN`/`$ENTRY`, and `*` comments — and lexes its own source. Tests 194 → 196 |

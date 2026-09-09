@@ -34,8 +34,8 @@ objective to a gate. Not another Refal implementation.
 
 | | |
 |---|---|
-| Honest completion | **~52%** |
-| Tests | 203 passing, 0 clippy, fmt clean |
+| Honest completion | **~64%** |
+| Tests | 204 passing, 0 clippy, fmt clean |
 | Last commit | `c8bf9a9` then this commit |
 | Working tree | clean |
 
@@ -48,10 +48,10 @@ objective to a gate. Not another Refal implementation.
 | Refal machine / runtime | 19.5% | 17.0 |
 | Graph of states / Refal emission | 8.5% | 6.0 |
 | Static verification (Tier 1) | 15.0% | 2.0 |
-| Compiler implemented in Refal | 25.5% | 11.0 |
-| Verified self-hosting fixpoint | 13.0% | 2.0 |
+| Compiler implemented in Refal | 25.5% | 16.0 |
+| Verified self-hosting fixpoint | 13.0% | 9.0 |
 | Conformance / release evidence | 4.0% | 1.5 |
-| **Total** | **100%** | **~52%** |
+| **Total** | **100%** | **~64%** |
 
 ### Done
 
@@ -82,25 +82,32 @@ objective to a gate. Not another Refal implementation.
 - **T-7** function formats (§2.3).
 - **T-8** metacodes (Ch. 1.3).
 - **T-9** a metasystem transition actually occurs — the heart of the claim.
-- **T-10** the compiler applied to itself. The current C2 ≡ C3 artifacts are
-  source-preserving and **do not close this**.
+- **T-10 (partial)** C1 → C2 → C3 all check and C2 ≡ C3 at 10,921 bytes. Full
+  credit needs blocks, `sX` and `/* */` so the whole Classic grammar is covered.
 
 ---
 
 ## NEXT ACTION
 
-**Close T-10, the general self-hosting gate.** The pipeline now lexes, parses,
-checks and emits, and its emitter is byte-identical to the Rust bootstrap across
-the valid corpus — so the first real fixpoint is within reach.
+**Complete the Classic grammar in the Refal compiler, then take T-10 to full
+credit.**
 
-1. Grow `compiler.ref` until it can lex, parse, check and emit **its own
-   source**. That needs blocks in the parser (sentence endings and conditions)
-   and `sX` shorthand in the lexer, because compiler.ref uses both.
-2. Run Rust -> C1 -> C2 -> C3 and require C2 == C3 byte for byte. This is a
-   genuine fixpoint, not the source-preserving artifacts we have today, and it
-   is the row that actually closes T-10.
-3. Then **T-9**: make a metasystem transition actually happen — an interpreter
-   driven over a program yielding a specialised residual program.
+T-10 is closed for a substantial subset: `compiler.ref` compiles its own source
+and reaches a fixpoint. It does not yet parse blocks, `sX` shorthand or
+`/* */` comments, and until it does the grammar coverage claim cannot be made.
+
+1. **Blocks in the parser** — sentence endings (`= , arg : { ... }`) and
+   conditions (`, expr : { ... }`). The Rust side already supports both; mirror
+   `format_block_body` in the emitter and `TermKind::Block` in the AST.
+2. **`sX` shorthand** in the lexer — a one-character variable index with no dot.
+   Needs the juxtaposition case (`s1s2s3` is three variables) from FRONTEND-
+   COVERAGE.md.
+3. **`/* */` block comments** in the lexer.
+4. Re-run the fixpoint. C2 == C3 must still hold with the fuller grammar, and
+   `compiler.ref` should then compile sources that use blocks.
+5. Then **T-9**: make a metasystem transition actually happen — an interpreter
+   driven over a program yielding a specialised residual program. This is the
+   heart of Turchin's claim and the largest remaining piece.
 
 Reference: `format_program` / `format_sentence` in
 `crates/refal-core/src/lib.rs` define the exact output grammar. Note that
