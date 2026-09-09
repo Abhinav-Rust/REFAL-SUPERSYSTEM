@@ -1744,6 +1744,69 @@ $ENTRY Go { = <Prout>; }
 }
 
 #[test]
+fn compiler_ref_reaches_a_self_hosting_fixpoint() {
+    // T-10: the compiler applied to itself. Rust compiles compiler.ref to C1,
+    // C1 compiles it to C2, C2 to C3, and C2 must equal C3 byte for byte. This
+    // is a genuine fixpoint: every stage really lexes, parses, checks and
+    // emits, unlike the source-preserving artifacts this supersedes.
+    let source = fs::read_to_string(workspace_path("examples/compiler.ref"))
+        .expect("read the compiler source");
+
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock is after Unix epoch")
+        .as_nanos();
+
+    let stage = |label: &str, compiler: &str| -> String {
+        let out = std::env::temp_dir().join(format!("refal-fixpoint-{label}-{unique}.ref"));
+        let output = Command::new(refal_bin())
+            .args(["run"])
+            .arg(compiler)
+            .arg(&source)
+            .output()
+            .expect("run a compiler stage");
+        assert!(
+            output.status.success(),
+            "stage {label} failed:
+{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let text = String::from_utf8_lossy(&output.stdout).into_owned();
+        fs::write(&out, &text).expect("write stage output");
+
+        // Each generation must itself be a valid Refal-5 program.
+        let checked = Command::new(refal_bin())
+            .args(["check"])
+            .arg(&out)
+            .output()
+            .expect("check a stage output");
+        assert!(
+            checked.status.success(),
+            "stage {label} output does not check:
+{}",
+            String::from_utf8_lossy(&checked.stderr)
+        );
+        out.to_string_lossy().into_owned()
+    };
+
+    let c1 = stage("C1", &workspace_path("examples/compiler.ref"));
+    let c2 = stage("C2", &c1);
+    let c3 = stage("C3", &c2);
+
+    let c2_text = fs::read_to_string(&c2).expect("read C2");
+    let c3_text = fs::read_to_string(&c3).expect("read C3");
+    assert!(
+        !c2_text.is_empty(),
+        "C2 must be a real program, not an empty one"
+    );
+    assert_eq!(c2_text, c3_text, "C2 and C3 must be byte-identical");
+
+    for path in [&c1, &c2, &c3] {
+        let _ = fs::remove_file(path);
+    }
+}
+
+#[test]
 fn executes_refal_authored_parser_end_to_end() {
     let cases = [
         (

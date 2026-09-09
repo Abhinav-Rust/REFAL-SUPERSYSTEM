@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+### Self-hosting fixpoint: the compiler compiles itself (2026-09-09)
+
+T-10 is closed. `examples/compiler.ref` lexes, parses, checks and emits, and it
+compiles **its own source** to output byte-identical to the Rust bootstrap's
+`refal lower` — 10,921 bytes. Running the three-generation fixpoint:
+
+    Rust  compiles compiler.ref -> C1
+    C1    compiles compiler.ref -> C2
+    C2    compiles compiler.ref -> C3
+
+Every generation passes `refal check`, and **C2 is byte-identical to C3**.
+
+This supersedes the earlier C2 == C3 evidence, which was the fixpoint of
+source-preserving transformations: one slice discarded its input and emitted a
+constant, the other was a reformatter. Those tested the harness. This is a real
+compiler reaching a real fixed point on its own source.
+
+Partial credit only: the compiler does not yet parse blocks, `sX` shorthand, or
+`/* */` comments, so this closes T-10 for a substantial subset rather than for
+the whole Classic grammar.
+
+Added `compiler_ref_reaches_a_self_hosting_fixpoint`. Tests 203 -> 204.
+
 ### A Refal-authored emitter, byte-identical to the Rust bootstrap (2026-09-09)
 
 Phase 4, fourth stage. `examples/compiler.ref` now lexes, parses, checks and
