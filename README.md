@@ -286,6 +286,7 @@ architecture and comes after self-hosting, because a compiler in Refal emitting 
 does not need it.
 
 For the full gate definitions and completion accounting see [`docs/PLAN.md`](docs/PLAN.md).
+For live state, standing orders and the next action, see [`docs/PROGRESS.md`](docs/PROGRESS.md).
 For lexer/parser coverage detail see [`docs/FRONTEND-COVERAGE.md`](docs/FRONTEND-COVERAGE.md).
 
 ---
