@@ -1,7 +1,9 @@
 //! Semantic checks for parsed Refal programs.
 
+mod formats;
 mod lints;
 
+pub use formats::{Format, Formats, Shape, infer_formats};
 pub use lints::pattern_subsumes;
 
 use std::collections::{HashMap, HashSet};

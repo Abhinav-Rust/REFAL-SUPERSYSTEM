@@ -104,6 +104,7 @@ fn main() {
         "compile" => compile_program(&source, &input_args),
         "graph" => graph_program(&program, &input_args),
         "analyze" => analyze_program(&program, &input_args),
+        "formats" => formats_program(&program, &input_args),
         "overlap" => overlap_program(&program, &input_args),
         "drive" => drive_program(&program, &input_args),
         "drive-symbolic" => drive_symbolic_program(&program, &input_args),
@@ -156,6 +157,7 @@ fn print_usage() {
     eprintln!("  graph      Print the deterministic seed graph of sentence states and calls");
     eprintln!("  analyze    Report bounded Tier 1 reachability, terminals, and SCCs");
     eprintln!("  overlap    Report conservative sentence-pattern compatibility pairs");
+    eprintln!("  formats    Report inferred function formats (argument -> result)");
     eprintln!("  drive      Execute the bounded ground graph driver [--steps N] [args...]");
     eprintln!(
         "  drive-symbolic  Partially drive from an expression variable [--steps N] [--configurations]"
@@ -263,6 +265,16 @@ fn compile_program(source: &str, args: &[String]) {
             process::exit(2);
         }
     }
+}
+
+/// Prints inferred function formats (Turchin 1980 §2.3): what each function can
+/// be applied to, and what it can return.
+fn formats_program(program: &refal_ast::Program, args: &[String]) {
+    if !args.is_empty() {
+        eprintln!("Usage: refal formats <file.ref>");
+        process::exit(2);
+    }
+    print!("{}", refal_semantics::infer_formats(program));
 }
 
 fn graph_program(program: &refal_ast::Program, args: &[String]) {

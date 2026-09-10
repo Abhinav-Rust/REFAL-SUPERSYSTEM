@@ -2014,6 +2014,70 @@ fn strict_mode_has_no_false_positives_on_the_corpus() {
     );
 }
 
+fn formats_file(path: &str) -> std::process::Output {
+    Command::new(refal_bin())
+        .args(["formats", path])
+        .output()
+        .expect("run refal binary")
+}
+
+#[test]
+fn formats_reports_argument_and_result_shapes() {
+    // Function formats (Turchin 1980 2.3): what a function can be applied to,
+    // and what it can return. `S` is a symbol, `B` a bracket, `?` an unknown
+    // term, `..` an open tail.
+    let cases = [
+        (
+            "$ENTRY Go {\n  (s1s2s3) = s3 s2 s1;\n}\n",
+            "Go: [B] -> [S S S]",
+        ),
+        ("$ENTRY Go {\n  (e.X) = e.X;\n}\n", "Go: [B] -> [..]"),
+        ("$ENTRY Go {\n  = 'a';\n}\n", "Go: [] -> [S]"),
+        ("$ENTRY Go {\n  = (1 2);\n}\n", "Go: [] -> [B]"),
+        ("$ENTRY Go {\n  t.X = t.X;\n}\n", "Go: [?] -> [?]"),
+    ];
+    for (source, expected) in cases {
+        let path = scratch_source("refal-formats", source);
+        let output = formats_file(&path.to_string_lossy());
+        assert!(
+            output.status.success(),
+            "formats failed on {source:?}:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let reported = String::from_utf8_lossy(&output.stdout);
+        assert_eq!(
+            reported.trim(),
+            expected,
+            "formats reported {reported:?} for {source:?}"
+        );
+        let _ = fs::remove_file(&path);
+    }
+}
+
+#[test]
+fn formats_reaches_a_fixpoint_on_mutual_recursion() {
+    // A result format depends on the callee's result format, so two functions
+    // that call each other must still terminate. The lattice is finite and each
+    // round only widens, so it does -- this test is what says so.
+    let source = "$ENTRY Go {\n  = <Even 'a'>;\n}\nEven {\n  s.X = <Odd s.X>;\n}\nOdd {\n  s.X = <Even s.X>;\n}\n";
+    let path = scratch_source("refal-formats-rec", source);
+    let output = formats_file(&path.to_string_lossy());
+
+    assert!(
+        output.status.success(),
+        "mutual recursion did not terminate:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let reported = String::from_utf8_lossy(&output.stdout).into_owned();
+    for name in ["Go", "Even", "Odd"] {
+        assert!(
+            reported.contains(&format!("{name}: ")),
+            "no format reported for {name}: {reported:?}"
+        );
+    }
+    let _ = fs::remove_file(&path);
+}
+
 #[test]
 fn compile_command_uses_the_refal_authored_compiler() {
     // `refal compile` runs the compiler written in Refal, not the Rust

@@ -34,8 +34,8 @@ objective to a gate. Not another Refal implementation.
 
 | | |
 |---|---|
-| Honest completion | **~78%** |
-| Tests | 216 passing, 0 clippy, fmt clean |
+| Honest completion | **~80%** |
+| Tests | 220 passing, 0 clippy, fmt clean |
 | Last commit | `824cb72` then this commit |
 | Working tree | clean |
 
@@ -47,11 +47,11 @@ objective to a gate. Not another Refal implementation.
 | Bootstrap semantics | 6.0% | 5.0 |
 | Refal machine / runtime | 19.5% | 17.0 |
 | Graph of states / Refal emission | 8.5% | 6.0 |
-| Static verification (Tier 1) | 15.0% | 9.0 |
+| Static verification (Tier 1) | 15.0% | 10.0 |
 | Compiler implemented in Refal | 25.5% | 20.0 |
 | Verified self-hosting fixpoint | 13.0% | 12.0 |
 | Conformance / release evidence | 4.0% | 1.5 |
-| **Total** | **100%** | **~78%** |
+| **Total** | **100%** | **~80%** |
 
 ### Done
 

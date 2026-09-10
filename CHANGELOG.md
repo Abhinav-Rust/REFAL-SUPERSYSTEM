@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Function formats — T-7, Turchin 1980 §2.3 (2026-09-10)
+
+`refal formats` reports what each function can be applied to and what it can
+return, inferred to a fixpoint across call boundaries so that mutually
+recursive functions terminate. An expression is described by a run of leading
+item shapes plus a flag for "more may follow": `[S]` is one symbol, `[B ..]` a
+bracket followed by anything, `[]` the empty expression.
+
+Every abstraction over-approximates, which is the direction §2.3 needs: a
+format may describe more expressions than can actually occur, never fewer, so a
+conclusion drawn from it holds for every real execution. Brackets are opaque,
+an `s.`-variable is a symbol, a `t.`-variable is unknown, and an `e.`-variable
+opens the format.
+
+Names are keyed canonically but reported with the spelling the user wrote.
+
 ### `refal compile`: the compiler is now the Refal one (2026-09-10)
 
 `refal compile <file.ref>` runs `examples/compiler.ref` — the compiler written
