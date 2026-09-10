@@ -1,5 +1,10 @@
 use std::{env, fs, path::Path, process};
 
+/// The Refal-authored compiler. It is compiled into the binary because it is
+/// the compiler: Rust is the bootstrap and the verification harness, and the
+/// thing that turns Refal into Refal is this source.
+const REFAL_COMPILER: &str = include_str!("../../../examples/compiler.ref");
+
 use refal_ast::Span as AstSpan;
 use refal_runtime::{Evaluator, Value};
 use refal_syntax::{Lexer, Parser};
@@ -96,6 +101,7 @@ fn main() {
         "check" => println!("{path}: check ok"),
         "dump-ast" => println!("{program:#?}"),
         "lower" => lower_program(&program, &input_args),
+        "compile" => compile_program(&source, &input_args),
         "graph" => graph_program(&program, &input_args),
         "analyze" => analyze_program(&program, &input_args),
         "overlap" => overlap_program(&program, &input_args),
@@ -146,6 +152,7 @@ fn print_usage() {
     eprintln!("             [--strict]  also fail on statically proven defects");
     eprintln!("  dump-ast   Print the parsed AST");
     eprintln!("  lower      Lower checked Refal source to normalized Core Refal");
+    eprintln!("  compile    Compile Refal source with the Refal-authored compiler");
     eprintln!("  graph      Print the deterministic seed graph of sentence states and calls");
     eprintln!("  analyze    Report bounded Tier 1 reachability, terminals, and SCCs");
     eprintln!("  overlap    Report conservative sentence-pattern compatibility pairs");
@@ -175,6 +182,84 @@ fn lower_program(program: &refal_ast::Program, args: &[String]) {
         }
         _ => {
             eprintln!("Usage: refal lower <file.ref> [--output <file.ref>]");
+            process::exit(2);
+        }
+    }
+}
+
+/// Compiles Refal source with the Refal-authored compiler rather than with the
+/// Rust `lower`. The output is re-parsed and checked before it is emitted, so
+/// `compile` never hands back a program the compiler itself would reject.
+fn compile_program(source: &str, args: &[String]) {
+    let tokens = match Lexer::new(REFAL_COMPILER).tokenize() {
+        Ok(tokens) => tokens,
+        Err(error) => {
+            eprintln!(
+                "the embedded Refal compiler does not lex: {}",
+                error.message
+            );
+            process::exit(1);
+        }
+    };
+    let compiler = match Parser::new(tokens).parse_program() {
+        Ok(compiler) => compiler,
+        Err(error) => {
+            eprintln!(
+                "the embedded Refal compiler does not parse: {}",
+                error.message
+            );
+            process::exit(1);
+        }
+    };
+
+    let output = match apply_source_compiler(&compiler, source) {
+        Ok(output) => output,
+        Err(error) => {
+            eprintln!("compile error: {error}");
+            process::exit(1);
+        }
+    };
+
+    let reparsed = match Lexer::new(&output).tokenize() {
+        Ok(tokens) => match Parser::new(tokens).parse_program() {
+            Ok(program) => program,
+            Err(error) => {
+                eprintln!(
+                    "compile produced a program that does not parse: {}",
+                    error.message
+                );
+                process::exit(1);
+            }
+        },
+        Err(error) => {
+            eprintln!(
+                "compile produced a program that does not lex: {}",
+                error.message
+            );
+            process::exit(1);
+        }
+    };
+    if let Err(diagnostics) = refal_semantics::check_program(&reparsed) {
+        for diagnostic in &diagnostics {
+            eprintln!("{}", diagnostic.message);
+        }
+        eprintln!("compile produced a program that does not check");
+        process::exit(1);
+    }
+
+    // `Prout` terminates its line, and `lower` ends the same way, so the two
+    // commands agree byte for byte and `differential` can compare them.
+    let emitted = format!("{output}\n");
+    match args {
+        [] => print!("{emitted}"),
+        [flag, path] if flag == "--output" || flag == "-o" => {
+            if let Err(error) = fs::write(path, emitted) {
+                eprintln!("failed to write {path}: {error}");
+                process::exit(1);
+            }
+        }
+        _ => {
+            eprintln!("Usage: refal compile <file.ref> [--output <file.ref>]");
             process::exit(2);
         }
     }

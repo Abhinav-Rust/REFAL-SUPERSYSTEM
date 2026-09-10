@@ -2015,6 +2015,79 @@ fn strict_mode_has_no_false_positives_on_the_corpus() {
 }
 
 #[test]
+fn compile_command_uses_the_refal_authored_compiler() {
+    // `refal compile` runs the compiler written in Refal, not the Rust
+    // `lower`. They must agree byte for byte, because the Rust bootstrap is
+    // the oracle and the Refal compiler is meant to replace it.
+    for name in [
+        "hello",
+        "identity",
+        "runtime-recursion",
+        "runtime-arithmetic",
+        "condition",
+        "block-ending",
+        "condition-block",
+        "shorthand-variables",
+    ] {
+        let path = workspace_path(&format!("examples/{name}.ref"));
+        let expected = Command::new(refal_bin())
+            .args(["lower", &path])
+            .output()
+            .expect("run the Rust lowerer");
+        let actual = Command::new(refal_bin())
+            .args(["compile", &path])
+            .output()
+            .expect("run the Refal compiler");
+        assert!(
+            actual.status.success(),
+            "compile failed on {name}:\n{}",
+            String::from_utf8_lossy(&actual.stderr)
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&actual.stdout),
+            String::from_utf8_lossy(&expected.stdout),
+            "{name}: `compile` differs from `lower`"
+        );
+    }
+}
+
+#[test]
+fn compile_command_compiles_the_compiler_itself() {
+    // The point of the whole project, through the CLI: the Refal compiler
+    // compiles its own source, and what comes back still checks.
+    let path = workspace_path("examples/compiler.ref");
+    let output = Command::new(refal_bin())
+        .args(["compile", &path])
+        .output()
+        .expect("run the Refal compiler");
+    assert!(
+        output.status.success(),
+        "compiling the compiler failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let compiled = String::from_utf8_lossy(&output.stdout).into_owned();
+    assert!(
+        !compiled.is_empty(),
+        "the compiler compiled itself to nothing"
+    );
+    assert!(
+        compiled.contains("$ENTRY Go"),
+        "the compiled compiler lost its entry point"
+    );
+
+    let expected = Command::new(refal_bin())
+        .args(["lower", &path])
+        .output()
+        .expect("run the Rust lowerer");
+    assert_eq!(
+        compiled,
+        String::from_utf8_lossy(&expected.stdout),
+        "the Refal compiler's output differs from the Rust bootstrap's"
+    );
+}
+
+#[test]
 fn compiler_ref_reaches_a_self_hosting_fixpoint() {
     // T-10: the compiler applied to itself. Rust compiles compiler.ref to C1,
     // C1 compiles it to C2, C2 to C3, and C2 must equal C3 byte for byte. This

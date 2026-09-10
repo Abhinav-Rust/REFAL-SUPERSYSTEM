@@ -320,7 +320,7 @@ formats (§2.3) and metacodes (Ch. 1.3); `driver.ref`; native code generation
 | `refal-semantics` | 🔶 Legality checks for the supported surface | Exhaustiveness; graph-based analyses |
 | `refal-runtime` | 🔶 Broad covered builtin suite; worklist drives named calls and blocks with no fixed depth cap; projecting matcher (§2.2) | **Heap-allocated single view field (issue [#7](../../issues/7)); Chapter 6 metacode** |
 | `refal-core` | 🔶 Seed graph, SCC, cleanup, bounded driving, symbolic driving, bounded residualization | Complete Turchin driving (§4.2); semantic cleaning (§4.3); full generalization and residualization |
-| `refal-cli` | 🔶 `check`, `dump-ast`, `lower`, `run`, `differential`, `graph`, `analyze`, `overlap`, `drive`, `drive-symbolic`, `residualize`, `residualize-graph`, `residualize-driven`, `residualize-generalized`, `fixpoint` | No `compile` command yet |
+| `refal-cli` | 🔶 `check` (`--classic`/`--strict`), `dump-ast`, `lower`, **`compile`**, `run`, `differential`, `graph`, `analyze`, `overlap`, `drive`, `drive-symbolic`, `residualize`, `residualize-graph`, `residualize-driven`, `residualize-generalized`, `fixpoint` | `compile` normalises to Core Refal; it does not yet compile pattern matching |
 | CI and quality gates | ✅ `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` | — |
 
 ### Reporting Rules
@@ -447,6 +447,9 @@ cargo run -p refal -- dump-ast examples/hello.ref
 # Lower checked source into normalised Refal text
 cargo run -p refal -- lower examples/hello.ref
 cargo run -p refal -- lower examples/hello.ref --output build/hello.core.ref
+
+# The same job done by the compiler written in Refal, not by the Rust bootstrap
+cargo run -p refal -- compile examples/hello.ref
 
 # Compare a source program with its lowered/reparsed execution
 cargo run -p refal -- differential examples/hello.ref

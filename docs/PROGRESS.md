@@ -75,6 +75,11 @@ objective to a gate. Not another Refal implementation.
   divergences — including `sX` shorthand, `/* */` block comments and reals.
 - **T-10 closed at full credit**: C1 = C2 = C3 at 12,599 bytes over the full
   Classic grammar, every generation checked.
+- **`refal compile`** runs the Refal-authored compiler, not the Rust `lower`.
+  The compiler source is compiled into the binary because it *is* the compiler;
+  Rust is the bootstrap and the verification harness. Output is re-lexed,
+  re-parsed and re-checked before emission, and agrees with `lower` byte for
+  byte. `compile` compiles `compiler.ref` itself.
 - **Tier 1 delivers the published guarantee**: `--classic` / `--strict`, dead
   sentences, recognition impossible and builtin domain errors, with zero false
   positives across the corpus. All three classes the guarantee names are now

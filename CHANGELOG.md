@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### `refal compile`: the compiler is now the Refal one (2026-09-10)
+
+`refal compile <file.ref>` runs `examples/compiler.ref` — the compiler written
+in Refal — rather than the Rust `lower`. The compiler source is compiled into
+the binary, because it is the compiler; Rust is the bootstrap and the
+verification harness. The output is re-lexed, re-parsed and re-checked before it
+is emitted, so `compile` cannot hand back a program the compiler itself would
+reject, and it agrees with `lower` byte for byte across the corpus.
+
+### Tier 1: recognition impossible (2026-09-10)
 ### Tier 1: recognition impossible (2026-09-10)
 
 The third and most important class in the published guarantee. *Recognition
