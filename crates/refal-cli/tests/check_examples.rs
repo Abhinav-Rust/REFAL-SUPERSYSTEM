@@ -1771,6 +1771,116 @@ $ENTRY Go { = <Prout>; }
     }
 }
 
+/// Writes `source` to a uniquely named scratch file so `refal lower` can be
+/// pointed at it. `lower` only reads paths, while `run` takes the source as a
+/// command-line argument, so the two entry points have to be fed differently.
+fn scratch_source(prefix: &str, source: &str) -> std::path::PathBuf {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock is after Unix epoch")
+        .as_nanos();
+    let path = std::env::temp_dir().join(format!("{prefix}-{nanos}.ref"));
+    fs::write(&path, source).expect("write scratch source");
+    path
+}
+
+#[test]
+fn refal_authored_compiler_handles_shorthand_block_comments_and_reals() {
+    // The three grammar gaps that kept T-10 at partial credit: one-character
+    // variable shorthand, /* */ block comments, and reals whose dot and
+    // exponent are part of a single token.
+    let cases = [
+        "/* a\n   b */\n$ENTRY Go {\n  /* c */ = 1;\n}\n",
+        "$ENTRY Go {\n  (s1s2s3) = s3 s2 s1;\n}\n",
+        "$ENTRY Go {\n  e.X = 12.5 +4E2 6.0E3;\n}\n",
+        "$ENTRY Go {\n  = 'a''b';\n}\n",
+    ];
+    for source in cases {
+        let path = scratch_source("refal-grammar", source);
+        let expected = Command::new(refal_bin())
+            .args(["lower"])
+            .arg(&path)
+            .output()
+            .expect("run the Rust lowerer");
+        assert!(
+            expected.status.success(),
+            "the Rust lowerer rejected {source:?}:\n{}",
+            String::from_utf8_lossy(&expected.stderr)
+        );
+        let actual = run_file("examples/compiler.ref", &[source]);
+        assert!(
+            actual.status.success(),
+            "failed on {source:?}:\n{}",
+            String::from_utf8_lossy(&actual.stderr)
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&actual.stdout),
+            String::from_utf8_lossy(&expected.stdout),
+            "differs from the Rust bootstrap on {source:?}"
+        );
+        let _ = fs::remove_file(&path);
+    }
+}
+
+#[test]
+fn refal_authored_emitter_matches_lower_across_the_whole_corpus() {
+    // The strongest available statement about the Refal compiler's grammar
+    // coverage: every example the Rust bootstrap will lower must come back
+    // byte-identical from compiler.ref. `compiler.ref` is excluded because it
+    // is the compiler, and negative fixtures are excluded because `lower`
+    // rejects them by construction.
+    let mut names: Vec<String> = fs::read_dir(workspace_path("examples"))
+        .expect("read the examples directory")
+        .filter_map(|entry| {
+            let path = entry.ok()?.path();
+            let name = path.file_name()?.to_string_lossy().into_owned();
+            (name.ends_with(".ref") && name != "compiler.ref").then_some(name)
+        })
+        .collect();
+    names.sort();
+
+    let mut checked = 0usize;
+    let mut failures = Vec::new();
+    for name in names {
+        let path = format!("examples/{name}");
+        let oracle = Command::new(refal_bin())
+            .args(["lower", &workspace_path(&path)])
+            .output()
+            .expect("run the Rust lowerer");
+        if !oracle.status.success() {
+            continue;
+        }
+        checked += 1;
+        let expected = String::from_utf8_lossy(&oracle.stdout).into_owned();
+        let source = fs::read_to_string(workspace_path(&path)).expect("read example");
+        let actual = run_file("examples/compiler.ref", &[&source]);
+        if !actual.status.success() {
+            failures.push(format!(
+                "{name}: compiler.ref failed\n{}",
+                String::from_utf8_lossy(&actual.stderr)
+            ));
+            continue;
+        }
+        let actual = String::from_utf8_lossy(&actual.stdout).into_owned();
+        if actual != expected {
+            failures.push(format!(
+                "{name}:\n  lower: {expected:?}\n  refal: {actual:?}"
+            ));
+        }
+    }
+
+    assert!(
+        checked >= 40,
+        "the corpus sweep should cover the examples, only checked {checked}"
+    );
+    assert!(
+        failures.is_empty(),
+        "{} of {checked} examples diverge from the Rust bootstrap:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+}
+
 #[test]
 fn compiler_ref_reaches_a_self_hosting_fixpoint() {
     // T-10: the compiler applied to itself. Rust compiles compiler.ref to C1,

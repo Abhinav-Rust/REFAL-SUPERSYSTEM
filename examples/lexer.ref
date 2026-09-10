@@ -12,9 +12,10 @@ $EXTERN Prout, Chr;
 * is passed in as an argument and used both to skip end-of-line and to
 * terminate * line comments.
 *
-* Not yet handled: sX one-character variable shorthand, /* */ block comments.
 * Words are taken as maximal runs up to a delimiter, so '-' and '_' are
-* ordinary word characters here.
+* ordinary word characters here. A '.' is not a delimiter either, because a
+* real such as 12.5 or +4E2 is one token; the s./t./e. rules above have
+* already consumed the dot that separates a variable's kind from its index.
 
 $ENTRY Go {
   (e.Source) = <Prout <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>;

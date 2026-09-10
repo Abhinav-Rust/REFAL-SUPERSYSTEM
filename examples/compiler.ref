@@ -21,7 +21,10 @@ $EXTERN Prout, Chr, Ord, Add, Compare;
 *
 * Grammar covered: $EXTERN, $ENTRY and local functions, multi-sentence
 * functions, patterns, conditions (, expr : pattern), results, calls and
-* structural brackets. Not yet: blocks, as sentence endings or in conditions.
+* structural brackets, blocks as sentence endings and in condition position,
+* one-character variable shorthand, /* */ block comments and reals. Every
+* example in examples/ that the Rust bootstrap will lower comes back
+* byte-identical from this file -- see the corpus sweep test.
 
 * The CLI runs Go, so Go is the compiler: it emits. Passing CHECK as a first
 * argument asks for the checker's verdict instead, which is what the checker
@@ -405,9 +408,14 @@ CondVars {
   (COND (e.Expr) (e.CPat)) e.Rest = <VarsOf e.CPat> <CondVars e.Rest>;
 }
 
+* A variable record carries BOTH spellings: the source spelling is what a
+* diagnostic must print, and the canonical spelling is what two variables must
+* be compared by. Reference 1.3 makes e.Text and e.text the same variable, but
+* the Rust bootstrap still reports `unbound variable e.Missing` as written, so
+* folding the index at capture time silently corrupted the message.
 VarsOf {
   = ;
-  (VAR s.K e.I) e.Rest = (V s.K <Canon e.I>) <VarsOf e.Rest>;
+  (VAR s.K e.I) e.Rest = (V s.K (e.I) (<Canon e.I>)) <VarsOf e.Rest>;
   (BR e.Inner) e.Rest = <VarsOf e.Inner> <VarsOf e.Rest>;
   (CALL (ID e.N) e.Args) e.Rest = <VarsOf e.Args> <VarsOf e.Rest>;
   t.Item e.Rest = <VarsOf e.Rest>;
@@ -419,24 +427,29 @@ Unbound {
 
 UnboundVars {
   (e.Bound) = ;
-  (V s.K e.I) e.Rest (e.Bound), <IsBound (V s.K e.I) (e.Bound)> : '1' =
-    <UnboundVars e.Rest (e.Bound)>;
-  (V s.K e.I) e.Rest (e.Bound) =
+  (V s.K (e.I) (e.C)) e.Rest (e.Bound),
+    <IsBound (V s.K (e.I) (e.C)) (e.Bound)> : '1' =
+      <UnboundVars e.Rest (e.Bound)>;
+  (V s.K (e.I) (e.C)) e.Rest (e.Bound) =
     "unbound variable " s.K "." e.I "; " <UnboundVars e.Rest (e.Bound)>;
 }
 
 * A bound record is a bracket holding several atoms (V, the kind, and the index
 * characters), so it cannot be matched with `(t.V)`, which is a bracket holding
 * exactly one term. Compare bracket contents instead.
+* `e.V` holds the CONTENTS of the variable bracket, so the comparison has to
+* re-wrap it as `(e.V)` before it can be matched against the bound record.
 IsBound {
-  (e.V) (t.Item e.Rest), <EqBracket t.Item (e.V)> : '1' = '1';
+  (e.V) (t.Item e.Rest), <EqVar t.Item (e.V)> : '1' = '1';
   (e.V) (t.Item e.Rest) = <IsBound (e.V) (e.Rest)>;
   (e.V) () = ;
 }
 
-EqBracket {
-  (e.X) (e.X) = '1';
-  (e.X) (e.Y) = ;
+* Two variables are the same when the kind matches and the CANONICAL indices
+* match. The source spellings deliberately take no part in the comparison.
+EqVar {
+  (V s.K (e.I) (e.C)) (V s.K (e.J) (e.C)) = '1';
+  (e.A) (e.B) = ;
 }
 
 * --------------------------------------------------------------- emitter

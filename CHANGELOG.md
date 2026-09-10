@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### Full-corpus emitter parity and a variable-index diagnostic fix (2026-09-10)
+
+`compiler.ref` now emits **every** example in `examples/` byte-identically to
+the Rust bootstrap's `refal lower` — 47 files swept, zero divergences. Two new
+tests lock that in: a whole-corpus sweep, and explicit cases for `/* */` block
+comments, `s1s2s3` juxtaposed shorthand, and reals with exponents.
+
+Fixed a regression the variable-index folding introduced: folding a variable
+index at capture time made the diagnostic print the folded spelling, so
+`e.Missing` was reported as `e.missing`. Reference 1.3 makes `e.Text` and
+`e.text` the *same variable*, but the Rust bootstrap still reports the source
+spelling, and a diagnostic that renames the user's variable is a defect. A
+variable record now carries both spellings: the source spelling is printed, the
+canonical one is compared.
+
+With the fuller grammar the self-hosting fixpoint holds at **C1 = C2 = C3 =
+12,599 bytes**, and C2 passes `refal check`.
+
 ### Reals, case-folded variable indices, and top-level semicolons (2026-09-09)
 
 Sweeping every example against `refal lower` found two real divergences and one
