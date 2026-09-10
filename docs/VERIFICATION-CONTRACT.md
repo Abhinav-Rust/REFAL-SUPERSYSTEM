@@ -94,6 +94,14 @@ everything and length ranges that merely might miss each other do not count.
 Both under-approximate: a sentence whose conditions would fail at run time is
 still counted as matching, so neither can report a call that succeeds.
 
+### Open-`e` complexity — `note`
+
+Two `e.`-variables in one pattern is where matching stops being cheap: the
+matcher has to guess where each one ends, and each split point of the first is
+tried against each split point of the second. This is reported at `Allow`
+severity, so it is opt-in pedantry — visible under `--strict`, silent
+otherwise, and never fatal. No other Refal toolchain reports it.
+
 ### Builtin domain errors — `proven defect`
 
 A call is only judged when **every** argument is a literal, so the value the
@@ -114,6 +122,5 @@ disagree about what an integer literal denotes.
 - Exhaustiveness where the format lattice is too coarse to separate the
   argument from what the callee accepts. Widening `Shape` — describing bracket
   *contents*, or distinguishing character from number — is the next step.
-- The open-`e` complexity lint.
 - `-W` / `-D` / `-A` per-lint control. Today the mode sets the default for every
   lint at once.

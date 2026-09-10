@@ -34,7 +34,7 @@ objective to a gate. Not another Refal implementation.
 
 | | |
 |---|---|
-| Honest completion | **~80%** |
+| Honest completion | **~83%** |
 | Tests | 220 passing, 0 clippy, fmt clean |
 | Last commit | `824cb72` then this commit |
 | Working tree | clean |
@@ -47,11 +47,11 @@ objective to a gate. Not another Refal implementation.
 | Bootstrap semantics | 6.0% | 5.0 |
 | Refal machine / runtime | 19.5% | 17.0 |
 | Graph of states / Refal emission | 8.5% | 6.0 |
-| Static verification (Tier 1) | 15.0% | 11.0 |
+| Static verification (Tier 1) | 15.0% | 12.0 |
 | Compiler implemented in Refal | 25.5% | 20.0 |
 | Verified self-hosting fixpoint | 13.0% | 12.0 |
-| Conformance / release evidence | 4.0% | 1.5 |
-| **Total** | **100%** | **~81%** |
+| Conformance / release evidence | 4.0% | 3.0 |
+| **Total** | **100%** | **~83%** |
 
 ### Done
 
@@ -100,48 +100,35 @@ objective to a gate. Not another Refal implementation.
 
 ## NEXT ACTION
 
-**Tier 1 exhaustiveness (recognition-impossible reachability), via function
-formats (T-7).**
+**T-9: make a metasystem transition actually happen.**
 
-The published guarantee promises that `--strict` rejects every program in which
-a *recognition impossible* is reachable. Two of the three promised classes are
-now implemented; this is the third, and it is the one that matters most,
-because *recognition impossible* is Refal's dominant runtime failure.
+This is the heart of Turchin's claim and the largest remaining piece. An
+interpreter is driven over a program and the result is a *specialised residual
+program* — the metasystem transition from §5.5. Everything built so far is the
+apparatus around that moment; the moment itself has not been demonstrated.
 
 Order:
 
-1. **Function formats (T-7, 1980 §2.3).** Infer, for each function, the set of
-   argument shapes its sentences can accept, and propagate across call
-   boundaries to a fixpoint. This is the lattice exhaustiveness is computed
-   over, so it comes first.
-2. **Exhaustiveness.** For each reachable call, check the inferred format
-   against the callee's accepted shapes and report the shapes no sentence
-   handles. Severity `Warn` until the format lattice is precise enough to be
-   trusted as `Deny` — a false positive here would be worse than a miss.
-3. Then **T-9**: make a metasystem transition actually happen — an interpreter
-   driven over a program yielding a specialised residual program. This is the
-   heart of Turchin's claim and the largest remaining piece.
+1. Drive a Refal interpreter over a concrete program with a partially known
+   argument, using the existing graph machinery in `refal-core`.
+2. Fold repeated configurations; the homeomorphic-embedding whistle is already
+   there, so the work is generalization and residualization of what driving
+   produces.
+3. Prove the transition by *observing* it: the residual program must be smaller
+   or faster than the original, and `refal differential` must show the two agree.
+
+Tier 1 is finished as far as the published guarantee goes — all three classes it
+names are implemented. What remains there is precision, not coverage: widening
+`Shape` so format-disjointness catches more, and `-W`/`-D`/`-A` per-lint control.
 
 The soundness gate is unchanged and non-negotiable:
 `strict_mode_has_no_false_positives_on_the_corpus` must stay green. If a new
 check rejects an example the repository believes is sound, the check is wrong,
 not the example — unless it has found a real bug, as the dead-sentence check did.
 
-Reference: `format_program` / `format_sentence` in
-`crates/refal-core/src/lib.rs` define the exact output grammar. Note that
-`refal lower` uses `print!`, not `println!`, so the formatted program ends at
-the last brace; `Prout` adds the final newline.
+## Machine load
 
-## Pitfalls already paid for
-
-See the "Traps" section of the session memory, and in summary:
-
-- `(e.Item)` binds a bracket's **contents**; re-emit it wrapped or the tree
-  flattens by a level.
-- Names are stored as **characters** — write `(Ident 'Go')`, not `(Ident Go)`.
-- `(t.V)` is a bracket of exactly **one** term; compare contents instead.
-- Bare lowercase `s` / `t` / `e` are rejected by the lexer — use `('s')`.
-- `Compare` returns `+` / `0` / `-`. `Chr(Add(Ord('A'), 32))` = `a`.
-- Classic Refal-5 has no escape syntax for control characters in **patterns**;
-  pass newline in as an argument.
-- Files here are CRLF on disk (`core.autocrlf=true`); strip `\r` before lexing.
+This is developed on an HP laptop running Windows 11 Pro. Keep the load
+balanced: build and test with `-j 2`, prefer a targeted
+`cargo test -p <crate> <filter>` over a full workspace run, and leave a pause
+between heavy commands rather than chaining them back to back.

@@ -195,7 +195,7 @@ The guarantee this compiler intends to publish, once Tier 1 lands:
 
 ## Project Status
 
-### Honest Completion: ~80%
+### Honest Completion: ~83%
 
 The goal — a Classic Refal-5 compiler **written in Refal**, emitting Refal, compiling its
 own full source, with Turchin's graph-of-states supercompiler and Tier 1 static
@@ -208,8 +208,8 @@ rationale lives in [`docs/PLAN.md`](docs/PLAN.md).
 
 | Lens | Score | What it measures |
 |---|---|---|
-| Sub-task implementation credit (PLAN.md) | ~80% | Fraction of planned *effort* that has been coded and tested across ~16 sub-milestones |
-| Evidence-weighted score | **~74%** | Fraction of the *1.0 compiler goal* that is tested and working in the general case |
+| Sub-task implementation credit (PLAN.md) | ~83% | Fraction of planned *effort* that has been coded and tested across ~16 sub-milestones |
+| Evidence-weighted score | **~76%** | Fraction of the *1.0 compiler goal* that is tested and working in the general case |
 | Conservative architectural gate credit | ~26% | Strict: zero credit for any gate not fully closed (see `REFAL-FIRST-COMPLETION.md`) |
 
 The evidence-weighted figure sat far below the sub-task figure for a long time,
@@ -257,11 +257,11 @@ The 15% weight below covers Tier 1 decidable analyses only.
 | Bootstrap semantics | 6.0% | 5.0% | Entry, bindings, call checks done; no exhaustiveness or graph-based analysis |
 | Refal machine / runtime | 19.5% | ~17% | Broad covered builtin suite; **no fixed call-depth limit** — work-list driven for named calls and blocks, 50,000 frames in under a second; **projecting matcher (§2.2)** — closed `e`-variables match by position, five anchored `e`-variables over 60 symbols from >120 s to 1.6 s; `Dn`/`Up`; **heap-allocated single view field not done**; block sentences carrying conditions still take the recursive path |
 | Graph of states / Refal emission | 8.5% | ~6% | Seed graph, SCC, bounded driving, homeomorphic whistle, bounded residualization done; complete Turchin driving / cleaning / generalization open |
-| Static verification (Tier 1 only) | 15.0% | ~11% | **All three classes the guarantee names are implemented**: `--classic` / `--strict` severity model, dead sentences by pattern subsumption, recognition impossible and builtin domain errors for literal arguments. Zero false positives across the corpus. **Function formats (§2.3)** inferred to a fixpoint across call boundaries. Exhaustiveness for non-literal arguments and the open-`e` lint still open |
+| Static verification (Tier 1 only) | 15.0% | ~12% | **All three classes the guarantee names are implemented**: `--classic` / `--strict` severity model, dead sentences by pattern subsumption, recognition impossible and builtin domain errors for literal arguments. Zero false positives across the corpus. **Function formats (§2.3)** inferred to a fixpoint across call boundaries. Exhaustiveness for non-literal arguments and the open-`e` lint still open |
 | Compiler implemented in Refal | 25.5% | ~20% | A real Refal-authored compiler over the full Classic grammar: `lexer.ref` tokenises, `parser.ref` builds an AST, `compiler.ref` checks **and emits** — exported Go entry, duplicate names under Classic name equivalence, unbound variables — with output byte-identical to Rust `lower` on all 47 lowerable examples. Handles blocks in both positions, `sX` shorthand, `/* */` comments and reals. `driver.ref` **not written** |
 | Verified self-hosting fixpoint | 13.0% | ~12% | **The compiler compiles itself over the full grammar**: C1 → C2 → C3, every generation checks, C1 = C2 = C3 byte-identical at 12,599 bytes, output matching Rust `lower` |
-| Conformance / release evidence | 4.0% | ~1.5% | Solid automated foundation; no full Classic conformance claim or release packaging |
-| **Total (1.0 target)** | **100%** | **~81%** | |
+| Conformance / release evidence | 4.0% | ~3% | Solid automated foundation; no full Classic conformance claim or release packaging |
+| **Total (1.0 target)** | **100%** | **~83%** | |
 
 ---
 
@@ -278,7 +278,7 @@ The 15% weight below covers Tier 1 decidable analyses only.
 | 3 | Semantic checker | 🔶 Partial | Entry-point rules, duplicate checks, unresolved calls, variable binding, condition legality, pattern-call rejection | Exhaustiveness analysis; graph-based analyses; function-format inference |
 | 4 | Refal machine | 🔶 Partial | Broad covered builtin suite: arithmetic, file I/O (`Card`/`Open`/`Get`/`Put`/`Putout`), buried data (`Br`/`Dg`/`Cp`/`Rp`/`Dgall`), structural ops (`First`/`Last`/`Lenw`/`Lower`/`Upper`), `Arg`/`Step`/`Time`/`Mu`/`Dn`/`Up`/`Trunc`/`Real`, plus `Prout`/`Print`/`Explode`/`Implode`/`Ord`/`Chr`/`Numb`/`Symb`/`Type`; backtracking, conditions, blocks in both positions, explicit worklist for block-free call chains. The previously observed supported-body `TakeBody` scaling failure is resolved (C1→C2→C3 proven, 100-definition trial under 1 s) | Heap-allocated single view field (issue [#7](../../issues/7)); Chapter 6 metacode encoding. *The fixed call-depth cap and the projecting matcher are done.* |
 | 5 | Graph of states | 🔶 Partial | Seed graph, SCC, structural cleanup, bounded ground driver, shape-aware symbolic driver, homeomorphic-embedding whistle, bounded Tier 1 analysis (`refal analyze`, `refal overlap`), cleaned-graph Core Refal emitter, bounded driven/generalized residualization | Complete Turchin configuration driving (§4.2); semantic graph cleaning (§4.3); generalization termination (§4.6); whole-graph residualization for general programs |
-| 6 | Tier 1 static analyses | 🔶 Partial | `--classic` / `--strict` severity model; **dead sentences**, **recognition impossible** and **builtin domain errors**, all with zero false positives across the corpus; **function formats (§2.3)** inferred to a fixpoint across call boundaries (`refal formats`); structural reachability, terminal-state and SCC reports; conservative pairwise compatibility | Exhaustiveness for non-literal arguments; the open-`e` complexity lint; `-W`/`-D`/`-A` per-lint control |
+| 6 | Tier 1 static analyses | 🔶 Partial | `--classic` / `--strict` severity model; **dead sentences**, **recognition impossible** and **builtin domain errors**, all with zero false positives across the corpus; **function formats (§2.3)** inferred to a fixpoint across call boundaries (`refal formats`); structural reachability, terminal-state and SCC reports; conservative pairwise compatibility | Exhaustiveness where the format lattice is too coarse; `-W`/`-D`/`-A` per-lint control |
 | 7 | Compiler written in Refal | 🔶 Partial | **A real Refal-authored lexer, parser, checker and emitter over the full Classic grammar**: `lexer.ref` tokenises, `parser.ref` builds an AST, `compiler.ref` checks and emits byte-identically to Rust `lower` on all 47 lowerable examples — blocks in both positions, `sX` shorthand, `/* */` comments, reals; `refal fixpoint`; `refal differential` | `driver.ref`; general source *compilation* (today it normalises to Core Refal rather than compiling pattern matching); optimisation |
 | 8 | Verified self-hosting | 🔶 Partial | Rust-bootstrap → C1 → C2 → C3 proven byte-identical over the full Classic grammar (12,599 bytes), each generation checked | Nothing that is itself a gate — residual credit is withheld until the compiler does more than normalise |
 | 9 | Tier 2 metasystem analysis | ⬜ Research (post-1.0) | — | Excluded from 1.0 target: §5.5 differential metafunction, §5.6 integral metafunction, §5.7 metasystem analysis, §5.9 neighborhoods |
@@ -336,7 +336,9 @@ without a test or a gate that demonstrates the work.
 
 | Date | Change |
 |---|---|
-| 2026-09-10 | Thirtieth milestone, phase 3: **exhaustiveness widened past literals.** Recognition impossible is now also proven by format disjointness, so a variable argument is no longer skipped: `<OnlyBracket s.A>` is rejected because `s.` is a symbol and `OnlyBracket` accepts `[B]`. Still zero false positives across the corpus | **function formats (T-7).** `refal formats` infers what each function can be applied to and what it can return, to a fixpoint across call boundaries, so mutually recursive functions terminate. Over-approximating throughout, as §2.3 requires. Tests 218 → 220. Completion ~78% → **~80%** |
+| 2026-09-10 | Thirty-first milestone: **release evidence.** `docs/RELEASE-CHECKLIST.md`; the differential corpus grows 13 → 31 cases. Plus the open-`e` complexity lint, opt-in pedantry no other Refal toolchain reports. Completion ~81% → **~83%** |
+| 2026-09-10 | Thirtieth milestone, phase 3: **exhaustiveness widened past literals.** Recognition impossible is now also proven by format disjointness, so a variable argument is no longer skipped: `<OnlyBracket s.A>` is rejected because `s.` is a symbol and `OnlyBracket` accepts `[B]`. Still zero false positives across the corpus |
+| 2026-09-10 | Twenty-ninth milestone, phase 3: **function formats (T-7).** `refal formats` infers what each function can be applied to and what it can return, to a fixpoint across call boundaries, so mutually recursive functions terminate. Over-approximating throughout, as §2.3 requires. Tests 218 → 220. Completion ~78% → **~80%** |
 | 2026-09-10 | Twenty-eighth milestone, phase 3: **recognition impossible.** All three classes the `--strict` guarantee names are now implemented — a call whose argument is entirely literal and which no sentence of the callee matches is rejected. Zero false positives across the corpus. Tests 216 → 216 |
 | 2026-09-10 | Twenty-sixth milestone, phase 4: **full-corpus emitter parity.** `compiler.ref` emits every one of the 47 lowerable examples byte-identically to `refal lower`, covering `sX` shorthand, `/* */` block comments and reals; fixpoint C1 = C2 = C3 at 12,599 bytes. Also fixes a variable-index diagnostic regression that renamed the user's variable in the message. Tests 205 → 205 green (2 were red) |
 | 2026-09-09 | Twenty-fifth milestone, phase 4: blocks in the Refal compiler, as sentence endings and in condition position. Output byte-identical to `refal lower` on `block-ending` and `condition-block`, and the fixpoint still holds at 12,228 bytes. Tests 204 → 205 |
@@ -502,6 +504,7 @@ Not all Refal-5 programs execute correctly yet. See the
 | [SEMANTIC-AUDIT.md](docs/SEMANTIC-AUDIT.md) | Semantic completion audit |
 | [LANGUAGE-SCOPE.md](docs/LANGUAGE-SCOPE.md) | Dialect features in and out of scope |
 | [VERIFICATION-CONTRACT.md](docs/VERIFICATION-CONTRACT.md) | Severity model, published guarantee, soundness rule |
+| [RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md) | Release gates, supported scope, compatibility guarantees |
 | [REFAL-FIRST-COMPLETION.md](docs/REFAL-FIRST-COMPLETION.md) | Self-hosting completion contract and scorecard |
 | [CLEANROOM.md](docs/CLEANROOM.md) | Clean-room authorship policy |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute |

@@ -110,10 +110,12 @@ pub fn check_program_with_mode(program: &Program, mode: Mode) -> Vec<Diagnostic>
     lints::dead_sentences(program, &mut diagnostics);
     lints::recognition_impossible(program, &mut diagnostics);
     lints::builtin_domains(program, &mut diagnostics);
+    lints::open_expression_complexity(program, &mut diagnostics);
 
-    // Only fatal diagnostics are returned for Classic; the rest stay visible
-    // through `check_program_with_mode` without changing what is accepted.
-    let _ = mode;
+    // `Allow` is opt-in pedantry, so Classic mode does not even show it.
+    if mode == Mode::Classic {
+        diagnostics.retain(|diagnostic| diagnostic.severity != Severity::Allow);
+    }
     diagnostics
 }
 

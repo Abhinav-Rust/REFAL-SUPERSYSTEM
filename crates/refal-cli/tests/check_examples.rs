@@ -1971,6 +1971,39 @@ fn classic_mode_reports_lints_without_failing_the_build() {
 }
 
 #[test]
+fn strict_mode_reports_open_expression_complexity_without_failing() {
+    // The open-`e` lint is opt-in pedantry, so it is silent by default and
+    // visible under `--strict` -- and being a note, it never fails the build.
+    let source = "$ENTRY Go {\n  e.A 'x' e.B = 1;\n}\n";
+    let path = scratch_source("refal-open-e", source);
+    let rendered = path.to_string_lossy().into_owned();
+
+    let classic = check_path(&rendered, &[]);
+    assert!(
+        classic.status.success(),
+        "classic must accept legal Refal-5: {}",
+        String::from_utf8_lossy(&classic.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&classic.stderr).is_empty(),
+        "opt-in pedantry must stay silent in classic mode"
+    );
+
+    let strict = check_path(&rendered, &["--strict"]);
+    assert!(
+        strict.status.success(),
+        "a note must not fail the build: {}",
+        String::from_utf8_lossy(&strict.stderr)
+    );
+    let reported = String::from_utf8_lossy(&strict.stderr);
+    assert!(
+        reported.contains("`e.`-variables"),
+        "strict should surface the note, got {reported:?}"
+    );
+    let _ = fs::remove_file(&path);
+}
+
+#[test]
 fn strict_mode_has_no_false_positives_on_the_corpus() {
     // The Phase 3 gate. A sound analysis may miss defects; it may never invent
     // them. Everything strict rejects here must already be known to be broken.
@@ -3165,9 +3198,30 @@ fn verifies_manifest_driven_whole_corpus_differential_modes() {
         "unexpected stderr:\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout),
-        "differential-corpus: equal\ncases: 13\npositive: 6\ncheck-failure: 6\nruntime-failure: 1\n"
+    // Asserted as minimums rather than exact counts: adding a case to the
+    // manifest should not break this test, losing one should.
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.starts_with("differential-corpus: equal\n"),
+        "corpus is not equal:\n{stdout}"
+    );
+    let count = |label: &str| -> usize {
+        stdout
+            .lines()
+            .find_map(|line| line.strip_prefix(&format!("{label}: ")))
+            .unwrap_or_else(|| panic!("no {label} line in {stdout}"))
+            .parse()
+            .unwrap_or_else(|_| panic!("{label} is not a number in {stdout}"))
+    };
+    assert!(count("cases") >= 31, "corpus shrank:\n{stdout}");
+    assert!(count("positive") >= 24, "positive cases shrank:\n{stdout}");
+    assert!(
+        count("check-failure") >= 6,
+        "check-failure cases shrank:\n{stdout}"
+    );
+    assert!(
+        count("runtime-failure") >= 1,
+        "runtime-failure cases shrank:\n{stdout}"
     );
 }
 

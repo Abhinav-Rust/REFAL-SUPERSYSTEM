@@ -183,6 +183,49 @@ fn check_recognised(
     }
 }
 
+/// Reports patterns whose `e.`-variables can make matching expensive.
+///
+/// An `e.`-variable is *open* when the grammar does not pin down where it ends,
+/// so the matcher has to guess and backtrack. Two of them in one pattern is
+/// where the cost stops being linear: each split point of the first is tried
+/// against each split point of the second.
+///
+/// This is opt-in pedantry, not a defect. It is reported at [`Severity::Allow`]
+/// so it is visible under `--strict` and silent otherwise.
+pub fn open_expression_complexity(program: &Program, out: &mut Vec<Diagnostic>) {
+    for item in &program.items {
+        let Item::Function(function) = item else {
+            continue;
+        };
+        for sentence in &function.sentences {
+            let count = count_open_expression_variables(&sentence.pattern);
+            if count >= 2 {
+                out.push(Diagnostic {
+                    severity: Severity::Allow,
+                    message: format!(
+                        "sentence of `{name}` has {count} `e.`-variables in its pattern; \
+                         matching may backtrack proportionally to the argument length \
+                         to the power {count}",
+                        name = function.name
+                    ),
+                    span: sentence.span,
+                });
+            }
+        }
+    }
+}
+
+fn count_open_expression_variables(terms: &[Term]) -> usize {
+    terms
+        .iter()
+        .map(|term| match &term.kind {
+            TermKind::Variable(variable) => usize::from(variable.kind == VariableKind::Expression),
+            TermKind::Bracket(inner) => count_open_expression_variables(inner),
+            TermKind::Block { .. } | TermKind::Call { .. } | TermKind::Symbol(_) => 0,
+        })
+        .sum()
+}
+
 fn report_dead(owner: &str, sentences: &[Sentence], out: &mut Vec<Diagnostic>) {
     for (index, sentence) in sentences.iter().enumerate() {
         let shadowed = sentences[..index]

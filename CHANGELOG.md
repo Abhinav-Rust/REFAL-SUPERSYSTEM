@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### Release evidence: checklist, and a corpus four times larger (2026-09-10)
+
+`docs/RELEASE-CHECKLIST.md` states what must be true before a release, naming
+the command or test that decides each item, and publishes a supported-scope
+statement. The differential corpus grows from 13 cases to 31 (24 positive, up
+from 6), so conformance coverage is no longer a token handful of programs.
+
+`classic-syntax.ref` is deliberately not in the runnable corpus: its pattern
+begins with an `s.`-variable and a command-line argument always arrives as a
+bracket, so it can be parsed but never run.
+
+### The open-`e` complexity lint (2026-09-10)
+
+Two `e.`-variables in one pattern is where matching stops being cheap. Reported
+at `Allow` severity — opt-in pedantry, visible under `--strict`, never fatal.
+No other Refal toolchain reports it.
+
+### Exhaustiveness widened past literal arguments (2026-09-10)
 ### Exhaustiveness widened past literal arguments (2026-09-10)
 
 Recognition impossible is now proven two ways. The exact one decides every
