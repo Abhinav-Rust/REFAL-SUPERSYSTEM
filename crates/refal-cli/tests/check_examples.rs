@@ -1914,6 +1914,13 @@ fn strict_mode_fails_on_statically_proven_defects() {
             "$ENTRY Go {\n  = <Classify 'a'>;\n}\nClassify {\n  'b' = 1;\n  'c' = 2;\n}\n",
             "no sentence of `Classify` matches",
         ),
+        // The same class decided by formats rather than by literals: the
+        // argument is a variable, but `s.` can only be a symbol and
+        // `OnlyBracket` only accepts a bracket.
+        (
+            "$ENTRY Go {\n  s.A = <OnlyBracket s.A>;\n}\nOnlyBracket {\n  (e.Y) = e.Y;\n}\n",
+            "accepts [B], but this call passes [S]",
+        ),
     ];
     for (source, expected) in cases {
         let path = scratch_source("refal-strict", source);

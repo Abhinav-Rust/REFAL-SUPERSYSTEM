@@ -130,6 +130,41 @@ impl Format {
         self.items.push(shape);
     }
 
+    /// Whether no expression can belong to both formats.
+    ///
+    /// This is the test that lets exhaustiveness see past literal arguments.
+    /// Both operands over-approximate, so disjointness is a proof: if the set
+    /// of possible arguments and the set the callee accepts cannot overlap,
+    /// then no argument can be accepted.
+    ///
+    /// It answers "definitely disjoint", never "definitely overlapping", so a
+    /// `?` (unknown) shape overlaps with everything and length ranges that
+    /// merely might miss each other do not count.
+    pub fn disjoint(&self, other: &Self) -> bool {
+        if self.never || other.never {
+            return true;
+        }
+
+        // A fixed length against a different fixed length cannot coincide.
+        if !self.open && !other.open && self.items.len() != other.items.len() {
+            return true;
+        }
+
+        // A closed format of n items against one that demands more than n.
+        if !self.open && other.items.len() > self.items.len() {
+            return true;
+        }
+        if !other.open && self.items.len() > other.items.len() {
+            return true;
+        }
+
+        // Disagreement at a shared position, where neither side is unknown.
+        self.items
+            .iter()
+            .zip(&other.items)
+            .any(|(left, right)| shapes_disjoint(*left, *right))
+    }
+
     fn extend(&mut self, other: &Self) {
         if other.never {
             return;
@@ -166,11 +201,37 @@ impl fmt::Display for Format {
     }
 }
 
+/// Two shapes are disjoint only when they are different and neither is
+/// unknown: a symbol is never a bracket, but an unknown term may be either.
+fn shapes_disjoint(left: Shape, right: Shape) -> bool {
+    left != right && left != Shape::Unknown && right != Shape::Unknown
+}
+
 /// Inferred formats for every function in a program.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Formats {
     /// What each function can be applied to, and what it can return.
     pub functions: Vec<(String, Format, Format)>,
+    /// Result formats keyed canonically, kept so an expression containing calls
+    /// can be abstracted against them.
+    results: HashMap<String, Format>,
+}
+
+impl Formats {
+    /// The format of an expression, with calls abstracted to what the callee
+    /// can return. An unknown callee -- an extern, say -- can return anything.
+    pub fn format_of(&self, terms: &[Term]) -> Format {
+        format_of_result(terms, &self.results)
+    }
+
+    /// What a function can be applied to, by canonical name.
+    pub fn arguments_of(&self, name: &str) -> Option<&Format> {
+        let canonical = canonical_identifier(name);
+        self.functions
+            .iter()
+            .find(|(candidate, _, _)| canonical_identifier(candidate) == canonical)
+            .map(|(_, arguments, _)| arguments)
+    }
 }
 
 impl fmt::Display for Formats {
@@ -248,7 +309,7 @@ pub fn infer_formats(program: &Program) -> Formats {
         })
         .collect();
 
-    Formats { functions }
+    Formats { functions, results }
 }
 
 /// What a function's sentences can be applied to: the join of its patterns.

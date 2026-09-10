@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Exhaustiveness widened past literal arguments (2026-09-10)
+
+Recognition impossible is now proven two ways. The exact one decides every
+sentence against an all-literal argument. The new one compares formats: if the
+argument's format cannot overlap the format the callee accepts, no argument can
+be accepted — so `<OnlyBracket s.A>` is now rejected, where before a variable
+argument was simply skipped. `Format::disjoint` answers "definitely disjoint",
+never "definitely overlapping", so `?` overlaps with everything and length
+ranges that merely might miss each other do not count.
+
+### Function formats — T-7, Turchin 1980 §2.3 (2026-09-10)
 ### Function formats — T-7, Turchin 1980 §2.3 (2026-09-10)
 
 `refal formats` reports what each function can be applied to and what it can

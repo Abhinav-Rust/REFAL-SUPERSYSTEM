@@ -47,11 +47,11 @@ objective to a gate. Not another Refal implementation.
 | Bootstrap semantics | 6.0% | 5.0 |
 | Refal machine / runtime | 19.5% | 17.0 |
 | Graph of states / Refal emission | 8.5% | 6.0 |
-| Static verification (Tier 1) | 15.0% | 10.0 |
+| Static verification (Tier 1) | 15.0% | 11.0 |
 | Compiler implemented in Refal | 25.5% | 20.0 |
 | Verified self-hosting fixpoint | 13.0% | 12.0 |
 | Conformance / release evidence | 4.0% | 1.5 |
-| **Total** | **100%** | **~80%** |
+| **Total** | **100%** | **~81%** |
 
 ### Done
 

@@ -79,12 +79,20 @@ specific `" = "` it shadowed.
 ### Recognition impossible — `proven defect`
 
 *Recognition impossible* — no sentence matched — is Refal's dominant runtime
-failure. A call is reported when the callee is defined in the program, every
-argument is a literal, and **no** sentence's pattern matches that argument.
+failure. A call is reported in two ways.
 
-The check under-approximates on purpose. A sentence whose pattern matches but
-whose conditions fail at run time is still counted as matching, so the analysis
-never reports a call that actually succeeds; it only misses some that fail.
+**Exact.** Every argument is a literal, so each sentence's pattern can be
+decided against it; if none matches, the call cannot succeed.
+
+**By format.** The argument's *format* is compared against the format the
+callee accepts, and if the two cannot overlap then no argument can be accepted.
+This sees past literals: `<OnlyBracket s.A>` is rejected because `s.` can only
+denote a symbol while `OnlyBracket` accepts `[B]`. `Format::disjoint` answers
+"definitely disjoint", never "definitely overlapping", so `?` overlaps with
+everything and length ranges that merely might miss each other do not count.
+
+Both under-approximate: a sentence whose conditions would fail at run time is
+still counted as matching, so neither can report a call that succeeds.
 
 ### Builtin domain errors — `proven defect`
 
@@ -103,10 +111,9 @@ disagree about what an integer literal denotes.
 
 ## Not yet implemented
 
-- Exhaustiveness for **non-literal** arguments. Today the argument must be known
-  exactly. Widening this needs function formats (Turchin 1980 §2.3) and shape
-  inference across call boundaries, so that a call site carries an abstract
-  argument shape instead of a literal one.
+- Exhaustiveness where the format lattice is too coarse to separate the
+  argument from what the callee accepts. Widening `Shape` — describing bracket
+  *contents*, or distinguishing character from number — is the next step.
 - The open-`e` complexity lint.
 - `-W` / `-D` / `-A` per-lint control. Today the mode sets the default for every
   lint at once.

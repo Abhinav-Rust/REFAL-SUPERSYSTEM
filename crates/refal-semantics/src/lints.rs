@@ -13,7 +13,7 @@ use refal_ast::{
     canonical_identifier, canonical_variable_index,
 };
 
-use crate::{Diagnostic, Severity};
+use crate::{Diagnostic, Formats, Severity, infer_formats};
 
 /// Reports sentences that can never be reached.
 ///
@@ -81,6 +81,7 @@ pub fn recognition_impossible(program: &Program, out: &mut Vec<Diagnostic>) {
             Item::Declaration(_) => None,
         })
         .collect();
+    let formats = infer_formats(program);
 
     for item in &program.items {
         let Item::Function(function) = item else {
@@ -88,9 +89,9 @@ pub fn recognition_impossible(program: &Program, out: &mut Vec<Diagnostic>) {
         };
         for sentence in &function.sentences {
             for condition in &sentence.conditions {
-                check_call_sites(&condition.result, &defined, out);
+                check_call_sites(&condition.result, &defined, &formats, out);
             }
-            check_call_sites(&sentence.result, &defined, out);
+            check_call_sites(&sentence.result, &defined, &formats, out);
         }
     }
 }
@@ -98,25 +99,26 @@ pub fn recognition_impossible(program: &Program, out: &mut Vec<Diagnostic>) {
 fn check_call_sites(
     terms: &[Term],
     defined: &HashMap<String, &Function>,
+    formats: &Formats,
     out: &mut Vec<Diagnostic>,
 ) {
     for term in terms {
         match &term.kind {
             TermKind::Call { name, args } => {
-                check_recognised(name, args, term.span, defined, out);
-                check_call_sites(args, defined, out);
+                check_recognised(name, args, term.span, defined, formats, out);
+                check_call_sites(args, defined, formats, out);
             }
-            TermKind::Bracket(inner) => check_call_sites(inner, defined, out),
+            TermKind::Bracket(inner) => check_call_sites(inner, defined, formats, out),
             TermKind::Block {
                 argument,
                 sentences,
             } => {
-                check_call_sites(argument, defined, out);
+                check_call_sites(argument, defined, formats, out);
                 for sentence in sentences {
                     for condition in &sentence.conditions {
-                        check_call_sites(&condition.result, defined, out);
+                        check_call_sites(&condition.result, defined, formats, out);
                     }
-                    check_call_sites(&sentence.result, defined, out);
+                    check_call_sites(&sentence.result, defined, formats, out);
                 }
             }
             TermKind::Symbol(_) | TermKind::Variable(_) => {}
@@ -124,38 +126,61 @@ fn check_call_sites(
     }
 }
 
+/// Two independent proofs of the same failure, in increasing order of reach.
+///
+/// The first is exact: every argument is a literal, so each sentence's pattern
+/// can be decided against it. The second is coarser but sees past literals,
+/// comparing the format of the argument against the format the callee accepts;
+/// if the two cannot overlap, no argument can be accepted. Both under-approximate
+/// -- a sentence whose conditions would fail still counts as matching -- so
+/// neither can report a call that actually succeeds.
 fn check_recognised(
     name: &str,
     args: &[Term],
     span: Span,
     defined: &HashMap<String, &Function>,
+    formats: &Formats,
     out: &mut Vec<Diagnostic>,
 ) {
-    // Only an argument that is entirely literal is known well enough to judge.
-    if !args
+    let exact = args
         .iter()
-        .all(|term| matches!(term.kind, TermKind::Symbol(_)))
-    {
-        return;
-    }
+        .all(|term| matches!(term.kind, TermKind::Symbol(_)));
     let Some(callee) = defined.get(&canonical_identifier(name)) else {
         return;
     };
-    if callee
-        .sentences
-        .iter()
-        .any(|sentence| pattern_subsumes(&sentence.pattern, args))
+
+    if exact
+        && callee
+            .sentences
+            .iter()
+            .any(|sentence| pattern_subsumes(&sentence.pattern, args))
     {
         return;
     }
 
-    out.push(Diagnostic {
-        severity: Severity::Deny,
-        message: format!(
-            "`<{name} ...>` always fails: no sentence of `{name}` matches this argument"
-        ),
-        span,
-    });
+    if let Some(accepted) = formats.arguments_of(name) {
+        let argument = formats.format_of(args);
+        if argument.disjoint(accepted) {
+            out.push(Diagnostic {
+                severity: Severity::Deny,
+                message: format!(
+                    "`<{name} ...>` always fails: `{name}` accepts {accepted}, but this call passes {argument}"
+                ),
+                span,
+            });
+            return;
+        }
+    }
+
+    if exact {
+        out.push(Diagnostic {
+            severity: Severity::Deny,
+            message: format!(
+                "`<{name} ...>` always fails: no sentence of `{name}` matches this argument"
+            ),
+            span,
+        });
+    }
 }
 
 fn report_dead(owner: &str, sentences: &[Sentence], out: &mut Vec<Diagnostic>) {
