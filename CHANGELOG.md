@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+### Tier 1: the severity model, dead sentences, and builtin domains (2026-09-10)
+
+`refal check` now takes `--classic` (default) or `--strict`. Classic accepts
+exactly what Turchin's Refal-5 accepts; strict additionally fails on what is
+statically *proven* — a runtime failure, or a sentence that can never run. The
+language is never modified, only the diagnostics. `docs/VERIFICATION-CONTRACT.md`
+is the normative reference.
+
+Two Tier 1 lints land with it:
+
+- **Dead sentences.** A sentence is dead when an earlier sentence has no
+  conditions and a pattern that matches everything the later one matches.
+  `pattern_subsumes` decides this by running Refal matching backwards, and is
+  deliberately conservative: numeric literals compare by exact text, and a
+  `t.`/`e.`-variable in the specific pattern is opaque because it may denote a
+  bracket that an `s.`-variable cannot match.
+- **Builtin domain errors.** `<Div 4 0>`, `<Numb 'abc'>` and wrong-arity
+  arithmetic are rejected when every argument is a literal, so the failure is
+  proven rather than guessed.
+
+The dead-sentence check found a real ordering bug in our own
+`examples/compiler-refal-lexer-subset.ref`: `" "` preceded the more specific
+`" = "` it shadowed, so `" = "` was unreachable. Fixed by reordering; the
+emitted token stream is unchanged.
+
+`--strict` over the whole corpus produces zero rejections that are not already
+known to be genuine, which is the Phase 3 soundness gate.
+
 ### Full-corpus emitter parity and a variable-index diagnostic fix (2026-09-10)
 
 `compiler.ref` now emits **every** example in `examples/` byte-identically to

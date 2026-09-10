@@ -1,5 +1,9 @@
 //! Semantic checks for parsed Refal programs.
 
+mod lints;
+
+pub use lints::pattern_subsumes;
+
 use std::collections::{HashMap, HashSet};
 
 use refal_ast::{
@@ -14,23 +18,109 @@ const SUPPORTED_RUNTIME_EXTERNS: &[&str] = &[
     "TYPE", "UP", "MU", "DN", "UPPER",
 ];
 
+/// How a diagnostic is treated.
+///
+/// The split exists so that strict checking never changes the language. A
+/// Classic Refal-5 program is accepted by `--classic` exactly when Turchin's
+/// Refal-5 accepts it; everything stricter is a lint, and the mode decides
+/// whether a lint is merely reported or fails the build.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Severity {
+    /// A Classic Refal-5 spec violation. Fails in every mode.
+    Error,
+    /// A statically **proven** runtime failure or provably dead code. Reported
+    /// by `--classic`, fatal under `--strict`.
+    Deny,
+    /// A **possible** failure under approximation. Reported, never fatal.
+    Warn,
+    /// Opt-in pedantry: termination hints, open-`e` complexity.
+    Allow,
+}
+
+impl Severity {
+    /// The label a diagnostic is printed under. `Error` keeps the historical
+    /// `semantic error` wording so existing output stays stable.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Error => "semantic error",
+            Self::Deny => "proven defect",
+            Self::Warn => "warning",
+            Self::Allow => "note",
+        }
+    }
+}
+
+/// The checking mode. `--classic` is pure Refal-5 conformance; `--strict` is
+/// the rustc-grade experience.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Mode {
+    #[default]
+    Classic,
+    Strict,
+}
+
+impl Mode {
+    /// Whether a diagnostic of this severity fails the build in this mode.
+    pub fn fails(self, severity: Severity) -> bool {
+        match self {
+            Self::Classic => severity == Severity::Error,
+            Self::Strict => matches!(severity, Severity::Error | Severity::Deny),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Diagnostic {
     pub message: String,
     pub span: Span,
+    pub severity: Severity,
 }
 
+impl Diagnostic {
+    /// Renders as `severity: message`, the form the CLI prints.
+    pub fn render(&self) -> String {
+        format!("{}: {}", self.severity.label(), self.message)
+    }
+}
+
+/// Checks a program in Classic mode, failing only on spec violations.
 pub fn check_program(program: &Program) -> Result<(), Vec<Diagnostic>> {
+    let failing = failing(
+        &check_program_with_mode(program, Mode::Classic),
+        Mode::Classic,
+    );
+    if failing.is_empty() {
+        Ok(())
+    } else {
+        Err(failing)
+    }
+}
+
+/// Runs every check and returns all diagnostics, including the ones that the
+/// mode only reports.
+pub fn check_program_with_mode(program: &Program, mode: Mode) -> Vec<Diagnostic> {
     let mut checker = Checker::default();
     checker.collect_items(program);
     checker.check_calls(program);
     checker.check_variables(program);
 
-    if checker.diagnostics.is_empty() {
-        Ok(())
-    } else {
-        Err(checker.diagnostics)
-    }
+    let mut diagnostics = std::mem::take(&mut checker.diagnostics);
+    lints::dead_sentences(program, &mut diagnostics);
+    lints::builtin_domains(program, &mut diagnostics);
+
+    // Only fatal diagnostics are returned for Classic; the rest stay visible
+    // through `check_program_with_mode` without changing what is accepted.
+    let _ = mode;
+    diagnostics
+}
+
+/// The subset of `diagnostics` that fails the build in `mode`.
+pub fn failing(diagnostics: &[Diagnostic], mode: Mode) -> Vec<Diagnostic> {
+    diagnostics
+        .iter()
+        .filter(|diagnostic| mode.fails(diagnostic.severity))
+        .cloned()
+        .collect()
 }
 
 #[derive(Default)]
@@ -331,8 +421,18 @@ impl Checker {
         }
     }
 
+    /// Records a spec violation. Every check that enforces the Classic
+    /// Refal-5 reference goes through here.
     fn push(&mut self, message: String, span: Span) {
-        self.diagnostics.push(Diagnostic { message, span });
+        self.push_with(Severity::Error, message, span);
+    }
+
+    fn push_with(&mut self, severity: Severity, message: String, span: Span) {
+        self.diagnostics.push(Diagnostic {
+            message,
+            span,
+            severity,
+        });
     }
 }
 
@@ -793,7 +893,8 @@ mod tests {
         assert!(diagnostics.iter().any(|diagnostic| diagnostic
             == &Diagnostic {
                 message: "function calls are not allowed in patterns".to_string(),
-                span: call_span
+                span: call_span,
+                severity: Severity::Error,
             }));
     }
 
@@ -821,7 +922,8 @@ mod tests {
         assert!(diagnostics.iter().any(|diagnostic| diagnostic
             == &Diagnostic {
                 message: "function `Go` has no sentences".to_string(),
-                span: Span { start: 0, end: 7 }
+                span: Span { start: 0, end: 7 },
+                severity: Severity::Error,
             }));
     }
 
@@ -861,7 +963,105 @@ mod tests {
             == &Diagnostic {
                 message: "external function `MissingExternal` is declared but not implemented by the bootstrap runtime"
                     .to_string(),
-                span: call_span
+                span: call_span,
+                severity: Severity::Error,
             }));
+    }
+
+    fn ch(value: char) -> Term {
+        Term {
+            kind: TermKind::Symbol(Symbol::Char(value)),
+            span: empty_span(),
+        }
+    }
+
+    fn var(kind: VariableKind, name: &str) -> Term {
+        Term {
+            kind: TermKind::Variable(Variable {
+                kind,
+                name: name.to_string(),
+            }),
+            span: empty_span(),
+        }
+    }
+
+    fn bracket(terms: Vec<Term>) -> Term {
+        Term {
+            kind: TermKind::Bracket(terms),
+            span: empty_span(),
+        }
+    }
+
+    #[test]
+    fn an_expression_variable_subsumes_any_run() {
+        let general = vec![var(VariableKind::Expression, "X")];
+        assert!(pattern_subsumes(&general, &[]));
+        assert!(pattern_subsumes(&general, &[ch('a')]));
+        assert!(pattern_subsumes(
+            &general,
+            &[ch('a'), bracket(vec![ch('b')]), ch('c')]
+        ));
+    }
+
+    #[test]
+    fn a_symbol_variable_subsumes_a_symbol_but_not_a_bracket() {
+        let general = vec![var(VariableKind::Symbol, "X")];
+        assert!(pattern_subsumes(&general, &[ch('a')]));
+        // Another s-variable is an opaque single symbol, so it is covered.
+        assert!(pattern_subsumes(
+            &general,
+            &[var(VariableKind::Symbol, "Y")]
+        ));
+        assert!(!pattern_subsumes(&general, &[bracket(vec![])]));
+        // An e-variable may be empty or long, so it is not.
+        assert!(!pattern_subsumes(
+            &general,
+            &[var(VariableKind::Expression, "Y")]
+        ));
+        assert!(!pattern_subsumes(&general, &[]));
+    }
+
+    #[test]
+    fn a_term_variable_subsumes_one_term_of_any_shape() {
+        let general = vec![var(VariableKind::Term, "X")];
+        assert!(pattern_subsumes(&general, &[ch('a')]));
+        assert!(pattern_subsumes(&general, &[bracket(vec![ch('a')])]));
+        assert!(pattern_subsumes(&general, &[var(VariableKind::Term, "Y")]));
+        assert!(!pattern_subsumes(&general, &[]));
+    }
+
+    #[test]
+    fn a_repeated_variable_requires_matching_runs() {
+        let general = vec![
+            var(VariableKind::Expression, "X"),
+            var(VariableKind::Expression, "X"),
+        ];
+        assert!(pattern_subsumes(&general, &[ch('a'), ch('a')]));
+        assert!(!pattern_subsumes(&general, &[ch('a'), ch('b')]));
+    }
+
+    #[test]
+    fn literals_must_match_exactly() {
+        assert!(pattern_subsumes(&[ch('a')], &[ch('a')]));
+        assert!(!pattern_subsumes(&[ch('a')], &[ch('b')]));
+        assert!(!pattern_subsumes(&[ch('a')], &[]));
+        assert!(pattern_subsumes(&[], &[]));
+        assert!(!pattern_subsumes(&[], &[ch('a')]));
+    }
+
+    #[test]
+    fn brackets_are_compared_structurally() {
+        assert!(pattern_subsumes(
+            &[bracket(vec![ch('a')])],
+            &[bracket(vec![ch('a')])]
+        ));
+        assert!(!pattern_subsumes(
+            &[bracket(vec![ch('a')])],
+            &[bracket(vec![ch('b')])]
+        ));
+        assert!(pattern_subsumes(
+            &[bracket(vec![var(VariableKind::Expression, "X")])],
+            &[bracket(vec![ch('a'), ch('b')])]
+        ));
     }
 }

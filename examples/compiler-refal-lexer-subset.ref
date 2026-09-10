@@ -8,11 +8,15 @@ $ENTRY Go {
   (e.Source) = <Prout <Lex e.Source>>;
 }
 
+* Sentence order matters: `" "` matches any expression beginning with a space,
+* so it must come after the more specific `" = "` it would otherwise shadow.
+* The Tier 1 dead-sentence analysis found this ordering bug; the emitted token
+* stream is unchanged, because both routes produce `Equal`.
 Lex {
   = ;
+  " = " e.Rest = "Equal " <Lex e.Rest>;
   " " e.Rest = <Lex e.Rest>;
   "$EXTERN " e.Rest = "KwExtern " <LexNameExtern e.Rest>;
-  " = " e.Rest = "Equal " <Lex e.Rest>;
   "=" e.Rest = "Equal " <Lex e.Rest>;
   "; " e.Rest = "Semicolon " <Lex e.Rest>;
   ";" e.Rest = "Semicolon";

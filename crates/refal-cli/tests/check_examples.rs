@@ -1881,6 +1881,134 @@ fn refal_authored_emitter_matches_lower_across_the_whole_corpus() {
     );
 }
 
+fn check_path(path: &str, extra: &[&str]) -> std::process::Output {
+    let mut command = Command::new(refal_bin());
+    command.args(["check", path]);
+    command.args(extra);
+    command.output().expect("run refal binary")
+}
+
+#[test]
+fn strict_mode_fails_on_statically_proven_defects() {
+    // The published guarantee: `--strict` rejects every program in which a
+    // recognition-impossible, a builtin domain error, or a dead sentence is
+    // reachable. Each case here is one of those three.
+    let cases = [
+        // `e.X` matches every argument and carries no condition, so the second
+        // sentence can never run.
+        ("$ENTRY Go {\n  e.X = 1;\n  s.Y = 2;\n}\n", "unreachable"),
+        (
+            "$EXTERN Div;\n$ENTRY Go {\n  = <Div 4 0>;\n}\n",
+            "division by zero",
+        ),
+        (
+            "$EXTERN Numb;\n$ENTRY Go {\n  = <Numb 'abc'>;\n}\n",
+            "decimal digits",
+        ),
+        (
+            "$EXTERN Add;\n$ENTRY Go {\n  = <Add 1>;\n}\n",
+            "two integer numbers",
+        ),
+    ];
+    for (source, expected) in cases {
+        let path = scratch_source("refal-strict", source);
+        let rendered = path.to_string_lossy().into_owned();
+
+        let strict = check_path(&rendered, &["--strict"]);
+        assert!(
+            !strict.status.success(),
+            "strict accepted a proven defect: {source:?}"
+        );
+        let reported = String::from_utf8_lossy(&strict.stderr);
+        assert!(
+            reported.contains(expected),
+            "strict reported {reported:?}, which does not mention {expected:?}"
+        );
+
+        // Classic accepts exactly what Turchin's Refal-5 accepts, and all four
+        // of these are legal Refal-5 programs. Only the diagnostics differ.
+        let classic = check_path(&rendered, &[]);
+        assert!(
+            classic.status.success(),
+            "classic rejected a legal Refal-5 program: {source:?}\n{}",
+            String::from_utf8_lossy(&classic.stderr)
+        );
+        let _ = fs::remove_file(&path);
+    }
+}
+
+#[test]
+fn classic_mode_reports_lints_without_failing_the_build() {
+    // A lint that is not reported is a lint nobody will act on, so classic mode
+    // still prints it -- it just does not refuse to run the program.
+    let source = "$ENTRY Go {\n  e.X = 1;\n  s.Y = 2;\n}\n";
+    let path = scratch_source("refal-classic", source);
+    let classic = check_path(&path.to_string_lossy(), &[]);
+
+    assert!(
+        classic.status.success(),
+        "classic must accept legal Refal-5: {}",
+        String::from_utf8_lossy(&classic.stderr)
+    );
+    let reported = String::from_utf8_lossy(&classic.stderr);
+    assert!(
+        reported.contains("proven defect") && reported.contains("unreachable"),
+        "classic should report the lint without failing, got {reported:?}"
+    );
+    let _ = fs::remove_file(&path);
+}
+
+#[test]
+fn strict_mode_has_no_false_positives_on_the_corpus() {
+    // The Phase 3 gate. A sound analysis may miss defects; it may never invent
+    // them. Everything strict rejects here must already be known to be broken.
+    let known_defective = [
+        (
+            "runtime-invalid-numb.ref",
+            "deliberately provokes a Numb domain error at run time",
+        ),
+        (
+            "runtime-unimplemented-extern.ref",
+            "deliberately declares an extern the bootstrap does not implement",
+        ),
+    ];
+
+    let mut names: Vec<String> = fs::read_dir(workspace_path("examples"))
+        .expect("read the examples directory")
+        .filter_map(|entry| {
+            let path = entry.ok()?.path();
+            let name = path.file_name()?.to_string_lossy().into_owned();
+            (name.ends_with(".ref") && !name.starts_with("bad-")).then_some(name)
+        })
+        .collect();
+    names.sort();
+    names.retain(|name| !known_defective.iter().any(|(known, _)| known == name));
+
+    let mut failures = Vec::new();
+    for name in &names {
+        let output = check_path(&workspace_path(&format!("examples/{name}")), &["--strict"]);
+        if !output.status.success() {
+            failures.push(format!(
+                "{name}:\n{}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+    }
+
+    assert!(
+        names.len() >= 40,
+        "the corpus should be swept, only checked {}",
+        names.len()
+    );
+    assert!(
+        failures.is_empty(),
+        "strict mode rejected {} of {} sound examples -- these are false positives:\n{}",
+        failures.len(),
+        names.len(),
+        failures.join("\n")
+    );
+}
+
 #[test]
 fn compiler_ref_reaches_a_self_hosting_fixpoint() {
     // T-10: the compiler applied to itself. Rust compiles compiler.ref to C1,

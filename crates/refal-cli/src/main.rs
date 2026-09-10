@@ -23,6 +23,7 @@ fn main() {
         process::exit(2);
     };
     let input_args: Vec<String> = args.collect();
+    let (mode, input_args) = parse_mode(input_args);
 
     if command == "differential" && input_args.first().is_some_and(|flag| flag == "--corpus") {
         differential_corpus(&path);
@@ -60,18 +61,34 @@ fn main() {
         }
     };
 
-    if let Err(diagnostics) = refal_semantics::check_program(&program) {
-        for diagnostic in diagnostics {
-            eprintln!(
-                "{}",
-                render_ast_diagnostic(
-                    "semantic error",
-                    &source,
-                    diagnostic.span,
-                    &diagnostic.message
-                )
-            );
-        }
+    let diagnostics = refal_semantics::check_program_with_mode(&program, mode);
+    let fatal = refal_semantics::failing(&diagnostics, mode);
+
+    // `check` is where the diagnosis is the point, so it reports everything a
+    // mode knows, including the lints that do not fail the build. Every other
+    // command stays quiet about advice and only reports what it refuses to run.
+    let reported = if command == "check" {
+        diagnostics.iter().collect::<Vec<_>>()
+    } else {
+        diagnostics
+            .iter()
+            .filter(|diagnostic| mode.fails(diagnostic.severity))
+            .collect::<Vec<_>>()
+    };
+
+    for diagnostic in reported {
+        eprintln!(
+            "{}",
+            render_ast_diagnostic(
+                diagnostic.severity.label(),
+                &source,
+                diagnostic.span,
+                &diagnostic.message
+            )
+        );
+    }
+
+    if !fatal.is_empty() {
         process::exit(1);
     }
 
@@ -101,11 +118,32 @@ fn main() {
     }
 }
 
+/// Pulls `--classic` / `--strict` out of the argument list.
+///
+/// `--classic` accepts exactly what Turchin's Refal-5 accepts, so only a spec
+/// violation fails the build. `--strict` additionally fails on what is
+/// statically proven: a runtime failure, or a sentence that cannot be reached.
+/// The language itself is never modified -- only the diagnostics differ.
+fn parse_mode(args: Vec<String>) -> (refal_semantics::Mode, Vec<String>) {
+    let mut mode = refal_semantics::Mode::Classic;
+    let mut rest = Vec::with_capacity(args.len());
+    for arg in args {
+        match arg.as_str() {
+            "--classic" => mode = refal_semantics::Mode::Classic,
+            "--strict" => mode = refal_semantics::Mode::Strict,
+            other => rest.push(other.to_owned()),
+        }
+    }
+    (mode, rest)
+}
+
 fn print_usage() {
     eprintln!("Usage: refal <command> <file.ref> [args...]");
     eprintln!();
     eprintln!("Commands:");
     eprintln!("  check      Check a Refal source file for syntax and semantic errors");
+    eprintln!("             [--classic] accept exactly what Refal-5 accepts (default)");
+    eprintln!("             [--strict]  also fail on statically proven defects");
     eprintln!("  dump-ast   Print the parsed AST");
     eprintln!("  lower      Lower checked Refal source to normalized Core Refal");
     eprintln!("  graph      Print the deterministic seed graph of sentence states and calls");

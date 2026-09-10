@@ -34,9 +34,9 @@ objective to a gate. Not another Refal implementation.
 
 | | |
 |---|---|
-| Honest completion | **~66%** |
-| Tests | 205 passing, 0 clippy, fmt clean |
-| Last commit | `c8bf9a9` then this commit |
+| Honest completion | **~76%** |
+| Tests | 216 passing, 0 clippy, fmt clean |
+| Last commit | `824cb72` then this commit |
 | Working tree | clean |
 
 ### Workstream credit
@@ -47,11 +47,11 @@ objective to a gate. Not another Refal implementation.
 | Bootstrap semantics | 6.0% | 5.0 |
 | Refal machine / runtime | 19.5% | 17.0 |
 | Graph of states / Refal emission | 8.5% | 6.0 |
-| Static verification (Tier 1) | 15.0% | 2.0 |
-| Compiler implemented in Refal | 25.5% | 18.0 |
-| Verified self-hosting fixpoint | 13.0% | 10.0 |
+| Static verification (Tier 1) | 15.0% | 7.0 |
+| Compiler implemented in Refal | 25.5% | 20.0 |
+| Verified self-hosting fixpoint | 13.0% | 12.0 |
 | Conformance / release evidence | 4.0% | 1.5 |
-| **Total** | **100%** | **~66%** |
+| **Total** | **100%** | **~76%** |
 
 ### Done
 
@@ -71,10 +71,18 @@ objective to a gate. Not another Refal implementation.
 - Refal-authored checker in `examples/compiler.ref`, the integrated pipeline
   (`b3588ad`).
 - Refal-authored emitter: `compiler.ref` emits Core Refal byte-identical to the
-  Rust bootstrap's `lower` across the valid corpus and edge cases.
+  Rust bootstrap's `lower` across the **whole corpus** — 47 examples, zero
+  divergences — including `sX` shorthand, `/* */` block comments and reals.
+- **T-10 closed at full credit**: C1 = C2 = C3 at 12,599 bytes over the full
+  Classic grammar, every generation checked.
+- **Tier 1 lands**: `--classic` / `--strict`, dead-sentence detection by pattern
+  subsumption, and builtin domain errors for literal arguments. Zero false
+  positives across the corpus. `docs/VERIFICATION-CONTRACT.md` is normative.
 
 ### Open
 
+- **Tier 1 exhaustiveness** — a *recognition impossible* that is reachable. This
+  is the largest gap in the published guarantee, and it needs function formats.
 - **T-1** a non-trivial program transformer written in Refal.
 - **T-4** complete driving over a graph of states.
 - **T-5** full generalization (1980 §4.6, 1988).
@@ -82,31 +90,37 @@ objective to a gate. Not another Refal implementation.
 - **T-7** function formats (§2.3).
 - **T-8** metacodes (Ch. 1.3).
 - **T-9** a metasystem transition actually occurs — the heart of the claim.
-- **T-10 (partial)** C1 → C2 → C3 all check and C2 ≡ C3 at 10,921 bytes. Full
-  credit needs blocks, `sX` and `/* */` so the whole Classic grammar is covered.
 
 ---
 
 ## NEXT ACTION
 
-**Complete the Classic grammar in the Refal compiler, then take T-10 to full
-credit.**
+**Tier 1 exhaustiveness (recognition-impossible reachability), via function
+formats (T-7).**
 
-T-10 is closed for a substantial subset: `compiler.ref` compiles its own source
-and reaches a fixpoint. It does not yet parse blocks, `sX` shorthand or
-`/* */` comments, and until it does the grammar coverage claim cannot be made.
+The published guarantee promises that `--strict` rejects every program in which
+a *recognition impossible* is reachable. Two of the three promised classes are
+now implemented; this is the third, and it is the one that matters most,
+because *recognition impossible* is Refal's dominant runtime failure.
 
-Blocks are done. Remaining for a full-grammar T-10:
+Order:
 
-1. **`sX` shorthand** in the lexer — a one-character variable index with no dot.
-   Needs the juxtaposition case (`s1s2s3` is three variables) from FRONTEND-
-   COVERAGE.md.
-2. **`/* */` block comments** in the lexer.
-3. Re-run the fixpoint and extend the byte-for-byte corpus to every example the
-   grammar now covers.
-4. Then **T-9**: make a metasystem transition actually happen — an interpreter
+1. **Function formats (T-7, 1980 §2.3).** Infer, for each function, the set of
+   argument shapes its sentences can accept, and propagate across call
+   boundaries to a fixpoint. This is the lattice exhaustiveness is computed
+   over, so it comes first.
+2. **Exhaustiveness.** For each reachable call, check the inferred format
+   against the callee's accepted shapes and report the shapes no sentence
+   handles. Severity `Warn` until the format lattice is precise enough to be
+   trusted as `Deny` — a false positive here would be worse than a miss.
+3. Then **T-9**: make a metasystem transition actually happen — an interpreter
    driven over a program yielding a specialised residual program. This is the
    heart of Turchin's claim and the largest remaining piece.
+
+The soundness gate is unchanged and non-negotiable:
+`strict_mode_has_no_false_positives_on_the_corpus` must stay green. If a new
+check rejects an example the repository believes is sound, the check is wrong,
+not the example — unless it has found a real bug, as the dead-sentence check did.
 
 Reference: `format_program` / `format_sentence` in
 `crates/refal-core/src/lib.rs` define the exact output grammar. Note that
