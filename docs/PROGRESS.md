@@ -34,7 +34,7 @@ objective to a gate. Not another Refal implementation.
 
 | | |
 |---|---|
-| Honest completion | **~76%** |
+| Honest completion | **~78%** |
 | Tests | 216 passing, 0 clippy, fmt clean |
 | Last commit | `824cb72` then this commit |
 | Working tree | clean |
@@ -47,11 +47,11 @@ objective to a gate. Not another Refal implementation.
 | Bootstrap semantics | 6.0% | 5.0 |
 | Refal machine / runtime | 19.5% | 17.0 |
 | Graph of states / Refal emission | 8.5% | 6.0 |
-| Static verification (Tier 1) | 15.0% | 7.0 |
+| Static verification (Tier 1) | 15.0% | 9.0 |
 | Compiler implemented in Refal | 25.5% | 20.0 |
 | Verified self-hosting fixpoint | 13.0% | 12.0 |
 | Conformance / release evidence | 4.0% | 1.5 |
-| **Total** | **100%** | **~76%** |
+| **Total** | **100%** | **~78%** |
 
 ### Done
 
@@ -75,14 +75,14 @@ objective to a gate. Not another Refal implementation.
   divergences — including `sX` shorthand, `/* */` block comments and reals.
 - **T-10 closed at full credit**: C1 = C2 = C3 at 12,599 bytes over the full
   Classic grammar, every generation checked.
-- **Tier 1 lands**: `--classic` / `--strict`, dead-sentence detection by pattern
-  subsumption, and builtin domain errors for literal arguments. Zero false
-  positives across the corpus. `docs/VERIFICATION-CONTRACT.md` is normative.
+- **Tier 1 delivers the published guarantee**: `--classic` / `--strict`, dead
+  sentences, recognition impossible and builtin domain errors, with zero false
+  positives across the corpus. All three classes the guarantee names are now
+  implemented. `docs/VERIFICATION-CONTRACT.md` is normative.
 
 ### Open
 
-- **Tier 1 exhaustiveness** — a *recognition impossible* that is reachable. This
-  is the largest gap in the published guarantee, and it needs function formats.
+- **Exhaustiveness for non-literal arguments**, which needs function formats.
 - **T-1** a non-trivial program transformer written in Refal.
 - **T-4** complete driving over a graph of states.
 - **T-5** full generalization (1980 §4.6, 1988).

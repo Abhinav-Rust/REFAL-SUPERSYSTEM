@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Tier 1: recognition impossible (2026-09-10)
+
+The third and most important class in the published guarantee. *Recognition
+impossible* — no sentence matched — is Refal's dominant runtime failure, and
+`--strict` now proves it whenever a call's argument is entirely literal: if no
+sentence of the callee matches that argument, the call cannot succeed. It
+under-approximates deliberately, counting a sentence whose conditions would
+fail as still matching, so it never reports a call that actually succeeds.
+
+With this, all three classes the guarantee names are implemented: recognition
+impossible, builtin domain errors, and dead sentences.
+
 ### Tier 1: the severity model, dead sentences, and builtin domains (2026-09-10)
 
 `refal check` now takes `--classic` (default) or `--strict`. Classic accepts

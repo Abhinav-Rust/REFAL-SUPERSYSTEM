@@ -9,8 +9,8 @@
 use std::collections::HashMap;
 
 use refal_ast::{
-    Item, Program, Sentence, Span, Symbol, Term, TermKind, VariableKind, canonical_identifier,
-    canonical_variable_index,
+    Function, Item, Program, Sentence, Span, Symbol, Term, TermKind, VariableKind,
+    canonical_identifier, canonical_variable_index,
 };
 
 use crate::{Diagnostic, Severity};
@@ -61,6 +61,101 @@ pub fn builtin_domains(program: &Program, out: &mut Vec<Diagnostic>) {
             check_terms(&sentence.result, out);
         }
     }
+}
+
+/// Reports calls that are certain to fail because no sentence of the callee
+/// matches the argument.
+///
+/// *Recognition impossible* is Refal's dominant runtime failure. It is proven
+/// here only when every argument is a literal, so the callee's argument is
+/// known exactly and `pattern_subsumes` can decide each sentence's pattern
+/// against it. A sentence whose pattern matches but whose conditions fail is
+/// treated as matching, which is why this under-approximates: it never reports
+/// a call that actually succeeds.
+pub fn recognition_impossible(program: &Program, out: &mut Vec<Diagnostic>) {
+    let defined: HashMap<String, &Function> = program
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            Item::Function(function) => Some((canonical_identifier(&function.name), function)),
+            Item::Declaration(_) => None,
+        })
+        .collect();
+
+    for item in &program.items {
+        let Item::Function(function) = item else {
+            continue;
+        };
+        for sentence in &function.sentences {
+            for condition in &sentence.conditions {
+                check_call_sites(&condition.result, &defined, out);
+            }
+            check_call_sites(&sentence.result, &defined, out);
+        }
+    }
+}
+
+fn check_call_sites(
+    terms: &[Term],
+    defined: &HashMap<String, &Function>,
+    out: &mut Vec<Diagnostic>,
+) {
+    for term in terms {
+        match &term.kind {
+            TermKind::Call { name, args } => {
+                check_recognised(name, args, term.span, defined, out);
+                check_call_sites(args, defined, out);
+            }
+            TermKind::Bracket(inner) => check_call_sites(inner, defined, out),
+            TermKind::Block {
+                argument,
+                sentences,
+            } => {
+                check_call_sites(argument, defined, out);
+                for sentence in sentences {
+                    for condition in &sentence.conditions {
+                        check_call_sites(&condition.result, defined, out);
+                    }
+                    check_call_sites(&sentence.result, defined, out);
+                }
+            }
+            TermKind::Symbol(_) | TermKind::Variable(_) => {}
+        }
+    }
+}
+
+fn check_recognised(
+    name: &str,
+    args: &[Term],
+    span: Span,
+    defined: &HashMap<String, &Function>,
+    out: &mut Vec<Diagnostic>,
+) {
+    // Only an argument that is entirely literal is known well enough to judge.
+    if !args
+        .iter()
+        .all(|term| matches!(term.kind, TermKind::Symbol(_)))
+    {
+        return;
+    }
+    let Some(callee) = defined.get(&canonical_identifier(name)) else {
+        return;
+    };
+    if callee
+        .sentences
+        .iter()
+        .any(|sentence| pattern_subsumes(&sentence.pattern, args))
+    {
+        return;
+    }
+
+    out.push(Diagnostic {
+        severity: Severity::Deny,
+        message: format!(
+            "`<{name} ...>` always fails: no sentence of `{name}` matches this argument"
+        ),
+        span,
+    });
 }
 
 fn report_dead(owner: &str, sentences: &[Sentence], out: &mut Vec<Diagnostic>) {

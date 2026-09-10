@@ -106,6 +106,7 @@ pub fn check_program_with_mode(program: &Program, mode: Mode) -> Vec<Diagnostic>
 
     let mut diagnostics = std::mem::take(&mut checker.diagnostics);
     lints::dead_sentences(program, &mut diagnostics);
+    lints::recognition_impossible(program, &mut diagnostics);
     lints::builtin_domains(program, &mut diagnostics);
 
     // Only fatal diagnostics are returned for Classic; the rest stay visible

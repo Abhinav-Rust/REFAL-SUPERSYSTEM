@@ -1909,6 +1909,11 @@ fn strict_mode_fails_on_statically_proven_defects() {
             "$EXTERN Add;\n$ENTRY Go {\n  = <Add 1>;\n}\n",
             "two integer numbers",
         ),
+        // *Recognition impossible*: no sentence of `Classify` matches 'a'.
+        (
+            "$ENTRY Go {\n  = <Classify 'a'>;\n}\nClassify {\n  'b' = 1;\n  'c' = 2;\n}\n",
+            "no sentence of `Classify` matches",
+        ),
     ];
     for (source, expected) in cases {
         let path = scratch_source("refal-strict", source);

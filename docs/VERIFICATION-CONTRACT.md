@@ -76,6 +76,16 @@ This check has already earned its place. It found a genuine ordering bug in
 `examples/compiler-refal-lexer-subset.ref`, where `" "` preceded the more
 specific `" = "` it shadowed.
 
+### Recognition impossible — `proven defect`
+
+*Recognition impossible* — no sentence matched — is Refal's dominant runtime
+failure. A call is reported when the callee is defined in the program, every
+argument is a literal, and **no** sentence's pattern matches that argument.
+
+The check under-approximates on purpose. A sentence whose pattern matches but
+whose conditions fail at run time is still counted as matching, so the analysis
+never reports a call that actually succeeds; it only misses some that fail.
+
 ### Builtin domain errors — `proven defect`
 
 A call is only judged when **every** argument is a literal, so the value the
@@ -93,10 +103,10 @@ disagree about what an integer literal denotes.
 
 ## Not yet implemented
 
-- Exhaustiveness: a *recognition impossible* that is reachable for an argument
-  shape no sentence handles. This is the largest gap in the published guarantee.
-- Function formats (Turchin 1980 §2.3) and shape inference across call
-  boundaries, which is what exhaustiveness needs to be precise.
+- Exhaustiveness for **non-literal** arguments. Today the argument must be known
+  exactly. Widening this needs function formats (Turchin 1980 §2.3) and shape
+  inference across call boundaries, so that a call site carries an abstract
+  argument shape instead of a literal one.
 - The open-`e` complexity lint.
 - `-W` / `-D` / `-A` per-lint control. Today the mode sets the default for every
   lint at once.
