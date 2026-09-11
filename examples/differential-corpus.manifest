@@ -63,3 +63,5 @@ residual|block-ending.ref|
 residual|metasystem-fuse.ref|
 residual|metasystem-unroll.ref|
 residual|metacode-macrodigit.ref|
+positive|case-split.ref|abc
+residual|case-split.ref|abc

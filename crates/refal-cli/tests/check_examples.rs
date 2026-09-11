@@ -2600,7 +2600,11 @@ fn emits_valid_refal_for_a_symbolic_identity_residual() {
 }
 
 #[test]
-fn preserves_an_ambiguous_symbolic_call_as_a_residual() {
+fn partitions_an_ambiguous_symbolic_call_instead_of_leaving_it_whole() {
+    // This case used to end at `<Choose e.Input>`: the sentences of `Choose`
+    // disagree on the argument's shape, matching could not choose between
+    // them, and the driver gave up. It now partitions the argument, which is
+    // exactly what the ambiguity was about.
     let output = symbolic_drive_file("examples/symbolic-branch.ref", &[]);
     assert!(
         output.status.success(),
@@ -2609,7 +2613,7 @@ fn preserves_an_ambiguous_symbolic_call_as_a_residual() {
     );
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
-        "steps: 2\nvisited: S0\nresidual: <Choose e.Input>\n"
+        "steps: 5\nvisited: S0 -> S1 -> S2\nresidual: <Split1 e.Input>\n"
     );
 }
 
@@ -3787,9 +3791,11 @@ fn a_residue_retains_the_user_functions_it_still_calls() {
     );
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
 
+    // The argument is partitioned first, so it is the branches that still call
+    // `ContainsX` rather than the entry.
     assert!(
-        stdout.contains("<ContainsX e.Input>"),
-        "an undecidable call should stay a call:\n{stdout}"
+        stdout.contains("<ContainsX s.H1 e.T1>"),
+        "an undecidable branch should stay a call:\n{stdout}"
     );
     assert!(
         stdout.contains("ContainsX {"),
@@ -3941,4 +3947,122 @@ fn the_refal_authored_compiler_matches_lower_on_every_lowerable_example() {
         compared >= 51,
         "only {compared} examples were lowerable; the corpus has shrunk"
     );
+}
+
+/// Case splitting: driving does not stop when matching cannot decide a
+/// configuration. It partitions the argument into cases the matcher *can*
+/// decide, and drives each one (Turchin 1980 §4.2).
+///
+/// `Classify` distinguishes the empty expression, a symbol-headed one and a
+/// bracket-headed one. Matching cannot choose between those sentences while
+/// the argument is a variable, so the split is what makes the dispatch
+/// decidable -- and once it is decided, the residue needs no call to
+/// `Classify` at all.
+#[test]
+fn driving_splits_a_wholly_unknown_argument_into_decidable_cases() {
+    let output = residualize_driven_file("examples/case-split.ref", &[]);
+    assert!(
+        output.status.success(),
+        "unexpected stderr:/n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+
+    assert!(
+        stdout.contains("<Split1 e.Input>"),
+        "the entry should call the generated partition:/n{stdout}"
+    );
+    // The three branches are exactly the partition, and each one is decided.
+    assert!(
+        stdout.contains("  = 'e' 'm' 'p' 't' 'y';"),
+        "the empty branch is missing:/n{stdout}"
+    );
+    assert!(
+        stdout.contains("s.H1 e.T1 = 's' 'y' 'm'"),
+        "the symbol-headed branch is missing:/n{stdout}"
+    );
+    assert!(
+        stdout.contains("(e.B1) e.T1 = 'b' 'r' 'a' 'c' 'k'"),
+        "the bracket-headed branch is missing:/n{stdout}"
+    );
+    // The dispatch is decided at drive time, so nothing is left to dispatch.
+    assert!(
+        !stdout.contains("Classify {"),
+        "the source function should be gone from the residue:/n{stdout}"
+    );
+}
+
+/// The partition is exhaustive and pairwise disjoint, so every expression
+/// takes exactly one branch. A residue that could take two, or none, would
+/// answer differently from the source.
+#[test]
+fn every_shape_an_expression_can_have_lands_in_exactly_one_branch() {
+    let output = residualize_driven_file("examples/case-split.ref", &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let residue = stdout
+        .split_once("$ENTRY")
+        .map(|(_, rest)| format!("$ENTRY{rest}"))
+        .expect("residue source");
+    let path = scratch_source("refal-case-split", &residue);
+    let rendered = path.to_string_lossy().into_owned();
+
+    // The three shapes, reached through the program's own interface: a
+    // bracket-headed argument, an empty one, and a symbol-headed one cannot
+    // be built from the command line, so the residue's patterns are asserted
+    // structurally above and the runnable shapes are checked here.
+    for argument in ["abc", "", "a"] {
+        let source = run_file("examples/case-split.ref", &[argument]);
+        let residue_run = Command::new(refal_bin())
+            .args(["run", &rendered, argument])
+            .output()
+            .expect("run residue");
+        assert_eq!(
+            String::from_utf8_lossy(&source.stdout),
+            String::from_utf8_lossy(&residue_run.stdout),
+            "the residue disagreed on {argument:?}"
+        );
+    }
+    let _ = fs::remove_file(&path);
+}
+
+/// A narrow entry is deliberately not split.
+///
+/// `Go { (e.Text) = ...; }` accepts a bracket and nothing else. The residue's
+/// pattern has to bind the variable its body uses, and a partition of
+/// `e.Input` does not fit a narrower pattern -- so splitting it would give the
+/// residue an argument it accepts but the source did not, turning a program
+/// that fails into one that loops. The residue stays the source instead.
+#[test]
+fn a_narrow_entry_is_not_split() {
+    let output = residualize_driven_file("examples/runtime-bracket.ref", &[]);
+    assert!(
+        output.status.success(),
+        "unexpected stderr:/n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+
+    assert!(
+        stdout.contains("(e.Text) = <Prout e.Text>;"),
+        "a narrow entry should keep its own pattern:/n{stdout}"
+    );
+    assert!(
+        !stdout.contains("Split1"),
+        "a narrow entry must not be split:/n{stdout}"
+    );
+
+    // And the residue is a program the checker accepts, which a duplicate
+    // entry definition would not be.
+    let residue = stdout
+        .split_once("$EXTERN")
+        .map(|(_, rest)| format!("$EXTERN{rest}"))
+        .expect("residue source");
+    let path = scratch_source("refal-narrow-entry", &residue);
+    let checked = check_path(&path.to_string_lossy(), &[]);
+    assert!(
+        checked.status.success(),
+        "the residue does not check:/n{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+    let _ = fs::remove_file(&path);
 }

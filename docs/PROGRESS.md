@@ -46,7 +46,7 @@ objective to a gate. Not another Refal implementation.
 | Bootstrap frontend | 8.5% | 8.0 |
 | Bootstrap semantics | 6.0% | 5.0 |
 | Refal machine / runtime | 19.5% | 17.0 |
-| Graph of states / Refal emission | 8.5% | 8.2 |
+| Graph of states / Refal emission | 8.5% | 8.4 |
 | Static verification (Tier 1) | 15.0% | 13.5 |
 | Compiler implemented in Refal | 25.5% | 20.0 |
 | Verified self-hosting fixpoint | 13.0% | 12.0 |
@@ -91,6 +91,36 @@ objective to a gate. Not another Refal implementation.
   `builtin-domain` and `open-expression-complexity` can be warned, denied or
   suppressed individually. A lint flag moves diagnostics only; a test asserts
   no flag can silence a spec violation.
+
+### Done — case splitting
+
+Driving no longer stops when matching cannot decide a configuration. It
+partitions the argument into cases the matcher *can* decide and drives each one
+(§4.2), which is what makes driving work at all when the input is not ground.
+
+- The partition is `[]`, `s.H e.T`, `(e.B) e.T` — exhaustive and pairwise
+  disjoint for an expression variable, so no value is lost and none is counted
+  twice.
+- A branch the driver cannot decide keeps a call to the original function, so
+  the residue fails exactly where the source fails.
+- `examples/case-split.ref`: `Classify`'s dispatch is decided at drive time and
+  the residue contains no call to `Classify` at all.
+- The whistle fires *before* splitting when the configuration has grown
+  relative to one already seen. Without that, splitting a growing argument
+  peels one more symbol each turn and never terminates — `condition.ref`
+  generated sixteen functions instead of one.
+
+Three more precision bugs surfaced on the way, all in the symbolic matcher, and
+all of the same kind: a question the shapes had already answered was being
+reported as unknown.
+
+- `[]` against a definitely non-empty input is a definite no. Only a tail made
+  entirely of `e.`-variables leaves it open.
+- A bracket pattern against a definitely-symbol input is a definite no, and the
+  converse. `s.` counts as a symbol even unbound.
+- "No sentence can match" is not the same as "unknown". Separating them lets a
+  failing condition be a definite `No` — which is what Refal does at run time —
+  instead of leaving the sentence undecided.
 
 ### Done — T-4, driving a whole program
 
@@ -166,10 +196,6 @@ cannot specialise must at least preserve what it was given.
 - **T-1** a non-trivial program transformer written in Refal. The compiler
   slices are a start; a transformer that is not itself a compiler is the
   remaining case.
-- **Case splitting on a wholly unknown argument.** Driving `<F e.X>` where the
-  sentences of `F` distinguish empty from non-empty still stops rather than
-  splitting into `[]`, `s.H e.T` and `(e.B) e.T`. This is the capability the
-  configuration graph is missing; the gate above does not depend on it.
 - **T-5** the complete generalization algorithm (1988). The whistle and a
   sound, least-general LGG exist; the iterated "is this too general" check does
   not.
@@ -182,26 +208,19 @@ cannot specialise must at least preserve what it was given.
 
 ## NEXT ACTION
 
-**T-6: clean and perfect graphs (§4.3, §4.5) — then case splitting.**
+**T-6: clean and perfect graphs (§4.3, §4.5).**
 
-T-4 is closed on its published gate. The driver still works over
-source-preserved sentence states rather than a true configuration graph, and
-that shows up in one concrete way: driving `<F e.X>` where `F`'s sentences
-distinguish empty from non-empty stops instead of splitting. Adding that split
-is what would let a loop with an unknown counter residualise into a terminating
-specialized function.
+T-4 is closed on its published gate and driving now case-splits, so it handles
+an unknown argument. What it still does not do is *clean* the result: the driver
+works over source-preserved sentence states rather than a true configuration
+graph, and there is no §4.3 semantic cleaning or §4.5 perfection.
 
 Order:
 
 1. **T-6** — semantic cleaning and the drive toward perfect graphs. The
    structural cleanup exists; §4.3's semantic version and §4.5's perfection
    do not.
-2. **Case splitting.** Split a blocking `e.`-variable into the exhaustive,
-   disjoint partition `[]`, `s.H e.T`, `(e.B) e.T`, drive each branch, and
-   emit a multi-sentence residue. Branch completeness is what makes it sound:
-   those three cover every expression, and a branch no sentence matches stays
-   a residual call so the residue fails exactly where the source fails.
-3. **T-5's remaining half** — the iterated "is this generalization too general"
+2. **T-5's remaining half** — the iterated "is this generalization too general"
    check from the 1988 algorithm.
 
 Then T-8 metacodes (Ch. 1.3), `driver.ref`, and bracket contents in the format

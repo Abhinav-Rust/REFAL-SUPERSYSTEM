@@ -1,0 +1,34 @@
+* Case splitting: driving a configuration whose argument is wholly unknown.
+*
+* Turchin's driver does not stop when matching cannot decide a configuration.
+* It partitions the argument into cases the matcher *can* decide, and drives
+* each one (1980 4.2). Without that step a driver can only compile programs
+* whose input is already ground, which is not a compiler at all.
+*
+* The partition used is the only one that is both exhaustive and pairwise
+* disjoint for an expression variable:
+*
+*   e.X   is   []   or   s.H e.T   or   (e.B) e.T
+*
+* Every expression is exactly one of those three, so no value is lost and none
+* is counted twice.
+*
+* `Classify` distinguishes exactly those three shapes, and matching cannot
+* decide which sentence applies while its argument is still a variable. Driving
+* splits, and once split each branch already knows its own shape -- so the
+* dispatch is decided at drive time and the residue needs no call to `Classify`
+* at all. The source calls it once per execution; the residue never does.
+*
+* Every branch here is decidable, which is what makes the split pay. A branch
+* the driver cannot decide keeps a call to the original function instead of
+* being guessed at, so the residue fails exactly where the source fails.
+
+$ENTRY Go {
+  e.X = <Classify e.X>;
+}
+
+Classify {
+  = 'empty';
+  s.H e.T = 'symbol-headed';
+  (e.B) e.T = 'bracket-headed';
+}
