@@ -35,7 +35,7 @@ objective to a gate. Not another Refal implementation.
 | | |
 |---|---|
 | Honest completion | **~85%** |
-| Tests | 230 passing, 0 clippy, fmt clean |
+| Tests | 233 passing, 0 clippy, fmt clean |
 | Last commit | `99d17fc` then this commit |
 | Working tree | clean |
 
@@ -46,7 +46,7 @@ objective to a gate. Not another Refal implementation.
 | Bootstrap frontend | 8.5% | 8.0 |
 | Bootstrap semantics | 6.0% | 5.0 |
 | Refal machine / runtime | 19.5% | 17.0 |
-| Graph of states / Refal emission | 8.5% | 7.5 |
+| Graph of states / Refal emission | 8.5% | 7.7 |
 | Static verification (Tier 1) | 15.0% | 12.0 |
 | Compiler implemented in Refal | 25.5% | 20.0 |
 | Verified self-hosting fixpoint | 13.0% | 12.0 |
@@ -129,8 +129,9 @@ cannot specialise must at least preserve what it was given.
   remaining case.
 - **T-4** complete Turchin configuration driving (§4.2): the driver still works
   over source-preserved sentence states rather than a true configuration graph.
-- **T-5** full generalization (1980 §4.6, 1988). The whistle and a bounded LGG
-  exist; the complete algorithm does not.
+- **T-5** the complete generalization algorithm (1988). The whistle and a
+  sound, least-general LGG exist; the iterated "is this too general" check does
+  not.
 - **T-6** clean / perfect graphs (§4.3, §4.5).
 - **T-8** metacodes (Ch. 1.3). `Dn`/`Up` cover a tagged subset; the Chapter 6
   contract is open.

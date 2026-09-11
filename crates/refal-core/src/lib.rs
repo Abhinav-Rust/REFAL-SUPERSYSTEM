@@ -1609,49 +1609,106 @@ pub fn format_term_sequence(terms: &[CoreTerm]) -> String {
     output
 }
 
-fn generalize_term_sequence(previous: &[CoreTerm], repeated: &[CoreTerm]) -> Vec<CoreTerm> {
-    if previous.len() != repeated.len() {
-        return vec![generalized_expression_variable(Span { start: 0, end: 0 })];
-    }
-    previous
-        .iter()
-        .zip(repeated)
-        .map(|(left, right)| generalize_term(left, right))
-        .collect()
+pub fn generalize_term_sequence(previous: &[CoreTerm], repeated: &[CoreTerm]) -> Vec<CoreTerm> {
+    Generalization::default().sequence(previous, repeated)
 }
 
-fn generalize_term(left: &CoreTerm, right: &CoreTerm) -> CoreTerm {
-    let kind = match (&left.kind, &right.kind) {
-        (CoreTermKind::Bracket(left_inner), CoreTermKind::Bracket(right_inner)) => {
-            CoreTermKind::Bracket(generalize_term_sequence(left_inner, right_inner))
+/// State for one generalization.
+///
+/// Turchin's generalization has to be the *least* general one (1980 4.6; the
+/// 1988 *Algorithm of Generalization*), and in Refal that requirement is not a
+/// matter of quality but of soundness. A repeated variable must bind the same
+/// value wherever it occurs, so:
+///
+/// - two occurrences of the *same* mismatch must share a variable, or the
+///   result is more general than it needs to be and throws away information
+///   driving was trying to keep;
+/// - two *different* mismatches must get *different* variables, or the result
+///   covers neither of the expressions it was computed from.
+///
+/// The second is the bug this replaces: every mismatch was named `Whistle`, so
+/// generalizing `'a' 'a'` against `'b' 'c'` produced `e.Whistle e.Whistle`,
+/// which matches `'b' 'b'` but not `'b' 'c'`.
+#[derive(Default)]
+struct Generalization {
+    /// Keyed by the rendered pair, so identical mismatches collapse together.
+    mismatches: Vec<(String, String)>,
+}
+
+impl Generalization {
+    fn sequence(&mut self, left: &[CoreTerm], right: &[CoreTerm]) -> Vec<CoreTerm> {
+        if left.len() != right.len() {
+            // There is no positional correspondence to preserve. Collapsing to
+            // a single variable loses structure, but guessing an alignment can
+            // place two expression variables next to each other, and Refal
+            // resolves those by shortest split -- which would rebind the
+            // argument wrongly at the call site. Soundness beats sharpness.
+            let span = left
+                .first()
+                .map(|term| term.span)
+                .unwrap_or(Span { start: 0, end: 0 });
+            return vec![self.variable_for(&format!("{left:?}|{right:?}"), span)];
         }
-        (
-            CoreTermKind::Call {
-                name: left_name,
-                args: left_args,
-            },
-            CoreTermKind::Call {
-                name: right_name,
-                args: right_args,
-            },
-        ) if left_name.eq_ignore_ascii_case(right_name) => CoreTermKind::Call {
-            name: left_name.clone(),
-            args: generalize_term_sequence(left_args, right_args),
-        },
-        _ if left.kind == right.kind => left.kind.clone(),
-        _ => return generalized_expression_variable(left.span),
-    };
-    CoreTerm {
-        kind,
-        span: left.span,
+        left.iter()
+            .zip(right)
+            .map(|(left, right)| self.term(left, right))
+            .collect()
+    }
+
+    fn term(&mut self, left: &CoreTerm, right: &CoreTerm) -> CoreTerm {
+        let kind = match (&left.kind, &right.kind) {
+            (CoreTermKind::Bracket(left_inner), CoreTermKind::Bracket(right_inner)) => {
+                CoreTermKind::Bracket(self.sequence(left_inner, right_inner))
+            }
+            (
+                CoreTermKind::Call {
+                    name: left_name,
+                    args: left_args,
+                },
+                CoreTermKind::Call {
+                    name: right_name,
+                    args: right_args,
+                },
+            ) if left_name.eq_ignore_ascii_case(right_name)
+                && left_args.len() == right_args.len() =>
+            {
+                CoreTermKind::Call {
+                    name: left_name.clone(),
+                    args: self.sequence(left_args, right_args),
+                }
+            }
+            _ if left.kind == right.kind => left.kind.clone(),
+            _ => return self.variable_for(&format!("{left:?}|{right:?}"), left.span),
+        };
+        CoreTerm {
+            kind,
+            span: left.span,
+        }
+    }
+
+    fn variable_for(&mut self, key: &str, span: Span) -> CoreTerm {
+        if let Some(name) = self
+            .mismatches
+            .iter()
+            .find(|(candidate, _)| candidate == key)
+            .map(|(_, name)| name.clone())
+        {
+            return expression_variable(&name, span);
+        }
+        let name = match self.mismatches.len() {
+            0 => "Whistle".to_string(),
+            index => format!("Whistle{}", index + 1),
+        };
+        self.mismatches.push((key.to_string(), name.clone()));
+        expression_variable(&name, span)
     }
 }
 
-fn generalized_expression_variable(span: Span) -> CoreTerm {
+fn expression_variable(name: &str, span: Span) -> CoreTerm {
     CoreTerm {
         kind: CoreTermKind::Variable {
             kind: VariableKind::Expression,
-            name: "Whistle".to_string(),
+            name: name.to_string(),
         },
         span,
     }
@@ -3980,6 +4037,79 @@ mod tests {
         assert_eq!(
             match_symbolic_pattern(&pattern, &input, &mut bindings),
             SymbolicMatch::Yes
+        );
+    }
+
+    /// A generalization is only a generalization if both expressions it was
+    /// computed from are instances of it (1980 4.6).
+    ///
+    /// Generalizing `'a' 'a'` against `'b' 'c'` used to give
+    /// `e.Whistle e.Whistle`, and Refal requires a repeated variable to bind
+    /// the same value, so that result matches `'b' 'b'` but not `'b' 'c'` --
+    /// it generalized to something that covered neither input.
+    #[test]
+    fn a_generalization_covers_both_expressions_it_came_from() {
+        let previous = vec![
+            core_term(CoreTermKind::Char('a')),
+            core_term(CoreTermKind::Char('a')),
+        ];
+        let repeated = vec![
+            core_term(CoreTermKind::Char('b')),
+            core_term(CoreTermKind::Char('c')),
+        ];
+
+        let generalized = generalize_term_sequence(&previous, &repeated);
+
+        assert_eq!(
+            format_term_sequence(&generalized),
+            "e.Whistle e.Whistle2",
+            "different mismatches must not share a variable"
+        );
+        for input in [&previous, &repeated] {
+            let mut bindings = HashMap::new();
+            assert!(
+                match_ground_pattern(&generalized, input, &mut bindings),
+                "{:?} is not an instance of the generalization",
+                format_term_sequence(input)
+            );
+        }
+    }
+
+    /// The same mismatch at two positions must collapse to one variable, or the
+    /// generalization is more general than it needs to be and driving loses the
+    /// fact that the two positions agree.
+    #[test]
+    fn identical_mismatches_share_one_generalization_variable() {
+        let previous = vec![
+            core_term(CoreTermKind::Char('a')),
+            core_term(CoreTermKind::Char('a')),
+        ];
+        let repeated = vec![
+            core_term(CoreTermKind::Char('b')),
+            core_term(CoreTermKind::Char('b')),
+        ];
+
+        assert_eq!(
+            format_term_sequence(&generalize_term_sequence(&previous, &repeated)),
+            "e.Whistle e.Whistle"
+        );
+    }
+
+    #[test]
+    fn generalizes_inside_brackets_and_calls_before_falling_back() {
+        let previous = vec![core_term(CoreTermKind::Bracket(vec![
+            core_term(CoreTermKind::Char('a')),
+            core_term(CoreTermKind::Char('x')),
+        ]))];
+        let repeated = vec![core_term(CoreTermKind::Bracket(vec![
+            core_term(CoreTermKind::Char('b')),
+            core_term(CoreTermKind::Char('x')),
+        ]))];
+
+        assert_eq!(
+            format_term_sequence(&generalize_term_sequence(&previous, &repeated)),
+            "(e.Whistle 'x')",
+            "the structure the two expressions agree on must survive"
         );
     }
 

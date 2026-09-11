@@ -43,7 +43,7 @@ Everything in this repository is downstream of that paragraph.
 | T-2 | The machine has **no fixed stack**: depth is bounded by memory, not a constant | The Refal machine's state is the workable expression in the view-field | 1980 §4.2 (p. 91) | Deep-recursion regression; PLAN Phase 1a | ✅ Done — 50,000 frames in <1s, cap removed (`b893b4e`) |
 | T-3 | Matching uses the **projecting algorithm**: open vs closed `e`-variables, determinate parts matched first | §2.2 *The Projecting Algorithm. Open and Closed e-Variables* | 1980 §2.2 | Projection regression; five anchored `e`-variables over 60 symbols | ✅ Done — was >120s, now 1.6s (`6177793`) |
 | T-4 | Compilation **is** driving a configuration into a graph of states — not lexing/parsing/codegen with a bolt-on optimiser | "Our main concept will be a **configuration**…" | 1980 §4.2 (pp. 89–134) | `drive → clean → residualise` produces a program that agrees with the interpreter on the corpus | 🔶 Partial — bounded drivers exist; complete driving open |
-| T-5 | **Generalization** when driving would not terminate | "A generalization of a set of expressions S is any expression G such that for any E ∈ S, E ⊂ G" | 1980 §4.6 (p. 139); 1988 *Algorithm of Generalization*; 1996 *On Generalization of Lists and Strings* | A loop that blows the whistle residualizes to a terminating specialized function | 🔶 Partial — whistle + bounded LGG exist; full algorithm open |
+| T-5 | **Generalization** when driving would not terminate | "A generalization of a set of expressions S is any expression G such that for any E ∈ S, E ⊂ G" | 1980 §4.6 (p. 139); 1988 *Algorithm of Generalization*; 1996 *On Generalization of Lists and Strings* | A loop that blows the whistle residualizes to a terminating specialized function | 🔶 Partial — whistle + **sound least-general generalization**; complete algorithm (1988) open |
 | T-6 | Graphs are **cleaned** and striven toward perfection | §4.3 *Clean Graphs*; §4.5 *Perfect Graphs* | 1980 §4.3, §4.5 | Clean-graph residualization round-trips through `check` and `run` | 🔶 Partial |
 | T-7 | **Function formats** describe argument shape | §2.3 *Function Formats* | 1980 §2.3 | Format inference feeds Tier 1 shape diagnostics | ⬜ Not started |
 | T-8 | Programs are **data**: metacode representation | Ch. 1.3 *Representations and Metacodes* | 1980 §1.3; 1975 *REFAL macrocode* | `Dn`/`Up` invertibly encode and decode program terms | 🔶 Partial — tagged subset only |
@@ -92,6 +92,14 @@ something else, and the difference changes what counts as done.
    right. Turchin proved in Theorem 5.1 that no bet is always right. This is why
    Tier 1 (decidable) and Tier 2 (bounded search) are separate, and why Tier 2 is
    opt-in and budgeted.
+
+   The bet still has to be a *sound* one. A generalization G must satisfy
+   E ⊂ G for every E it was computed from, and in Refal that requirement bites:
+   a repeated variable must bind the same value wherever it occurs, so naming two
+   different mismatches `Whistle` produces a G that covers neither input. The
+   generalization now threads an environment so identical mismatches share a
+   variable and different ones do not, and a test checks that both source
+   expressions really are instances of the result.
 
 ## The self-hosting caveat, restated as an objective
 
