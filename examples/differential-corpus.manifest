@@ -30,3 +30,6 @@ positive|runtime-type.ref|
 positive|shorthand-variables.ref|xyz
 positive|variable-index-equivalence.ref|abc
 positive|multiple-entry.ref|
+positive|metasystem-fuse.ref|
+positive|metasystem-unroll.ref|
+positive|metacode-macrodigit.ref|

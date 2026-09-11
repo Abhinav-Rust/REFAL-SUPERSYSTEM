@@ -202,6 +202,17 @@ impl<'a> Evaluator<'a> {
         self.output.borrow().clone()
     }
 
+    /// Reduction steps taken since construction.
+    ///
+    /// This is the same counter the `Step` builtin reports, exposed so a
+    /// harness can compare two programs on the same work. A metasystem
+    /// transition has to be *observed*: the residual program is only a new
+    /// level of control if it measurably does less work than the interpreter
+    /// it replaces.
+    pub fn steps(&self) -> usize {
+        self.steps.get()
+    }
+
     fn card(&self) -> Result<Vec<Value>, EvalError> {
         self.read_stdin_line()
     }

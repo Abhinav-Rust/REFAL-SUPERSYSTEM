@@ -47,7 +47,7 @@ Everything in this repository is downstream of that paragraph.
 | T-6 | Graphs are **cleaned** and striven toward perfection | §4.3 *Clean Graphs*; §4.5 *Perfect Graphs* | 1980 §4.3, §4.5 | Clean-graph residualization round-trips through `check` and `run` | 🔶 Partial |
 | T-7 | **Function formats** describe argument shape | §2.3 *Function Formats* | 1980 §2.3 | Format inference feeds Tier 1 shape diagnostics | ⬜ Not started |
 | T-8 | Programs are **data**: metacode representation | Ch. 1.3 *Representations and Metacodes* | 1980 §1.3; 1975 *REFAL macrocode* | `Dn`/`Up` invertibly encode and decode program terms | 🔶 Partial — tagged subset only |
-| T-9 | A **metasystem transition actually occurs**: an interpreter, driven over a program, yields a specialised residual program | The supercompiler as metasystem over the interpreter | 1996 *Metacomputation: MST plus Supercompilation*; 1986 *The Concept of a Supercompiler* | A canonical example where residual code is observably better — e.g. a two-pass procedure becomes one-pass, as in Turchin's own §4.6 result | ⬜ Not started — **the heart of the claim** |
+| T-9 | A **metasystem transition actually occurs**: an interpreter, driven over a program, yields a specialised residual program | The supercompiler as metasystem over the interpreter | 1996 *Metacomputation: MST plus Supercompilation*; 1986 *The Concept of a Supercompiler* | A canonical example where residual code is observably better — e.g. a two-pass procedure becomes one-pass, as in Turchin's own §4.6 result | ✅ Done — `refal metasystem`; interpreter eliminated, loop unrolled, 93–98% fewer steps, soundness proven on every input tried |
 | T-10 | The compiler can be **applied to itself** | Self-applicable supercompilation | 1996 *A Self-Applicable Supercompiler* (Nemytykh, Pinchuk, Turchin) | Rust→C1→C2→C3 fixpoint, byte-identical, on a compiler slice that genuinely parses and emits | ⬜ Not started — current fixpoint artifacts are source-preserving, see below |
 | T-11 | The **honest limit is published**, not papered over | "There exists no algorithm which could transform any graph of states into an equivalent perfect graph" | 1980 §5.8, Theorem 5.1 | The published guarantee names its own bound | ✅ Done — README and PLAN state it |
 | T-12 | **Control asymmetry** is respected: the compiler observes and transforms; it never silently modifies what it observes | C acts on S directly; S acts on C only through a representation | *Dialogue*; Principia Cybernetica `CONTROL` | No transformation mutates user source in place; `differential` proves output equivalence | ✅ Done — `refal differential` |
@@ -65,6 +65,17 @@ something else, and the difference changes what counts as done.
    physical process." A compiler that merely re-arranges syntax has not
    undergone one. Objective T-9 is the test: the residual program must be a
    *new level*, observably unlike the source, not a reformatted copy.
+
+   T-9 is closed by `refal metasystem`, which drives an interpreter over a
+   known object program with an unknown input. The residue contains **no
+   interpreter call at all** — the object program has been translated out of
+   metacode into Refal — and takes 93–98% fewer reduction steps than
+   interpreting did. `metasystem-unroll.ref` is the sharper case: the
+   interpreter's own recursion is structural and counter-driven, and driving
+   unwinds it into straight-line code. The command refuses to report success
+   unless the residue is checked Refal, agrees with the interpreter on every
+   input tried, and is measurably cheaper — so the transition is established
+   by observation, not asserted.
 
 2. **The new level controls the old; it does not replace it.** S′ = C(S₁+…+Sₙ)
    *integrates* the S's. The interpreter must survive inside the supercompiled

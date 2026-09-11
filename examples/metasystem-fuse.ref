@@ -1,0 +1,33 @@
+* T-9: the metasystem transition, in its simplest observable form.
+*
+* `Run` below is an interpreter for a tiny metacoded language of list
+* transducers. `Go` applies it to ONE KNOWN object program and ONE UNKNOWN
+* input. Driving watches the interpreter's executions and emits a residual
+* program in which the interpreter is gone: what remains is the object
+* program itself, translated into Refal.
+*
+* That translation is the metasystem transition. The interpreter is a system
+* acting on a program; the supercompiler is a system one level up, acting on
+* the interpreter's runs; the residual is the new level (Turchin 1980 5.5;
+* 1986 "The Concept of a Supercompiler"; 1996 "Metacomputation: MST plus
+* Supercompilation").
+*
+* Object language, metacoded as Refal terms (Turchin 1980 1.3):
+*   (End)             contribute nothing more
+*   (In)              contribute the rest of the input
+*   (Lit c (P))       contribute the symbol c, then run P
+*   (Seq (P) (Q))     run P, then run Q
+*
+* The object program here is  Seq(Lit 'h' (Lit 'i' (End)), In)
+* and the residual this file drives to is   e.Input = 'h' 'i' e.Input;
+
+$ENTRY Go {
+  e.In = <Run (Seq (Lit 'h' (Lit 'i' (End))) (In)) e.In>;
+}
+
+Run {
+  (End) e.In = ;
+  (In) e.In = e.In;
+  (Lit s.C t.P) e.In = s.C <Run t.P e.In>;
+  (Seq t.P t.Q) e.In = <Run t.P e.In> <Run t.Q e.In>;
+}

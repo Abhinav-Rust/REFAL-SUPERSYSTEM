@@ -1,0 +1,21 @@
+* A regression fixture for Refal-5 variable kinds in the driving matchers
+* (reference 1.3).
+*
+* `s.` ranges over symbols, and a macrodigit is a symbol: `Const` holds the
+* number 7, and `s.N` must bind it. The driving matchers used to accept only
+* characters for `s.`, so this program stalled at the constant and left the
+* whole residual call behind. The runtime matcher was always right, which is
+* what made the disagreement a bug.
+*
+* The residue is  'v' 7 e.Input
+
+$ENTRY Go {
+  e.In = <Run (Seq (Lit 'v' (Const 7)) (In)) e.In>;
+}
+
+Run {
+  (In) e.In = e.In;
+  (Lit s.C t.P) e.In = s.C <Run t.P e.In>;
+  (Const s.N) e.In = s.N;
+  (Seq t.P t.Q) e.In = <Run t.P e.In> <Run t.Q e.In>;
+}

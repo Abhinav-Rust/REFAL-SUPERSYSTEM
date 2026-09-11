@@ -3412,3 +3412,143 @@ fn reports_declared_but_unimplemented_external_during_check() {
         "unexpected stderr:\n{stderr}"
     );
 }
+
+fn metasystem_file(path: &str, args: &[&str]) -> std::process::Output {
+    let mut command = Command::new(refal_bin());
+    command.args(["metasystem", &workspace_path(path)]);
+    command.args(args);
+    command.output().expect("run refal binary")
+}
+
+fn supercompile_file(path: &str) -> std::process::Output {
+    Command::new(refal_bin())
+        .args(["supercompile", &workspace_path(path)])
+        .output()
+        .expect("run refal binary")
+}
+
+/// T-9. The interpreter is driven over a known object program with an unknown
+/// input, and the residue is the object program translated into Refal. The
+/// test asserts the thing that makes it a metasystem transition rather than a
+/// reformatting: no interpreter call survives, and the residue does less work
+/// than interpreting did.
+#[test]
+fn drives_an_interpreter_into_the_program_it_was_interpreting() {
+    let output = metasystem_file("examples/metasystem-fuse.ref", &[]);
+    assert!(
+        output.status.success(),
+        "unexpected stderr:/n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+
+    assert!(
+        stdout.contains("metasystem: transition observed"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("residual interpreter calls: 0 "),
+        "the interpreter must be gone from the residue:/n{stdout}"
+    );
+
+    // The object program was Seq(Lit 'h' (Lit 'i' (End)), In). The residue is
+    // that program, not a call to something that walks it.
+    assert!(
+        stdout.contains("e.Input = 'h' 'i' e.Input;"),
+        "unexpected residue:/n{stdout}"
+    );
+}
+
+/// T-9 over a recursive object program. The interpreter's own recursion is
+/// structural and driven by a ground counter, so driving must unwind it. This
+/// is the case that distinguishes folding from reusing: the same configuration
+/// recurs three times, and each recurrence is separate work with the same
+/// answer rather than a cycle.
+#[test]
+fn unwinds_an_interpreter_loop_into_straight_line_residual_code() {
+    let output = metasystem_file("examples/metasystem-unroll.ref", &[]);
+    assert!(
+        output.status.success(),
+        "unexpected stderr:/n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+
+    assert!(
+        stdout.contains("metasystem: transition observed"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("residual interpreter calls: 0 "),
+        "the interpreter must be gone from the residue:/n{stdout}"
+    );
+    assert!(
+        stdout.contains("e.Input = 'a' e.Input 'a' e.Input 'a' e.Input;"),
+        "the loop should be unrolled exactly three times:/n{stdout}"
+    );
+    // No whistle: the counter is ground, so driving terminates by consuming it
+    // rather than by generalising.
+    assert!(
+        stdout.contains("driving steps: "),
+        "unexpected report:/n{stdout}"
+    );
+}
+
+/// The residue must be checked Refal that agrees with the interpreter on every
+/// input tried. A transition that changes behaviour is not a transition, it is
+/// a bug, so this is the soundness gate on the whole objective.
+#[test]
+fn residual_agrees_with_the_interpreter_on_every_input_tried() {
+    for example in [
+        "examples/metasystem-fuse.ref",
+        "examples/metasystem-unroll.ref",
+    ] {
+        let output = metasystem_file(example, &["--inputs", ",x,abc,pqrs,zzz"]);
+        assert!(
+            output.status.success(),
+            "{example}: unexpected stderr:/n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        assert!(stdout.contains("inputs agreed: 5"), "{example}:\n{stdout}");
+    }
+}
+
+/// A metasystem transition has to be observable, not merely claimed: the
+/// residue is a new level of control only if it measurably does less work.
+#[test]
+fn refuses_to_claim_a_transition_the_residue_did_not_earn() {
+    // `identity.ref` drives to itself, so the residue is not cheaper and the
+    // command must say so rather than printing a vacuous success.
+    let output = metasystem_file("examples/identity.ref", &[]);
+    assert!(
+        !output.status.success(),
+        "an unearned transition must be rejected:/n{}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    assert!(
+        stderr.contains("no metasystem transition observed"),
+        "unexpected stderr:/n{stderr}"
+    );
+}
+
+/// The driving matchers must agree with the runtime matcher on Refal-5
+/// variable kinds (reference 1.3). `s.` ranges over symbols -- characters,
+/// numbers and identifiers -- and `t.` over any single term. Before this was
+/// fixed, `('c' s.N)` never matched `('c' 1)` and driving an interpreter over
+/// a metacoded program stalled at the first constant it met.
+#[test]
+fn drives_through_a_macrodigit_constant_in_a_metacoded_program() {
+    let output = supercompile_file("examples/metacode-macrodigit.ref");
+    assert!(
+        output.status.success(),
+        "unexpected stderr:/n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    assert!(
+        stdout.contains("e.Input = 'v' 7 e.Input;"),
+        "an s-variable must bind a number:/n{stdout}"
+    );
+}

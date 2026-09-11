@@ -34,9 +34,9 @@ objective to a gate. Not another Refal implementation.
 
 | | |
 |---|---|
-| Honest completion | **~83%** |
-| Tests | 220 passing, 0 clippy, fmt clean |
-| Last commit | `824cb72` then this commit |
+| Honest completion | **~85%** |
+| Tests | 230 passing, 0 clippy, fmt clean |
+| Last commit | `99d17fc` then this commit |
 | Working tree | clean |
 
 ### Workstream credit
@@ -46,12 +46,12 @@ objective to a gate. Not another Refal implementation.
 | Bootstrap frontend | 8.5% | 8.0 |
 | Bootstrap semantics | 6.0% | 5.0 |
 | Refal machine / runtime | 19.5% | 17.0 |
-| Graph of states / Refal emission | 8.5% | 6.0 |
+| Graph of states / Refal emission | 8.5% | 7.5 |
 | Static verification (Tier 1) | 15.0% | 12.0 |
 | Compiler implemented in Refal | 25.5% | 20.0 |
 | Verified self-hosting fixpoint | 13.0% | 12.0 |
 | Conformance / release evidence | 4.0% | 3.0 |
-| **Total** | **100%** | **~83%** |
+| **Total** | **100%** | **~85%** |
 
 ### Done
 
@@ -84,42 +84,84 @@ objective to a gate. Not another Refal implementation.
   sentences, recognition impossible and builtin domain errors, with zero false
   positives across the corpus. All three classes the guarantee names are now
   implemented. `docs/VERIFICATION-CONTRACT.md` is normative.
+- **T-7 function formats (§2.3)** inferred to a fixpoint across call boundaries.
+
+### Done — T-9, the metasystem transition
+
+An interpreter is driven over a known object program with an unknown input, and
+the residue is the object program translated out of metacode into Refal.
+
+- `examples/metasystem-fuse.ref` — the interpreter disappears entirely. The
+  object program `Seq(Lit 'h' (Lit 'i' (End)), In)` drives to
+  `e.Input = 'h' 'i' e.Input`. Interpreter calls 4 → 0, steps 56 → 4.
+- `examples/metasystem-unroll.ref` — the interpreter's own recursion is
+  structural and counter-driven, and driving unwinds it. `Times(3, body)`
+  drives to `'a' e.Input 'a' e.Input 'a' e.Input`. Interpreter calls 7 → 0,
+  steps 172 → 4.
+- `refal metasystem` refuses to claim success unless the residue is checked
+  Refal, agrees with the interpreter on every input tried, and is measurably
+  cheaper. The transition is established by observation, not assertion.
+
+Two bugs had to be fixed to get here, both found by making the attempt:
+
+- The driving matchers disagreed with the runtime matcher on Refal-5 variable
+  kinds (reference 1.3). `s.` accepted only characters, so `('c' s.N)` never
+  matched `('c' 1)` and driving stalled at the first constant in a metacoded
+  program; `t.` accepted only brackets. `examples/metacode-macrodigit.ref` is
+  the regression fixture. The runtime matcher was the oracle and was right.
+- Driving could not tell a cycle from a repeat. A configuration recurring *on
+  the path being expanded* is a cycle and must be folded; the same
+  configuration recurring *after completing* is separate work with the same
+  answer and must be reused. Conflating them whistled at the second turn of
+  every ground-bounded loop and left the loop residual.
+
+A third came out of the same work: `residualize_symbolic` could emit
+`<Go e.Input>` for the entry, a program that cannot terminate. It now falls
+back to the source program when driving learns nothing — a supercompiler that
+cannot specialise must at least preserve what it was given.
 
 ### Open
 
-- **Exhaustiveness for non-literal arguments**, which needs function formats.
-- **T-1** a non-trivial program transformer written in Refal.
-- **T-4** complete driving over a graph of states.
-- **T-5** full generalization (1980 §4.6, 1988).
-- **T-6** clean / perfect graphs.
-- **T-7** function formats (§2.3).
-- **T-8** metacodes (Ch. 1.3).
-- **T-9** a metasystem transition actually occurs — the heart of the claim.
+- **Exhaustiveness where the format lattice is too coarse**, and `-W`/`-D`/`-A`
+  per-lint control.
+- **T-1** a non-trivial program transformer written in Refal. The compiler
+  slices are a start; a transformer that is not itself a compiler is the
+  remaining case.
+- **T-4** complete Turchin configuration driving (§4.2): the driver still works
+  over source-preserved sentence states rather than a true configuration graph.
+- **T-5** full generalization (1980 §4.6, 1988). The whistle and a bounded LGG
+  exist; the complete algorithm does not.
+- **T-6** clean / perfect graphs (§4.3, §4.5).
+- **T-8** metacodes (Ch. 1.3). `Dn`/`Up` cover a tagged subset; the Chapter 6
+  contract is open.
+- Heap-allocated single view field (issue #7); `driver.ref`.
 
 ---
 
 ## NEXT ACTION
 
-**T-9: make a metasystem transition actually happen.**
+**T-4: complete Turchin configuration driving (§4.2), then T-5 generalization.**
 
-This is the heart of Turchin's claim and the largest remaining piece. An
-interpreter is driven over a program and the result is a *specialised residual
-program* — the metasystem transition from §5.5. Everything built so far is the
-apparatus around that moment; the moment itself has not been demonstrated.
+T-9 is closed, but it is closed on a driver that works over source-preserved
+sentence states rather than a true graph of configurations. That is enough to
+demonstrate the transition; it is not yet Turchin's machine, and it is why the
+cases that drive cleanly today are the ones where the object program is known
+and only the input is symbolic.
 
 Order:
 
-1. Drive a Refal interpreter over a concrete program with a partially known
-   argument, using the existing graph machinery in `refal-core`.
-2. Fold repeated configurations; the homeomorphic-embedding whistle is already
-   there, so the work is generalization and residualization of what driving
-   produces.
-3. Prove the transition by *observing* it: the residual program must be smaller
-   or faster than the original, and `refal differential` must show the two agree.
+1. Replace sentence states with real configurations — a call and its argument,
+   not a source sentence — so that two calls to the same sentence with
+   different arguments are different nodes. Today they are the same node, which
+   is what forced the fold/reuse distinction to be discovered the hard way.
+2. Generalize off that graph (T-5, 1980 §4.6 and the 1988 algorithm) instead of
+   off the bounded LGG, so a loop with an *unknown* counter residualizes into a
+   terminating specialized function rather than stalling.
+3. Clean the result (T-6, §4.3) and residualize the whole graph, not the
+   reachable slice.
 
-Tier 1 is finished as far as the published guarantee goes — all three classes it
-names are implemented. What remains there is precision, not coverage: widening
-`Shape` so format-disjointness catches more, and `-W`/`-D`/`-A` per-lint control.
+Then the remaining Tier 1 precision work — exhaustiveness where the format
+lattice is too coarse, and `-W`/`-D`/`-A` per-lint control.
 
 The soundness gate is unchanged and non-negotiable:
 `strict_mode_has_no_false_positives_on_the_corpus` must stay green. If a new

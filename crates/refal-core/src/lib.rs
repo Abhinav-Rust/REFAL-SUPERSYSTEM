@@ -607,6 +607,8 @@ pub fn drive_ground(
         whistle_inputs: Vec::new(),
         whistle_events: Vec::new(),
         visited_inputs: Vec::new(),
+        active_path: Vec::new(),
+        completed: Vec::new(),
         configurations: Vec::new(),
         configuration_transitions: Vec::new(),
         active_configuration: None,
@@ -667,6 +669,8 @@ pub fn drive_symbolic_with_input(
         whistle_inputs: Vec::new(),
         whistle_events: Vec::new(),
         visited_inputs: Vec::new(),
+        active_path: Vec::new(),
+        completed: Vec::new(),
         configurations: Vec::new(),
         configuration_transitions: Vec::new(),
         active_configuration: None,
@@ -744,6 +748,10 @@ pub fn drive_symbolic_with_input(
     })
 }
 
+/// A driven configuration: the sentence state being applied and the argument
+/// it is applied to.
+type Configuration = (StateId, Vec<CoreTerm>);
+
 struct DriveContext<'a> {
     graph: &'a StateGraph,
     visited: Vec<StateId>,
@@ -751,6 +759,12 @@ struct DriveContext<'a> {
     whistle_inputs: Vec<(StateId, Vec<CoreTerm>)>,
     whistle_events: Vec<WhistleEvent>,
     visited_inputs: Vec<(StateId, Vec<CoreTerm>)>,
+    /// Configurations currently being expanded, innermost last. A recurrence
+    /// against this path is a cycle rather than a repeat.
+    active_path: Vec<Configuration>,
+    /// Residuals already computed for configurations that finished. Reused
+    /// when the same configuration recurs off the active path.
+    completed: Vec<(Configuration, Vec<CoreTerm>)>,
     configurations: Vec<SymbolicConfiguration>,
     configuration_transitions: Vec<SymbolicConfigurationTransition>,
     active_configuration: Option<usize>,
@@ -792,6 +806,15 @@ impl<'a> DriveContext<'a> {
                     to: None,
                 });
         }
+    }
+
+    fn completed_residual(&self, state: StateId, input: &[CoreTerm]) -> Option<Vec<CoreTerm>> {
+        self.completed
+            .iter()
+            .find(|((completed_state, completed_input), _)| {
+                *completed_state == state && completed_input.as_slice() == input
+            })
+            .map(|(_, residual)| residual.clone())
     }
 
     fn record_whistle(
@@ -900,6 +923,37 @@ impl<'a> DriveContext<'a> {
                         }
                         SymbolicMatch::Yes => {}
                     }
+                    // Two different things can make a configuration recur, and
+                    // Turchin's machinery treats them differently (1980 4.6).
+                    //
+                    // A recurrence *on the current path* is a cycle: the driver
+                    // has come back to a configuration it is still expanding,
+                    // so continuing would not terminate. That is what the
+                    // whistle is for.
+                    //
+                    // A recurrence with a configuration that already finished
+                    // is not a cycle at all. `Rep` below calls `Run` with the
+                    // same object program on every turn of a ground-bounded
+                    // loop; each of those calls is a genuine, separate piece of
+                    // work that happens to have the same answer. Reusing the
+                    // residual already computed is exactly what unwinds the
+                    // interpreter's recursion into straight-line code. Stopping
+                    // there would leave the loop residual and lose the
+                    // transition.
+                    // Only a symbolic cycle warrants a whistle. A ground
+                    // configuration recurring on the path is a concrete
+                    // residual call: there is nothing to generalize in two
+                    // identical ground terms, so it stays a call.
+                    if self.active_path.contains(&(state.id, input.to_vec()))
+                        && input.iter().any(contains_symbolic_variable)
+                    {
+                        self.record_whistle(state.id, input, input);
+                        return Ok(SymbolicInvoke::Residual);
+                    }
+                    if let Some(reduced) = self.completed_residual(state.id, input) {
+                        self.steps += 1;
+                        return Ok(SymbolicInvoke::Reduced(reduced));
+                    }
                     if let Some(previous_input) = self
                         .visited_inputs
                         .iter()
@@ -920,20 +974,9 @@ impl<'a> DriveContext<'a> {
                             *visited_state == state.id && previous_input.as_slice() == input
                         })
                     {
-                        // An exact symbolic configuration closes a recursive cycle and retains
-                        // the established whistle evidence. Exact ground repeats, however, are
-                        // already concrete residual calls and do not justify generalisation.
-                        if input.iter().any(contains_symbolic_variable)
-                            && let Some(previous_input) = self
-                                .visited_inputs
-                                .iter()
-                                .find(|(visited_state, previous_input)| {
-                                    *visited_state == state.id && previous_input.as_slice() == input
-                                })
-                                .map(|(_, previous_input)| previous_input.clone())
-                        {
-                            self.record_whistle(state.id, &previous_input, input);
-                        }
+                        // An exact repeat whose residual never completed: the
+                        // earlier expansion was itself abandoned, so there is
+                        // nothing to reuse and the call stays residual.
                         return Ok(SymbolicInvoke::Residual);
                     }
                     if !self.visited.contains(&state.id) {
@@ -942,8 +985,14 @@ impl<'a> DriveContext<'a> {
                     self.visited_inputs.push((state.id, input.to_vec()));
                     let previous_configuration = self.active_configuration;
                     self.active_configuration = Some(configuration_id);
+                    self.active_path.push((state.id, input.to_vec()));
                     let result = self.instantiate_symbolic(&state.result, &bindings);
+                    self.active_path.pop();
                     self.active_configuration = previous_configuration;
+                    if let Ok(SymbolicInvoke::Reduced(ref reduced)) = result {
+                        self.completed
+                            .push(((state.id, input.to_vec()), reduced.clone()));
+                    }
                     return result;
                 }
             }
@@ -1633,6 +1682,68 @@ pub fn residualize_symbolic(report: &SymbolicDriveReport) -> String {
         "$ENTRY Go {{\n  e.Input = {};\n}}\n",
         format_term_sequence(&report.residual)
     )
+}
+
+/// Emit the residual program for a driven report, or the source program when
+/// driving learned nothing.
+///
+/// Sometimes driving cannot specialise at all: the input is wholly unknown and
+/// no sentence is decidable, so the residual comes back as the original call.
+/// For the entry function that residual is `<Go e.Input>` -- a program that
+/// re-enters itself with the same argument and cannot terminate. Emitting it
+/// would turn a failure to optimise into a hang.
+///
+/// A supercompiler that cannot specialise must at least preserve the program
+/// it was given, so the honest output in that case is the source itself.
+pub fn residualize_symbolic_program(
+    program: &CoreProgram,
+    report: &SymbolicDriveReport,
+) -> CoreProgram {
+    let entry = program
+        .functions
+        .iter()
+        .find(|function| function.visibility == Visibility::Entry)
+        .map(|function| function.name.as_str());
+    let self_loop = entry.is_some_and(|name| {
+        matches!(report.residual.as_slice(), [term] if matches!(&term.kind,
+        CoreTermKind::Call { name: callee, args }
+            if callee.eq_ignore_ascii_case(name)
+                && args.len() == 1
+                && matches!(&args[0].kind, CoreTermKind::Variable {
+                    kind: VariableKind::Expression,
+                    ..
+                })))
+    });
+    if self_loop {
+        return program.clone();
+    }
+    let name = entry.unwrap_or("Go").to_string();
+    let visibility = program
+        .functions
+        .iter()
+        .find(|function| function.visibility == Visibility::Entry)
+        .map(|function| function.visibility)
+        .unwrap_or(Visibility::Entry);
+    CoreProgram {
+        declarations: program.declarations.clone(),
+        functions: vec![CoreFunction {
+            name,
+            visibility,
+            sentences: vec![CoreSentence {
+                pattern: vec![CoreTerm {
+                    kind: CoreTermKind::Variable {
+                        kind: VariableKind::Expression,
+                        name: "Input".to_string(),
+                    },
+                    span: Span { start: 0, end: 0 },
+                }],
+                conditions: Vec::new(),
+                result: report.residual.clone(),
+                span: Span { start: 0, end: 0 },
+            }],
+            span: Span { start: 0, end: 0 },
+        }],
+    }
 }
 
 /// Semantically clean a driven graph by closing over calls in retained configurations.
@@ -3789,10 +3900,7 @@ mod tests {
     }
 
     fn core_term(kind: CoreTermKind) -> CoreTerm {
-        CoreTerm {
-            kind,
-            span: span(),
-        }
+        CoreTerm { kind, span: span() }
     }
 
     fn core_var(kind: VariableKind, name: &str) -> CoreTerm {

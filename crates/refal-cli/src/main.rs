@@ -113,6 +113,7 @@ fn main() {
         "residualize-driven" => residualize_driven_program(&program, &input_args),
         "residualize-generalized" => residualize_generalized_program(&program, &input_args),
         "supercompile" => supercompile_program(&program, &input_args),
+        "metasystem" => metasystem_program(&program, &input_args, &path),
         "fixpoint" => fixpoint_program(&program, &input_args),
         "differential" => differential_program(&program, &input_args),
         "run" => run_program(&program, &input_args),
@@ -167,6 +168,10 @@ fn print_usage() {
     eprintln!("  residualize-driven  Emit driven Core Refal with whistle evidence [--steps N]");
     eprintln!("  residualize-generalized  Emit explicit generalized residual graph [--steps N]");
     eprintln!("  supercompile  Analyze, symbolically drive, whistle, and residualize [--steps N]");
+    eprintln!("  metasystem   Drive an interpreter over a known program, emit the residue,");
+    eprintln!(
+        "               and prove the transition is sound and cheaper [--steps N] [--inputs a,b]"
+    );
     eprintln!("  fixpoint   Apply a source-to-source compiler twice and check byte stability");
     eprintln!("  differential  Compare original and lowered-source runtime outputs [--corpus]");
     eprintln!("  run        Run a Refal source file with the bootstrap interpreter");
@@ -493,7 +498,10 @@ fn supercompile_program(program: &refal_ast::Program, args: &[String]) {
         .join(", ");
     println!("generalized: {generalized}");
     println!("residual:");
-    print!("{}", refal_core::residualize_symbolic(&report));
+    print!(
+        "{}",
+        refal_core::format_program(&refal_core::residualize_symbolic_program(&core, &report))
+    );
 }
 
 fn residualize_program(program: &refal_ast::Program, args: &[String]) {
@@ -773,6 +781,220 @@ fn execute_program(
         outputs.push(render_values(&result));
     }
     Ok(outputs)
+}
+
+/// Run a program and report both its output and the reduction steps it took.
+///
+/// The step count is what makes a metasystem transition observable rather
+/// than merely claimed: the residue is a new level of control only if it
+/// demonstrably does less work than the interpreter it replaces.
+fn execute_with_steps(
+    program: &refal_ast::Program,
+    input_args: &[String],
+) -> Result<(Vec<String>, usize), String> {
+    let input = args_to_values(input_args);
+    let arguments = input_args
+        .iter()
+        .map(|arg| arg.chars().map(Value::Char).collect())
+        .collect();
+    let evaluator = Evaluator::with_arguments(program, arguments);
+    let result = evaluator
+        .evaluate_entry(&input)
+        .map_err(|error| error.to_string())?;
+    let mut outputs = evaluator
+        .captured_output()
+        .into_iter()
+        .map(|expression| render_values(&expression))
+        .collect::<Vec<_>>();
+    if !result.is_empty() {
+        outputs.push(render_values(&result));
+    }
+    Ok((outputs, evaluator.steps()))
+}
+
+/// How many calls the residual still makes into the interpreter it replaced.
+///
+/// Zero is the interesting answer: it means driving has translated the object
+/// program out of the metacode entirely, and nothing interprets at run time.
+fn residual_interpreter_calls(
+    residual: &refal_core::CoreProgram,
+    source: &refal_ast::Program,
+) -> usize {
+    let source_functions = source
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            refal_ast::Item::Function(function) => Some(function.name.to_ascii_lowercase()),
+            _ => None,
+        })
+        .collect::<std::collections::HashSet<_>>();
+    let mut count = 0;
+    for function in &residual.functions {
+        for sentence in &function.sentences {
+            count += count_matching_calls(&sentence.result, &source_functions);
+            for condition in &sentence.conditions {
+                count += count_matching_calls(&condition.result, &source_functions);
+            }
+        }
+    }
+    count
+}
+
+fn count_matching_calls(
+    terms: &[refal_core::CoreTerm],
+    names: &std::collections::HashSet<String>,
+) -> usize {
+    terms
+        .iter()
+        .map(|term| match &term.kind {
+            refal_core::CoreTermKind::Call { name, args } => {
+                (names.contains(&name.to_ascii_lowercase()) as usize)
+                    + count_matching_calls(args, names)
+            }
+            refal_core::CoreTermKind::Bracket(inner) => count_matching_calls(inner, names),
+            refal_core::CoreTermKind::Block {
+                argument,
+                sentences,
+            } => {
+                count_matching_calls(argument, names)
+                    + sentences
+                        .iter()
+                        .map(|sentence| {
+                            count_matching_calls(&sentence.result, names)
+                                + sentence
+                                    .conditions
+                                    .iter()
+                                    .map(|condition| count_matching_calls(&condition.result, names))
+                                    .sum::<usize>()
+                        })
+                        .sum::<usize>()
+            }
+            _ => 0,
+        })
+        .sum()
+}
+
+/// Drive an interpreter over a known program and emit the specialised residue.
+///
+/// This is T-9, the objective the whole project exists for. An interpreter is
+/// a system acting on a program; driving observes its executions and emits a
+/// residual program, which is a system one level up (Turchin 1980 5.5). The
+/// transition is only real if it can be seen, so this command refuses to
+/// report success unless the residue (a) is valid checked Refal, (b) agrees
+/// with the interpreter on every input tried, and (c) does measurably less
+/// work than interpreting did.
+fn metasystem_program(program: &refal_ast::Program, args: &[String], path: &str) {
+    let (max_steps, inputs) = parse_metasystem_args(args);
+
+    let core = refal_core::lower_program(program);
+    let graph = refal_core::clean_unreachable_states(&refal_core::build_seed_graph(&core));
+    let report = match refal_core::drive_symbolic(&graph, max_steps) {
+        Ok(report) => report,
+        Err(error) => {
+            eprintln!("metasystem driving error: {error}");
+            process::exit(1);
+        }
+    };
+
+    let residual_source =
+        refal_core::format_program(&refal_core::residualize_symbolic_program(&core, &report));
+    let residual = match parse_checked_source(&residual_source) {
+        Ok(residual) => residual,
+        Err(error) => {
+            eprintln!("the residual program is not valid Refal: {error}");
+            process::exit(1);
+        }
+    };
+
+    let mut interpreted_steps = 0;
+    let mut residual_steps = 0;
+    let mut compared = 0;
+    for input in &inputs {
+        let arguments = vec![input.clone()];
+        let (original_output, original_steps) = match execute_with_steps(program, &arguments) {
+            Ok(result) => result,
+            Err(error) => {
+                eprintln!("interpreter failed on input {input:?}: {error}");
+                process::exit(1);
+            }
+        };
+        let (residual_output, steps) = match execute_with_steps(&residual, &arguments) {
+            Ok(result) => result,
+            Err(error) => {
+                eprintln!("residual failed on input {input:?}: {error}");
+                process::exit(1);
+            }
+        };
+        if original_output != residual_output {
+            eprintln!("metasystem transition is unsound on input {input:?}");
+            eprintln!("  interpreted: {original_output:?}");
+            eprintln!("  residual:    {residual_output:?}");
+            process::exit(1);
+        }
+        interpreted_steps += original_steps;
+        residual_steps += steps;
+        compared += 1;
+    }
+
+    let residual_core = refal_core::lower_program(&residual);
+    let surviving_calls = residual_interpreter_calls(&residual_core, program);
+    let source_calls = residual_interpreter_calls(&core, program);
+
+    if residual_steps >= interpreted_steps {
+        eprintln!("no metasystem transition observed: the residual is not cheaper");
+        eprintln!("  interpreted steps: {interpreted_steps}");
+        eprintln!("  residual steps:    {residual_steps}");
+        process::exit(1);
+    }
+
+    println!("metasystem: transition observed");
+    println!("interpreter: {path}");
+    println!("driving steps: {}", report.steps);
+    println!("residual interpreter calls: {surviving_calls} (source: {source_calls})");
+    println!("steps interpreted -> residual: {interpreted_steps} -> {residual_steps}");
+    println!(
+        "improvement: {:.0}%",
+        (1.0 - residual_steps as f64 / interpreted_steps as f64) * 100.0
+    );
+    println!("inputs agreed: {compared}");
+    println!("residual:");
+    print!("{residual_source}");
+}
+
+fn parse_metasystem_args(args: &[String]) -> (usize, Vec<String>) {
+    const DEFAULT_INPUTS: [&str; 4] = ["", "a", "abc", "zzz"];
+    let mut max_steps = 10_000usize;
+    let mut inputs: Option<Vec<String>> = None;
+    let mut cursor = 0;
+    while cursor < args.len() {
+        match args[cursor].as_str() {
+            "--steps" if cursor + 1 < args.len() => {
+                match args[cursor + 1].parse::<usize>() {
+                    Ok(limit) => max_steps = limit,
+                    Err(_) => {
+                        eprintln!("Usage: refal metasystem <file.ref> [--steps N] [--inputs a,b]");
+                        process::exit(2);
+                    }
+                }
+                cursor += 2;
+            }
+            "--inputs" if cursor + 1 < args.len() => {
+                inputs = Some(args[cursor + 1].split(',').map(str::to_string).collect());
+                cursor += 2;
+            }
+            _ => {
+                eprintln!("Usage: refal metasystem <file.ref> [--steps N] [--inputs a,b]");
+                process::exit(2);
+            }
+        }
+    }
+    let inputs = inputs.unwrap_or_else(|| {
+        DEFAULT_INPUTS
+            .iter()
+            .map(|input| input.to_string())
+            .collect()
+    });
+    (max_steps, inputs)
 }
 
 fn differential_corpus(manifest_path: &str) {
