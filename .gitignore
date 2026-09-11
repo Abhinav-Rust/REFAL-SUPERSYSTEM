@@ -4,3 +4,6 @@
 .DS_Store
 Thumbs.db
 
+
+# local editor state: local tooling, not project content
+.workbuddy-ai/
