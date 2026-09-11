@@ -34,7 +34,7 @@ objective to a gate. Not another Refal implementation.
 
 | | |
 |---|---|
-| Honest completion | **~86%** |
+| Honest completion | **~87%** |
 | Tests | 242 passing, 0 clippy, fmt clean |
 | Last commit | `99d17fc` then this commit |
 | Working tree | clean |
@@ -46,12 +46,12 @@ objective to a gate. Not another Refal implementation.
 | Bootstrap frontend | 8.5% | 8.0 |
 | Bootstrap semantics | 6.0% | 5.0 |
 | Refal machine / runtime | 19.5% | 17.0 |
-| Graph of states / Refal emission | 8.5% | 7.7 |
+| Graph of states / Refal emission | 8.5% | 8.2 |
 | Static verification (Tier 1) | 15.0% | 13.5 |
 | Compiler implemented in Refal | 25.5% | 20.0 |
 | Verified self-hosting fixpoint | 13.0% | 12.0 |
 | Conformance / release evidence | 4.0% | 3.0 |
-| **Total** | **100%** | **~86%** |
+| **Total** | **100%** | **~87%** |
 
 ### Done
 
@@ -90,6 +90,39 @@ objective to a gate. Not another Refal implementation.
   `builtin-domain` and `open-expression-complexity` can be warned, denied or
   suppressed individually. A lint flag moves diagnostics only; a test asserts
   no flag can silence a spec violation.
+
+### Done — T-4, driving a whole program
+
+`drive → clean → residualise` now means something for a complete program. The
+gate is a corpus mode: 29 programs are driven, the residue is re-checked as
+Refal, and running it must produce what running the source produced.
+
+- **The entry configuration is the closed one.** `Go` normally takes no
+  arguments, so supplying an `e.Input` matched nothing and the entire ground
+  corpus residualised to itself. Driving `<>` — the configuration §4.2 starts
+  from — collapses the program's work: `Reverse 'abc'` becomes `'c' 'b' 'a'`,
+  `Classify 'accepted'` becomes `'Y'`, and `runtime-recursion.ref`'s residue
+  has no `Reverse` left in it.
+- **A residue is a program.** Every user function it still calls is carried
+  with it, transitively. A residue that calls `ContainsX` without defining it
+  is not Refal, and a residualizer that emits a program the compiler rejects
+  has emitted nothing.
+
+Four bugs the gate found, all of which had been silently producing wrong
+programs:
+
+- **`Prout` was folded to its argument.** It prints and returns the empty
+  expression; folding it produced a residue that stopped printing and leaked
+  the printed value into the result — a wrong program that looked like a
+  successful optimisation.
+- **Blocks in condition position were matched as literals.** `E : { sentences }`
+  applies the block to `E` as an anonymous function. Treating the block as an
+  opaque pattern makes every such condition fail, which silently sends control
+  to the next sentence and changes the answer.
+- **`Mu` dispatches on a name carried as data**, so a call-name walk cannot see
+  what it will call. A residue that still dispatches dynamically now keeps
+  every definition the original had.
+- A residue with no retained definitions failed the checker outright.
 
 ### Done — T-9, the metasystem transition
 
@@ -132,8 +165,10 @@ cannot specialise must at least preserve what it was given.
 - **T-1** a non-trivial program transformer written in Refal. The compiler
   slices are a start; a transformer that is not itself a compiler is the
   remaining case.
-- **T-4** complete Turchin configuration driving (§4.2): the driver still works
-  over source-preserved sentence states rather than a true configuration graph.
+- **Case splitting on a wholly unknown argument.** Driving `<F e.X>` where the
+  sentences of `F` distinguish empty from non-empty still stops rather than
+  splitting into `[]`, `s.H e.T` and `(e.B) e.T`. This is the capability the
+  configuration graph is missing; the gate above does not depend on it.
 - **T-5** the complete generalization algorithm (1988). The whistle and a
   sound, least-general LGG exist; the iterated "is this too general" check does
   not.
@@ -146,28 +181,30 @@ cannot specialise must at least preserve what it was given.
 
 ## NEXT ACTION
 
-**T-4: complete Turchin configuration driving (§4.2), then T-5 generalization.**
+**T-6: clean and perfect graphs (§4.3, §4.5) — then case splitting.**
 
-T-9 is closed, but it is closed on a driver that works over source-preserved
-sentence states rather than a true graph of configurations. That is enough to
-demonstrate the transition; it is not yet Turchin's machine, and it is why the
-cases that drive cleanly today are the ones where the object program is known
-and only the input is symbolic.
+T-4 is closed on its published gate. The driver still works over
+source-preserved sentence states rather than a true configuration graph, and
+that shows up in one concrete way: driving `<F e.X>` where `F`'s sentences
+distinguish empty from non-empty stops instead of splitting. Adding that split
+is what would let a loop with an unknown counter residualise into a terminating
+specialized function.
 
 Order:
 
-1. Replace sentence states with real configurations — a call and its argument,
-   not a source sentence — so that two calls to the same sentence with
-   different arguments are different nodes. Today they are the same node, which
-   is what forced the fold/reuse distinction to be discovered the hard way.
-2. Generalize off that graph (T-5, 1980 §4.6 and the 1988 algorithm) instead of
-   off the bounded LGG, so a loop with an *unknown* counter residualizes into a
-   terminating specialized function rather than stalling.
-3. Clean the result (T-6, §4.3) and residualize the whole graph, not the
-   reachable slice.
+1. **T-6** — semantic cleaning and the drive toward perfect graphs. The
+   structural cleanup exists; §4.3's semantic version and §4.5's perfection
+   do not.
+2. **Case splitting.** Split a blocking `e.`-variable into the exhaustive,
+   disjoint partition `[]`, `s.H e.T`, `(e.B) e.T`, drive each branch, and
+   emit a multi-sentence residue. Branch completeness is what makes it sound:
+   those three cover every expression, and a branch no sentence matches stays
+   a residual call so the residue fails exactly where the source fails.
+3. **T-5's remaining half** — the iterated "is this generalization too general"
+   check from the 1988 algorithm.
 
-Then the remaining Tier 1 precision: bracket *contents* in the format lattice,
-which needs a recursive extension rather than another shape.
+Then T-8 metacodes (Ch. 1.3), `driver.ref`, and bracket contents in the format
+lattice.
 
 The soundness gate is unchanged and non-negotiable:
 `strict_mode_has_no_false_positives_on_the_corpus` must stay green. If a new

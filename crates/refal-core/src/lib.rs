@@ -889,10 +889,13 @@ impl<'a> DriveContext<'a> {
             });
         }
         self.record_call(function, input);
-        if function.eq_ignore_ascii_case("Prout") {
-            self.steps += 1;
-            return Ok(SymbolicInvoke::Reduced(input.to_vec()));
-        }
+        // `Prout` is deliberately *not* folded away here. It is a side effect:
+        // `<Prout e.X>` prints and returns the empty expression. Folding it to
+        // its argument, as this once did, produces a residue that silently
+        // stops printing and leaks the printed value into the result -- a
+        // wrong program that looks like a successful optimisation. Leaving the
+        // call residual keeps the effect while still driving its arguments,
+        // which is where the specialisation actually happens.
         self.steps += 1;
         let mut unknown_before = false;
         for state in self
@@ -1007,11 +1010,42 @@ impl<'a> DriveContext<'a> {
     ) -> Result<bool, DriveError> {
         for condition in conditions {
             let value = self.instantiate(&condition.result, bindings)?;
+            // `E : { sentences }` is not a match against a literal: the block
+            // is an anonymous function applied to E, and the condition holds
+            // exactly when that block reduces. Treating the block as an opaque
+            // pattern makes every such condition fail, which silently sends
+            // control to the next sentence and changes the program's answer.
+            if let Some(sentences) = block_pattern(&condition.pattern) {
+                if !self.match_ground_block_condition(&value, sentences, bindings)? {
+                    return Ok(false);
+                }
+                continue;
+            }
             if !match_ground_pattern(&condition.pattern, &value, bindings) {
                 return Ok(false);
             }
         }
         Ok(true)
+    }
+
+    fn match_ground_block_condition(
+        &mut self,
+        value: &[CoreTerm],
+        sentences: &[CoreSentence],
+        bindings: &HashMap<String, Vec<CoreTerm>>,
+    ) -> Result<bool, DriveError> {
+        for sentence in sentences {
+            // Bindings made inside the block are local to it, so each sentence
+            // starts from the enclosing bindings and none of them are written
+            // back.
+            let mut nested = bindings.clone();
+            if match_ground_pattern(&sentence.pattern, value, &mut nested)
+                && self.match_ground_conditions(&sentence.conditions, &mut nested)?
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     fn match_symbolic_conditions(
@@ -1024,6 +1058,12 @@ impl<'a> DriveContext<'a> {
                 SymbolicInvoke::Reduced(value) => value,
                 SymbolicInvoke::Residual => return Ok(SymbolicMatch::Unknown),
             };
+            if let Some(sentences) = block_pattern(&condition.pattern) {
+                match self.match_symbolic_block_condition(&value, sentences, bindings)? {
+                    SymbolicMatch::Yes => continue,
+                    other => return Ok(other),
+                }
+            }
             match match_symbolic_pattern(&condition.pattern, &value, bindings) {
                 SymbolicMatch::Yes => {}
                 SymbolicMatch::No => return Ok(SymbolicMatch::No),
@@ -1031,6 +1071,37 @@ impl<'a> DriveContext<'a> {
             }
         }
         Ok(SymbolicMatch::Yes)
+    }
+
+    fn match_symbolic_block_condition(
+        &mut self,
+        value: &[CoreTerm],
+        sentences: &[CoreSentence],
+        bindings: &HashMap<String, Vec<CoreTerm>>,
+    ) -> Result<SymbolicMatch, DriveError> {
+        let mut saw_unknown = false;
+        for sentence in sentences {
+            let mut nested = bindings.clone();
+            match match_symbolic_pattern(&sentence.pattern, value, &mut nested) {
+                SymbolicMatch::No => continue,
+                SymbolicMatch::Unknown => {
+                    saw_unknown = true;
+                    continue;
+                }
+                SymbolicMatch::Yes => {
+                    match self.match_symbolic_conditions(&sentence.conditions, &mut nested)? {
+                        SymbolicMatch::Yes => return Ok(SymbolicMatch::Yes),
+                        SymbolicMatch::No => continue,
+                        SymbolicMatch::Unknown => saw_unknown = true,
+                    }
+                }
+            }
+        }
+        Ok(if saw_unknown {
+            SymbolicMatch::Unknown
+        } else {
+            SymbolicMatch::No
+        })
     }
 
     fn instantiate_block(
@@ -1321,6 +1392,22 @@ fn match_shape_pattern(
 /// over any single *term* -- a symbol *or* a bracket -- and `e.` over any
 /// expression. Numbers and identifiers are symbols, so `s.N` binds `1`, and a
 /// `t.` variable binds a bare character or number just as readily as a bracket.
+/// The sentences of a block used as a condition pattern.
+///
+/// `E : { sentences }` applies the block to `E` as an anonymous function, so a
+/// block in condition position is not a pattern to match against but a
+/// function to call. Recognising the shape here keeps both condition matchers
+/// honest about which one they are doing.
+fn block_pattern(pattern: &[CoreTerm]) -> Option<&[CoreSentence]> {
+    match pattern {
+        [term] => match &term.kind {
+            CoreTermKind::Block { sentences, .. } => Some(sentences),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 fn symbolic_variable_accepts(kind: VariableKind, input: &CoreTerm) -> Option<bool> {
     match kind {
         VariableKind::Symbol => match &input.kind {
@@ -1781,26 +1868,156 @@ pub fn residualize_symbolic_program(
         .find(|function| function.visibility == Visibility::Entry)
         .map(|function| function.visibility)
         .unwrap_or(Visibility::Entry);
-    CoreProgram {
-        declarations: program.declarations.clone(),
-        functions: vec![CoreFunction {
-            name,
-            visibility,
-            sentences: vec![CoreSentence {
-                pattern: vec![CoreTerm {
-                    kind: CoreTermKind::Variable {
-                        kind: VariableKind::Expression,
-                        name: "Input".to_string(),
-                    },
-                    span: Span { start: 0, end: 0 },
-                }],
-                conditions: Vec::new(),
-                result: report.residual.clone(),
-                span: Span { start: 0, end: 0 },
-            }],
+    // The residue has to accept whatever the entry accepts. A `Go { = ...; }`
+    // takes no arguments, and giving it an `e.Input` pattern would widen the
+    // program's interface: the residue would then answer calls the original
+    // could not. Preserving a closed entry's empty pattern keeps the two
+    // programs interchangeable, which is the whole point of the gate.
+    let pattern = if entry_accepts_no_arguments(program) {
+        Vec::new()
+    } else {
+        vec![CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind: VariableKind::Expression,
+                name: "Input".to_string(),
+            },
+            span: Span { start: 0, end: 0 },
+        }]
+    };
+    let mut functions = vec![CoreFunction {
+        name,
+        visibility,
+        sentences: vec![CoreSentence {
+            pattern,
+            conditions: Vec::new(),
+            result: report.residual.clone(),
             span: Span { start: 0, end: 0 },
         }],
+        span: Span { start: 0, end: 0 },
+    }];
+    // Driving stops at a call it cannot decide and leaves it in the residue.
+    // The residue is a program, so every user function it still calls has to
+    // come with it -- otherwise the residue does not check, and a residualizer
+    // that emits a program the compiler rejects has emitted nothing.
+    functions.extend(retain_called_functions(
+        program,
+        &report.residual,
+        &functions[0].name,
+    ));
+    CoreProgram {
+        declarations: program.declarations.clone(),
+        functions,
     }
+}
+
+/// The definitions of every user function the residue still calls, transitively.
+///
+/// Externs need no definition: they are carried by the program's declarations.
+fn retain_called_functions(
+    program: &CoreProgram,
+    residual: &[CoreTerm],
+    entry_name: &str,
+) -> Vec<CoreFunction> {
+    let mut pending = Vec::new();
+    collect_call_names(residual, &mut pending);
+    // `Mu` dispatches on a function name carried as *data*, so walking call
+    // terms cannot see what it will call. When the residue still dispatches
+    // dynamically the only sound residue keeps every definition the original
+    // had -- a residue that drops `Echo` is a program that fails at run time
+    // where the original succeeded.
+    if pending.iter().any(|name| name.eq_ignore_ascii_case("Mu")) {
+        return program
+            .functions
+            .iter()
+            .filter(|function| !function.name.eq_ignore_ascii_case(entry_name))
+            .cloned()
+            .collect();
+    }
+    let mut retained = Vec::new();
+    let mut seen = HashSet::new();
+    let mut cursor = 0;
+    while cursor < pending.len() {
+        let name = pending[cursor].clone();
+        cursor += 1;
+        if !seen.insert(name.to_ascii_lowercase()) {
+            continue;
+        }
+        let Some(function) = program
+            .functions
+            .iter()
+            .find(|function| function.name.eq_ignore_ascii_case(&name))
+        else {
+            continue;
+        };
+        for sentence in &function.sentences {
+            collect_call_names(&sentence.pattern, &mut pending);
+            collect_call_names(&sentence.result, &mut pending);
+            for condition in &sentence.conditions {
+                collect_call_names(&condition.result, &mut pending);
+                collect_call_names(&condition.pattern, &mut pending);
+            }
+        }
+        retained.push(function.clone());
+    }
+    retained
+}
+
+/// Whether the entry function's first sentence takes no arguments.
+///
+/// A closed pattern means the program is run as a whole, which is the ordinary
+/// case for a Refal `Go`.
+fn entry_accepts_no_arguments(program: &CoreProgram) -> bool {
+    program
+        .functions
+        .iter()
+        .find(|function| function.visibility == Visibility::Entry)
+        .and_then(|function| function.sentences.first())
+        .is_some_and(|sentence| sentence.pattern.is_empty())
+}
+
+/// Drive the entry configuration as a whole program.
+///
+/// [`drive_symbolic`] always supplies `e.Input` as the argument, which suits a
+/// program whose entry takes one. But a Refal program's `Go` normally takes
+/// none: `Go { = <Prout ...>; }`. Supplying `e.Input` to that matches nothing,
+/// driving learns nothing, and the entire ground corpus residualises to
+/// itself. Driving the closed configuration instead evaluates the program.
+///
+/// This is the configuration Turchin starts from in §4.2 — the entry, applied
+/// to the arguments the program is actually run on — and it is what makes
+/// `drive → clean → residualise` mean something for a complete program.
+pub fn drive_entry_configuration(
+    graph: &StateGraph,
+    max_steps: usize,
+) -> Result<SymbolicDriveReport, DriveError> {
+    let closed = graph
+        .entry
+        .and_then(|entry| graph.states.get(entry.0))
+        .is_some_and(|state| state.pattern.is_empty());
+    if closed {
+        return drive_symbolic_with_input(graph, Vec::new(), max_steps);
+    }
+    drive_symbolic(graph, max_steps)
+}
+
+/// Residualise the entry configuration into a checked Core Refal program.
+///
+/// This is the T-4 deliverable: `drive → clean → residualise` for a whole
+/// program, rather than for a symbolic entry that most programs cannot accept.
+pub fn residualize_entry_graph(
+    program: &CoreProgram,
+    graph: &StateGraph,
+    max_steps: usize,
+) -> Result<DrivenResidualization, DriveError> {
+    let report = drive_entry_configuration(graph, max_steps)?;
+    let residual_program = residualize_symbolic_program(program, &report);
+    let generalized_states = generalized_residual_states(&report);
+    Ok(DrivenResidualization {
+        program: residual_program,
+        report,
+        generalized_states,
+        generalized_graph: None,
+    })
 }
 
 /// Semantically clean a driven graph by closing over calls in retained configurations.

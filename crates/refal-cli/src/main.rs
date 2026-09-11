@@ -645,7 +645,7 @@ fn residualize_driven_program(program: &refal_ast::Program, args: &[String]) {
     };
     let core = refal_core::lower_program(program);
     let graph = refal_core::clean_unreachable_states(&refal_core::build_seed_graph(&core));
-    let residual = match refal_core::residualize_driven_graph(&core, &graph, max_steps) {
+    let residual = match refal_core::residualize_entry_graph(&core, &graph, max_steps) {
         Ok(residual) => residual,
         Err(error) => {
             eprintln!("driven residualization error: {error}");
@@ -1098,6 +1098,7 @@ fn differential_corpus(manifest_path: &str) {
     let mut positive = 0usize;
     let mut check_failures = 0usize;
     let mut runtime_failures = 0usize;
+    let mut residuals = 0usize;
 
     for (line_index, line) in manifest.lines().enumerate() {
         let line = line.trim();
@@ -1146,6 +1147,10 @@ fn differential_corpus(manifest_path: &str) {
                 runtime_failures += 1;
                 runtime_failure_case(&source, &arguments)
             }
+            "residual" => {
+                residuals += 1;
+                residual_case(&source, &arguments)
+            }
             other => Err(format!("unknown differential corpus mode `{other}`")),
         };
         if let Err(error) = result {
@@ -1165,6 +1170,37 @@ fn differential_corpus(manifest_path: &str) {
     println!("positive: {positive}");
     println!("check-failure: {check_failures}");
     println!("runtime-failure: {runtime_failures}");
+    println!("residual: {residuals}");
+}
+
+/// The T-4 gate: `drive → clean → residualise` must produce a program that
+/// agrees with the interpreter.
+///
+/// A residual program that is merely *emitted* proves nothing. It has to be
+/// checked Refal, and running it has to produce what running the source
+/// produced. This is the check that turns "the residualizer runs" into "the
+/// residualizer is correct".
+fn residual_case(source: &str, input_args: &[String]) -> Result<(), String> {
+    let original = parse_checked_source(source)?;
+    let core = refal_core::lower_program(&original);
+    let graph = refal_core::clean_unreachable_states(&refal_core::build_seed_graph(&core));
+    let residual = refal_core::residualize_entry_graph(&core, &graph, 10_000)
+        .map_err(|error| format!("driving failed: {error}"))?;
+
+    let residual_source = refal_core::format_program(&residual.program);
+    let residual_program = parse_checked_source(&residual_source)
+        .map_err(|error| format!("the residue is not valid Refal: {error}"))?;
+
+    let original_output = execute_program(&original, input_args)?;
+    let residual_output = execute_program(&residual_program, input_args)?;
+    if original_output == residual_output {
+        Ok(())
+    } else {
+        Err(format!(
+            "the residue disagrees with the interpreter: source {:?}, residue {:?}\nresidue source:\n{residual_source}",
+            original_output, residual_output
+        ))
+    }
 }
 
 fn differential_case(source: &str, input_args: &[String]) -> Result<(), String> {

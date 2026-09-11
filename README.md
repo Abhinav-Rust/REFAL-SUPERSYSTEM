@@ -262,21 +262,21 @@ The guarantee this compiler intends to publish, once Tier 1 lands:
 
 ## Project Status
 
-### Honest Completion: ~86%
+### Honest Completion: ~87%
 
 The goal — a Classic Refal-5 compiler **written in Refal**, emitting Refal, compiling its
 own full source, with Turchin's graph-of-states supercompiler and Tier 1 static
 verification — counts as 100%. **Tier 2 metasystem analysis (§5.5–5.9) is post-1.0
 research and is excluded from the 100% compiler target.** Against the 1.0 target,
-the honest functional completion is **approximately 79%**. The full weighting
+the honest functional completion is **approximately 81%**. The full weighting
 rationale lives in [`docs/PLAN.md`](docs/PLAN.md).
 
 **Three lenses on the same codebase:**
 
 | Lens | Score | What it measures |
 |---|---|---|
-| Sub-task implementation credit (PLAN.md) | ~86% | Fraction of planned *effort* that has been coded and tested across ~19 sub-milestones |
-| Evidence-weighted score | **~79%** | Fraction of the *1.0 compiler goal* that is tested and working in the general case |
+| Sub-task implementation credit (PLAN.md) | ~87% | Fraction of planned *effort* that has been coded and tested across ~20 sub-milestones |
+| Evidence-weighted score | **~81%** | Fraction of the *1.0 compiler goal* that is tested and working in the general case |
 | Conservative architectural gate credit | ~26% | Strict: zero credit for any gate not fully closed (see `REFAL-FIRST-COMPLETION.md`) |
 
 The evidence-weighted figure sat far below the sub-task figure for a long time,
@@ -295,7 +295,7 @@ described in detail in [`docs/PLAN.md`](docs/PLAN.md) — but it can be misread 
 the compiler is nearly done. **It is not.** The two most architecturally critical open
 items are the general flat view-field rewriting machine (needed for condition-bearing
 evaluation at scale) and the full general Refal compiler pipeline in Refal. This README
-leads with the ~79% evidence-weighted figure because it is the most honest answer to
+leads with the ~81% evidence-weighted figure because it is the most honest answer to
 "how much of a working Refal compiler exists today?"
 
 The earlier score went *down* from an older published estimate of 38%, for two reasons:
@@ -323,12 +323,12 @@ The 15% weight below covers Tier 1 decidable analyses only.
 | Bootstrap frontend | 8.5% | 8.0% | Broad Classic Refal-5 lexer/parser coverage; clause-complete conformance corpus still partial |
 | Bootstrap semantics | 6.0% | 5.0% | Entry, bindings, call checks done; no exhaustiveness or graph-based analysis |
 | Refal machine / runtime | 19.5% | ~17% | Broad covered builtin suite; **no fixed call-depth limit** — work-list driven for named calls and blocks, 50,000 frames in under a second; **projecting matcher (§2.2)** — closed `e`-variables match by position, five anchored `e`-variables over 60 symbols from >120 s to 1.6 s; `Dn`/`Up`; **heap-allocated single view field not done**; block sentences carrying conditions still take the recursive path |
-| Graph of states / Refal emission | 8.5% | ~7.5% | Seed graph, SCC, bounded driving, homeomorphic whistle, bounded residualization done; **T-9 metasystem transition closed** — `refal metasystem` drives an interpreter over a known object program and emits the object program translated into Refal, with zero interpreter calls left; complete Turchin driving / cleaning / generalization open |
+| Graph of states / Refal emission | 8.5% | ~8.2% | Seed graph, SCC, bounded driving, homeomorphic whistle, bounded residualization done; **T-4 closed** — `drive → clean → residualise` agrees with the interpreter across 29 corpus programs, and driving a closed entry configuration collapses a whole program; **T-9 closed** — `refal metasystem` drives an interpreter over a known object program and emits it as Refal with zero interpreter calls left; graph cleaning and generalization open |
 | Static verification (Tier 1 only) | 15.0% | ~13% | **All three classes the guarantee names are implemented**: `--classic` / `--strict` severity model, dead sentences by pattern subsumption, recognition impossible and builtin domain errors. Zero false positives across the corpus. **Function formats (§2.3)** inferred to a fixpoint across call boundaries. **`-W` / `-D` / `-A` per-lint control.** The lattice now separates character, number and identifier literals, so a wrong-kind literal is refuted too |
 | Compiler implemented in Refal | 25.5% | ~20% | A real Refal-authored compiler over the full Classic grammar: `lexer.ref` tokenises, `parser.ref` builds an AST, `compiler.ref` checks **and emits** — exported Go entry, duplicate names under Classic name equivalence, unbound variables — with output byte-identical to Rust `lower` on all 47 lowerable examples. Handles blocks in both positions, `sX` shorthand, `/* */` comments and reals. `driver.ref` **not written** |
 | Verified self-hosting fixpoint | 13.0% | ~12% | **The compiler compiles itself over the full grammar**: C1 → C2 → C3, every generation checks, C1 = C2 = C3 byte-identical at 12,599 bytes, output matching Rust `lower` |
 | Conformance / release evidence | 4.0% | ~3% | Solid automated foundation; no full Classic conformance claim or release packaging |
-| **Total (1.0 target)** | **100%** | **~86%** |
+| **Total (1.0 target)** | **100%** | **~87%** |
 
 ---
 
@@ -344,7 +344,7 @@ The 15% weight below covers Tier 1 decidable analyses only.
 | 2 | Classic Refal-5 front end | 🔶 Partial | Broad lexer/parser surface: `s.`/`t.`/`e.` variables, blocks in sentence-ending and condition position, brackets, conditions, `$ENTRY`/`$EXTERN`, 12 negative fixture classes, spans and diagnostics | Clause-complete traceable conformance corpus; Milestone 2 exit criteria not met (see [`FRONTEND-COVERAGE.md`](docs/FRONTEND-COVERAGE.md)) |
 | 3 | Semantic checker | 🔶 Partial | Entry-point rules, duplicate checks, unresolved calls, variable binding, condition legality, pattern-call rejection | Exhaustiveness analysis; graph-based analyses; function-format inference |
 | 4 | Refal machine | 🔶 Partial | Broad covered builtin suite: arithmetic, file I/O (`Card`/`Open`/`Get`/`Put`/`Putout`), buried data (`Br`/`Dg`/`Cp`/`Rp`/`Dgall`), structural ops (`First`/`Last`/`Lenw`/`Lower`/`Upper`), `Arg`/`Step`/`Time`/`Mu`/`Dn`/`Up`/`Trunc`/`Real`, plus `Prout`/`Print`/`Explode`/`Implode`/`Ord`/`Chr`/`Numb`/`Symb`/`Type`; backtracking, conditions, blocks in both positions, explicit worklist for block-free call chains. The previously observed supported-body `TakeBody` scaling failure is resolved (C1→C2→C3 proven, 100-definition trial under 1 s) | Heap-allocated single view field (issue [#7](../../issues/7)); Chapter 6 metacode encoding. *The fixed call-depth cap and the projecting matcher are done.* |
-| 5 | Graph of states | 🔶 Partial | Seed graph, SCC, structural cleanup, bounded ground driver, shape-aware symbolic driver, homeomorphic-embedding whistle, bounded Tier 1 analysis (`refal analyze`, `refal overlap`), cleaned-graph Core Refal emitter, bounded driven/generalized residualization, **and a demonstrated metasystem transition (`refal metasystem`, T-9)** | Complete Turchin configuration driving (§4.2); semantic graph cleaning (§4.3); generalization termination (§4.6); whole-graph residualization for general programs |
+| 5 | Graph of states | 🔶 Partial | Seed graph, SCC, structural cleanup, bounded ground driver, shape-aware symbolic driver, homeomorphic-embedding whistle, bounded Tier 1 analysis (`refal analyze`, `refal overlap`), cleaned-graph Core Refal emitter, bounded driven/generalized residualization, **a demonstrated metasystem transition (`refal metasystem`, T-9)**, and **`drive → clean → residualise` verified against the interpreter over the corpus (T-4)** | Semantic graph cleaning (§4.3); generalization termination (§4.6); case splitting on a wholly unknown argument; whole-graph residualization for general programs |
 | 6 | Tier 1 static analyses | 🔶 Partial | `--classic` / `--strict` severity model; **dead sentences**, **recognition impossible** and **builtin domain errors**, all with zero false positives across the corpus; **function formats (§2.3)** inferred to a fixpoint across call boundaries (`refal formats`); **`-W` / `-D` / `-A` per-lint control**; structural reachability, terminal-state and SCC reports; conservative pairwise compatibility | Bracket *contents* are still opaque in the lattice |
 | 7 | Compiler written in Refal | 🔶 Partial | **A real Refal-authored lexer, parser, checker and emitter over the full Classic grammar**: `lexer.ref` tokenises, `parser.ref` builds an AST, `compiler.ref` checks and emits byte-identically to Rust `lower` on all 47 lowerable examples — blocks in both positions, `sX` shorthand, `/* */` comments, reals; `refal fixpoint`; `refal differential` | `driver.ref`; general source *compilation* (today it normalises to Core Refal rather than compiling pattern matching); optimisation |
 | 8 | Verified self-hosting | 🔶 Partial | Rust-bootstrap → C1 → C2 → C3 proven byte-identical over the full Classic grammar (12,599 bytes), each generation checked | Nothing that is itself a gate — residual credit is withheld until the compiler does more than normalise |
@@ -408,6 +408,7 @@ without a test or a gate that demonstrates the work.
 
 | Date | Change |
 |---|---|
+| 2026-09-11 | Thirty-fifth milestone, phase 2: **T-4, driving a whole program.** `drive → clean → residualise` is now verified against the interpreter as a corpus mode: 29 programs driven, every residue re-checked as Refal and output-equal to the source. Driving the **closed entry configuration** is what made it mean something — `Go` takes no arguments, so the old `e.Input` matched nothing and the whole ground corpus residualised to itself. `Reverse 'abc'` now drives to `'c' 'b' 'a'` with no `Reverse` left. The gate found four bugs, each of which had been silently emitting a *wrong* program: `Prout` folded to its argument (dropping the print), blocks in condition position matched as literals, residues missing the functions they still call, and `Mu` losing definitions it can dispatch to by name. Tests 242 → 247. Completion ~86% → **~87%** |
 | 2026-09-11 | Thirty-fourth milestone, phase 3: **exhaustiveness past literals, properly.** The shape lattice now keeps character, number and identifier literals apart (`C`, `N`, `I`) and joins them back to `S` when they disagree, so `<F 'a'>` is refuted against a callee that only accepts numbers — the argument need not be a literal to be refutable. An `s.`-variable stays `S` and is never refuted by a literal kind, which is the direction that keeps the widening sound; a test pins that directly. Zero false positives across the corpus still holds. Tests 237 → 242. Completion held at **~86%**, now with 13.5 of the 15 Tier 1 points |
 | 2026-09-11 | Thirty-third milestone, phase 3: **`-W` / `-D` / `-A` per-lint control.** Diagnostics now carry the lint that produced them, so `dead-sentence`, `recognition-impossible`, `builtin-domain` and `open-expression-complexity` can each be warned, denied or suppressed individually (or with `all`). A lint flag moves diagnostics only: a test asserts that no flag can silence a spec violation, which is what keeps `--classic` a pure conformance mode. Tests 233 → 237. Completion ~85% → **~86%** |
 | 2026-09-11 | Thirty-second milestone: **the metasystem transition (T-9).** `refal metasystem` drives a Refal interpreter over a known object program with an unknown input and emits the object program translated into Refal — zero interpreter calls left, 93–98% fewer reduction steps, soundness proven on every input tried. `examples/metasystem-fuse.ref` (interpreter eliminated), `examples/metasystem-unroll.ref` (loop unrolled) and `examples/metacode-macrodigit.ref`. Three bugs fixed on the way: `s.`/`t.` variable kinds in the driving matchers, cycles confused with repeats during driving, and a residualizer that could emit a non-terminating entry. Tests 221 → 230. Completion ~83% → **~85%** |
@@ -538,8 +539,14 @@ cargo run -p refal -- compile examples/hello.ref
 # Compare a source program with its lowered/reparsed execution
 cargo run -p refal -- differential examples/hello.ref
 
-# Verify the committed positive, check-failure, and runtime-failure corpus
+# Verify the committed positive, check-failure, runtime-failure and residual
+# corpus. The `residual` rows are the T-4 gate: each program is driven to a
+# residue, the residue is re-checked as Refal, and it has to produce what the
+# source produced.
 cargo run -p refal -- differential examples/differential-corpus.manifest --corpus
+
+# Drive the entry configuration and emit the residue for one program
+cargo run -p refal -- residualize-driven examples/runtime-recursion.ref
 
 # Report inferred function formats: what each function accepts and returns
 cargo run -p refal -- formats examples/hello.ref

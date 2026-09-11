@@ -1516,7 +1516,7 @@ fn executes_refal_authored_lexer_end_to_end() {
     let output = run_file("examples/lexer.ref", &["Go { = 'Hi'; }"]);
     assert!(
         output.status.success(),
-        "unexpected stderr://n{}",
+        "unexpected stderr:\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
     assert_eq!(
@@ -1530,7 +1530,7 @@ fn executes_refal_authored_lexer_end_to_end() {
     );
     assert!(
         with_terms.status.success(),
-        "unexpected stderr://n{}",
+        "unexpected stderr:\n{}",
         String::from_utf8_lossy(&with_terms.stderr)
     );
     assert_eq!(
@@ -1541,7 +1541,7 @@ fn executes_refal_authored_lexer_end_to_end() {
     let with_comment = run_file("examples/lexer.ref", &["* a comment\nGo { = 1; }"]);
     assert!(
         with_comment.status.success(),
-        "unexpected stderr://n{}",
+        "unexpected stderr:\n{}",
         String::from_utf8_lossy(&with_comment.stderr)
     );
     assert_eq!(
@@ -1552,7 +1552,7 @@ fn executes_refal_authored_lexer_end_to_end() {
     let escaped = run_file("examples/lexer.ref", &["F = 'a''b';"]);
     assert!(
         escaped.status.success(),
-        "unexpected stderr://n{}",
+        "unexpected stderr:\n{}",
         String::from_utf8_lossy(&escaped.stderr)
     );
     assert_eq!(
@@ -1568,7 +1568,7 @@ fn refal_authored_lexer_lexes_its_own_source() {
     let output = run_file("examples/lexer.ref", &[&source]);
     assert!(
         output.status.success(),
-        "the lexer should tokenise its own source://n{}",
+        "the lexer should tokenise its own source:\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
     let tokens = String::from_utf8_lossy(&output.stdout);
@@ -2506,7 +2506,7 @@ fn supercompiles_recursive_symbolic_program_with_a_whistle() {
     );
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
-        "states: 2\ntransitions: 2\nsteps: 3\nvisited: S0 -> S1\nwhistles: S1\ngeneralized: S1: e.Input\nresidual:\n$ENTRY Go {\n  e.Input = <Loop e.Input>;\n}\n"
+        "states: 2\ntransitions: 2\nsteps: 3\nvisited: S0 -> S1\nwhistles: S1\ngeneralized: S1: e.Input\nresidual:\n$ENTRY Go {\n  e.Input = <Loop e.Input>;\n}\n\nLoop {\n  e.Input = <Loop e.Input>;\n}\n"
     );
 }
 
@@ -2528,7 +2528,7 @@ fn supercompiles_a_differing_recursive_input_without_a_whistle() {
     );
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
-        "states: 2\ntransitions: 2\nsteps: 4\nvisited: S0 -> S1\nwhistles: \ngeneralized: \nresidual:\n$ENTRY Go {\n  e.Input = <Loop 'b'>;\n}\n"
+        "states: 2\ntransitions: 2\nsteps: 4\nvisited: S0 -> S1\nwhistles: \ngeneralized: \nresidual:\n$ENTRY Go {\n  e.Input = <Loop 'b'>;\n}\n\nLoop {\n  e.Input = <Loop 'b'>;\n}\n"
     );
 }
 
@@ -2550,7 +2550,7 @@ fn does_not_whistle_on_distinct_inputs_at_one_source_state() {
     );
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
-        "states: 2\ntransitions: 2\nsteps: 4\nvisited: S0 -> S1\nwhistles: \ngeneralized: \nresidual:\n$ENTRY Go {\n  e.Input = <Loop 'b'>;\n}\n"
+        "states: 2\ntransitions: 2\nsteps: 4\nvisited: S0 -> S1\nwhistles: \ngeneralized: \nresidual:\n$ENTRY Go {\n  e.Input = <Loop 'b'>;\n}\n\nLoop {\n  e.Input = <Loop 'b'>;\n}\n"
     );
 }
 
@@ -3233,6 +3233,10 @@ fn verifies_manifest_driven_whole_corpus_differential_modes() {
         count("runtime-failure") >= 1,
         "runtime-failure cases shrank:\n{stdout}"
     );
+
+    // The T-4 gate: `drive -> clean -> residualise` must agree with the
+    // interpreter, over the whole corpus rather than one hand-picked example.
+    assert!(count("residual") >= 29, "residual cases shrank:\n{stdout}");
 }
 
 #[test]
@@ -3447,7 +3451,7 @@ fn drives_an_interpreter_into_the_program_it_was_interpreting() {
     let output = metasystem_file("examples/metasystem-fuse.ref", &[]);
     assert!(
         output.status.success(),
-        "unexpected stderr:/n{}",
+        "unexpected stderr:\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
@@ -3458,14 +3462,14 @@ fn drives_an_interpreter_into_the_program_it_was_interpreting() {
     );
     assert!(
         stdout.contains("residual interpreter calls: 0 "),
-        "the interpreter must be gone from the residue:/n{stdout}"
+        "the interpreter must be gone from the residue:\n{stdout}"
     );
 
     // The object program was Seq(Lit 'h' (Lit 'i' (End)), In). The residue is
     // that program, not a call to something that walks it.
     assert!(
         stdout.contains("e.Input = 'h' 'i' e.Input;"),
-        "unexpected residue:/n{stdout}"
+        "unexpected residue:\n{stdout}"
     );
 }
 
@@ -3479,7 +3483,7 @@ fn unwinds_an_interpreter_loop_into_straight_line_residual_code() {
     let output = metasystem_file("examples/metasystem-unroll.ref", &[]);
     assert!(
         output.status.success(),
-        "unexpected stderr:/n{}",
+        "unexpected stderr:\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
@@ -3490,17 +3494,17 @@ fn unwinds_an_interpreter_loop_into_straight_line_residual_code() {
     );
     assert!(
         stdout.contains("residual interpreter calls: 0 "),
-        "the interpreter must be gone from the residue:/n{stdout}"
+        "the interpreter must be gone from the residue:\n{stdout}"
     );
     assert!(
         stdout.contains("e.Input = 'a' e.Input 'a' e.Input 'a' e.Input;"),
-        "the loop should be unrolled exactly three times:/n{stdout}"
+        "the loop should be unrolled exactly three times:\n{stdout}"
     );
     // No whistle: the counter is ground, so driving terminates by consuming it
     // rather than by generalising.
     assert!(
         stdout.contains("driving steps: "),
-        "unexpected report:/n{stdout}"
+        "unexpected report:\n{stdout}"
     );
 }
 
@@ -3516,7 +3520,7 @@ fn residual_agrees_with_the_interpreter_on_every_input_tried() {
         let output = metasystem_file(example, &["--inputs", ",x,abc,pqrs,zzz"]);
         assert!(
             output.status.success(),
-            "{example}: unexpected stderr:/n{}",
+            "{example}: unexpected stderr:\n{}",
             String::from_utf8_lossy(&output.stderr)
         );
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
@@ -3533,13 +3537,13 @@ fn refuses_to_claim_a_transition_the_residue_did_not_earn() {
     let output = metasystem_file("examples/identity.ref", &[]);
     assert!(
         !output.status.success(),
-        "an unearned transition must be rejected:/n{}",
+        "an unearned transition must be rejected:\n{}",
         String::from_utf8_lossy(&output.stdout)
     );
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
     assert!(
         stderr.contains("no metasystem transition observed"),
-        "unexpected stderr:/n{stderr}"
+        "unexpected stderr:\n{stderr}"
     );
 }
 
@@ -3553,13 +3557,13 @@ fn drives_through_a_macrodigit_constant_in_a_metacoded_program() {
     let output = supercompile_file("examples/metacode-macrodigit.ref");
     assert!(
         output.status.success(),
-        "unexpected stderr:/n{}",
+        "unexpected stderr:\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     assert!(
         stdout.contains("e.Input = 'v' 7 e.Input;"),
-        "an s-variable must bind a number:/n{stdout}"
+        "an s-variable must bind a number:\n{stdout}"
     );
 }
 
@@ -3670,11 +3674,11 @@ fn rejects_an_unknown_lint_name() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("unknown lint `no-such-lint`"),
-        "unexpected stderr:/n{stderr}"
+        "unexpected stderr:\n{stderr}"
     );
     assert!(
         stderr.contains("dead-sentence"),
-        "the error should list the lints that do exist:/n{stderr}"
+        "the error should list the lints that do exist:\n{stderr}"
     );
     let _ = fs::remove_file(&path);
 }
@@ -3741,4 +3745,147 @@ fn an_s_variable_is_never_refuted_by_a_literal_kind() {
         );
         let _ = fs::remove_file(&path);
     }
+}
+
+/// T-4: driving a whole program to a residue actually evaluates it.
+///
+/// `Go` normally takes no arguments, so the old symbolic-only driver supplied
+/// an `e.Input` that matched nothing, learned nothing, and residualised the
+/// entire ground corpus to itself. Driving the closed entry configuration —
+/// the one Turchin starts from in §4.2 — collapses the program's work.
+#[test]
+fn driving_a_closed_entry_collapses_a_recursive_program() {
+    let output = residualize_driven_file("examples/runtime-recursion.ref", &[]);
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+
+    // `Reverse 'abc'` was the whole program's work; the residue is its answer.
+    assert!(
+        stdout.contains("= <Prout 'c' 'b' 'a'>;"),
+        "the recursion should be gone from the residue:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("Reverse {"),
+        "nothing should be left to reverse:\n{stdout}"
+    );
+}
+
+/// A residue is a program, so it has to check. Driving stops at calls it
+/// cannot decide and leaves them in the residue; every user function those
+/// calls reach must come with them, or the residue is not Refal.
+#[test]
+fn a_residue_retains_the_user_functions_it_still_calls() {
+    let output = residualize_driven_file("examples/condition.ref", &[]);
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+
+    assert!(
+        stdout.contains("<ContainsX e.Input>"),
+        "an undecidable call should stay a call:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("ContainsX {"),
+        "the residue calls ContainsX, so it must carry its definition:\n{stdout}"
+    );
+    // And the residue has to pass the checker the CLI applies to everything.
+    let residue = stdout
+        .split_once("$EXTERN")
+        .map(|(_, rest)| format!("$EXTERN{rest}"))
+        .or_else(|| {
+            stdout
+                .split_once("$ENTRY")
+                .map(|(_, r)| format!("$ENTRY{r}"))
+        })
+        .expect("residue source");
+    let path = scratch_source("refal-residue-retain", residue.trim_start_matches('\n'));
+    let checked = check_path(&path.to_string_lossy(), &[]);
+    assert!(
+        checked.status.success(),
+        "the residue does not check:\n{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+    let _ = fs::remove_file(&path);
+}
+
+/// `Prout` prints and returns the empty expression. Folding it to its argument
+/// — which driving once did — produces a residue that silently stops printing
+/// and leaks the printed value into the result: a wrong program that looks
+/// like a successful optimisation.
+#[test]
+fn driving_never_folds_a_side_effecting_builtin_away() {
+    let output = residualize_driven_file("examples/runtime-recursion.ref", &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    assert!(
+        stdout.contains("<Prout 'c' 'b' 'a'>"),
+        "the print must survive in the residue:\n{stdout}"
+    );
+
+    // And the residue has to produce what the source produced, which is the
+    // property the fold used to break.
+    let manifest = workspace_path("examples/differential-corpus.manifest");
+    let corpus = Command::new(refal_bin())
+        .args(["differential", &manifest, "--corpus"])
+        .output()
+        .expect("run corpus");
+    assert!(
+        corpus.status.success(),
+        "the residual corpus gate failed:\n{}",
+        String::from_utf8_lossy(&corpus.stderr)
+    );
+}
+
+/// `E : { sentences }` applies the block to `E` as an anonymous function. A
+/// block is not a pattern, and treating it as one makes every such condition
+/// fail — which silently sends control to the next sentence and changes the
+/// program's answer.
+#[test]
+fn driving_applies_a_block_in_condition_position_instead_of_matching_it() {
+    let output = residualize_driven_file("examples/condition-block.ref", &[]);
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+
+    // The two calls take different branches; a residue that answers the same
+    // thing twice has decided the block wrongly.
+    assert!(
+        stdout.contains("'A' 'C' 'C' 'E' 'P' 'T' 'E' 'D'"),
+        "the accepted branch is missing from the residue:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("'R' 'E' 'J' 'E' 'C' 'T' 'E' 'D'"),
+        "the rejected branch is missing from the residue:\n{stdout}"
+    );
+}
+
+/// `Mu` dispatches on a function name carried as data, so walking call terms
+/// cannot see what it will call. A residue that drops the definition fails at
+/// run time where the original succeeded.
+#[test]
+fn a_residue_keeps_every_definition_when_it_still_dispatches_dynamically() {
+    let output = residualize_driven_file("examples/runtime-mu.ref", &[]);
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    assert!(
+        stdout.contains("<Mu Echo 'Z'>"),
+        "the dynamic dispatch should stay a call:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("Echo {"),
+        "Mu can call Echo, so the residue must keep it:\n{stdout}"
+    );
 }
