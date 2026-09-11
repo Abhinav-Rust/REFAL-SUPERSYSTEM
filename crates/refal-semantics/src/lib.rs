@@ -71,11 +71,96 @@ impl Mode {
     }
 }
 
+/// A Tier 1 lint, as distinct from a spec violation.
+///
+/// Spec violations are not lints: `--classic` must reject them and no flag may
+/// silence them. A lint is a *statically proven* runtime failure or a piece of
+/// advice, and the reference has nothing to say about it, so it is the thing a
+/// per-lint flag may reasonably move.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Lint {
+    /// A sentence no call can ever reach.
+    DeadSentence,
+    /// A call whose argument cannot match any sentence of the callee.
+    RecognitionImpossible,
+    /// A builtin applied to an argument outside its domain.
+    BuiltinDomain,
+    /// An open `e`-variable that can cost super-linear matching time.
+    OpenExpressionComplexity,
+}
+
+impl Lint {
+    /// The name the CLI accepts for this lint.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::DeadSentence => "dead-sentence",
+            Self::RecognitionImpossible => "recognition-impossible",
+            Self::BuiltinDomain => "builtin-domain",
+            Self::OpenExpressionComplexity => "open-expression-complexity",
+        }
+    }
+
+    /// Every lint, for `-W all` and for the usage text.
+    pub fn all() -> &'static [Lint] {
+        &[
+            Self::DeadSentence,
+            Self::RecognitionImpossible,
+            Self::BuiltinDomain,
+            Self::OpenExpressionComplexity,
+        ]
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::all()
+            .iter()
+            .copied()
+            .find(|lint| lint.name().eq_ignore_ascii_case(name))
+    }
+}
+
+/// Per-lint severity overrides from `-W` / `-D` / `-A`.
+///
+/// The default level of each lint is what the check itself chose, so an empty
+/// `LintLevels` reproduces the published guarantee exactly. An override only
+/// moves the *diagnostic*: the language is never changed, which is what keeps
+/// `--classic` a pure conformance mode.
+#[derive(Debug, Clone, Default)]
+pub struct LintLevels {
+    overrides: Vec<(Lint, Severity)>,
+}
+
+impl LintLevels {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Records an override. A later flag for the same lint wins, so
+    /// `-D dead-sentence -A dead-sentence` means allow.
+    pub fn set(&mut self, lint: Lint, severity: Severity) {
+        self.overrides.retain(|(candidate, _)| *candidate != lint);
+        self.overrides.push((lint, severity));
+    }
+
+    pub fn level_for(&self, lint: Lint) -> Option<Severity> {
+        self.overrides
+            .iter()
+            .find(|(candidate, _)| *candidate == lint)
+            .map(|(_, severity)| *severity)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.overrides.is_empty()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Diagnostic {
     pub message: String,
     pub span: Span,
     pub severity: Severity,
+    /// `None` for a spec violation. `Some` for a Tier 1 lint, which is what a
+    /// `-W`/`-D`/`-A` flag is able to move.
+    pub lint: Option<Lint>,
 }
 
 impl Diagnostic {
@@ -101,6 +186,20 @@ pub fn check_program(program: &Program) -> Result<(), Vec<Diagnostic>> {
 /// Runs every check and returns all diagnostics, including the ones that the
 /// mode only reports.
 pub fn check_program_with_mode(program: &Program, mode: Mode) -> Vec<Diagnostic> {
+    check_program_with_levels(program, mode, &LintLevels::new())
+}
+
+/// Runs every check, then applies per-lint severity overrides.
+///
+/// `-W`, `-D` and `-A` move the *diagnostics*, never the language: a spec
+/// violation still fails in every mode. That is the whole point of the severity
+/// model, and it is why the overrides are applied after the checks rather than
+/// threaded through them.
+pub fn check_program_with_levels(
+    program: &Program,
+    mode: Mode,
+    levels: &LintLevels,
+) -> Vec<Diagnostic> {
     let mut checker = Checker::default();
     checker.collect_items(program);
     checker.check_calls(program);
@@ -111,6 +210,25 @@ pub fn check_program_with_mode(program: &Program, mode: Mode) -> Vec<Diagnostic>
     lints::recognition_impossible(program, &mut diagnostics);
     lints::builtin_domains(program, &mut diagnostics);
     lints::open_expression_complexity(program, &mut diagnostics);
+
+    for diagnostic in &mut diagnostics {
+        if let Some(lint) = diagnostic.lint
+            && let Some(severity) = levels.level_for(lint)
+        {
+            diagnostic.severity = severity;
+        }
+    }
+
+    // An explicit `-A` suppresses the lint outright, the way rustc's `allow`
+    // does. This is distinct from a lint whose *default* is `Allow` (opt-in
+    // pedantry), which is hidden in Classic mode but still reported under
+    // `--strict` -- silencing those by default would hide the thing that
+    // makes `--strict` worth passing.
+    diagnostics.retain(|diagnostic| {
+        !diagnostic
+            .lint
+            .is_some_and(|lint| levels.level_for(lint) == Some(Severity::Allow))
+    });
 
     // `Allow` is opt-in pedantry, so Classic mode does not even show it.
     if mode == Mode::Classic {
@@ -437,6 +555,7 @@ impl Checker {
             message,
             span,
             severity,
+            lint: None,
         });
     }
 }
@@ -900,6 +1019,7 @@ mod tests {
                 message: "function calls are not allowed in patterns".to_string(),
                 span: call_span,
                 severity: Severity::Error,
+                lint: None,
             }));
     }
 
@@ -929,6 +1049,7 @@ mod tests {
                 message: "function `Go` has no sentences".to_string(),
                 span: Span { start: 0, end: 7 },
                 severity: Severity::Error,
+                lint: None,
             }));
     }
 
@@ -970,6 +1091,7 @@ mod tests {
                     .to_string(),
                 span: call_span,
                 severity: Severity::Error,
+                lint: None,
             }));
     }
 

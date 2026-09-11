@@ -35,6 +35,31 @@ changing the language.
 `--classic` accepts exactly what Turchin's Refal-5 accepts. **The language is
 never modified — only the diagnostics differ.**
 
+### Per-lint control
+
+The mode sets the default level for every lint at once. `-W`, `-D` and `-A`
+override one lint at a time, or all of them with `all`:
+
+| Flag | Effect |
+|---|---|
+| `-W <lint>` | report as a `warning` |
+| `-D <lint>` | raise to a `proven defect`, which `--strict` fails on |
+| `-A <lint>` | suppress the diagnostic entirely |
+
+The lints are `dead-sentence`, `recognition-impossible`, `builtin-domain` and
+`open-expression-complexity`. Both `-W dead-sentence` and `-Wdead-sentence` are
+accepted, and a later flag for the same lint wins.
+
+**A lint flag cannot touch a spec violation.** Only diagnostics that carry a
+lint are affected, and spec violations carry none, so no combination of flags
+can make the compiler accept a program the reference rejects. A test asserts
+this directly across `-A all`, `-W all` and `--strict -A all`.
+
+Suppressing with `-A` is distinct from a lint whose *default* is `note`: the
+open-`e` lint is hidden in `--classic` and visible under `--strict`, because
+silencing opt-in pedantry by default would remove the reason to pass
+`--strict`.
+
 ## Soundness rule
 
 Every analysis in `crates/refal-semantics/src/lints.rs` must be **sound**: it may
@@ -122,5 +147,3 @@ disagree about what an integer literal denotes.
 - Exhaustiveness where the format lattice is too coarse to separate the
   argument from what the callee accepts. Widening `Shape` — describing bracket
   *contents*, or distinguishing character from number — is the next step.
-- `-W` / `-D` / `-A` per-lint control. Today the mode sets the default for every
-  lint at once.

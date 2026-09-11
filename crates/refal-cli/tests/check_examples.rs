@@ -3552,3 +3552,119 @@ fn drives_through_a_macrodigit_constant_in_a_metacoded_program() {
         "an s-variable must bind a number:/n{stdout}"
     );
 }
+
+/// `-A` suppresses a lint outright, the way rustc's `allow` does, and it is
+/// what makes `--strict` usable on a codebase that has not yet cleaned up.
+#[test]
+fn an_explicit_allow_flag_suppresses_a_lint() {
+    let source = "$ENTRY Go {\n  e.X = 1;\n  s.Y = 2;\n}\n";
+    let path = scratch_source("refal-lint-allow", source);
+    let rendered = path.to_string_lossy().into_owned();
+
+    let strict = check_path(&rendered, &["--strict"]);
+    assert!(!strict.status.success(), "--strict should fail by default");
+
+    let allowed = check_path(&rendered, &["--strict", "-A", "dead-sentence"]);
+    assert!(
+        allowed.status.success(),
+        "-A must suppress the lint: {}",
+        String::from_utf8_lossy(&allowed.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&allowed.stderr).is_empty(),
+        "-A must suppress it entirely, not downgrade it"
+    );
+    let _ = fs::remove_file(&path);
+}
+
+/// The open-`e` lint is opt-in pedantry: a note under `--strict`, fatal only
+/// when the user asks for it. `-D` is that ask, and the compact `-Dname` form
+/// has to work as well as the separated one.
+#[test]
+fn a_deny_flag_promotes_an_opt_in_lint_to_a_failure() {
+    let source = "$ENTRY Go {\n  e.A 'x' e.B = 1;\n}\n";
+    let path = scratch_source("refal-lint-deny", source);
+    let rendered = path.to_string_lossy().into_owned();
+
+    let default = check_path(&rendered, &["--strict"]);
+    assert!(
+        default.status.success(),
+        "a note must not fail the build by default"
+    );
+    assert!(
+        String::from_utf8_lossy(&default.stderr).contains("note at"),
+        "the pedantry should still be visible under --strict"
+    );
+
+    for flag in ["-Dopen-expression-complexity", "-D"] {
+        let args: Vec<&str> = if flag == "-D" {
+            vec!["--strict", "-D", "open-expression-complexity"]
+        } else {
+            vec!["--strict", flag]
+        };
+        let denied = check_path(&rendered, &args);
+        assert!(
+            !denied.status.success(),
+            "`{flag}` should make the lint fatal"
+        );
+        assert!(
+            String::from_utf8_lossy(&denied.stderr).contains("proven defect"),
+            "`{flag}` should raise it to a proven defect"
+        );
+    }
+    let _ = fs::remove_file(&path);
+}
+
+/// The severity model's central promise: `--classic` is a pure conformance
+/// mode, so no lint flag may turn a spec violation into something the compiler
+/// will run. If this test ever fails, the language has been changed by a flag.
+#[test]
+fn no_lint_flag_can_silence_a_spec_violation() {
+    let source = "$ENTRY Go {\n  e.X = e.Missing;\n}\n";
+    let path = scratch_source("refal-lint-spec", source);
+    let rendered = path.to_string_lossy().into_owned();
+
+    for args in [
+        vec!["--classic", "-A", "all"],
+        vec!["--classic", "-W", "all"],
+        vec!["--strict", "-A", "all"],
+        vec![
+            "--classic",
+            "-A",
+            "dead-sentence",
+            "-A",
+            "recognition-impossible",
+        ],
+    ] {
+        let output = check_path(&rendered, &args);
+        assert!(
+            !output.status.success(),
+            "{args:?} silenced a spec violation"
+        );
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("semantic error"),
+            "{args:?} should still report the spec violation"
+        );
+    }
+    let _ = fs::remove_file(&path);
+}
+
+/// An unknown lint name is a usage error, not a silently ignored flag.
+#[test]
+fn rejects_an_unknown_lint_name() {
+    let source = "$ENTRY Go {\n  = 1;\n}\n";
+    let path = scratch_source("refal-lint-unknown", source);
+    let output = check_path(&path.to_string_lossy(), &["-W", "no-such-lint"]);
+
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("unknown lint `no-such-lint`"),
+        "unexpected stderr:/n{stderr}"
+    );
+    assert!(
+        stderr.contains("dead-sentence"),
+        "the error should list the lints that do exist:/n{stderr}"
+    );
+    let _ = fs::remove_file(&path);
+}

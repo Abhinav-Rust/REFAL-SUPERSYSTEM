@@ -34,8 +34,8 @@ objective to a gate. Not another Refal implementation.
 
 | | |
 |---|---|
-| Honest completion | **~85%** |
-| Tests | 233 passing, 0 clippy, fmt clean |
+| Honest completion | **~86%** |
+| Tests | 237 passing, 0 clippy, fmt clean |
 | Last commit | `99d17fc` then this commit |
 | Working tree | clean |
 
@@ -47,11 +47,11 @@ objective to a gate. Not another Refal implementation.
 | Bootstrap semantics | 6.0% | 5.0 |
 | Refal machine / runtime | 19.5% | 17.0 |
 | Graph of states / Refal emission | 8.5% | 7.7 |
-| Static verification (Tier 1) | 15.0% | 12.0 |
+| Static verification (Tier 1) | 15.0% | 13.0 |
 | Compiler implemented in Refal | 25.5% | 20.0 |
 | Verified self-hosting fixpoint | 13.0% | 12.0 |
 | Conformance / release evidence | 4.0% | 3.0 |
-| **Total** | **100%** | **~85%** |
+| **Total** | **100%** | **~86%** |
 
 ### Done
 
@@ -85,6 +85,11 @@ objective to a gate. Not another Refal implementation.
   positives across the corpus. All three classes the guarantee names are now
   implemented. `docs/VERIFICATION-CONTRACT.md` is normative.
 - **T-7 function formats (§2.3)** inferred to a fixpoint across call boundaries.
+- **`-W` / `-D` / `-A` per-lint control.** Diagnostics carry the lint that
+  produced them, so each of `dead-sentence`, `recognition-impossible`,
+  `builtin-domain` and `open-expression-complexity` can be warned, denied or
+  suppressed individually. A lint flag moves diagnostics only; a test asserts
+  no flag can silence a spec violation.
 
 ### Done — T-9, the metasystem transition
 
@@ -122,8 +127,7 @@ cannot specialise must at least preserve what it was given.
 
 ### Open
 
-- **Exhaustiveness where the format lattice is too coarse**, and `-W`/`-D`/`-A`
-  per-lint control.
+- **Exhaustiveness where the format lattice is too coarse.**
 - **T-1** a non-trivial program transformer written in Refal. The compiler
   slices are a start; a transformer that is not itself a compiler is the
   remaining case.
@@ -161,8 +165,8 @@ Order:
 3. Clean the result (T-6, §4.3) and residualize the whole graph, not the
    reachable slice.
 
-Then the remaining Tier 1 precision work — exhaustiveness where the format
-lattice is too coarse, and `-W`/`-D`/`-A` per-lint control.
+Then the remaining Tier 1 precision work: exhaustiveness where the format
+lattice is too coarse.
 
 The soundness gate is unchanged and non-negotiable:
 `strict_mode_has_no_false_positives_on_the_corpus` must stay green. If a new

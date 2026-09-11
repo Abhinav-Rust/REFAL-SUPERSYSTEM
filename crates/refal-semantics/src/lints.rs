@@ -13,7 +13,7 @@ use refal_ast::{
     canonical_identifier, canonical_variable_index,
 };
 
-use crate::{Diagnostic, Formats, Severity, infer_formats};
+use crate::{Diagnostic, Formats, Lint, Severity, infer_formats};
 
 /// Reports sentences that can never be reached.
 ///
@@ -167,6 +167,7 @@ fn check_recognised(
                     "`<{name} ...>` always fails: `{name}` accepts {accepted}, but this call passes {argument}"
                 ),
                 span,
+                lint: Some(Lint::RecognitionImpossible),
             });
             return;
         }
@@ -179,6 +180,7 @@ fn check_recognised(
                 "`<{name} ...>` always fails: no sentence of `{name}` matches this argument"
             ),
             span,
+            lint: Some(Lint::RecognitionImpossible),
         });
     }
 }
@@ -202,6 +204,7 @@ pub fn open_expression_complexity(program: &Program, out: &mut Vec<Diagnostic>) 
             if count >= 2 {
                 out.push(Diagnostic {
                     severity: Severity::Allow,
+                    lint: Some(Lint::OpenExpressionComplexity),
                     message: format!(
                         "sentence of `{name}` has {count} `e.`-variables in its pattern; \
                          matching may backtrack proportionally to the argument length \
@@ -247,6 +250,7 @@ fn report_dead(owner: &str, sentences: &[Sentence], out: &mut Vec<Diagnostic>) {
                     earlier_index + 1
                 ),
                 span: sentence.span,
+                lint: Some(Lint::DeadSentence),
             });
         }
     }
@@ -339,6 +343,7 @@ fn fails(name: &str, reason: &str, span: Span) -> Diagnostic {
         severity: Severity::Deny,
         message: format!("`<{name} ...>` always fails: {reason}"),
         span,
+        lint: Some(Lint::BuiltinDomain),
     }
 }
 

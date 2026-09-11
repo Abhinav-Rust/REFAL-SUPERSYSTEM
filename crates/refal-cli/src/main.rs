@@ -28,7 +28,7 @@ fn main() {
         process::exit(2);
     };
     let input_args: Vec<String> = args.collect();
-    let (mode, input_args) = parse_mode(input_args);
+    let (mode, levels, input_args) = parse_mode(input_args);
 
     if command == "differential" && input_args.first().is_some_and(|flag| flag == "--corpus") {
         differential_corpus(&path);
@@ -66,7 +66,7 @@ fn main() {
         }
     };
 
-    let diagnostics = refal_semantics::check_program_with_mode(&program, mode);
+    let diagnostics = refal_semantics::check_program_with_levels(&program, mode, &levels);
     let fatal = refal_semantics::failing(&diagnostics, mode);
 
     // `check` is where the diagnosis is the point, so it reports everything a
@@ -126,23 +126,103 @@ fn main() {
     }
 }
 
-/// Pulls `--classic` / `--strict` out of the argument list.
+/// Pulls `--classic` / `--strict` and the `-W` / `-D` / `-A` lint flags out of
+/// the argument list.
 ///
 /// `--classic` accepts exactly what Turchin's Refal-5 accepts, so only a spec
 /// violation fails the build. `--strict` additionally fails on what is
 /// statically proven: a runtime failure, or a sentence that cannot be reached.
-/// The language itself is never modified -- only the diagnostics differ.
-fn parse_mode(args: Vec<String>) -> (refal_semantics::Mode, Vec<String>) {
+/// The language itself is never modified -- only the diagnostics differ, which
+/// is why a lint flag can never turn a spec violation into a warning.
+fn parse_mode(
+    args: Vec<String>,
+) -> (
+    refal_semantics::Mode,
+    refal_semantics::LintLevels,
+    Vec<String>,
+) {
     let mut mode = refal_semantics::Mode::Classic;
+    let mut levels = refal_semantics::LintLevels::new();
     let mut rest = Vec::with_capacity(args.len());
-    for arg in args {
-        match arg.as_str() {
+    let mut cursor = 0;
+    while cursor < args.len() {
+        let flag = args[cursor].as_str();
+        match flag {
             "--classic" => mode = refal_semantics::Mode::Classic,
             "--strict" => mode = refal_semantics::Mode::Strict,
+            _ if is_lint_flag(flag) => {
+                let severity = lint_severity(flag).expect("lint flag has a severity");
+                let (lint_name, consumed) = match flag.len() {
+                    2 => match args.get(cursor + 1) {
+                        Some(name) => (name.as_str(), 2),
+                        None => {
+                            eprintln!("`{flag}` needs a lint name; see `refal --help`");
+                            process::exit(2);
+                        }
+                    },
+                    _ => (&flag[2..], 1),
+                };
+                apply_lint_flag(&mut levels, severity, lint_name);
+                cursor += consumed;
+                continue;
+            }
             other => rest.push(other.to_owned()),
         }
+        cursor += 1;
     }
-    (mode, rest)
+    (mode, levels, rest)
+}
+
+/// `-W`, `-D` and `-A` set a lint's severity to warn, deny and allow.
+///
+/// They move diagnostics only. A spec violation still fails in every mode, so
+/// `--classic` stays a pure conformance mode no matter what is passed here.
+fn is_lint_flag(flag: &str) -> bool {
+    lint_severity(flag).is_some()
+}
+
+fn lint_severity(flag: &str) -> Option<refal_semantics::Severity> {
+    if !flag.starts_with('-') || flag.len() < 2 {
+        return None;
+    }
+    match flag.as_bytes()[1] {
+        b'W' if flag.len() == 2 || flag.as_bytes()[2].is_ascii_alphabetic() => {
+            Some(refal_semantics::Severity::Warn)
+        }
+        b'D' if flag.len() == 2 || flag.as_bytes()[2].is_ascii_alphabetic() => {
+            Some(refal_semantics::Severity::Deny)
+        }
+        b'A' if flag.len() == 2 || flag.as_bytes()[2].is_ascii_alphabetic() => {
+            Some(refal_semantics::Severity::Allow)
+        }
+        _ => None,
+    }
+}
+
+fn apply_lint_flag(
+    levels: &mut refal_semantics::LintLevels,
+    severity: refal_semantics::Severity,
+    name: &str,
+) {
+    if name.eq_ignore_ascii_case("all") {
+        for lint in refal_semantics::Lint::all() {
+            levels.set(*lint, severity);
+        }
+        return;
+    }
+    match refal_semantics::Lint::from_name(name) {
+        Some(lint) => levels.set(lint, severity),
+        None => {
+            let known = refal_semantics::Lint::all()
+                .iter()
+                .map(|lint| lint.name())
+                .collect::<Vec<_>>()
+                .join(", ");
+            eprintln!("unknown lint `{name}`");
+            eprintln!("known lints: {known}, all");
+            process::exit(2);
+        }
+    }
 }
 
 fn print_usage() {
@@ -152,6 +232,12 @@ fn print_usage() {
     eprintln!("  check      Check a Refal source file for syntax and semantic errors");
     eprintln!("             [--classic] accept exactly what Refal-5 accepts (default)");
     eprintln!("             [--strict]  also fail on statically proven defects");
+    eprintln!("             [-W lint]   report lint as a warning");
+    eprintln!("             [-D lint]   make lint fail the build");
+    eprintln!("             [-A lint]   suppress lint entirely");
+    eprintln!("             lints: dead-sentence, recognition-impossible, builtin-domain,");
+    eprintln!("                    open-expression-complexity, or `all`");
+    eprintln!("             A lint flag moves diagnostics only; a spec violation always fails.");
     eprintln!("  dump-ast   Print the parsed AST");
     eprintln!("  lower      Lower checked Refal source to normalized Core Refal");
     eprintln!("  compile    Compile Refal source with the Refal-authored compiler");
