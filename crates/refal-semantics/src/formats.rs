@@ -24,28 +24,80 @@
 use std::collections::HashMap;
 use std::fmt;
 
-use refal_ast::{Function, Item, Program, Term, TermKind, VariableKind, canonical_identifier};
+use refal_ast::{
+    Function, Item, Program, Symbol, Term, TermKind, VariableKind, canonical_identifier,
+};
 
 /// The abstract shape of a single top-level term.
+///
+/// The three literal kinds are kept apart rather than collapsed into one
+/// `Symbol`, because a character literal and a number literal can never be the
+/// same term. That distinction is what lets exhaustiveness prove a call fails
+/// without the argument being a literal: `<F 'a'>` against a `F` that only
+/// accepts numbers is refutable even though `F`'s own format is `[S]`.
+///
+/// An `s.`-variable is [`Shape::Symbol`], not one of the three: it ranges over
+/// all of them, so it is deliberately the *join*, and a `[Symbol]` is never
+/// disjoint from a `[Char]`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Shape {
-    /// A symbol: a character, identifier, number, or an `s.`-variable.
+    /// A character literal.
+    Char,
+    /// A number literal (a macrodigit).
+    Number,
+    /// An identifier literal.
+    Identifier,
+    /// Any symbol: an `s.`-variable, or the join of the three literal kinds.
     Symbol,
     /// A structural bracket. Its contents are not described.
     Bracket,
-    /// A `t.`-variable, or the join of two shapes that disagree.
+    /// A `t.`-variable, or the join of shapes that disagree.
     Unknown,
 }
 
 impl Shape {
+    /// Whether this shape describes symbols at all.
+    fn is_symbolic(self) -> bool {
+        matches!(
+            self,
+            Self::Char | Self::Number | Self::Identifier | Self::Symbol
+        )
+    }
+
+    /// Whether every term of `other` is also a term of `self`. Used to decide
+    /// disjointness, which must never claim two overlapping shapes are apart.
+    fn subsumes(self, other: Self) -> bool {
+        match (self, other) {
+            (Self::Unknown, _) => true,
+            (Self::Symbol, other) => other.is_symbolic(),
+            (left, right) => left == right,
+        }
+    }
+
     fn join(self, other: Self) -> Self {
-        if self == other { self } else { Self::Unknown }
+        if self == other {
+            return self;
+        }
+        if self.subsumes(other) {
+            return self;
+        }
+        if other.subsumes(self) {
+            return other;
+        }
+        // Three literal kinds that disagree are still all symbols.
+        if self.is_symbolic() && other.is_symbolic() {
+            return Self::Symbol;
+        }
+        Self::Unknown
     }
 }
 
 impl fmt::Display for Shape {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Char => formatter.write_str("C"),
+            Self::Number => formatter.write_str("N"),
+            Self::Identifier => formatter.write_str("I"),
             Self::Symbol => formatter.write_str("S"),
             Self::Bracket => formatter.write_str("B"),
             Self::Unknown => formatter.write_str("?"),
@@ -201,10 +253,11 @@ impl fmt::Display for Format {
     }
 }
 
-/// Two shapes are disjoint only when they are different and neither is
-/// unknown: a symbol is never a bracket, but an unknown term may be either.
+/// Two shapes are disjoint exactly when neither subsumes the other. A symbol is
+/// never a bracket, and a character is never a number, but a `[Symbol]` and a
+/// `[Char]` overlap and an unknown term overlaps with everything.
 fn shapes_disjoint(left: Shape, right: Shape) -> bool {
-    left != right && left != Shape::Unknown && right != Shape::Unknown
+    !left.subsumes(right) && !right.subsumes(left)
 }
 
 /// Inferred formats for every function in a program.
@@ -332,11 +385,22 @@ fn result_format_of(function: &Function, current: &HashMap<String, Format>) -> F
         })
 }
 
+/// The shape of a symbol literal. The three kinds are kept apart because they
+/// can never coincide, which is what lets exhaustiveness refute a call whose
+/// argument is a literal of the wrong kind.
+fn symbol_shape(symbol: &Symbol) -> Shape {
+    match symbol {
+        Symbol::Char(_) => Shape::Char,
+        Symbol::Number(_) => Shape::Number,
+        Symbol::Identifier(_) => Shape::Identifier,
+    }
+}
+
 fn format_of_terms(terms: &[Term]) -> Format {
     let mut format = Format::empty();
     for term in terms {
         match &term.kind {
-            TermKind::Symbol(_) => format.push(Shape::Symbol),
+            TermKind::Symbol(symbol) => format.push(symbol_shape(symbol)),
             TermKind::Variable(variable) => match variable.kind {
                 VariableKind::Symbol => format.push(Shape::Symbol),
                 VariableKind::Term => format.push(Shape::Unknown),
@@ -361,7 +425,7 @@ fn format_of_result(terms: &[Term], current: &HashMap<String, Format>) -> Format
     let mut format = Format::empty();
     for term in terms {
         match &term.kind {
-            TermKind::Symbol(_) => format.push(Shape::Symbol),
+            TermKind::Symbol(symbol) => format.push(symbol_shape(symbol)),
             TermKind::Variable(variable) => match variable.kind {
                 VariableKind::Symbol => format.push(Shape::Symbol),
                 VariableKind::Term => format.push(Shape::Unknown),
@@ -391,4 +455,58 @@ fn format_of_result(terms: &[Term], current: &HashMap<String, Format>) -> Format
         }
     }
     format
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Widening the lattice must never invent a disjointness that is not there.
+    /// Every claim below is about whether two shapes can coincide, and the
+    /// answer has to match what the runtime matcher would do.
+    #[test]
+    fn disjointness_follows_subsumption_rather_than_inequality() {
+        // Different literal kinds can never coincide.
+        assert!(shapes_disjoint(Shape::Char, Shape::Number));
+        assert!(shapes_disjoint(Shape::Char, Shape::Identifier));
+        assert!(shapes_disjoint(Shape::Number, Shape::Identifier));
+        // A symbol may be any of them, so it overlaps with each.
+        assert!(!shapes_disjoint(Shape::Symbol, Shape::Char));
+        assert!(!shapes_disjoint(Shape::Symbol, Shape::Number));
+        assert!(!shapes_disjoint(Shape::Symbol, Shape::Identifier));
+        // A bracket is never a symbol of any kind.
+        assert!(shapes_disjoint(Shape::Bracket, Shape::Char));
+        assert!(shapes_disjoint(Shape::Bracket, Shape::Symbol));
+        // An unknown term may be anything, so it is disjoint from nothing.
+        for shape in [
+            Shape::Char,
+            Shape::Number,
+            Shape::Identifier,
+            Shape::Symbol,
+            Shape::Bracket,
+        ] {
+            assert!(!shapes_disjoint(Shape::Unknown, shape));
+            assert!(!shapes_disjoint(shape, Shape::Unknown));
+        }
+    }
+
+    #[test]
+    fn joining_disagreeing_literal_kinds_gives_a_symbol() {
+        assert_eq!(Shape::Char.join(Shape::Number), Shape::Symbol);
+        assert_eq!(Shape::Char.join(Shape::Identifier), Shape::Symbol);
+        assert_eq!(Shape::Number.join(Shape::Identifier), Shape::Symbol);
+        // A symbol already subsumes each of them.
+        assert_eq!(Shape::Symbol.join(Shape::Char), Shape::Symbol);
+        assert_eq!(Shape::Char.join(Shape::Symbol), Shape::Symbol);
+        // A bracket is not a symbol, so the join is unknown.
+        assert_eq!(Shape::Char.join(Shape::Bracket), Shape::Unknown);
+    }
+
+    #[test]
+    fn a_symbol_variable_is_not_a_character() {
+        // The soundness of the widening rests on this: `s.A` ranges over every
+        // symbol, so `[S]` must not be reported as disjoint from `[C]`.
+        let symbol_variable = Shape::Symbol;
+        assert!(!shapes_disjoint(symbol_variable, Shape::Char));
+    }
 }

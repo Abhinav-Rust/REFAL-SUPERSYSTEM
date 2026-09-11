@@ -35,7 +35,7 @@ objective to a gate. Not another Refal implementation.
 | | |
 |---|---|
 | Honest completion | **~86%** |
-| Tests | 237 passing, 0 clippy, fmt clean |
+| Tests | 242 passing, 0 clippy, fmt clean |
 | Last commit | `99d17fc` then this commit |
 | Working tree | clean |
 
@@ -47,7 +47,7 @@ objective to a gate. Not another Refal implementation.
 | Bootstrap semantics | 6.0% | 5.0 |
 | Refal machine / runtime | 19.5% | 17.0 |
 | Graph of states / Refal emission | 8.5% | 7.7 |
-| Static verification (Tier 1) | 15.0% | 13.0 |
+| Static verification (Tier 1) | 15.0% | 13.5 |
 | Compiler implemented in Refal | 25.5% | 20.0 |
 | Verified self-hosting fixpoint | 13.0% | 12.0 |
 | Conformance / release evidence | 4.0% | 3.0 |
@@ -127,7 +127,8 @@ cannot specialise must at least preserve what it was given.
 
 ### Open
 
-- **Exhaustiveness where the format lattice is too coarse.**
+- **Bracket contents in the format lattice.** `Shape::Bracket` is opaque, so
+  `<F ('a')>` against a callee accepting only `(1)` is not refuted.
 - **T-1** a non-trivial program transformer written in Refal. The compiler
   slices are a start; a transformer that is not itself a compiler is the
   remaining case.
@@ -165,8 +166,8 @@ Order:
 3. Clean the result (T-6, §4.3) and residualize the whole graph, not the
    reachable slice.
 
-Then the remaining Tier 1 precision work: exhaustiveness where the format
-lattice is too coarse.
+Then the remaining Tier 1 precision: bracket *contents* in the format lattice,
+which needs a recursive extension rather than another shape.
 
 The soundness gate is unchanged and non-negotiable:
 `strict_mode_has_no_false_positives_on_the_corpus` must stay green. If a new

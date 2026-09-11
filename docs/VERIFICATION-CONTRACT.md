@@ -76,6 +76,12 @@ Soundness is bought by under-approximating rather than over-approximating:
 - A `t.`- or `e.`-variable in the *specific* pattern is opaque. At run time it
   may denote a bracket, which an `s.`-variable cannot match, so an `s.`-variable
   is never assumed to cover it.
+- The shape lattice keeps the three literal kinds apart — `C` character, `N`
+  number, `I` identifier — because they can never coincide, and joins them back
+  to `S` (any symbol) when they disagree. An `s.`-variable is `S`, never one of
+  the three, so a callee that accepts only numbers does **not** refute it. That
+  is the direction that matters: the widening has to buy precision without
+  inventing a disjointness that is not there.
 
 ## Implemented checks
 
@@ -116,6 +122,14 @@ denote a symbol while `OnlyBracket` accepts `[B]`. `Format::disjoint` answers
 "definitely disjoint", never "definitely overlapping", so `?` overlaps with
 everything and length ranges that merely might miss each other do not count.
 
+The shape lattice keeps the three literal kinds apart — `C` character, `N`
+number, `I` identifier — because they can never coincide, and joins them back to
+`S` (any symbol) when they disagree. So `<F 'a'>` is refuted when `F` only
+accepts numbers: `'a'` is `[C]`, `F` accepts `[N]`, and a character is never a
+number. An `s.`-variable is `S`, never one of the three, so it is **not**
+refuted by any single literal kind — which is the direction that keeps the
+widening sound. A test pins that directly.
+
 Both under-approximate: a sentence whose conditions would fail at run time is
 still counted as matching, so neither can report a call that succeeds.
 
@@ -144,6 +158,7 @@ disagree about what an integer literal denotes.
 
 ## Not yet implemented
 
-- Exhaustiveness where the format lattice is too coarse to separate the
-  argument from what the callee accepts. Widening `Shape` — describing bracket
-  *contents*, or distinguishing character from number — is the next step.
+- Bracket *contents* in the format lattice. `Shape::Bracket` is opaque, so
+  `<F ('a')>` against a callee that only accepts `(1)` is not refuted. The
+  contents would need their own format, which is a recursive extension of the
+  lattice rather than another shape.

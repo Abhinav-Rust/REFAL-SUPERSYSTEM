@@ -2064,15 +2064,25 @@ fn formats_file(path: &str) -> std::process::Output {
 #[test]
 fn formats_reports_argument_and_result_shapes() {
     // Function formats (Turchin 1980 2.3): what a function can be applied to,
-    // and what it can return. `S` is a symbol, `B` a bracket, `?` an unknown
-    // term, `..` an open tail.
+    // and what it can return. `C` is a character, `N` a number, `I` an
+    // identifier, `S` any symbol (an `s.`-variable, or three literal kinds that
+    // disagree), `B` a bracket, `?` an unknown term, `..` an open tail.
+    //
+    // The three literal kinds are kept apart because they can never coincide.
+    // That is what lets exhaustiveness refute a call whose argument is a
+    // literal of the wrong kind, while `s.` stays `S` and is never refuted.
     let cases = [
         (
             "$ENTRY Go {\n  (s1s2s3) = s3 s2 s1;\n}\n",
             "Go: [B] -> [S S S]",
         ),
         ("$ENTRY Go {\n  (e.X) = e.X;\n}\n", "Go: [B] -> [..]"),
-        ("$ENTRY Go {\n  = 'a';\n}\n", "Go: [] -> [S]"),
+        ("$ENTRY Go {\n  = 'a';\n}\n", "Go: [] -> [C]"),
+        ("$ENTRY Go {\n  = 1;\n}\n", "Go: [] -> [N]"),
+        ("$ENTRY Go {\n  = Foo;\n}\n", "Go: [] -> [I]"),
+        // Three disagreeing literal kinds are still all symbols.
+        ("$ENTRY Go {\n  = 'a' 1 Foo;\n}\n", "Go: [] -> [C N I]"),
+        ("$ENTRY Go {\n  s.A = 1;\n}\n", "Go: [S] -> [N]"),
         ("$ENTRY Go {\n  = (1 2);\n}\n", "Go: [] -> [B]"),
         ("$ENTRY Go {\n  t.X = t.X;\n}\n", "Go: [?] -> [?]"),
     ];
@@ -3667,4 +3677,68 @@ fn rejects_an_unknown_lint_name() {
         "the error should list the lints that do exist:/n{stderr}"
     );
     let _ = fs::remove_file(&path);
+}
+
+/// Exhaustiveness past literals: the argument need not be a literal for the
+/// call to be refutable. A character and a number can never be the same term,
+/// so a callee that only accepts numbers refutes a character argument.
+#[test]
+fn refutes_a_call_whose_literal_is_of_the_wrong_kind() {
+    let cases = [
+        (
+            "$ENTRY Go {\n  = <F 'a'>;\n}\nF {\n  1 = 'x';\n}\n",
+            "accepts [N], but this call passes [C]",
+        ),
+        (
+            "$ENTRY Go {\n  = <F Foo>;\n}\nF {\n  'a' = 'x';\n}\n",
+            "accepts [C], but this call passes [I]",
+        ),
+        // Each sentence of `F` is refuted separately, so this is reported as
+        // recognition impossible rather than as a format disagreement.
+        (
+            "$ENTRY Go {\n  = <F 1>;\n}\nF {\n  'a' = 'x';\n  Foo = 'y';\n}\n",
+            "no sentence of `F` matches this argument",
+        ),
+    ];
+    for (source, expected) in cases {
+        let path = scratch_source("refal-shape-widen", source);
+        let rendered = path.to_string_lossy().into_owned();
+        let strict = check_path(&rendered, &["--strict"]);
+        assert!(
+            !strict.status.success(),
+            "strict accepted a refutable call: {source:?}"
+        );
+        let reported = String::from_utf8_lossy(&strict.stderr);
+        assert!(
+            reported.contains(expected),
+            "expected {expected:?} in {reported:?}"
+        );
+        // And it is still legal Refal-5, so classic accepts it.
+        assert!(
+            check_path(&rendered, &[]).status.success(),
+            "classic rejected a legal Refal-5 program: {source:?}"
+        );
+        let _ = fs::remove_file(&path);
+    }
+}
+
+/// The widening must not over-claim. An `s.`-variable ranges over every symbol
+/// — characters, numbers and identifiers alike — so a callee that accepts only
+/// numbers must NOT refute it. This is the false-positive guard on the whole
+/// shape lattice, and it is the reason the three literal kinds join back to
+/// `Symbol` instead of to `Unknown`.
+#[test]
+fn an_s_variable_is_never_refuted_by_a_literal_kind() {
+    for callee in ["1 = 'x';", "'a' = 'x';", "Foo = 'x';"] {
+        let source = format!("$ENTRY Go {{\n  s.A = <F s.A>;\n}}\nF {{\n  {callee}\n}}\n");
+        let path = scratch_source("refal-shape-symbol", &source);
+        let rendered = path.to_string_lossy().into_owned();
+        let strict = check_path(&rendered, &["--strict"]);
+        assert!(
+            strict.status.success(),
+            "an s-variable was refuted by `{callee}`: {}",
+            String::from_utf8_lossy(&strict.stderr)
+        );
+        let _ = fs::remove_file(&path);
+    }
 }
