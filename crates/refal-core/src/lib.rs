@@ -1217,31 +1217,10 @@ fn match_shape_pattern(
             let Some(input_term) = input.get(input_index) else {
                 return (SymbolicMatch::No, None);
             };
-            let compatible = match kind {
-                VariableKind::Symbol => matches!(
-                    input_term.kind,
-                    CoreTermKind::Char(_)
-                        | CoreTermKind::Variable {
-                            kind: VariableKind::Symbol,
-                            ..
-                        }
-                ),
-                VariableKind::Term => matches!(
-                    input_term.kind,
-                    CoreTermKind::Bracket(_)
-                        | CoreTermKind::Variable {
-                            kind: VariableKind::Term,
-                            ..
-                        }
-                ),
-                VariableKind::Expression => unreachable!(),
-            };
-            if !compatible {
-                return if contains_symbolic_variable(input_term) {
-                    (SymbolicMatch::Unknown, None)
-                } else {
-                    (SymbolicMatch::No, None)
-                };
+            match symbolic_variable_accepts(*kind, input_term) {
+                Some(true) => {}
+                Some(false) => return (SymbolicMatch::No, None),
+                None => return (SymbolicMatch::Unknown, None),
             }
             if let Some(previous) = bindings.get(&key)
                 && previous != &vec![input_term.clone()]
@@ -1281,6 +1260,47 @@ fn match_shape_pattern(
         *bindings = result_bindings;
     }
     result
+}
+
+/// Whether a single input term can be bound to a variable of the given kind.
+///
+/// `None` means the answer depends on information driving does not have: the
+/// input is a variable of a wider kind, or an unevaluated call. Returning
+/// `Unknown` there keeps driving sound rather than guessing a branch.
+///
+/// Refal-5 variable kinds (reference 1.3): `s.` ranges over *symbols*, `t.`
+/// over any single *term* -- a symbol *or* a bracket -- and `e.` over any
+/// expression. Numbers and identifiers are symbols, so `s.N` binds `1`, and a
+/// `t.` variable binds a bare character or number just as readily as a bracket.
+fn symbolic_variable_accepts(kind: VariableKind, input: &CoreTerm) -> Option<bool> {
+    match kind {
+        VariableKind::Symbol => match &input.kind {
+            CoreTermKind::Char(_) | CoreTermKind::Number(_) | CoreTermKind::Identifier(_) => {
+                Some(true)
+            }
+            CoreTermKind::Bracket(_) => Some(false),
+            CoreTermKind::Variable {
+                kind: VariableKind::Symbol,
+                ..
+            } => Some(true),
+            _ => None,
+        },
+        VariableKind::Term => match &input.kind {
+            CoreTermKind::Char(_)
+            | CoreTermKind::Number(_)
+            | CoreTermKind::Identifier(_)
+            | CoreTermKind::Bracket(_) => Some(true),
+            CoreTermKind::Variable {
+                kind: VariableKind::Expression,
+                ..
+            } => None,
+            CoreTermKind::Variable { .. } => Some(true),
+            _ => None,
+        },
+        VariableKind::Expression => {
+            unreachable!("expression variables are handled before this point")
+        }
+    }
 }
 
 fn match_symbolic_term(
@@ -1357,13 +1377,20 @@ fn match_ground_pattern(
                 .rev()
             {
                 let slice = &input[input_index..end];
+                // `s.` binds any single symbol -- a character, a number or an
+                // identifier -- but never a bracket. `t.` binds any single
+                // term, symbol or bracket alike (reference 1.3).
                 let valid = match kind {
                     VariableKind::Symbol => {
-                        slice.len() == 1 && matches!(slice[0].kind, CoreTermKind::Char(_))
+                        slice.len() == 1
+                            && matches!(
+                                slice[0].kind,
+                                CoreTermKind::Char(_)
+                                    | CoreTermKind::Number(_)
+                                    | CoreTermKind::Identifier(_)
+                            )
                     }
-                    VariableKind::Term => {
-                        slice.len() == 1 && matches!(slice[0].kind, CoreTermKind::Bracket(_))
-                    }
+                    VariableKind::Term => slice.len() == 1,
                     VariableKind::Expression => true,
                 };
                 if !valid {
@@ -3759,5 +3786,107 @@ mod tests {
         };
 
         assert_eq!(format_program(&core), "$ENTRY Go {\n  = \"'\" '\\';\n}\n");
+    }
+
+    fn core_term(kind: CoreTermKind) -> CoreTerm {
+        CoreTerm {
+            kind,
+            span: span(),
+        }
+    }
+
+    fn core_var(kind: VariableKind, name: &str) -> CoreTerm {
+        core_term(CoreTermKind::Variable {
+            kind,
+            name: name.to_string(),
+        })
+    }
+
+    // Variable kinds follow reference 1.3: `s.` ranges over symbols -- a
+    // character, a number or an identifier -- and `t.` over any single term, a
+    // symbol or a bracket alike. Both matchers must agree with the runtime
+    // matcher in `refal-runtime`, which is the oracle for these two tests.
+    #[test]
+    fn s_variable_binds_numbers_and_identifiers_not_just_characters() {
+        let pattern = vec![core_var(VariableKind::Symbol, "N")];
+        let mut bindings = HashMap::new();
+
+        assert!(match_ground_pattern(
+            &pattern,
+            &[core_term(CoreTermKind::Number("1".to_string()))],
+            &mut bindings
+        ));
+        bindings.clear();
+        assert!(match_ground_pattern(
+            &pattern,
+            &[core_term(CoreTermKind::Identifier("Foo".to_string()))],
+            &mut bindings
+        ));
+        bindings.clear();
+        assert!(!match_ground_pattern(
+            &pattern,
+            &[core_term(CoreTermKind::Bracket(Vec::new()))],
+            &mut bindings
+        ));
+    }
+
+    #[test]
+    fn t_variable_binds_a_bare_symbol_as_well_as_a_bracket() {
+        let pattern = vec![core_var(VariableKind::Term, "X")];
+        let mut bindings = HashMap::new();
+
+        for input in [
+            core_term(CoreTermKind::Char('a')),
+            core_term(CoreTermKind::Number("2".to_string())),
+            core_term(CoreTermKind::Bracket(Vec::new())),
+        ] {
+            bindings.clear();
+            assert!(
+                match_ground_pattern(&pattern, std::slice::from_ref(&input), &mut bindings),
+                "a t-variable should bind {input:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn symbolic_matcher_agrees_with_the_ground_matcher_on_variable_kinds() {
+        // `('c' s.N)` must match `('c' 1)`. Before the fix the symbolic
+        // matcher only accepted characters here, so driving an interpreter over
+        // a metacoded program stalled on the first constant it met.
+        let pattern = vec![
+            core_term(CoreTermKind::Bracket(vec![
+                core_term(CoreTermKind::Char('c')),
+                core_var(VariableKind::Symbol, "N"),
+            ])),
+            core_var(VariableKind::Expression, "In"),
+        ];
+        let input = vec![
+            core_term(CoreTermKind::Bracket(vec![
+                core_term(CoreTermKind::Char('c')),
+                core_term(CoreTermKind::Number("1".to_string())),
+            ])),
+            core_var(VariableKind::Expression, "Input"),
+        ];
+        let mut bindings = HashMap::new();
+
+        assert_eq!(
+            match_symbolic_pattern(&pattern, &input, &mut bindings),
+            SymbolicMatch::Yes
+        );
+    }
+
+    #[test]
+    fn symbolic_matcher_reports_unknown_rather_than_no_for_a_wider_variable() {
+        // An `s.` variable against a `t.` variable cannot be decided: the
+        // term may turn out to be a bracket. Guessing `No` would silently drop
+        // a reachable branch, so the matcher must say `Unknown`.
+        let pattern = vec![core_var(VariableKind::Symbol, "X")];
+        let input = vec![core_var(VariableKind::Term, "Y")];
+        let mut bindings = HashMap::new();
+
+        assert_eq!(
+            match_symbolic_pattern(&pattern, &input, &mut bindings),
+            SymbolicMatch::Unknown
+        );
     }
 }
