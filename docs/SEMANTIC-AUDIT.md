@@ -3,7 +3,7 @@
 This audit records the completion check for Milestone 3 against `LANGUAGE-SCOPE.md`, the
 frontend coverage contract, and the bootstrap runtime behaviour available at this stage.
 
-## Status: PARTIAL
+## Status: COMPLETE for the milestone gate
 
 An earlier revision of this document concluded that Milestone 3 was complete, and that the
 checker "rejects every known program shape that would otherwise contradict the parser
@@ -19,9 +19,14 @@ reference on 2026-08-05:
    function to exist, then let the runtime pick one by `HashMap` iteration order. An
    executable Classic Refal-5 program starts from the function named `Go` (reference A).
 
-Both are fixed in `641ffc0`. The milestone remains **Partial** until the checker covers
-sentence-ending blocks (issue #13) and the conformance corpus is traceable clause by
-clause.
+Both are fixed in `641ffc0`, and both gaps this section used to name as still open are
+now closed: sentence-ending blocks are parsed, checked and evaluated in **both** positions
+(`4112268`), so issue #13 is done. The milestone's gate — "validate entry points,
+declarations, calls, bindings, variable kinds, and condition legality before execution" —
+is therefore green, and this document records it as **Complete**.
+
+What remains outside this milestone is not a checker rule. It is the clause-by-clause
+traceable conformance corpus, which is tracked as Milestone 2's open gate.
 
 ## Audited Scope
 
@@ -38,20 +43,30 @@ clause.
 - Empty function bodies.
 - Declared external calls the bootstrap runtime cannot execute yet.
 
-## Known Gaps
+## Gaps that were open here, and where they went
 
-| Gap | Tracked as |
+Every row this section used to list as open is now closed. It is kept as an audit trail,
+because a gap list that silently disappears is indistinguishable from a gap list nobody
+checked.
+
+| Gap | Status now |
 | --- | --- |
-| Sentence-ending blocks are not parsed, so their variable scoping is unchecked | #13 |
-| No exhaustiveness analysis, so a reachable *recognition impossible* is not diagnosed | `PLAN.md` phase 3 |
-| No dead-sentence (pattern subsumption) analysis | `PLAN.md` phase 3 |
-| No argument-shape inference across call boundaries (Turchin 1980, 2.3 Function Formats) | `PLAN.md` phase 3 |
-| No builtin domain checks, for example a literal zero divisor | `PLAN.md` phase 3 |
-| Macrodigit range of 2^32 - 1 is not enforced (reference 1.2.2) | #11 follow-up |
+| Sentence-ending blocks are not parsed, so their variable scoping is unchecked | ✅ Closed — blocks parse, check and evaluate in both positions (`4112268`); issue #13 done |
+| No exhaustiveness analysis, so a reachable *recognition impossible* is not diagnosed | ✅ Closed — `recognition_impossible` in `lints.rs`, by exact argument and by format disjointness |
+| No dead-sentence (pattern subsumption) analysis | ✅ Closed — `dead_sentences` in `lints.rs`, which found a genuine ordering bug in `compiler-refal-lexer-subset.ref` |
+| No argument-shape inference across call boundaries (Turchin 1980, §2.3 Function Formats) | ✅ Closed — `refal formats`, inferred to a fixpoint; the lattice now separates character, number and identifier literals |
+| No builtin domain checks, for example a literal zero divisor | ✅ Closed — `builtin_domains` in `lints.rs`, mirroring `parse_integer` in the runtime |
+| Macrodigit range of 2^32 − 1 is not enforced (reference 1.2.2) | ✅ Closed — the lexer rejects a macrodigit above the Classic limit |
 
-Everything in this table is decidable and belongs to the Tier 1 analyses described in
-`PLAN.md`. They are built on the graph of states from phase 2, because exhaustiveness and
-subsumption are queries over that same structure.
+The three Tier 1 analyses that closed those rows live in `crates/refal-semantics/src/lints.rs`
+and are documented, normatively, in [`VERIFICATION-CONTRACT.md`](VERIFICATION-CONTRACT.md).
+They are queries over the graph of states from phase 2, as this document predicted, and
+they carry the published guarantee: in `--strict` mode the compiler rejects every program
+in which a recognition-impossible, a builtin domain error, or a dead sentence is reachable
+— with zero false positives across the corpus.
+
+The one Tier 1 gap that remains is precision rather than coverage: `Shape::Bracket` is
+opaque, so `<F ('a')>` against a callee that only accepts `(1)` is not refuted.
 
 ## Reporting Rule
 

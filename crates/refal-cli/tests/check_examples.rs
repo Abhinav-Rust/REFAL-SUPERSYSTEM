@@ -3889,3 +3889,56 @@ fn a_residue_keeps_every_definition_when_it_still_dispatches_dynamically() {
         "Mu can call Echo, so the residue must keep it:\n{stdout}"
     );
 }
+
+/// The claim this repository makes about its Refal-authored compiler is that it
+/// emits what the Rust bootstrap's `lower` emits, byte for byte, on every
+/// example the bootstrap will lower.
+///
+/// That claim was published without a test behind it, and it had already
+/// drifted: the README said 47 examples while the corpus had grown to 51. The
+/// list is derived from the directory here, so it cannot drift again.
+#[test]
+fn the_refal_authored_compiler_matches_lower_on_every_lowerable_example() {
+    let directory = workspace_path("examples");
+    let mut examples = fs::read_dir(&directory)
+        .expect("read the examples directory")
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().is_some_and(|extension| extension == "ref"))
+        .collect::<Vec<_>>();
+    examples.sort();
+    assert!(!examples.is_empty(), "no examples found in {directory}");
+
+    let mut compared = 0usize;
+    for path in examples {
+        let rendered = path.to_string_lossy().into_owned();
+        let lowered = Command::new(refal_bin())
+            .args(["lower", &rendered])
+            .output()
+            .expect("run lower");
+        if !lowered.status.success() {
+            // A negative fixture, or a program the bootstrap will not lower.
+            // There is nothing for the Refal-authored compiler to match.
+            continue;
+        }
+        let compiled = Command::new(refal_bin())
+            .args(["compile", &rendered])
+            .output()
+            .expect("run compile");
+        assert!(
+            compiled.status.success(),
+            "{rendered} compiles with `lower` but not with the Refal-authored compiler:/n{}",
+            String::from_utf8_lossy(&compiled.stderr)
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&lowered.stdout),
+            String::from_utf8_lossy(&compiled.stdout),
+            "{rendered}: the Refal-authored compiler diverged from `lower`"
+        );
+        compared += 1;
+    }
+    assert!(
+        compared >= 51,
+        "only {compared} examples were lowerable; the corpus has shrunk"
+    );
+}

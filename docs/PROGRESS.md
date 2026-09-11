@@ -71,8 +71,9 @@ objective to a gate. Not another Refal implementation.
 - Refal-authored checker in `examples/compiler.ref`, the integrated pipeline
   (`b3588ad`).
 - Refal-authored emitter: `compiler.ref` emits Core Refal byte-identical to the
-  Rust bootstrap's `lower` across the **whole corpus** — 47 examples, zero
-  divergences — including `sX` shorthand, `/* */` block comments and reals.
+  Rust bootstrap's `lower` across the **whole corpus** — 51 examples, zero
+  divergences — including `sX` shorthand, `/* */` block comments and reals. Now
+  enforced by a test that derives its list from `examples/`.
 - **T-10 closed at full credit**: C1 = C2 = C3 at 12,599 bytes over the full
   Classic grammar, every generation checked.
 - **`refal compile`** runs the Refal-authored compiler, not the Rust `lower`.

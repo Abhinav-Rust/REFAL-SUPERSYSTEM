@@ -274,37 +274,36 @@ Native codegen (§4.7) if wanted, packaging, performance suite, compatibility st
 
 ## 5. Completion accounting
 
-Honest reset. The clarified goal added a workstream, so the denominator grew. The figure
-also *fell* from an earlier published 38%, because that figure gave full credit to two
-milestones an audit then found to be Partial.
+**~87% today by the sub-task implementation credit method.** This is *not* the
+headline figure: the README leads with the **~81% evidence-weighted** score,
+which counts only what is tested and working for the general case. Both are
+reproduced from the same underlying work; they differ because this method
+credits planned effort coded and tested, while the README's method credits
+functional completion of the 1.0 goal. When in doubt, quote the 81%.
 
-**~60% today by the sub-task implementation credit method**, after the eighteenth
-implementation milestone on 2026-09-02. This is *not* the headline figure: the README leads
-with the **~42% evidence-weighted** score, which counts only what is tested and working for
-the general case. Both numbers are reproduced from the same underlying work; they differ
-because this method credits planned effort coded and tested, while the README's method
-credits functional completion of the 1.0 goal. When in doubt, quote the 42%.
+The audited 19.8% baseline remains the comparison point. The figure once fell
+from a published 38%, deliberately: that figure gave full credit to two
+milestones an audit found to be Partial, and the completion target then grew by
+the two verification tiers. Both changes are permanent; the score has risen
+since because the work behind it now exists.
 
-The audited 19.8% baseline remains the comparison point; the new score credits only tested frontend,
-bootstrap-runtime, deterministic graph infrastructure, bounded concrete driving,
-shape-aware symbolic driving, supported-subset Refal residualization, cleaned-graph Core Refal emission,
-restricted compiler-in-Refal emission/parsing/checking, the direct supported-body C1 → C2 → C3
-fixpoint proof, and conformance work. Complete Turchin graph driving, graph residualisation, general
-Classic Refal parsing, whole-corpus Refal compilation, and general-corpus self-hosting remain
-unimplemented; the new matcher fast path, character-literal scanner, `Go` preservation, and
-fixpoint evidence close only the supported-body self-hosting gate.
+What the credit covers today, and what it does not:
 
-| Workstream | Weight | Now | After P1 | After P3 | After P5 |
-|---|---:|---:|---:|---:|---:|
-| Bootstrap frontend | 8.5% | 8.0 | 8.5 | 8.5 | 8.5 |
-| Bootstrap semantics | 6% | 5.0 | 6 | 6 | 6 |
-| Refal machine | 19.5% | 18.8 | 19.5 | 19.5 | 19.5 |
-| Graph of states / Refal emission | 8.5% | 8.0 | 8.0 | 8.5 | 8.5 |
-| Static verification | 15% | 0.8 | 1 | 13 | 13 |
-| Compiler in Refal | 25.5% | 0 | 0 | 0 | 25.5 |
-| Self-hosting fixpoint | 13% | 0 | 0 | 0 | 13 |
-| Conformance / release | 4% | 1.5 | 1.5 | 2.5 | 3 |
-| **Total** | **100%** | **~60%** | **~42%** | **~58%** | **~96%** |
+| Workstream | Weight | Credit | What the credit is for |
+|---|---:|---:|---|
+| Bootstrap frontend | 8.5% | 8.0 | Broad Classic Refal-5 lexer/parser coverage; clause-complete corpus still partial |
+| Bootstrap semantics | 6.0% | 5.0 | Entry, bindings, call checks; no graph-based analysis |
+| Refal machine | 19.5% | 17.0 | No fixed depth cap; projecting matcher (§2.2); broad covered builtin suite. Heap-allocated view field (issue #7) open |
+| Graph of states / Refal emission | 8.5% | 8.2 | **T-4** — `drive → clean → residualise` verified against the interpreter over 29 corpus programs; **T-9** — a metasystem transition demonstrated. Semantic cleaning (§4.3) and perfect graphs (§4.5) open |
+| Static verification | 15.0% | 13.5 | Tier 1 complete for its published guarantee: dead sentences, recognition impossible, builtin domain errors, function formats (§2.3), `-W`/`-D`/`-A`, and a shape lattice that separates literal kinds. Bracket contents open |
+| Compiler in Refal | 25.5% | 20.0 | A real lexer, parser, checker and emitter over the full Classic grammar, byte-identical to Rust `lower` on every lowerable example. `driver.ref` not written; it normalises rather than compiling pattern matching |
+| Self-hosting fixpoint | 13.0% | 12.0 | C1 = C2 = C3 at 12,599 bytes over the full grammar. Residual credit withheld until the compiler does more than normalise |
+| Conformance / release | 4.0% | 3.0 | Solid automated foundation; no full Classic conformance claim or release packaging |
+| **Total** | **100%** | **~87%** | |
+
+The two heaviest workstreams are where the remaining weight sits, and both are
+held back by the same thing: the compiler normalises rather than compiling
+pattern matching, so `driver.ref` and general source compilation stay open.
 
 ---
 

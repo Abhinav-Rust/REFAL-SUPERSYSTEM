@@ -46,15 +46,16 @@ verification harness; it must not contain the production compiler's logic.
 - Verify the generated compiler produces equivalent output across the full corpus.
 - Retain Rust only as a reproducible verification harness, not as the compiler implementation.
 
-### 7. Release and Compatibility Evidence — Not Started
+### 7. Release and Compatibility Evidence — Partial
 
-- Add broad conformance, regression, performance, installation, and release
-  checks.
+- Automated conformance and regression corpora exist (`differential --corpus` with
+  positive, check-failure, runtime-failure and residual modes).
+- Add performance, installation, and release checks.
 - Publish supported-scope and compatibility guarantees.
 
 ## Quantitative Scorecard
 
-The live accounting is [`PLAN.md`](PLAN.md) section 5. The repository milestone log currently reports **95%** against the broader completion target; this contract’s workstream table remains a conservative architectural gate breakdown, not a replacement for the live weighted score. It is updated only when a gate changes.
+The live accounting is [`PLAN.md`](PLAN.md) section 5, which reports **~87%** by the sub-task implementation credit method and **~81%** evidence-weighted. This contract's workstream table is a **conservative architectural gate breakdown**, not a replacement for the live weighted score: it credits only gates that are fully closed, so it sits well below the weighted figure by design. It is updated only when a gate changes.
 
 It went *down* from an earlier 38%, deliberately, for two reasons:
 
@@ -65,17 +66,17 @@ It went *down* from an earlier 38%, deliberately, for two reasons:
 - The completion target now includes the two verification tiers described in `PLAN.md`,
   so the denominator grew.
 
-| Workstream | Weight | Credit |
-| --- | ---: | ---: |
-| Bootstrap frontend | 8.5% | 7.0% |
-| Bootstrap semantics | 6% | 5.0% |
-| Refal machine | 19.5% | 4.3% |
-| Graph of states and Refal emission | 8.5% | 2.1% |
-| Static verification | 15% | 0.8% |
-| Compiler implemented in Refal | 25.5% | partial restricted emitter/parser/checker/lexer/token-parser/Core-emit; general compiler 0% |
-| Verified self-hosting bootstrap | 13% | bounded canonical-subset `C2 ≡ C3` evidence; full gate 0% |
-| Conformance, release and compatibility evidence | 4% | 0.6% |
-| **Total** | **100%** | **~19% conservative gate credit; live weighted score: 95%** |
+| Workstream | Weight | Closed gates | Credit |
+| --- | ---: | --- | ---: |
+| Bootstrap frontend | 8.5% | Lexer and parser cover the documented Classic scope and diagnose the negative corpus | 7.5% |
+| Bootstrap semantics | 6% | Entry points, declarations, calls, bindings, variable kinds, condition legality | 5.0% |
+| Refal machine | 19.5% | No fixed depth cap; projecting matcher (§2.2); broad covered builtin suite. **Open:** heap-allocated view field, Chapter 6 metacode | 15.0% |
+| Graph of states and Refal emission | 8.5% | **T-4** `drive → clean → residualise` agrees with the interpreter over 29 corpus programs; **T-9** metasystem transition. **Open:** §4.3 semantic cleaning, §4.5 perfect graphs, case splitting | 7.0% |
+| Static verification | 15% | Tier 1 for its published guarantee, with zero false positives on the corpus. **Open:** bracket contents in the format lattice | 13.0% |
+| Compiler implemented in Refal | 25.5% | Real lexer, parser, checker and emitter over the full Classic grammar. **Open:** `driver.ref`; it normalises rather than compiling pattern matching | 18.0% |
+| Verified self-hosting bootstrap | 13% | C1 = C2 = C3 at 12,599 bytes, every generation checked | 10.0% |
+| Conformance, release and compatibility evidence | 4% | Automated differential and residual corpora. **Open:** full Classic conformance claim, packaging | 2.0% |
+| **Total** | **100%** | | **~77.5% conservative gate credit; live weighted score: ~87%** |
 
 ## Reporting Rule
 
