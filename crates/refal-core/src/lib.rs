@@ -2260,6 +2260,305 @@ pub fn clean_unreachable_states(graph: &StateGraph) -> StateGraph {
     }
 }
 
+// ===========================================================================
+// T-6 — clean and perfect graphs (Turchin 1980 §4.3, §4.5)
+// ===========================================================================
+//
+// §4.3 defines the property over the *path* to a vertex:
+//
+//   "A path is called feasible if the corresponding quasiinput set is not
+//    empty, otherwise it is unfeasible. A graph in which there are no
+//    unfeasible paths will be called clean."
+//   "Now we know how to clean the graph of states; we remove all vertices to
+//    which empty quasiinput sets correspond; we also remove dynamic arcs
+//    leading to these vertices."   — Theorem 4.4: an algorithm exists.
+//
+// §4.5 strengthens it to the whole *walk*, which also records the branch taken
+// at every dynamic arc:
+//
+//   "A graph of states in which all possible walks are feasible will be called
+//    perfect."
+//
+// The difference is exactly the one Turchin draws on p. 115. The graph of his
+// Figure 13 is *clean* — "the paths 1,2,3 and 1,2,5 are feasible" — but not
+// *perfect*, because no input that reaches vertex 2 takes branch 3 or branch 5.
+// A margin of generality survives: a test remains that no input can perform.
+//
+// In this compiler a vertex is a function entered with an argument, and its
+// quasiinput set is the set of expressions the call sites can supply. That set
+// is written down in the residue itself: every `<F a>` is a contraction
+// restricting `F`'s argument to the instances of `a`. So cleaning is a pass
+// over the residue, and it is sound for a reason that does not depend on
+// driving being clever:
+//
+//   the value of `a` is always an instance of the pattern `a`, provided `a`
+//   contains no unevaluated call and no block.
+//
+// A sentence whose pattern matches no instance of any entering restriction can
+// therefore never be selected, and removing it cannot change what the residue
+// computes. Where that argument does not hold — an argument containing a call,
+// a dynamic `Mu` dispatch, an entry the residue does not define — nothing is
+// removed and the function is reported as uncharacterised.
+
+/// The argument expressions a function can be entered with, and whether that
+/// set is known to be complete.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EnteringRestrictions {
+    pub function: String,
+    /// One entry per call site, in program order.
+    pub restrictions: Vec<Vec<CoreTerm>>,
+    /// False when some call site's argument could not be characterised — it
+    /// contains an unevaluated call or a block, so its value is not an instance
+    /// of its text. Nothing may be removed from such a function.
+    pub characterised: bool,
+}
+
+/// A sentence removed because no entering restriction can select it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemovedSentence {
+    pub function: String,
+    pub pattern: String,
+    /// The restrictions it was refuted against, rendered.
+    pub restrictions: Vec<String>,
+}
+
+/// A retained sentence that no entering restriction *provably* selects.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UndecidedSentence {
+    pub function: String,
+    pub pattern: String,
+}
+
+/// An entering restriction that no retained sentence can select: a call site
+/// whose argument no sentence of the callee accepts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UncoveredRestriction {
+    pub function: String,
+    pub input: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CleanReport {
+    pub functions: usize,
+    pub sentences_before: usize,
+    pub sentences_after: usize,
+    pub removed: Vec<RemovedSentence>,
+    pub undecided: Vec<UndecidedSentence>,
+    pub uncovered: Vec<UncoveredRestriction>,
+    /// Functions nothing was removed from, and why.
+    pub uncharacterised: Vec<String>,
+    /// The residue still applies a function chosen at run time, so no call-site
+    /// walk can enumerate its entering restrictions. Nothing is cleaned.
+    pub dynamic_dispatch: bool,
+    pub rounds: usize,
+}
+
+/// The §4.5 verdict.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Perfection {
+    /// Every walk in the residue is provably feasible: each retained sentence
+    /// is selected by some input, no call site is left without a sentence, and
+    /// no walk's feasibility is undecided.
+    Perfect,
+    /// Clean — no vertex has an empty quasiinput set — but perfection is not
+    /// proven. §5.8 Theorem 5.1 says it cannot always be proven; this is that
+    /// limit, reported rather than papered over.
+    Clean { undecided: usize, uncovered: usize },
+    /// Perfection is not even askable: a function chosen at run time means the
+    /// graph of states is not fully written down in the residue.
+    Unknown,
+}
+
+impl CleanReport {
+    pub fn perfection(&self) -> Perfection {
+        if self.dynamic_dispatch {
+            return Perfection::Unknown;
+        }
+        if self.undecided.is_empty() && self.uncovered.is_empty() {
+            Perfection::Perfect
+        } else {
+            Perfection::Clean {
+                undecided: self.undecided.len(),
+                uncovered: self.uncovered.len(),
+            }
+        }
+    }
+}
+
+/// Whether two Refal patterns can be satisfied by one and the same expression.
+///
+/// `Disjoint` is returned only on a proof. Anything the bounded search cannot
+/// settle is `Unknown`, so a caller may act on `Disjoint` and nothing else.
+///
+/// This is deliberately not [`pattern_sequence_compatibility`], which gives up
+/// as soon as an expression variable appears. A Refal pattern is matched
+/// against an *expression*, so an `e.` variable absorbs any number of terms and
+/// the comparison has to search over how many. That search is bounded by
+/// `OVERLAP_FUEL`; exhausting it yields `Unknown`, which costs precision and
+/// never soundness.
+///
+/// Repeated variables are ignored, which can only make the answer *less*
+/// precise: `e.X 'a' e.X` against `'a' 'a'` is reported as an overlap when the
+/// truth is that they are disjoint. Erring that way is the safe direction.
+fn patterns_overlap(first: &[CoreTerm], second: &[CoreTerm]) -> PatternCompatibility {
+    /// The search is exponential in the number of adjacent expression
+    /// variables. Patterns in real programs are short; the bound exists so a
+    /// pathological input degrades to `Unknown` instead of hanging.
+    const OVERLAP_FUEL: usize = 4_096;
+    OverlapSearch { fuel: OVERLAP_FUEL }.sequence(first, second)
+}
+
+struct OverlapSearch {
+    fuel: usize,
+}
+
+impl OverlapSearch {
+    fn sequence(&mut self, first: &[CoreTerm], second: &[CoreTerm]) -> PatternCompatibility {
+        if self.fuel == 0 {
+            return PatternCompatibility::Unknown;
+        }
+        self.fuel -= 1;
+
+        if first.is_empty() && second.is_empty() {
+            return PatternCompatibility::Overlap;
+        }
+        if first.is_empty() {
+            return leftover_overlap(second);
+        }
+        if second.is_empty() {
+            return leftover_overlap(first);
+        }
+
+        // An expression variable absorbs any number of terms, including none,
+        // so every split is a candidate. This is where Refal-5 matching departs
+        // from first-order unification, and why the search needs a budget.
+        if is_expression_variable(&first[0]) {
+            return self.absorbing_split(&first[1..], second);
+        }
+        if is_expression_variable(&second[0]) {
+            return self.absorbing_split(&second[1..], first);
+        }
+
+        // Neither head is an expression variable, so both denote exactly one
+        // term and can be compared positionally.
+        let head = overlap_of_terms(&first[0], &second[0]);
+        if head == PatternCompatibility::Disjoint {
+            return PatternCompatibility::Disjoint;
+        }
+        let tail = self.sequence(&first[1..], &second[1..]);
+        if tail == PatternCompatibility::Disjoint {
+            return PatternCompatibility::Disjoint;
+        }
+        if head == PatternCompatibility::Overlap && tail == PatternCompatibility::Overlap {
+            PatternCompatibility::Overlap
+        } else {
+            PatternCompatibility::Unknown
+        }
+    }
+
+    /// Match `absorbing_head`'s expression variable against every prefix of
+    /// `other`, then continue with the remainder of the absorbing pattern.
+    ///
+    /// Taking the whole of `other` is the case that matters most in practice —
+    /// an `e.` variable in a call-site argument usually stands for the rest of
+    /// the expression — but stopping early has to be tried too, or a pattern
+    /// with anything after the variable is refuted the moment the argument is
+    /// longer than the pattern.
+    fn absorbing_split(
+        &mut self,
+        absorbing_rest: &[CoreTerm],
+        other: &[CoreTerm],
+    ) -> PatternCompatibility {
+        let mut verdict = PatternCompatibility::Disjoint;
+        for take in 0..=other.len() {
+            match self.sequence(absorbing_rest, &other[take..]) {
+                PatternCompatibility::Overlap => return PatternCompatibility::Overlap,
+                PatternCompatibility::Unknown => verdict = PatternCompatibility::Unknown,
+                PatternCompatibility::Disjoint => {}
+            }
+        }
+        verdict
+    }
+}
+
+/// Whether a leftover term sequence can be the empty expression.
+///
+/// Only `e.` variables denote nothing, so a leftover made entirely of them can
+/// be chosen empty and the two patterns then coincide — that is an overlap, not
+/// an unknown. `'k'` against `'k' e.R` is the everyday case: the caller can
+/// supply exactly `'k'`, so the one-term pattern is reachable.
+fn leftover_overlap(sequence: &[CoreTerm]) -> PatternCompatibility {
+    if sequence.iter().all(is_expression_variable) {
+        PatternCompatibility::Overlap
+    } else {
+        PatternCompatibility::Disjoint
+    }
+}
+
+fn overlap_of_terms(first: &CoreTerm, second: &CoreTerm) -> PatternCompatibility {
+    use CoreTermKind::{Bracket, Char, Identifier, Number, Variable};
+    use VariableKind::{Expression, Symbol, Term};
+
+    let is_symbol_literal =
+        |term: &CoreTerm| matches!(term.kind, Char(_) | Identifier(_) | Number(_));
+    let literals = |left: &CoreTerm, right: &CoreTerm| match (&left.kind, &right.kind) {
+        (Char(left), Char(right)) => Some(left == right),
+        (Identifier(left), Identifier(right)) => Some(left.eq_ignore_ascii_case(right)),
+        (Number(left), Number(right)) => Some(left == right),
+        // A character, an identifier and a number are three different symbols.
+        (Char(_) | Identifier(_) | Number(_), Char(_) | Identifier(_) | Number(_)) => Some(false),
+        _ => None,
+    };
+
+    if let Some(equal) = literals(first, second) {
+        return literal_overlap(equal);
+    }
+
+    match (&first.kind, &second.kind) {
+        (Bracket(left), Bracket(right)) => patterns_overlap(left, right),
+        // A bracket is a term but never a symbol. Refuting these pairings is
+        // the one kind rule that removes anything, and it is the rule the
+        // cleaning pass leans on.
+        (Bracket(_), _) if is_symbol_literal(second) => PatternCompatibility::Disjoint,
+        (_, Bracket(_)) if is_symbol_literal(first) => PatternCompatibility::Disjoint,
+        (Bracket(_), Variable { kind: Symbol, .. })
+        | (Variable { kind: Symbol, .. }, Bracket(_)) => PatternCompatibility::Disjoint,
+        // Everything else a term can be is satisfiable by choosing the values:
+        // a bracket against a `t.` variable, a symbol against any variable, or
+        // two variables against each other.
+        (
+            Bracket(_),
+            Variable {
+                kind: Term | Expression,
+                ..
+            },
+        )
+        | (
+            Variable {
+                kind: Term | Expression,
+                ..
+            },
+            Bracket(_),
+        )
+        | (Char(_) | Identifier(_) | Number(_), Variable { .. })
+        | (Variable { .. }, Char(_) | Identifier(_) | Number(_))
+        | (Variable { .. }, Variable { .. }) => PatternCompatibility::Overlap,
+        // An unevaluated call or a block is not a pattern, so no conclusion
+        // can be drawn from one. Nothing reaches here through a call-site
+        // argument — those are filtered before they become evidence — but a
+        // sentence pattern is not filtered, and guessing would be unsound.
+        _ => PatternCompatibility::Unknown,
+    }
+}
+
+fn literal_overlap(equal: bool) -> PatternCompatibility {
+    if equal {
+        PatternCompatibility::Overlap
+    } else {
+        PatternCompatibility::Disjoint
+    }
+}
+
 pub fn format_term_sequence(terms: &[CoreTerm]) -> String {
     let mut output = String::new();
     format_terms(terms, &mut output);
@@ -2573,6 +2872,396 @@ fn entry_accepts_no_arguments(program: &CoreProgram) -> bool {
         .find(|function| function.visibility == Visibility::Entry)
         .and_then(|function| function.sentences.first())
         .is_some_and(|sentence| sentence.pattern.is_empty())
+}
+
+/// Every argument a function can be entered with, read off the residue.
+///
+/// The residue is self-contained: the only way to reach `F` is a call term
+/// `<F a>` inside it. Each such `a` is a contraction — Turchin's own word for
+/// the restriction a dynamic arc imposes (§4.3, p. 90) — and the set of them is
+/// `F`'s quasiinput set. `characterised` is false when one of those arguments
+/// contains an unevaluated call or a block, because then the value handed to
+/// `F` is not an instance of the text, and nothing about `F` can be concluded.
+pub fn entering_restrictions(program: &CoreProgram) -> Vec<EnteringRestrictions> {
+    let mut collected: Vec<EnteringRestrictions> = Vec::new();
+    for function in &program.functions {
+        for sentence in &function.sentences {
+            let mut sites = Vec::new();
+            collect_call_sites(&sentence.pattern, &mut sites);
+            collect_call_sites(&sentence.result, &mut sites);
+            for condition in &sentence.conditions {
+                collect_call_sites(&condition.result, &mut sites);
+                collect_call_sites(&condition.pattern, &mut sites);
+            }
+            for (callee, argument) in sites {
+                let characterised = restriction_is_characterisable(&argument);
+                match collected
+                    .iter_mut()
+                    .find(|entry| entry.function.eq_ignore_ascii_case(&callee))
+                {
+                    Some(entry) => {
+                        entry.characterised &= characterised;
+                        if characterised
+                            && !entry
+                                .restrictions
+                                .iter()
+                                .any(|seen| same_configuration(seen, &argument))
+                        {
+                            entry.restrictions.push(argument);
+                        }
+                    }
+                    None => collected.push(EnteringRestrictions {
+                        function: callee,
+                        restrictions: if characterised {
+                            vec![argument]
+                        } else {
+                            Vec::new()
+                        },
+                        characterised,
+                    }),
+                }
+            }
+        }
+    }
+    collected
+}
+
+/// Whether the residue still applies a function chosen at run time.
+///
+/// `Mu` takes a function *name* as data, so no walk over call terms can see
+/// what it will call. A function reachable that way has entering restrictions
+/// the residue does not spell out, and §4.3's refutation has nothing to stand
+/// on.
+fn residual_dispatches_dynamically(program: &CoreProgram) -> bool {
+    fn mentions(terms: &[CoreTerm]) -> bool {
+        terms.iter().any(|term| match &term.kind {
+            CoreTermKind::Call { name, args } => name.eq_ignore_ascii_case("Mu") || mentions(args),
+            CoreTermKind::Bracket(inner) => mentions(inner),
+            CoreTermKind::Block {
+                argument,
+                sentences,
+            } => {
+                mentions(argument)
+                    || sentences.iter().any(|sentence| {
+                        mentions(&sentence.pattern)
+                            || mentions(&sentence.result)
+                            || sentence.conditions.iter().any(|condition| {
+                                mentions(&condition.result) || mentions(&condition.pattern)
+                            })
+                    })
+            }
+            _ => false,
+        })
+    }
+    program.functions.iter().any(|function| {
+        function.sentences.iter().any(|sentence| {
+            mentions(&sentence.pattern)
+                || mentions(&sentence.result)
+                || sentence
+                    .conditions
+                    .iter()
+                    .any(|condition| mentions(&condition.result) || mentions(&condition.pattern))
+        })
+    })
+}
+
+/// A call term and the argument it is applied to, at any depth.
+fn collect_call_sites(terms: &[CoreTerm], sites: &mut Vec<(String, Vec<CoreTerm>)>) {
+    for term in terms {
+        match &term.kind {
+            CoreTermKind::Call { name, args } => {
+                sites.push((name.clone(), args.clone()));
+                collect_call_sites(args, sites);
+            }
+            CoreTermKind::Bracket(inner) => collect_call_sites(inner, sites),
+            CoreTermKind::Block {
+                argument,
+                sentences,
+            } => {
+                collect_call_sites(argument, sites);
+                for sentence in sentences {
+                    collect_call_sites(&sentence.pattern, sites);
+                    collect_call_sites(&sentence.result, sites);
+                    for condition in &sentence.conditions {
+                        collect_call_sites(&condition.result, sites);
+                        collect_call_sites(&condition.pattern, sites);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Whether an argument's value is guaranteed to be an instance of its text.
+///
+/// It is, as long as nothing in it has to be *computed*. An unevaluated call
+/// denotes whatever it reduces to — `<F>` may well be `'a'` — and a block is an
+/// anonymous function awaiting its argument. Either one breaks the implication,
+/// so a restriction containing one is not usable as evidence.
+fn restriction_is_characterisable(argument: &[CoreTerm]) -> bool {
+    fn walk(terms: &[CoreTerm]) -> bool {
+        terms.iter().all(|term| match &term.kind {
+            CoreTermKind::Call { .. } | CoreTermKind::Block { .. } => false,
+            CoreTermKind::Bracket(inner) => walk(inner),
+            _ => true,
+        })
+    }
+    walk(argument)
+}
+
+/// Clean a residue of sentences no call site can select — Turchin §4.3.
+///
+/// A sentence is removed when *every* entering restriction of its function is
+/// provably disjoint from its pattern: its quasiinput set is empty, and the
+/// dynamic arc leading to it is exactly what §4.3 says to remove. The removal
+/// cascades, because dropping a sentence drops the calls in it, which can be
+/// another function's last entering restriction.
+///
+/// Two things are deliberately *not* done. A function is never emptied: if
+/// every sentence would go, the function is left as it was, because a residue
+/// whose function has no sentences has been rewritten rather than cleaned. And
+/// a function whose restrictions are uncharacterised is left alone, because the
+/// evidence is not there to refute anything.
+pub fn clean_residual_program(program: &CoreProgram) -> (CoreProgram, CleanReport) {
+    let root = program
+        .functions
+        .iter()
+        .position(|function| function.visibility == Visibility::Entry)
+        .unwrap_or(0);
+    let mut report = CleanReport {
+        functions: program.functions.len(),
+        sentences_before: program
+            .functions
+            .iter()
+            .map(|function| function.sentences.len())
+            .sum(),
+        ..CleanReport::default()
+    };
+    // `Mu` applies a function whose *name is data*, so a call-term walk cannot
+    // see what it will call. That makes the call sites an incomplete list of a
+    // function's entering restrictions, and removing a sentence on an
+    // incomplete list is exactly the mistake this pass must not make. The
+    // residue keeps every definition when it still dispatches dynamically, so
+    // the honest answer here is to clean nothing.
+    if residual_dispatches_dynamically(program) {
+        report.dynamic_dispatch = true;
+        report.sentences_after = report.sentences_before;
+        return (program.clone(), report);
+    }
+    let mut functions = program.functions.clone();
+    let mut removed_names: HashSet<(String, String)> = HashSet::new();
+
+    // Each round recomputes the restrictions, because a removal takes call
+    // sites away with it. The bound is the number of sentences: every round
+    // that changes anything removes at least one.
+    loop {
+        report.rounds += 1;
+        let restrictions = entering_restrictions(&CoreProgram {
+            declarations: program.declarations.clone(),
+            functions: functions.clone(),
+        });
+        let mut changed = false;
+        let mut next = Vec::with_capacity(functions.len());
+        for (index, function) in functions.iter().enumerate() {
+            let entry = restrictions
+                .iter()
+                .find(|entry| entry.function.eq_ignore_ascii_case(&function.name));
+            // The root is called from outside the residue, so its entering
+            // restrictions are not in the residue to be read. Leave it alone.
+            let Some(entry) = entry.filter(|_| index != root) else {
+                next.push(function.clone());
+                continue;
+            };
+            if !entry.characterised {
+                let name = function.name.clone();
+                if !report
+                    .uncharacterised
+                    .iter()
+                    .any(|seen| seen.eq_ignore_ascii_case(&name))
+                {
+                    report.uncharacterised.push(name);
+                }
+                next.push(function.clone());
+                continue;
+            }
+            if entry.restrictions.is_empty() {
+                // Nothing in the residue calls it. Dropping a definition is not
+                // cleaning, so it stays; the report says so through `uncovered`.
+                next.push(function.clone());
+                continue;
+            }
+            let mut kept = Vec::with_capacity(function.sentences.len());
+            let mut dropped = Vec::new();
+            for sentence in &function.sentences {
+                let rejected = entry.restrictions.iter().all(|restriction| {
+                    patterns_overlap(&sentence.pattern, restriction)
+                        == PatternCompatibility::Disjoint
+                });
+                if rejected {
+                    dropped.push(sentence);
+                } else {
+                    kept.push(sentence.clone());
+                }
+            }
+            // A function is never emptied: a definition with no sentences is
+            // not Refal, and emptying one would be a rewrite rather than a
+            // cleaning. The call site is reported as uncovered instead.
+            if kept.is_empty() || dropped.is_empty() {
+                next.push(function.clone());
+                continue;
+            }
+            for sentence in dropped {
+                let pattern = format_term_sequence(&sentence.pattern);
+                if !removed_names.insert((function.name.to_ascii_lowercase(), pattern.clone())) {
+                    continue;
+                }
+                report.removed.push(RemovedSentence {
+                    function: function.name.clone(),
+                    pattern,
+                    restrictions: entry
+                        .restrictions
+                        .iter()
+                        .map(|restriction| format_term_sequence(restriction))
+                        .collect(),
+                });
+            }
+            changed = true;
+            next.push(CoreFunction {
+                name: function.name.clone(),
+                visibility: function.visibility,
+                sentences: kept,
+                span: function.span,
+            });
+        }
+        functions = next;
+        if !changed || report.rounds > report.sentences_before + 2 {
+            break;
+        }
+    }
+
+    report.sentences_after = functions
+        .iter()
+        .map(|function| function.sentences.len())
+        .sum();
+    let cleaned = CoreProgram {
+        declarations: program.declarations.clone(),
+        functions,
+    };
+    let evidence = entering_restrictions(&cleaned);
+    for function in &cleaned.functions {
+        let Some(entry) = evidence
+            .iter()
+            .find(|entry| entry.function.eq_ignore_ascii_case(&function.name))
+        else {
+            continue;
+        };
+        if !entry.characterised || entry.restrictions.is_empty() {
+            continue;
+        }
+        for sentence in &function.sentences {
+            let verdicts = entry
+                .restrictions
+                .iter()
+                .map(|restriction| patterns_overlap(&sentence.pattern, restriction))
+                .collect::<Vec<_>>();
+            if !verdicts.contains(&PatternCompatibility::Overlap) {
+                report.undecided.push(UndecidedSentence {
+                    function: function.name.clone(),
+                    pattern: format_term_sequence(&sentence.pattern),
+                });
+            }
+        }
+        for restriction in &entry.restrictions {
+            if function.sentences.iter().all(|sentence| {
+                patterns_overlap(&sentence.pattern, restriction) == PatternCompatibility::Disjoint
+            }) {
+                report.uncovered.push(UncoveredRestriction {
+                    function: function.name.clone(),
+                    input: format_term_sequence(restriction),
+                });
+            }
+        }
+    }
+    report.undecided.dedup();
+    report.uncovered.dedup();
+    (cleaned, report)
+}
+
+/// Drive, residualise, then clean the residue — `drive → clean → residualise`
+/// with §4.3 actually performed on the result.
+pub fn residualize_entry_graph_cleaned(
+    program: &CoreProgram,
+    graph: &StateGraph,
+    max_steps: usize,
+) -> Result<(DrivenResidualization, CleanReport), DriveError> {
+    let driven = residualize_entry_graph(program, graph, max_steps)?;
+    let (cleaned, report) = clean_residual_program(&driven.program);
+    Ok((
+        DrivenResidualization {
+            program: cleaned,
+            ..driven
+        },
+        report,
+    ))
+}
+
+pub fn format_clean_report(report: &CleanReport) -> String {
+    let mut output = String::new();
+    output.push_str(&format!(
+        "functions: {}\nsentences: {} -> {}\nrounds: {}\n",
+        report.functions, report.sentences_before, report.sentences_after, report.rounds
+    ));
+    output.push_str(&format!("removed: {}\n", report.removed.len()));
+    for removed in &report.removed {
+        output.push_str(&format!(
+            "  {} {{{}}} rejected by {}\n",
+            removed.function,
+            removed.pattern,
+            removed
+                .restrictions
+                .iter()
+                .map(|restriction| format!("<{restriction}>"))
+                .collect::<Vec<_>>()
+                .join(" ")
+        ));
+    }
+    output.push_str(&format!("undecided: {}\n", report.undecided.len()));
+    for undecided in &report.undecided {
+        output.push_str(&format!(
+            "  {} {{{}}}\n",
+            undecided.function, undecided.pattern
+        ));
+    }
+    output.push_str(&format!("uncovered: {}\n", report.uncovered.len()));
+    for uncovered in &report.uncovered {
+        output.push_str(&format!(
+            "  {} <- {}\n",
+            uncovered.function, uncovered.input
+        ));
+    }
+    if !report.uncharacterised.is_empty() {
+        output.push_str(&format!(
+            "uncharacterised: {}\n",
+            report.uncharacterised.join(", ")
+        ));
+    }
+    if report.dynamic_dispatch {
+        output.push_str("dynamic-dispatch: yes (nothing cleaned)\n");
+    }
+    match report.perfection() {
+        Perfection::Perfect => output.push_str("graph: perfect\n"),
+        Perfection::Clean {
+            undecided,
+            uncovered,
+        } => {
+            output.push_str(&format!(
+                "graph: clean (undecided {undecided}, uncovered {uncovered})\n"
+            ));
+        }
+        Perfection::Unknown => output.push_str("graph: unknown\n"),
+    }
+    output
 }
 
 /// Drive the entry configuration as a whole program.
@@ -4944,5 +5633,354 @@ mod tests {
             match_symbolic_pattern(&pattern, &input, &mut bindings),
             SymbolicMatch::Unknown
         );
+    }
+
+    // -- T-6: clean and perfect graphs (Turchin 1980 4.3, 4.5) --------------
+
+    fn core_char(ch: char) -> CoreTerm {
+        core_term(CoreTermKind::Char(ch))
+    }
+
+    fn core_bracket(inner: Vec<CoreTerm>) -> CoreTerm {
+        core_term(CoreTermKind::Bracket(inner))
+    }
+
+    fn core_call(name: &str, args: Vec<CoreTerm>) -> CoreTerm {
+        core_term(CoreTermKind::Call {
+            name: name.to_string(),
+            args,
+        })
+    }
+
+    fn core_sentence(pattern: Vec<CoreTerm>, result: Vec<CoreTerm>) -> CoreSentence {
+        CoreSentence {
+            pattern,
+            conditions: vec![],
+            result,
+            span: span(),
+        }
+    }
+
+    fn core_function(
+        name: &str,
+        visibility: Visibility,
+        sentences: Vec<CoreSentence>,
+    ) -> CoreFunction {
+        CoreFunction {
+            name: name.to_string(),
+            visibility,
+            sentences,
+            span: span(),
+        }
+    }
+
+    #[test]
+    fn overlap_refutes_only_what_no_expression_can_satisfy() {
+        let symbol = || core_var(VariableKind::Symbol, "C");
+        let expression = || core_var(VariableKind::Expression, "R");
+
+        // A bracket is never a symbol, so `(e.B)` cannot be selected for an
+        // argument that has to begin with one. This is the refutation the
+        // cleaning pass rests on.
+        assert_eq!(
+            patterns_overlap(
+                &[core_bracket(vec![expression()])],
+                &[core_char('k'), expression()]
+            ),
+            PatternCompatibility::Disjoint
+        );
+        // A symbol pattern and a symbol-headed argument do overlap: the caller
+        // can supply exactly one symbol.
+        assert_eq!(
+            patterns_overlap(&[symbol()], &[core_char('k'), expression()]),
+            PatternCompatibility::Overlap
+        );
+        // Different literals never overlap.
+        assert_eq!(
+            patterns_overlap(&[core_char('a')], &[core_char('b')]),
+            PatternCompatibility::Disjoint
+        );
+        // An expression variable absorbs everything, so nothing is refuted.
+        assert_eq!(
+            patterns_overlap(&[expression()], &[core_char('a'), core_char('b')]),
+            PatternCompatibility::Overlap
+        );
+        // Two adjacent expression variables are the case that costs the
+        // search. `e.R 'x'` and `'a' e.S 'x'` do meet, at `'a' 'x'`, and the
+        // answer has to stay sound even when the budget runs out.
+        assert_eq!(
+            patterns_overlap(
+                &[expression(), core_char('x')],
+                &[core_char('a'), expression(), core_char('x')]
+            ),
+            PatternCompatibility::Overlap
+        );
+        // The same search must still refute what cannot meet: `e.R 'x'` and
+        // `'a' e.S 'y'` disagree about the last term, so nothing satisfies both.
+        assert_eq!(
+            patterns_overlap(
+                &[expression(), core_char('x')],
+                &[core_char('a'), expression(), core_char('y')]
+            ),
+            PatternCompatibility::Disjoint
+        );
+    }
+
+    #[test]
+    fn a_sentence_no_call_site_can_select_is_removed() {
+        // `Pick` is only ever entered as `<Pick 'k' ...>`. Its bracket-only
+        // sentence therefore has an empty quasiinput set, and 4.3 says to
+        // remove it.
+        let program = CoreProgram {
+            declarations: vec![],
+            functions: vec![
+                core_function(
+                    "Go",
+                    Visibility::Entry,
+                    vec![core_sentence(
+                        vec![core_var(VariableKind::Expression, "Input")],
+                        vec![core_call(
+                            "Pick",
+                            vec![core_char('k'), core_var(VariableKind::Expression, "Input")],
+                        )],
+                    )],
+                ),
+                core_function(
+                    "Pick",
+                    Visibility::Local,
+                    vec![
+                        core_sentence(
+                            vec![core_var(VariableKind::Symbol, "C"), core_char('x')],
+                            vec![core_char('m')],
+                        ),
+                        core_sentence(
+                            vec![core_bracket(vec![core_var(VariableKind::Expression, "B")])],
+                            vec![core_char('b')],
+                        ),
+                        core_sentence(
+                            vec![core_var(VariableKind::Expression, "R")],
+                            vec![core_char('f')],
+                        ),
+                    ],
+                ),
+            ],
+        };
+
+        let (cleaned, report) = clean_residual_program(&program);
+
+        assert_eq!(report.removed.len(), 1);
+        assert_eq!(report.removed[0].function, "Pick");
+        assert_eq!(report.removed[0].pattern, "(e.B)");
+        assert_eq!(cleaned.functions[1].sentences.len(), 2);
+        assert!(
+            !cleaned.functions[1]
+                .sentences
+                .iter()
+                .any(|sentence| format_term_sequence(&sentence.pattern) == "(e.B)"),
+            "the refuted sentence must be gone:\n{}",
+            format_program(&cleaned)
+        );
+    }
+
+    #[test]
+    fn a_function_is_never_emptied_by_cleaning() {
+        // `symbolic-branch.ref` in miniature: the one call site cannot select
+        // *any* sentence of `Choose`. Removing all of them would leave a
+        // function with no sentences, which is not Refal, so the pass reports
+        // the call as uncovered and leaves the definition alone.
+        let program = CoreProgram {
+            declarations: vec![],
+            functions: vec![
+                core_function(
+                    "Go",
+                    Visibility::Entry,
+                    vec![core_sentence(
+                        vec![],
+                        vec![core_call(
+                            "Choose",
+                            vec![core_bracket(vec![core_var(VariableKind::Expression, "B")])],
+                        )],
+                    )],
+                ),
+                core_function(
+                    "Choose",
+                    Visibility::Local,
+                    vec![
+                        core_sentence(vec![], vec![core_char('e')]),
+                        core_sentence(
+                            vec![
+                                core_var(VariableKind::Symbol, "H"),
+                                core_var(VariableKind::Expression, "T"),
+                            ],
+                            vec![core_char('n')],
+                        ),
+                    ],
+                ),
+            ],
+        };
+
+        let (cleaned, report) = clean_residual_program(&program);
+
+        assert!(report.removed.is_empty());
+        assert_eq!(cleaned.functions[1].sentences.len(), 2);
+        assert_eq!(report.uncovered.len(), 1);
+        assert_eq!(report.uncovered[0].function, "Choose");
+        assert_eq!(
+            report.perfection(),
+            Perfection::Clean {
+                undecided: 2,
+                uncovered: 1
+            }
+        );
+    }
+
+    #[test]
+    fn an_argument_containing_a_call_is_not_evidence_for_removing_anything() {
+        // `<F <G>>` does not restrict `F` to the expression `<G>`: it restricts
+        // it to whatever `G` reduces to. Treating the call as a literal would
+        // refute every sentence of `F` and silently change the program.
+        let program = CoreProgram {
+            declarations: vec![],
+            functions: vec![
+                core_function(
+                    "Go",
+                    Visibility::Entry,
+                    vec![core_sentence(
+                        vec![],
+                        vec![core_call(
+                            "Pick",
+                            vec![core_call("Tag", vec![core_char('k')])],
+                        )],
+                    )],
+                ),
+                core_function(
+                    "Pick",
+                    Visibility::Local,
+                    vec![core_sentence(vec![core_char('k')], vec![core_char('y')])],
+                ),
+                core_function(
+                    "Tag",
+                    Visibility::Local,
+                    vec![core_sentence(vec![], vec![core_char('k')])],
+                ),
+            ],
+        };
+
+        let (cleaned, report) = clean_residual_program(&program);
+
+        assert!(report.removed.is_empty(), "removed: {:?}", report.removed);
+        assert_eq!(cleaned.functions[1].sentences.len(), 1);
+        assert!(
+            report
+                .uncharacterised
+                .iter()
+                .any(|name| name.eq_ignore_ascii_case("Pick")),
+            "Pick's restrictions are not characterised: {:?}",
+            report.uncharacterised
+        );
+    }
+
+    #[test]
+    fn the_root_is_never_cleaned_because_its_callers_are_outside_the_residue() {
+        let program = CoreProgram {
+            declarations: vec![],
+            functions: vec![core_function(
+                "Go",
+                Visibility::Entry,
+                vec![
+                    core_sentence(vec![], vec![core_char('e')]),
+                    core_sentence(
+                        vec![core_var(VariableKind::Symbol, "C")],
+                        vec![core_char('s')],
+                    ),
+                ],
+            )],
+        };
+
+        let (cleaned, report) = clean_residual_program(&program);
+
+        assert!(report.removed.is_empty());
+        assert_eq!(cleaned.functions[0].sentences.len(), 2);
+    }
+
+    #[test]
+    fn a_run_time_dispatch_stops_cleaning_because_the_call_sites_are_incomplete() {
+        // `Mu` applies a function whose name is *data*, so a call-term walk
+        // cannot see it. `Pick` is called once directly with a rigid argument
+        // and once through `Mu`; refuting its second sentence against the
+        // direct call site alone would remove a sentence `Mu` can still reach.
+        let program = CoreProgram {
+            declarations: vec![],
+            functions: vec![
+                core_function(
+                    "Go",
+                    Visibility::Entry,
+                    vec![core_sentence(
+                        vec![],
+                        vec![
+                            core_call("Pick", vec![core_char('k')]),
+                            core_call("Mu", vec![core_char('P'), core_char('i'), core_char('c')]),
+                        ],
+                    )],
+                ),
+                core_function(
+                    "Pick",
+                    Visibility::Local,
+                    vec![
+                        core_sentence(vec![core_char('k')], vec![core_char('y')]),
+                        core_sentence(
+                            vec![core_bracket(vec![core_var(VariableKind::Expression, "B")])],
+                            vec![core_char('n')],
+                        ),
+                    ],
+                ),
+            ],
+        };
+
+        let (cleaned, report) = clean_residual_program(&program);
+
+        assert!(report.dynamic_dispatch);
+        assert!(report.removed.is_empty(), "removed: {:?}", report.removed);
+        assert_eq!(cleaned.functions[1].sentences.len(), 2);
+        assert_eq!(report.perfection(), Perfection::Unknown);
+    }
+
+    #[test]
+    fn a_residue_with_no_margin_of_generality_is_reported_perfect() {
+        let program = CoreProgram {
+            declarations: vec![],
+            functions: vec![
+                core_function(
+                    "Go",
+                    Visibility::Entry,
+                    vec![core_sentence(
+                        vec![core_var(VariableKind::Expression, "Input")],
+                        vec![core_call(
+                            "Pick",
+                            vec![core_char('k'), core_var(VariableKind::Expression, "Input")],
+                        )],
+                    )],
+                ),
+                core_function(
+                    "Pick",
+                    Visibility::Local,
+                    vec![
+                        core_sentence(
+                            vec![core_var(VariableKind::Symbol, "C"), core_char('x')],
+                            vec![core_char('m')],
+                        ),
+                        core_sentence(
+                            vec![core_var(VariableKind::Expression, "R")],
+                            vec![core_char('f')],
+                        ),
+                    ],
+                ),
+            ],
+        };
+
+        let (_, report) = clean_residual_program(&program);
+
+        assert!(report.removed.is_empty());
+        assert_eq!(report.perfection(), Perfection::Perfect);
     }
 }

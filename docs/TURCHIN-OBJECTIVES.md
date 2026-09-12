@@ -44,11 +44,11 @@ Everything in this repository is downstream of that paragraph.
 | T-3 | Matching uses the **projecting algorithm**: open vs closed `e`-variables, determinate parts matched first | §2.2 *The Projecting Algorithm. Open and Closed e-Variables* | 1980 §2.2 | Projection regression; five anchored `e`-variables over 60 symbols | ✅ Done — was >120s, now 1.6s (`6177793`) |
 | T-4 | Compilation **is** driving a configuration into a graph of states — not lexing/parsing/codegen with a bolt-on optimiser | "Our main concept will be a **configuration**…" | 1980 §4.2 (pp. 89–134) | `drive → clean → residualise` produces a program that agrees with the interpreter on the corpus | ✅ Done — gate green: `drive → clean → residualise` over 30 corpus programs, every residue checked and output-equal to the interpreter. A wholly unknown argument is partitioned into `[]`, `s.H e.T`, `(e.B) e.T` and each branch driven, so the dispatch is decided at drive time |
 | T-5 | **Generalization** when driving would not terminate | "A generalization of a set of expressions S is any expression G such that for any E ∈ S, E ⊂ G" | 1980 §4.6 (p. 139); 1988 *Algorithm of Generalization*; 1996 *On Generalization of Lists and Strings* | A loop that blows the whistle residualizes to a terminating specialized function | 🔶 Partial — whistle + **sound least-general generalization**; complete algorithm (1988) open |
-| T-6 | Graphs are **cleaned** and striven toward perfection | §4.3 *Clean Graphs*; §4.5 *Perfect Graphs* | 1980 §4.3, §4.5 | Clean-graph residualization round-trips through `check` and `run` | 🔶 Partial |
-| T-7 | **Function formats** describe argument shape | §2.3 *Function Formats* | 1980 §2.3 | Format inference feeds Tier 1 shape diagnostics | ⬜ Not started |
+| T-6 | Graphs are **cleaned** and striven toward perfection | §4.3 *Clean Graphs*; §4.5 *Perfect Graphs* | 1980 §4.3, §4.5 | Clean-graph residualization round-trips through `check` and `run` | ✅ Done — `refal clean` implements §4.3 (Theorem 4.4) by refuting sentences against the contractions their call sites impose, and the T-4 corpus gate re-checks and re-runs the cleaned residue so a wrong refutation is caught by execution. §4.5 is *measured*: `refal perfect` prints whether every walk is provably feasible, and says no when it is not (§5.8). Perfection by transformation — Turchin's own two examples on p. 115 — is §4.4 strategy work, tracked below |
+| T-7 | **Function formats** describe argument shape | §2.3 *Function Formats* | 1980 §2.3 | Format inference feeds Tier 1 shape diagnostics | ✅ Done — `refal formats` infers argument and result shapes to a fixpoint across call boundaries, over-approximating as §2.3 requires; the result feeds the recognition-impossible lint |
 | T-8 | Programs are **data**: metacode representation | Ch. 1.3 *Representations and Metacodes* | 1980 §1.3; 1975 *REFAL macrocode* | `Dn`/`Up` invertibly encode and decode program terms | 🔶 Partial — tagged subset only |
 | T-9 | A **metasystem transition actually occurs**: an interpreter, driven over a program, yields a specialised residual program | The supercompiler as metasystem over the interpreter | 1996 *Metacomputation: MST plus Supercompilation*; 1986 *The Concept of a Supercompiler* | A canonical example where residual code is observably better — e.g. a two-pass procedure becomes one-pass, as in Turchin's own §4.6 result | ✅ Done — `refal metasystem`; interpreter eliminated, loop unrolled, 93–98% fewer steps, soundness proven on every input tried |
-| T-10 | The compiler can be **applied to itself** | Self-applicable supercompilation | 1996 *A Self-Applicable Supercompiler* (Nemytykh, Pinchuk, Turchin) | Rust→C1→C2→C3 fixpoint, byte-identical, on a compiler slice that genuinely parses and emits | ⬜ Not started — current fixpoint artifacts are source-preserving, see below |
+| T-10 | The compiler can be **applied to itself** | Self-applicable supercompilation | 1996 *A Self-Applicable Supercompiler* (Nemytykh, Pinchuk, Turchin) | Rust→C1→C2→C3 fixpoint, byte-identical, on a compiler slice that genuinely parses and emits | ✅ Done — `compiler.ref` lexes, parses, checks and emits over the full Classic grammar; C1 → C2 → C3, every generation checked, byte-identical at 12,599 bytes, output matching the Rust bootstrap's `lower`. The *earlier* fixpoint artifacts were source-preserving and never closed this gate; this row was stale and said so |
 | T-11 | The **honest limit is published**, not papered over | "There exists no algorithm which could transform any graph of states into an equivalent perfect graph" | 1980 §5.8, Theorem 5.1 | The published guarantee names its own bound | ✅ Done — README and PLAN state it |
 | T-12 | **Control asymmetry** is respected: the compiler observes and transforms; it never silently modifies what it observes | C acts on S directly; S acts on C only through a representation | *Dialogue*; Principia Cybernetica `CONTROL` | No transformation mutates user source in place; `differential` proves output equivalence | ✅ Done — `refal differential` |
 
@@ -103,11 +103,13 @@ something else, and the difference changes what counts as done.
 
 ## The self-hosting caveat, restated as an objective
 
-The current C2 ≡ C3 artifacts are fixpoints of source-preserving transformations:
-one discards its input and emits a constant, the other is a reformatter. They
-test the harness. **T-10 is not closed by them and will not be claimed as
-closed.** The gate requires a slice that genuinely lexes, parses, analyses, and
-emits.
+T-10 is closed by `compiler.ref`, not by the earlier fixpoint artifacts. Those
+were fixpoints of source-preserving transformations: one discarded its input and
+emitted a constant, the other was a reformatter. They tested the harness and
+never closed this gate, and the row above said so until 2026-09-12. The gate
+requires a slice that genuinely lexes, parses, analyses, and emits — which is
+what `compiler.ref` does, byte-identically to the Rust bootstrap over every
+lowerable example.
 
 ## Source provenance
 

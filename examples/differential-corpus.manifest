@@ -65,3 +65,6 @@ residual|metasystem-unroll.ref|
 residual|metacode-macrodigit.ref|
 positive|case-split.ref|abc
 residual|case-split.ref|abc
+# The T-6 gate: the cleaned residue must also check and agree with the interpreter.
+positive|clean-graph.ref|k x
+residual|clean-graph.ref|k x

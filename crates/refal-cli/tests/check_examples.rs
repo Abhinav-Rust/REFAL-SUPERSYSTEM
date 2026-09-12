@@ -103,6 +103,20 @@ fn residualize_file(path: &str, args: &[&str]) -> std::process::Output {
     command.output().expect("run refal binary")
 }
 
+fn clean_file(path: &str, args: &[&str]) -> std::process::Output {
+    let mut command = Command::new(refal_bin());
+    command.args(["clean", &workspace_path(path)]);
+    command.args(args);
+    command.output().expect("run refal binary")
+}
+
+fn perfect_file(path: &str, args: &[&str]) -> std::process::Output {
+    let mut command = Command::new(refal_bin());
+    command.args(["perfect", &workspace_path(path)]);
+    command.args(args);
+    command.output().expect("run refal binary")
+}
+
 /// Checks a source string, for conformance cases too small to warrant an example
 /// file. The temporary file is removed before the assertion runs.
 fn check_source(source: &str) -> std::process::Output {
@@ -4065,4 +4079,182 @@ fn a_narrow_entry_is_not_split() {
         String::from_utf8_lossy(&checked.stderr)
     );
     let _ = fs::remove_file(&path);
+}
+
+/// The residue part of a `clean`/`perfect` run: everything from the first
+/// declaration onwards. The report is printed above it.
+fn residue_of(stdout: &str) -> String {
+    match stdout.find("$EXTERN") {
+        Some(index) => stdout[index..].to_string(),
+        None => stdout
+            .split_once("$ENTRY")
+            .map(|(_, rest)| format!("$ENTRY{rest}"))
+            .unwrap_or_else(|| stdout.to_string()),
+    }
+}
+
+/// T-6, Turchin 1980 4.3. A sentence whose pattern no call site can satisfy has
+/// an empty quasiinput set, and cleaning removes it.
+#[test]
+fn cleaning_removes_a_sentence_no_call_site_can_select() {
+    let output = clean_file("examples/clean-graph.ref", &[]);
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+
+    assert!(
+        stdout.contains("removed: 1"),
+        "the refuted sentence should have been removed:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("Pick {(e.B)} rejected by"),
+        "the report must name what was removed and why:\n{stdout}"
+    );
+
+    let residue = residue_of(&stdout);
+    assert!(
+        !residue.contains("(e.B)"),
+        "the removed sentence is still in the residue:\n{residue}"
+    );
+    assert!(
+        residue.contains("s.C 'x'") && residue.contains("e.R"),
+        "the sentences that *are* selectable must survive:\n{residue}"
+    );
+}
+
+/// T-6 gate. Cleaning is only trustworthy if the cleaned residue is a program
+/// the checker accepts and one that still answers what the source answered.
+#[test]
+fn a_cleaned_residue_still_checks_and_runs_like_the_source() {
+    let output = clean_file("examples/clean-graph.ref", &[]);
+    assert!(output.status.success());
+    let residue = residue_of(&String::from_utf8_lossy(&output.stdout));
+
+    let path = scratch_source("refal-clean-graph", &residue);
+    let path_string = path.to_string_lossy().to_string();
+    let checked = check_path(&path_string, &[]);
+    assert!(
+        checked.status.success(),
+        "the cleaned residue does not check:\n{}\n{residue}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+
+    let source_output = run_file("examples/clean-graph.ref", &["k", "x"]);
+    let residue_output = Command::new(refal_bin())
+        .args(["run", &path_string, "k", "x"])
+        .output()
+        .expect("run the cleaned residue");
+    assert_eq!(
+        String::from_utf8_lossy(&source_output.stdout),
+        String::from_utf8_lossy(&residue_output.stdout),
+        "the cleaned residue disagrees with the source:\n{residue}\nstderr:\n{}",
+        String::from_utf8_lossy(&residue_output.stderr)
+    );
+    let _ = fs::remove_file(&path);
+}
+
+/// T-6, Turchin 1980 4.5. Perfection is a stronger claim than cleanliness and
+/// the command has to be willing to say it is not proven.
+#[test]
+fn the_perfection_verdict_is_reported_honestly() {
+    let perfect = perfect_file("examples/clean-graph.ref", &[]);
+    assert!(perfect.status.success());
+    let perfect_stdout = String::from_utf8_lossy(&perfect.stdout).to_string();
+    assert!(
+        perfect_stdout.contains("perfect: yes"),
+        "clean-graph should be perfect once cleaned:\n{perfect_stdout}"
+    );
+
+    // `symbolic-branch.ref` calls `Choose` only with a bracket-headed argument,
+    // and no sentence of `Choose` can take one. The residue is clean but keeps
+    // a margin of generality, so perfection must not be claimed.
+    let imperfect = perfect_file("examples/symbolic-branch.ref", &[]);
+    assert!(imperfect.status.success());
+    let imperfect_stdout = String::from_utf8_lossy(&imperfect.stdout).to_string();
+    assert!(
+        imperfect_stdout.contains("perfect: no"),
+        "symbolic-branch must not be reported perfect:\n{imperfect_stdout}"
+    );
+    assert!(
+        imperfect_stdout.contains("uncovered: 1"),
+        "the unselectable call site must be reported:\n{imperfect_stdout}"
+    );
+}
+
+/// The corpus gate has to exercise the pass it is guarding. If no residual case
+/// ever removes a sentence, the cleaning path is untested and the gate is
+/// decorative.
+#[test]
+fn the_corpus_gate_exercises_the_cleaning_pass() {
+    let manifest = workspace_path("examples/differential-corpus.manifest");
+    let output = Command::new(refal_bin())
+        .args(["differential", &manifest, "--corpus"])
+        .output()
+        .expect("run corpus");
+    assert!(
+        output.status.success(),
+        "the residual corpus gate failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let cleaned = stdout
+        .lines()
+        .find_map(|line| line.strip_prefix("cleaned-sentences: "))
+        .and_then(|value| value.trim().parse::<usize>().ok())
+        .expect("the corpus summary must report cleaned sentences");
+    assert!(
+        cleaned >= 1,
+        "no corpus case exercised the cleaning pass:\n{stdout}"
+    );
+}
+
+/// Cleaning must not be able to empty a function. A definition with no
+/// sentences is not Refal, and producing one would be a rewrite rather than a
+/// cleaning -- so the call site is reported instead.
+#[test]
+fn cleaning_never_leaves_a_function_without_sentences() {
+    let output = clean_file("examples/symbolic-branch.ref", &[]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+
+    assert!(
+        stdout.contains("removed: 0"),
+        "emptying Choose is not cleaning:\n{stdout}"
+    );
+    let residue = residue_of(&stdout);
+    assert!(
+        residue.contains("s.Head e.Tail"),
+        "Choose must keep every sentence it had:\n{residue}"
+    );
+}
+
+/// `Mu` applies a function whose name is data, so a walk over call terms
+/// cannot enumerate that function's entering restrictions. Refuting a sentence
+/// against the call sites it *can* see would remove a sentence `Mu` can still
+/// reach, so the pass has to stand down and say why.
+#[test]
+fn a_run_time_dispatch_stops_cleaning_and_says_so() {
+    let output = perfect_file("examples/runtime-mu.ref", &[]);
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+
+    assert!(
+        stdout.contains("dynamic-dispatch: yes"),
+        "the reason must be reported:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("removed: 0"),
+        "nothing may be removed when the call sites are incomplete:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("perfect: unknown"),
+        "perfection is not askable here, and must not be claimed:\n{stdout}"
+    );
 }

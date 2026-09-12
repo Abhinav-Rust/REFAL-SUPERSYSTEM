@@ -112,6 +112,8 @@ fn main() {
         "residualize-graph" => residualize_graph_program(&program, &input_args),
         "residualize-driven" => residualize_driven_program(&program, &input_args),
         "residualize-generalized" => residualize_generalized_program(&program, &input_args),
+        "clean" => clean_program(&program, &input_args, false),
+        "perfect" => clean_program(&program, &input_args, true),
         "supercompile" => supercompile_program(&program, &input_args),
         "metasystem" => metasystem_program(&program, &input_args, &path),
         "fixpoint" => fixpoint_program(&program, &input_args),
@@ -253,6 +255,11 @@ fn print_usage() {
     eprintln!("  residualize-graph  Emit structurally cleaned reachable Core Refal");
     eprintln!("  residualize-driven  Emit driven Core Refal with whistle evidence [--steps N]");
     eprintln!("  residualize-generalized  Emit explicit generalized residual graph [--steps N]");
+    eprintln!("  clean      Drive, residualize, then clean the residue of sentences no call");
+    eprintln!("             site can select (Turchin 1980 4.3) [--steps N]");
+    eprintln!(
+        "  perfect    As `clean`, and report whether every walk is feasible (4.5) [--steps N]"
+    );
     eprintln!("  supercompile  Analyze, symbolically drive, whistle, and residualize [--steps N]");
     eprintln!("  metasystem   Drive an interpreter over a known program, emit the residue,");
     eprintln!(
@@ -725,6 +732,56 @@ fn residualize_generalized_program(program: &refal_ast::Program, args: &[String]
     print!("{}", refal_core::format_program(&residual.program));
 }
 
+/// `drive → clean → residualise`, with §4.3 actually performed.
+///
+/// The report is the point as much as the program is. A cleaning pass that
+/// removes nothing is indistinguishable from no pass at all, so the command
+/// prints what it removed and why, and `perfect` additionally prints the §4.5
+/// verdict — which is allowed to be "not proven", because Turchin proved in
+/// §5.8 that it must sometimes be.
+fn clean_program(program: &refal_ast::Program, args: &[String], report_perfection: bool) {
+    let max_steps = match args {
+        [] => 10_000,
+        [flag, limit] if flag == "--steps" => match limit.parse::<usize>() {
+            Ok(limit) => limit,
+            Err(_) => {
+                eprintln!("Usage: refal clean <file.ref> [--steps N]");
+                process::exit(2);
+            }
+        },
+        _ => {
+            eprintln!("Usage: refal clean <file.ref> [--steps N]");
+            process::exit(2);
+        }
+    };
+    let core = refal_core::lower_program(program);
+    let graph = refal_core::clean_unreachable_states(&refal_core::build_seed_graph(&core));
+    let (residual, report) =
+        match refal_core::residualize_entry_graph_cleaned(&core, &graph, max_steps) {
+            Ok(result) => result,
+            Err(error) => {
+                eprintln!("cleaning error: {error}");
+                process::exit(1);
+            }
+        };
+    print!("{}", refal_core::format_clean_report(&report));
+    if report_perfection {
+        match report.perfection() {
+            refal_core::Perfection::Perfect => println!("perfect: yes"),
+            refal_core::Perfection::Clean {
+                undecided,
+                uncovered,
+            } => {
+                println!("perfect: no (undecided {undecided}, uncovered {uncovered})");
+            }
+            refal_core::Perfection::Unknown => {
+                println!("perfect: unknown (a function is chosen at run time)");
+            }
+        }
+    }
+    print!("{}", refal_core::format_program(&residual.program));
+}
+
 fn fixpoint_program(program: &refal_ast::Program, args: &[String]) {
     let [source_path] = args else {
         eprintln!("Usage: refal fixpoint <compiler.ref> <source.ref>");
@@ -1099,6 +1156,7 @@ fn differential_corpus(manifest_path: &str) {
     let mut check_failures = 0usize;
     let mut runtime_failures = 0usize;
     let mut residuals = 0usize;
+    let mut cleaned = 0usize;
 
     for (line_index, line) in manifest.lines().enumerate() {
         let line = line.trim();
@@ -1133,19 +1191,19 @@ fn differential_corpus(manifest_path: &str) {
         let result = match mode {
             "positive" => {
                 positive += 1;
-                differential_case(&source, &arguments)
+                differential_case(&source, &arguments).map(|()| 0)
             }
             "check-failure" => {
                 check_failures += 1;
                 if parse_checked_source(&source).is_err() {
-                    Ok(())
+                    Ok(0)
                 } else {
                     Err("source unexpectedly passed checking".to_string())
                 }
             }
             "runtime-failure" => {
                 runtime_failures += 1;
-                runtime_failure_case(&source, &arguments)
+                runtime_failure_case(&source, &arguments).map(|()| 0)
             }
             "residual" => {
                 residuals += 1;
@@ -1153,14 +1211,17 @@ fn differential_corpus(manifest_path: &str) {
             }
             other => Err(format!("unknown differential corpus mode `{other}`")),
         };
-        if let Err(error) = result {
-            eprintln!(
-                "differential corpus mismatch at row {} ({}): {}",
-                line_index + 1,
-                source_path.display(),
-                error
-            );
-            process::exit(1);
+        match result {
+            Ok(removed) => cleaned += removed,
+            Err(error) => {
+                eprintln!(
+                    "differential corpus mismatch at row {} ({}): {}",
+                    line_index + 1,
+                    source_path.display(),
+                    error
+                );
+                process::exit(1);
+            }
         }
         cases += 1;
     }
@@ -1171,36 +1232,67 @@ fn differential_corpus(manifest_path: &str) {
     println!("check-failure: {check_failures}");
     println!("runtime-failure: {runtime_failures}");
     println!("residual: {residuals}");
+    println!("cleaned-sentences: {cleaned}");
 }
 
-/// The T-4 gate: `drive → clean → residualise` must produce a program that
-/// agrees with the interpreter.
+/// The T-4 and T-6 gate: `drive → clean → residualise` must produce a program
+/// that agrees with the interpreter.
 ///
 /// A residual program that is merely *emitted* proves nothing. It has to be
 /// checked Refal, and running it has to produce what running the source
 /// produced. This is the check that turns "the residualizer runs" into "the
 /// residualizer is correct".
-fn residual_case(source: &str, input_args: &[String]) -> Result<(), String> {
+///
+/// The residue is then cleaned (§4.3) and put through the same gate. That is
+/// what makes the cleaning pass trustworthy: it removes sentences on the
+/// strength of a refutation about call-site arguments, and the way to find out
+/// whether a refutation was wrong is to run both programs on real input.
+///
+/// Returns how many sentences cleaning removed, so the corpus summary shows
+/// how much of the gate actually exercised the pass. A gate that never runs the
+/// code it is guarding is not a gate.
+fn residual_case(source: &str, input_args: &[String]) -> Result<usize, String> {
     let original = parse_checked_source(source)?;
     let core = refal_core::lower_program(&original);
     let graph = refal_core::clean_unreachable_states(&refal_core::build_seed_graph(&core));
     let residual = refal_core::residualize_entry_graph(&core, &graph, 10_000)
         .map_err(|error| format!("driving failed: {error}"))?;
 
+    let original_output = execute_program(&original, input_args)?;
+
     let residual_source = refal_core::format_program(&residual.program);
     let residual_program = parse_checked_source(&residual_source)
         .map_err(|error| format!("the residue is not valid Refal: {error}"))?;
-
-    let original_output = execute_program(&original, input_args)?;
     let residual_output = execute_program(&residual_program, input_args)?;
-    if original_output == residual_output {
-        Ok(())
-    } else {
-        Err(format!(
+    if original_output != residual_output {
+        return Err(format!(
             "the residue disagrees with the interpreter: source {:?}, residue {:?}\nresidue source:\n{residual_source}",
             original_output, residual_output
-        ))
+        ));
     }
+
+    let (cleaned, report) = refal_core::clean_residual_program(&residual.program);
+    if report.removed.is_empty() {
+        return Ok(0);
+    }
+    let cleaned_source = refal_core::format_program(&cleaned);
+    let cleaned_program = parse_checked_source(&cleaned_source)
+        .map_err(|error| format!("the cleaned residue is not valid Refal: {error}"))?;
+    let cleaned_output = execute_program(&cleaned_program, input_args)?;
+    if cleaned_output != original_output {
+        return Err(format!(
+            "cleaning changed what the residue computes: source {:?}, residue {:?}, cleaned {:?}\nremoved: {:?}\ncleaned source:\n{cleaned_source}",
+            original_output,
+            residual_output,
+            cleaned_output,
+            report
+                .removed
+                .iter()
+                .map(|removed| format!("{}{{{}}}", removed.function, removed.pattern))
+                .collect::<Vec<_>>()
+        ));
+    }
+    Ok(report.removed.len())
 }
 
 fn differential_case(source: &str, input_args: &[String]) -> Result<(), String> {

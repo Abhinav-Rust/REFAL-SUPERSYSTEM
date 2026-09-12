@@ -2,6 +2,73 @@
 
 ## Unreleased
 
+### Clean and perfect graphs — T-6, Turchin 1980 §4.3 and §4.5 (2026-09-12)
+
+`refal clean` implements §4.3's cleaning. In a residue the quasiinput set of a
+function is written down in the program itself: every call term `<F a>` is a
+contraction, and the value handed to `F` is always an instance of `a`. So a
+sentence whose pattern matches no instance of any argument the program can
+supply is a vertex with an empty quasiinput set, and Theorem 4.4 says to remove
+it. The report names what went and which call sites refuted it.
+
+`refal perfect` prints the §4.5 verdict rather than claiming it. A **path** is
+feasible when its quasiinput set is non-empty; a **walk** is feasible when some
+input actually takes it, which is strictly stronger — Turchin's own Figure 13 is
+clean but not perfect. `perfect: yes` requires every retained sentence to be
+provably selectable and every call site to be covered; anything else prints
+`perfect: no (undecided N, uncovered M)`, because §5.8 Theorem 5.1 says the
+stronger answer cannot always be had.
+
+Three guards, all tested:
+
+- A call argument containing an unevaluated call or a block makes its function
+  *uncharacterised* — `<F <G>>` restricts `F` to whatever `G` reduces to, not to
+  the text `<G>` — and nothing is removed from it.
+- A function is never emptied. If every sentence would go, the definition is
+  left alone and the call site is reported as uncovered.
+- A run-time `Mu` dispatch stands the whole pass down. `Mu` applies a function
+  whose name is *data*, so no call-term walk can enumerate that function's
+  entering restrictions; `examples/runtime-mu.ref` reports
+  `dynamic-dispatch: yes` and the verdict is `unknown`.
+
+The T-4 corpus gate now cleans every residue and re-checks and re-runs it, so a
+wrong refutation is caught by execution rather than by argument, and the summary
+reports `cleaned-sentences` so the pass cannot silently become dead code. New
+fixture `examples/clean-graph.ref`.
+
+The oracle needed replacing. `pattern_sequence_compatibility` gives up at the
+first expression variable, and the driving matcher answers a different question
+— it returns `No` for `s.X s.X` against `s.A s.B`, which is a claim about
+certainty, not about emptiness — so the new `patterns_overlap` searches over how
+many terms an `e.`-variable absorbs, under a step budget, and returns `Disjoint`
+only on a proof.
+
+Also reconciled three stale rows: `TURCHIN-OBJECTIVES.md` listed T-7 and T-10 as
+not started when both are closed, and `PLAN.md` and the README disagreed about
+the graph workstream's credit. Tests 251 → 264.
+
+### Driving a whole program, and the metasystem transition (2026-09-11)
+
+`drive → clean → residualise` is now verified against the interpreter as a
+corpus mode: every residue is re-checked as Refal and has to produce what the
+source produced. Driving the **closed entry configuration** is what made it mean
+something — `Go` takes no arguments, so an `e.Input` entry matched nothing and
+the whole ground corpus residualised to itself. The gate found four bugs, each
+of which had been silently emitting a *wrong* program: `Prout` folded to its
+argument (dropping the print), blocks in condition position matched as literals,
+residues missing the functions they still call, and `Mu` losing definitions it
+can dispatch to by name.
+
+Driving also stopped giving up when matching cannot decide a configuration: it
+partitions the argument into `[]`, `s.H e.T` and `(e.B) e.T` — exhaustive and
+pairwise disjoint for an expression variable — and drives each branch (§4.2).
+
+`refal metasystem` drives a Refal interpreter over a known object program with
+an unknown input and emits the object program translated into Refal: zero
+interpreter calls left, 93–98% fewer reduction steps, soundness proven on every
+input tried. Plus `-W` / `-D` / `-A` per-lint control, and function formats
+(§2.3) inferred to a fixpoint.
+
 ### Release evidence: checklist, and a corpus four times larger (2026-09-10)
 
 `docs/RELEASE-CHECKLIST.md` states what must be true before a release, naming
@@ -20,7 +87,6 @@ at `Allow` severity — opt-in pedantry, visible under `--strict`, never fatal.
 No other Refal toolchain reports it.
 
 ### Exhaustiveness widened past literal arguments (2026-09-10)
-### Exhaustiveness widened past literal arguments (2026-09-10)
 
 Recognition impossible is now proven two ways. The exact one decides every
 sentence against an all-literal argument. The new one compares formats: if the
@@ -30,7 +96,6 @@ argument was simply skipped. `Format::disjoint` answers "definitely disjoint",
 never "definitely overlapping", so `?` overlaps with everything and length
 ranges that merely might miss each other do not count.
 
-### Function formats — T-7, Turchin 1980 §2.3 (2026-09-10)
 ### Function formats — T-7, Turchin 1980 §2.3 (2026-09-10)
 
 `refal formats` reports what each function can be applied to and what it can
@@ -56,7 +121,6 @@ verification harness. The output is re-lexed, re-parsed and re-checked before it
 is emitted, so `compile` cannot hand back a program the compiler itself would
 reject, and it agrees with `lower` byte for byte across the corpus.
 
-### Tier 1: recognition impossible (2026-09-10)
 ### Tier 1: recognition impossible (2026-09-10)
 
 The third and most important class in the published guarantee. *Recognition

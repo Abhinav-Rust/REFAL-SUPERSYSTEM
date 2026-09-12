@@ -35,8 +35,8 @@ objective to a gate. Not another Refal implementation.
 | | |
 |---|---|
 | Honest completion | **~87%** |
-| Tests | 242 passing, 0 clippy, fmt clean |
-| Last commit | `99d17fc` then this commit |
+| Tests | 264 passing, 0 clippy, fmt clean |
+| Last commit | `b8bf679` then this commit |
 | Working tree | clean |
 
 ### Workstream credit
@@ -46,12 +46,17 @@ objective to a gate. Not another Refal implementation.
 | Bootstrap frontend | 8.5% | 8.0 |
 | Bootstrap semantics | 6.0% | 5.0 |
 | Refal machine / runtime | 19.5% | 17.0 |
-| Graph of states / Refal emission | 8.5% | 8.4 |
+| Graph of states / Refal emission | 8.5% | 8.5 |
 | Static verification (Tier 1) | 15.0% | 13.5 |
 | Compiler implemented in Refal | 25.5% | 20.0 |
 | Verified self-hosting fixpoint | 13.0% | 12.0 |
 | Conformance / release evidence | 4.0% | 3.0 |
 | **Total** | **100%** | **~87%** |
+
+T-6's share of its workstream was the last 0.3 points of an 8.5-point row, so closing
+it moves the headline by a third of a point. The remaining 13 points are elsewhere: the
+runtime's heap-allocated view field, the Refal compiler's pattern-matching stage, and
+the objectives still open below. The figure is not raised for work that is not gated.
 
 ### Done
 
@@ -91,6 +96,9 @@ objective to a gate. Not another Refal implementation.
   `builtin-domain` and `open-expression-complexity` can be warned, denied or
   suppressed individually. A lint flag moves diagnostics only; a test asserts
   no flag can silence a spec violation.
+- **T-6 clean and perfect graphs** — `refal clean` removes every sentence whose
+  quasiinput set is empty, `refal perfect` reports the §4.5 verdict, and the
+  corpus gate re-checks and re-runs the cleaned residue. See the section below.
 
 ### Done — case splitting
 
@@ -189,6 +197,69 @@ A third came out of the same work: `residualize_symbolic` could emit
 back to the source program when driving learns nothing — a supercompiler that
 cannot specialise must at least preserve what it was given.
 
+### Done — T-6, clean and perfect graphs (§4.3, §4.5)
+
+Turchin defines the two properties over different things, and the difference is
+the whole content of the section:
+
+> A **path** is called feasible if the corresponding quasiinput set is not
+> empty, otherwise it is unfeasible. A graph in which there are no unfeasible
+> paths will be called **clean**. (§4.3, p. 91)
+>
+> A graph of states in which all possible **walks** are feasible will be called
+> **perfect**. (§4.5, p. 112)
+
+A path stops at a vertex; a walk also records which branch was taken at every
+dynamic arc. Turchin's own Figure 13 is *clean but not perfect*: the paths to
+vertices 3 and 5 are feasible, but no input reaching vertex 2 takes either
+branch, so a test survives that no input can perform.
+
+- **§4.3, implemented.** In a residue the quasiinput set is written down: every
+  call term `<F a>` is a contraction, and the value handed to `F` is always an
+  instance of `a`. So a sentence whose pattern matches no instance of any
+  argument the program can supply is a vertex with an empty quasiinput set, and
+  `refal clean` removes it. Theorem 4.4 is satisfied by construction: the
+  removal is a refutation, never a guess.
+- **Soundness argument.** "The value of `a` is an instance of the pattern `a`"
+  holds exactly when `a` contains no unevaluated call and no block — an
+  unevaluated call denotes whatever it reduces to, and a block is a function
+  awaiting its argument. A function with an uncharacterised call site is
+  therefore left untouched and reported as such.
+- **A function is never emptied.** If every sentence would go, the definition is
+  left as it was and the call site is reported as uncovered. A definition with
+  no sentences is not Refal, and emptying one is a rewrite rather than a
+  cleaning. `examples/symbolic-branch.ref` is exactly this case: its residue is
+  clean and *not* perfect, and the command says so.
+- **§4.5, reported rather than claimed.** `refal perfect` prints the verdict.
+  `Perfection::Perfect` requires every retained sentence to be provably
+  selectable and every call site to be covered; anything else prints
+  `perfect: no (undecided N, uncovered M)`. §5.8 Theorem 5.1 is why the second
+  answer has to exist.
+- **The gate.** The T-4 corpus gate now cleans every residue and runs *that*
+  too, so a wrong refutation is caught by execution rather than by argument, and
+  the summary reports `cleaned-sentences` so the pass cannot silently become
+  dead code. `examples/clean-graph.ref` is the fixture that makes it non-vacuous.
+
+The oracle this rests on is a new one. `pattern_sequence_compatibility` gives up
+as soon as an expression variable appears, and the driving matcher answers a
+different question — *can this branch definitely be taken?*, not *can these two
+patterns meet at all?* — so reusing either would have been wrong in a way that
+is easy to miss: the driving matcher returns `No` for `s.X s.X` against
+`s.A s.B`, which is a statement about certainty, not about emptiness. The new
+`patterns_overlap` searches over how many terms an `e.`-variable absorbs, under
+a step budget, and returns `Disjoint` only on a proof.
+
+Two guards keep the pass honest, and both are tested:
+
+- **A run-time dispatch stands it down.** `Mu` applies a function whose name is
+  *data*, so a walk over call terms cannot enumerate that function's entering
+  restrictions. `runtime-mu.ref` reports `dynamic-dispatch: yes (nothing
+  cleaned)` and the verdict is `unknown` rather than `perfect`.
+- **A function is never emptied, and an uncharacterised one is never touched.**
+  `examples/symbolic-branch.ref` is the first case and
+  `compiler.ref` — whose `Mu`-dispatched helpers make 28 functions
+  uncharacterised — is the second.
+
 ### Open
 
 - **Bracket contents in the format lattice.** `Shape::Bracket` is opaque, so
@@ -199,7 +270,11 @@ cannot specialise must at least preserve what it was given.
 - **T-5** the complete generalization algorithm (1988). The whistle and a
   sound, least-general LGG exist; the iterated "is this too general" check does
   not.
-- **T-6** clean / perfect graphs (§4.3, §4.5).
+- **§4.4 compilation strategy** — perfection by *transformation*. T-6 measures
+  perfection and removes what is provably unnecessary; it does not yet achieve
+  it where achieving it needs a rewrite (Turchin's own two examples on p. 115 —
+  compile-time evaluation and Dijkstra's loop cleansing — are §4.4 strategies
+  over the cleaned graph).
 - **T-8** metacodes (Ch. 1.3). `Dn`/`Up` cover a tagged subset; the Chapter 6
   contract is open.
 - Heap-allocated single view field (issue #7); `driver.ref`.
@@ -208,23 +283,21 @@ cannot specialise must at least preserve what it was given.
 
 ## NEXT ACTION
 
-**T-6: clean and perfect graphs (§4.3, §4.5).**
+**T-5's remaining half: the 1988 generalization check.**
 
-T-4 is closed on its published gate and driving now case-splits, so it handles
-an unknown argument. What it still does not do is *clean* the result: the driver
-works over source-preserved sentence states rather than a true configuration
-graph, and there is no §4.3 semantic cleaning or §4.5 perfection.
+T-6 is closed on its published gate. The driver has a whistle and a sound,
+least-general generalization, so it stops; what it does not have is the
+iterated *"is this generalization too general?"* step from
+*The Algorithm of Generalization in the Supercompiler* (1988), which is what
+makes the abstraction sharp rather than merely terminating.
 
 Order:
 
-1. **T-6** — semantic cleaning and the drive toward perfect graphs. The
-   structural cleanup exists; §4.3's semantic version and §4.5's perfection
-   do not.
-2. **T-5's remaining half** — the iterated "is this generalization too general"
-   check from the 1988 algorithm.
-
-Then T-8 metacodes (Ch. 1.3), `driver.ref`, and bracket contents in the format
-lattice.
+1. **T-5** — the 1988 algorithm's refinement loop over the LGG.
+2. **§4.4 strategy** — use the §4.5 verdict to drive transformations that
+   remove a proven margin of generality rather than only reporting it.
+3. **T-8** metacodes (Ch. 1.3), `driver.ref`, and bracket contents in the
+   format lattice.
 
 The soundness gate is unchanged and non-negotiable:
 `strict_mode_has_no_false_positives_on_the_corpus` must stay green. If a new
