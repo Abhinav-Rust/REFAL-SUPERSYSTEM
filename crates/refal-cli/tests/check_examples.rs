@@ -1930,10 +1930,11 @@ fn strict_mode_fails_on_statically_proven_defects() {
         ),
         // The same class decided by formats rather than by literals: the
         // argument is a variable, but `s.` can only be a symbol and
-        // `OnlyBracket` only accepts a bracket.
+        // `OnlyBracket` only accepts a bracket. The bracket's format shows its
+        // contents, because the lattice describes them all the way down.
         (
             "$ENTRY Go {\n  s.A = <OnlyBracket s.A>;\n}\nOnlyBracket {\n  (e.Y) = e.Y;\n}\n",
-            "accepts [B], but this call passes [S]",
+            "accepts [([..])], but this call passes [S]",
         ),
     ];
     for (source, expected) in cases {
@@ -2030,6 +2031,10 @@ fn strict_mode_has_no_false_positives_on_the_corpus() {
             "runtime-unimplemented-extern.ref",
             "deliberately declares an extern the bootstrap does not implement",
         ),
+        (
+            "runtime-bracket-kind.ref",
+            "deliberately passes a character bracket where a number bracket is required",
+        ),
     ];
 
     let mut names: Vec<String> = fs::read_dir(workspace_path("examples"))
@@ -2080,24 +2085,29 @@ fn formats_reports_argument_and_result_shapes() {
     // Function formats (Turchin 1980 2.3): what a function can be applied to,
     // and what it can return. `C` is a character, `N` a number, `I` an
     // identifier, `S` any symbol (an `s.`-variable, or three literal kinds that
-    // disagree), `B` a bracket, `?` an unknown term, `..` an open tail.
+    // disagree), `(f)` a bracket whose contents are `f`, `?` an unknown term,
+    // `..` an open tail.
     //
     // The three literal kinds are kept apart because they can never coincide.
     // That is what lets exhaustiveness refute a call whose argument is a
     // literal of the wrong kind, while `s.` stays `S` and is never refuted.
+    // Describing a bracket's contents extends the same reasoning one level
+    // down, so `('a')` can be refuted against a callee accepting only `(1)`.
     let cases = [
         (
             "$ENTRY Go {\n  (s1s2s3) = s3 s2 s1;\n}\n",
-            "Go: [B] -> [S S S]",
+            "Go: [([S S S])] -> [S S S]",
         ),
-        ("$ENTRY Go {\n  (e.X) = e.X;\n}\n", "Go: [B] -> [..]"),
+        ("$ENTRY Go {\n  (e.X) = e.X;\n}\n", "Go: [([..])] -> [..]"),
         ("$ENTRY Go {\n  = 'a';\n}\n", "Go: [] -> [C]"),
         ("$ENTRY Go {\n  = 1;\n}\n", "Go: [] -> [N]"),
         ("$ENTRY Go {\n  = Foo;\n}\n", "Go: [] -> [I]"),
         // Three disagreeing literal kinds are still all symbols.
         ("$ENTRY Go {\n  = 'a' 1 Foo;\n}\n", "Go: [] -> [C N I]"),
         ("$ENTRY Go {\n  s.A = 1;\n}\n", "Go: [S] -> [N]"),
-        ("$ENTRY Go {\n  = (1 2);\n}\n", "Go: [] -> [B]"),
+        ("$ENTRY Go {\n  = (1 2);\n}\n", "Go: [] -> [([N N])]"),
+        // Nesting is described all the way down.
+        ("$ENTRY Go {\n  = ((1));\n}\n", "Go: [] -> [([([N])])]"),
         ("$ENTRY Go {\n  t.X = t.X;\n}\n", "Go: [?] -> [?]"),
     ];
     for (source, expected) in cases {
@@ -4257,4 +4267,65 @@ fn a_run_time_dispatch_stops_cleaning_and_says_so() {
         stdout.contains("perfect: unknown"),
         "perfection is not askable here, and must not be claimed:\n{stdout}"
     );
+}
+
+/// Turchin 1980 §2.3. A format that stops at "it is a bracket" cannot refute
+/// anything about a bracket argument. With the contents described, `('a')`
+/// against a callee that only accepts `(1)` is refuted — and `--classic` still
+/// accepts the program, because only the diagnosis changed, not the language.
+#[test]
+fn bracket_contents_are_refuted_but_the_language_is_unchanged() {
+    let classic = check_file("examples/runtime-bracket-kind.ref");
+    assert!(
+        classic.status.success(),
+        "--classic must keep accepting the program:\n{}",
+        String::from_utf8_lossy(&classic.stderr)
+    );
+
+    let strict = check_path(
+        &workspace_path("examples/runtime-bracket-kind.ref"),
+        &["--strict"],
+    );
+    let stderr = String::from_utf8_lossy(&strict.stderr);
+    assert!(!strict.status.success(), "strict must reject the call");
+    assert!(
+        stderr.contains("always fails"),
+        "the call should be reported as always failing:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("[([N])]") && stderr.contains("[([C])]"),
+        "the report must name both formats so the refutation is checkable:\n{stderr}"
+    );
+
+    // The contents are described, not just the bracket: `formats` must show
+    // what is inside.
+    let formats = formats_file(&workspace_path("examples/runtime-bracket-kind.ref"));
+    let stdout = String::from_utf8_lossy(&formats.stdout).to_string();
+    assert!(
+        stdout.contains("[([N])]"),
+        "the inferred format must describe the bracket's contents:\n{stdout}"
+    );
+}
+
+/// A bracket whose contents are open must not be refuted by a bracket whose
+/// contents are not: the refutation has to follow from the contents, and an
+/// `e.`-variable inside a bracket can be anything.
+#[test]
+fn an_open_bracket_is_never_refuted_by_a_narrow_one() {
+    let source = "$EXTERN Prout;\n\n$ENTRY Go {\n  e.Input = <Prout <Any e.Input>>;\n}\n\nAny {\n  (1) = 'number';\n}\n";
+    let output = check_source(source);
+    assert!(
+        output.status.success(),
+        "the program itself is sound:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    // `<Any e.Input>` passes anything at all, so nothing may be refuted.
+    let path = scratch_source("refal-open-bracket", source);
+    let strict = check_path(&path.to_string_lossy(), &["--strict"]);
+    assert!(
+        strict.status.success(),
+        "an unrestricted argument must not be refuted:\n{}",
+        String::from_utf8_lossy(&strict.stderr)
+    );
+    let _ = fs::remove_file(&path);
 }

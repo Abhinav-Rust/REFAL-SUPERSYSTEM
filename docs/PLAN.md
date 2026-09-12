@@ -274,7 +274,7 @@ Native codegen (§4.7) if wanted, packaging, performance suite, compatibility st
 
 ## 5. Completion accounting
 
-**~87% today by the sub-task implementation credit method.** This is *not* the
+**~88% today by the sub-task implementation credit method.** This is *not* the
 headline figure: the README leads with the **~81% evidence-weighted** score,
 which counts only what is tested and working for the general case. Both are
 reproduced from the same underlying work; they differ because this method
@@ -295,11 +295,11 @@ What the credit covers today, and what it does not:
 | Bootstrap semantics | 6.0% | 5.0 | Entry, bindings, call checks; no graph-based analysis |
 | Refal machine | 19.5% | 17.0 | No fixed depth cap; projecting matcher (§2.2); broad covered builtin suite. Heap-allocated view field (issue #7) open |
 | Graph of states / Refal emission | 8.5% | 8.5 | **T-4** — `drive → clean → residualise` verified against the interpreter over 30 corpus programs; **T-9** — a metasystem transition demonstrated; **T-6** — §4.3 cleaning implemented and gated, §4.5 perfection measured and reported. Generalization (§4.6) is tracked as **T-5** |
-| Static verification | 15.0% | 13.5 | Tier 1 complete for its published guarantee: dead sentences, recognition impossible, builtin domain errors, function formats (§2.3), `-W`/`-D`/`-A`, and a shape lattice that separates literal kinds. Bracket contents open |
+| Static verification | 15.0% | 15.0 | Tier 1 complete for its published guarantee: dead sentences, recognition impossible, builtin domain errors, function formats (§2.3), `-W`/`-D`/`-A`, and a shape lattice that separates literal kinds and describes a bracket's contents recursively. No named gap left |
 | Compiler in Refal | 25.5% | 20.0 | A real lexer, parser, checker and emitter over the full Classic grammar, byte-identical to Rust `lower` on every lowerable example. `driver.ref` not written; it normalises rather than compiling pattern matching |
 | Self-hosting fixpoint | 13.0% | 12.0 | C1 = C2 = C3 at 12,599 bytes over the full grammar. Residual credit withheld until the compiler does more than normalise |
 | Conformance / release | 4.0% | 3.0 | Solid automated foundation; no full Classic conformance claim or release packaging |
-| **Total** | **100%** | **~87%** | |
+| **Total** | **100%** | **~88%** | |
 
 The two heaviest workstreams are where the remaining weight sits, and both are
 held back by the same thing: the compiler normalises rather than compiling

@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+### Bracket contents in the format lattice — Tier 1 complete (2026-09-12)
+
+A format that stops at "it is a bracket" cannot say anything about a bracket
+argument, and that was the last thing Tier 1 could not see. `Shape::Bracket`
+now carries the format of its contents, recursively, so the inference describes
+a nested structure all the way down.
+
+`('a')` against a callee accepting only `(1)` is now a proven defect:
+`--strict` reports `` `<OnlyNumber ...>` always fails: `OnlyNumber` accepts
+[([N])], but this call passes [([C])] ``, and `--classic` still accepts the
+program, because only the diagnosis changed.
+
+Soundness rests on two things. The contents over-approximate in the same
+direction the outer format does: a bracket term belongs to `Bracket(f)` exactly
+when its contents belong to `f`, so "the contents cannot overlap" is a proof
+that the terms cannot either. And two brackets are compared by their
+*contents*, not by set inclusion — two bracket sets that merely fail to contain
+one another can still intersect, so `shapes_disjoint` special-cases brackets and
+recurses while `Shape::subsumes` deliberately declines to compare them at all.
+`join` is monotone, so joining two brackets joins their contents and stays as
+tight as the contents allow; a bracket joined with a symbol is still unknown.
+
+New fixture `examples/runtime-bracket-kind.ref`;
+`strict_mode_has_no_false_positives_on_the_corpus` stays green. Tests 264 → 267.
+Completion ~87% → **~88%**.
+
 ### Clean and perfect graphs — T-6, Turchin 1980 §4.3 and §4.5 (2026-09-12)
 
 `refal clean` implements §4.3's cleaning. In a residue the quasiinput set of a

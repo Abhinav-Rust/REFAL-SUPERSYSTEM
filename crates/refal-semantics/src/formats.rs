@@ -18,8 +18,9 @@
 //! Every abstraction in this module **over-approximates**. That is the safe
 //! direction: a format may describe more expressions than can actually occur,
 //! never fewer, so a conclusion drawn from it holds for every real execution.
-//! Brackets are opaque (their contents are not described), an `s.`-variable is
-//! a symbol, a `t.`-variable is unknown, and an `e.`-variable opens the format.
+//! A bracket carries the format of its *contents*, so `('a')` can be refuted
+//! against a callee that only accepts `(1)`; an `s.`-variable is a symbol, a
+//! `t.`-variable is unknown, and an `e.`-variable opens the format.
 
 use std::collections::HashMap;
 use std::fmt;
@@ -39,7 +40,7 @@ use refal_ast::{
 /// An `s.`-variable is [`Shape::Symbol`], not one of the three: it ranges over
 /// all of them, so it is deliberately the *join*, and a `[Symbol]` is never
 /// disjoint from a `[Char]`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Shape {
     /// A character literal.
     Char,
@@ -49,15 +50,21 @@ pub enum Shape {
     Identifier,
     /// Any symbol: an `s.`-variable, or the join of the three literal kinds.
     Symbol,
-    /// A structural bracket. Its contents are not described.
-    Bracket,
+    /// A structural bracket, described by what its contents can be.
+    ///
+    /// Recursing here is what lets `<F ('a')>` be refuted against a callee that
+    /// only accepts `(1)`. It stays sound because the inner format
+    /// over-approximates in the same direction the outer one does: a bracket
+    /// term belongs to `Bracket(f)` exactly when its contents belong to `f`, so
+    /// "the contents cannot overlap" is a proof that the terms cannot either.
+    Bracket(Box<Format>),
     /// A `t.`-variable, or the join of shapes that disagree.
     Unknown,
 }
 
 impl Shape {
     /// Whether this shape describes symbols at all.
-    fn is_symbolic(self) -> bool {
+    fn is_symbolic(&self) -> bool {
         matches!(
             self,
             Self::Char | Self::Number | Self::Identifier | Self::Symbol
@@ -66,23 +73,35 @@ impl Shape {
 
     /// Whether every term of `other` is also a term of `self`. Used to decide
     /// disjointness, which must never claim two overlapping shapes are apart.
-    fn subsumes(self, other: Self) -> bool {
+    ///
+    /// Brackets are deliberately not compared here. Set inclusion for two
+    /// bracket shapes is inclusion of their contents, which is a different
+    /// question from [`shapes_disjoint`] asks, and answering it with this
+    /// predicate is how a lattice goes unsound. Disjointness of brackets is
+    /// decided directly, in [`shapes_disjoint`], by disjointness of contents.
+    fn subsumes(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Unknown, _) => true,
             (Self::Symbol, other) => other.is_symbolic(),
+            (Self::Bracket(_), _) | (_, Self::Bracket(_)) => false,
             (left, right) => left == right,
         }
     }
 
-    fn join(self, other: Self) -> Self {
+    fn join(&self, other: &Self) -> Self {
         if self == other {
-            return self;
+            return self.clone();
         }
         if self.subsumes(other) {
-            return self;
+            return self.clone();
         }
         if other.subsumes(self) {
-            return other;
+            return other.clone();
+        }
+        if let (Self::Bracket(left), Self::Bracket(right)) = (self, other) {
+            // `join` is monotone, so the join of the contents describes the
+            // join of the bracket sets. The least upper bound, in fact.
+            return Self::Bracket(Box::new(left.join(right)));
         }
         // Three literal kinds that disagree are still all symbols.
         if self.is_symbolic() && other.is_symbolic() {
@@ -99,7 +118,7 @@ impl fmt::Display for Shape {
             Self::Number => formatter.write_str("N"),
             Self::Identifier => formatter.write_str("I"),
             Self::Symbol => formatter.write_str("S"),
-            Self::Bracket => formatter.write_str("B"),
+            Self::Bracket(contents) => write!(formatter, "({contents})"),
             Self::Unknown => formatter.write_str("?"),
         }
     }
@@ -160,7 +179,7 @@ impl Format {
         let shared = self.items.len().min(other.items.len());
         let mut items = Vec::with_capacity(shared);
         for index in 0..shared {
-            items.push(self.items[index].join(other.items[index]));
+            items.push(self.items[index].join(&other.items[index]));
         }
 
         // Differing lengths, or either side already open, means the tail is
@@ -214,7 +233,7 @@ impl Format {
         self.items
             .iter()
             .zip(&other.items)
-            .any(|(left, right)| shapes_disjoint(*left, *right))
+            .any(|(left, right)| shapes_disjoint(left, right))
     }
 
     fn extend(&mut self, other: &Self) {
@@ -222,7 +241,7 @@ impl Format {
             return;
         }
         for shape in &other.items {
-            self.push(*shape);
+            self.push(shape.clone());
         }
         if other.open {
             self.open = true;
@@ -256,7 +275,17 @@ impl fmt::Display for Format {
 /// Two shapes are disjoint exactly when neither subsumes the other. A symbol is
 /// never a bracket, and a character is never a number, but a `[Symbol]` and a
 /// `[Char]` overlap and an unknown term overlaps with everything.
-fn shapes_disjoint(left: Shape, right: Shape) -> bool {
+/// Whether two shapes can never describe the same term.
+///
+/// Two brackets are apart exactly when their contents are: a bracket term
+/// belongs to `Bracket(f)` exactly when its contents belong to `f`. Going
+/// through `subsumes` here instead would compare set *inclusion*, which is a
+/// different relation and answers the wrong question — two bracket sets that
+/// merely fail to contain one another can still intersect.
+fn shapes_disjoint(left: &Shape, right: &Shape) -> bool {
+    if let (Shape::Bracket(left), Shape::Bracket(right)) = (left, right) {
+        return left.disjoint(right);
+    }
     !left.subsumes(right) && !right.subsumes(left)
 }
 
@@ -409,7 +438,9 @@ fn format_of_terms(terms: &[Term]) -> Format {
                     return format;
                 }
             },
-            TermKind::Bracket(_) => format.push(Shape::Bracket),
+            TermKind::Bracket(inner) => {
+                format.push(Shape::Bracket(Box::new(format_of_terms(inner))))
+            }
             // A call in a pattern is already a spec violation and a block is an
             // anonymous function; neither is worth describing precisely.
             TermKind::Call { .. } | TermKind::Block { .. } => {
@@ -434,7 +465,9 @@ fn format_of_result(terms: &[Term], current: &HashMap<String, Format>) -> Format
                     return format;
                 }
             },
-            TermKind::Bracket(_) => format.push(Shape::Bracket),
+            TermKind::Bracket(inner) => {
+                format.push(Shape::Bracket(Box::new(format_of_result(inner, current))))
+            }
             TermKind::Call { name, .. } => {
                 // The call is evaluated, so it contributes whatever the callee
                 // can return. An unknown callee -- an extern, say -- can return
@@ -461,45 +494,91 @@ fn format_of_result(terms: &[Term], current: &HashMap<String, Format>) -> Format
 mod tests {
     use super::*;
 
+    /// A bracket whose contents are a single character, for the tests.
+    fn char_bracket() -> Shape {
+        Shape::Bracket(Box::new(Format {
+            items: vec![Shape::Char],
+            open: false,
+            never: false,
+        }))
+    }
+
     /// Widening the lattice must never invent a disjointness that is not there.
     /// Every claim below is about whether two shapes can coincide, and the
     /// answer has to match what the runtime matcher would do.
     #[test]
     fn disjointness_follows_subsumption_rather_than_inequality() {
         // Different literal kinds can never coincide.
-        assert!(shapes_disjoint(Shape::Char, Shape::Number));
-        assert!(shapes_disjoint(Shape::Char, Shape::Identifier));
-        assert!(shapes_disjoint(Shape::Number, Shape::Identifier));
+        assert!(shapes_disjoint(&Shape::Char, &Shape::Number));
+        assert!(shapes_disjoint(&Shape::Char, &Shape::Identifier));
+        assert!(shapes_disjoint(&Shape::Number, &Shape::Identifier));
         // A symbol may be any of them, so it overlaps with each.
-        assert!(!shapes_disjoint(Shape::Symbol, Shape::Char));
-        assert!(!shapes_disjoint(Shape::Symbol, Shape::Number));
-        assert!(!shapes_disjoint(Shape::Symbol, Shape::Identifier));
-        // A bracket is never a symbol of any kind.
-        assert!(shapes_disjoint(Shape::Bracket, Shape::Char));
-        assert!(shapes_disjoint(Shape::Bracket, Shape::Symbol));
+        assert!(!shapes_disjoint(&Shape::Symbol, &Shape::Char));
+        assert!(!shapes_disjoint(&Shape::Symbol, &Shape::Number));
+        assert!(!shapes_disjoint(&Shape::Symbol, &Shape::Identifier));
+        // A bracket is never a symbol of any kind, however its contents are
+        // described.
+        assert!(shapes_disjoint(&char_bracket(), &Shape::Char));
+        assert!(shapes_disjoint(&char_bracket(), &Shape::Symbol));
         // An unknown term may be anything, so it is disjoint from nothing.
         for shape in [
             Shape::Char,
             Shape::Number,
             Shape::Identifier,
             Shape::Symbol,
-            Shape::Bracket,
+            char_bracket(),
         ] {
-            assert!(!shapes_disjoint(Shape::Unknown, shape));
-            assert!(!shapes_disjoint(shape, Shape::Unknown));
+            assert!(!shapes_disjoint(&Shape::Unknown, &shape));
+            assert!(!shapes_disjoint(&shape, &Shape::Unknown));
         }
     }
 
     #[test]
+    fn brackets_are_apart_exactly_when_their_contents_are() {
+        let character = char_bracket();
+        let any = Shape::Bracket(Box::new(Format::any()));
+        let number = Shape::Bracket(Box::new(Format {
+            items: vec![Shape::Number],
+            open: false,
+            never: false,
+        }));
+
+        // `('a')` against `(1)`: the contents cannot coincide, so the brackets
+        // cannot either. This is the refutation that used to be unavailable.
+        assert!(shapes_disjoint(&character, &number));
+        // `('a')` against `(?)`: the contents may coincide, so they overlap.
+        assert!(!shapes_disjoint(&character, &any));
+        // Equal contents are not apart.
+        assert!(!shapes_disjoint(&character, &character));
+
+        // Joining brackets joins their contents, so the join stays as tight as
+        // the contents allow.
+        let joined = character.join(&number);
+        assert_eq!(
+            joined,
+            Shape::Bracket(Box::new(Format {
+                items: vec![Shape::Symbol],
+                open: false,
+                never: false,
+            }))
+        );
+        // A bracket and a symbol still join to unknown: nothing is both.
+        assert_eq!(Shape::Char.join(&any), Shape::Unknown);
+    }
+
+    #[test]
     fn joining_disagreeing_literal_kinds_gives_a_symbol() {
-        assert_eq!(Shape::Char.join(Shape::Number), Shape::Symbol);
-        assert_eq!(Shape::Char.join(Shape::Identifier), Shape::Symbol);
-        assert_eq!(Shape::Number.join(Shape::Identifier), Shape::Symbol);
+        assert_eq!(Shape::Char.join(&Shape::Number), Shape::Symbol);
+        assert_eq!(Shape::Char.join(&Shape::Identifier), Shape::Symbol);
+        assert_eq!(Shape::Number.join(&Shape::Identifier), Shape::Symbol);
         // A symbol already subsumes each of them.
-        assert_eq!(Shape::Symbol.join(Shape::Char), Shape::Symbol);
-        assert_eq!(Shape::Char.join(Shape::Symbol), Shape::Symbol);
+        assert_eq!(Shape::Symbol.join(&Shape::Char), Shape::Symbol);
+        assert_eq!(Shape::Char.join(&Shape::Symbol), Shape::Symbol);
         // A bracket is not a symbol, so the join is unknown.
-        assert_eq!(Shape::Char.join(Shape::Bracket), Shape::Unknown);
+        assert_eq!(
+            Shape::Char.join(&Shape::Bracket(Box::new(Format::any()))),
+            Shape::Unknown
+        );
     }
 
     #[test]
@@ -507,6 +586,6 @@ mod tests {
         // The soundness of the widening rests on this: `s.A` ranges over every
         // symbol, so `[S]` must not be reported as disjoint from `[C]`.
         let symbol_variable = Shape::Symbol;
-        assert!(!shapes_disjoint(symbol_variable, Shape::Char));
+        assert!(!shapes_disjoint(&symbol_variable, &Shape::Char));
     }
 }

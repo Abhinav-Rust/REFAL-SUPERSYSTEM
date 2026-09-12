@@ -34,9 +34,9 @@ objective to a gate. Not another Refal implementation.
 
 | | |
 |---|---|
-| Honest completion | **~87%** |
-| Tests | 264 passing, 0 clippy, fmt clean |
-| Last commit | `b8bf679` then this commit |
+| Honest completion | **~88%** |
+| Tests | 267 passing, 0 clippy, fmt clean |
+| Last commit | `2668072` then this commit |
 | Working tree | clean |
 
 ### Workstream credit
@@ -47,16 +47,16 @@ objective to a gate. Not another Refal implementation.
 | Bootstrap semantics | 6.0% | 5.0 |
 | Refal machine / runtime | 19.5% | 17.0 |
 | Graph of states / Refal emission | 8.5% | 8.5 |
-| Static verification (Tier 1) | 15.0% | 13.5 |
+| Static verification (Tier 1) | 15.0% | 15.0 |
 | Compiler implemented in Refal | 25.5% | 20.0 |
 | Verified self-hosting fixpoint | 13.0% | 12.0 |
 | Conformance / release evidence | 4.0% | 3.0 |
-| **Total** | **100%** | **~87%** |
+| **Total** | **100%** | **~88%** |
 
-T-6's share of its workstream was the last 0.3 points of an 8.5-point row, so closing
-it moves the headline by a third of a point. The remaining 13 points are elsewhere: the
-runtime's heap-allocated view field, the Refal compiler's pattern-matching stage, and
-the objectives still open below. The figure is not raised for work that is not gated.
+Tier 1 is now complete for its published guarantee, with no named gap left in
+that workstream. The remaining 12 points are elsewhere: the runtime's
+heap-allocated view field, the Refal compiler's pattern-matching stage, and the
+objectives still open below. The figure is not raised for work that is not gated.
 
 ### Done
 
@@ -99,6 +99,36 @@ the objectives still open below. The figure is not raised for work that is not g
 - **T-6 clean and perfect graphs** — `refal clean` removes every sentence whose
   quasiinput set is empty, `refal perfect` reports the §4.5 verdict, and the
   corpus gate re-checks and re-runs the cleaned residue. See the section below.
+- **Bracket contents in the format lattice (§2.3)** — `Shape::Bracket` carries
+  the format of its contents, so `<OnlyNumber ('a')>` is refuted against a
+  callee that accepts only `(1)`. This was the last named gap in Tier 1.
+
+### Done — bracket contents in the format lattice (§2.3)
+
+A format that stops at "it is a bracket" cannot say anything about a bracket
+argument, and that was the last thing Tier 1 could not see. `Shape::Bracket`
+now carries the format of its contents, recursively, so the inference describes
+a nested structure all the way down.
+
+- `('a')` against a callee accepting only `(1)` is now a proven defect:
+  `--strict` reports "`<OnlyNumber ...>` always fails: `OnlyNumber` accepts
+  [([N])], but this call passes [([C])]", and `--classic` still accepts the
+  program, because only the diagnosis changed.
+- Soundness rests on the contents over-approximating in the same direction the
+  outer format does: a bracket term belongs to `Bracket(f)` exactly when its
+  contents belong to `f`, so "the contents cannot overlap" is a proof that the
+  terms cannot either.
+- Two brackets are compared by their *contents*, not by set inclusion. Going
+  through `subsumes` would compare containment, which is a different relation
+  and answers the wrong question: two bracket sets that merely fail to contain
+  one another can still intersect. `shapes_disjoint` therefore special-cases
+  brackets and recurses, and `Shape::subsumes` deliberately declines to compare
+  them at all.
+- `join` is monotone, so joining two brackets joins their contents and stays as
+  tight as the contents allow; a bracket joined with a symbol is still unknown.
+- `examples/runtime-bracket-kind.ref` is the fixture, and
+  `strict_mode_has_no_false_positives_on_the_corpus` stays green.
+
 
 ### Done — case splitting
 
@@ -262,14 +292,17 @@ Two guards keep the pass honest, and both are tested:
 
 ### Open
 
-- **Bracket contents in the format lattice.** `Shape::Bracket` is opaque, so
-  `<F ('a')>` against a callee accepting only `(1)` is not refuted.
 - **T-1** a non-trivial program transformer written in Refal. The compiler
   slices are a start; a transformer that is not itself a compiler is the
   remaining case.
 - **T-5** the complete generalization algorithm (1988). The whistle and a
-  sound, least-general LGG exist; the iterated "is this too general" check does
-  not.
+  sound, least-general LGG exist; the *neighborhood* store and the iterated
+  "is this generalization too general" check do not. The 1988 paper is clear
+  that the generalizer should be defined by **common computation histories**
+  — the tightest neighborhood containing the configurations — and that the
+  loop-back test is neighborhood recurrence rather than configuration
+  recurrence. That is a redesign of the driver's loop-back rule, not a
+  patch, and it is the largest single item left.
 - **§4.4 compilation strategy** — perfection by *transformation*. T-6 measures
   perfection and removes what is provably unnecessary; it does not yet achieve
   it where achieving it needs a rewrite (Turchin's own two examples on p. 115 —
@@ -283,21 +316,31 @@ Two guards keep the pass honest, and both are tested:
 
 ## NEXT ACTION
 
-**T-5's remaining half: the 1988 generalization check.**
+**T-5: the 1988 algorithm of generalization.**
 
-T-6 is closed on its published gate. The driver has a whistle and a sound,
-least-general generalization, so it stops; what it does not have is the
-iterated *"is this generalization too general?"* step from
-*The Algorithm of Generalization in the Supercompiler* (1988), which is what
-makes the abstraction sharp rather than merely terminating.
+Read `docs/turchin/pdf/1988_generalization_algorithm.pdf` first — `fetch-sources.sh`
+retrieves it from the Wayback Machine, and `pypdf` in the managed venv extracts
+it (there is no `pdftotext` on PATH). The three things it asks for that this
+driver does not have:
 
-Order:
+1. **Neighborhoods as first-class objects.** A neighborhood is the set of
+   ground expressions sharing a computation history of order *n*, and the
+   seven elementary contractions (1988 p. 535) are what histories are made of.
+   The compact form is the pattern you get by folding a history's contractions
+   into one.
+2. **Generalization by common history, not by positional alignment.**
+   `generalize_term_sequence` currently walks two term sequences positionally.
+   The 1988 rule is that the generalization is the tightest neighborhood
+   containing both objects, which is the longest common prefix of their
+   histories — a different and better answer whenever the two are processed
+   differently at different positions.
+3. **Loop-back on neighborhood recurrence.** §4 of the paper: before each
+   replacement, compare the current step's neighborhoods against the previous
+   ones and loop back to the first match. Because there are finitely many
+   first-order neighborhoods, this always terminates — which is the argument
+   the current homeomorphic whistle does not have.
 
-1. **T-5** — the 1988 algorithm's refinement loop over the LGG.
-2. **§4.4 strategy** — use the §4.5 verdict to drive transformations that
-   remove a proven margin of generality rather than only reporting it.
-3. **T-8** metacodes (Ch. 1.3), `driver.ref`, and bracket contents in the
-   format lattice.
+Then §4.4 strategy, T-8 metacodes (Ch. 1.3), `driver.ref`.
 
 The soundness gate is unchanged and non-negotiable:
 `strict_mode_has_no_false_positives_on_the_corpus` must stay green. If a new
