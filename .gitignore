@@ -4,6 +4,9 @@
 .DS_Store
 Thumbs.db
 
+# Scratch logs and extracted source text (not project content)
+/.logs/
+
 
 # local editor state: local tooling, not project content
 .workbuddy-ai/

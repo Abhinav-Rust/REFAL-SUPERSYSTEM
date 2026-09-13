@@ -494,6 +494,10 @@ pub struct SymbolicDriveReport {
     /// stands for a configuration whose argument matching could not decide, and
     /// its sentences are the branches of the partition.
     pub split_functions: Vec<SplitFunction>,
+    /// Loop-backs taken because a neighborhood recurred rather than because a
+    /// configuration did. Turchin's own termination rule (1988 4), and the
+    /// evidence that it fired rather than merely being implemented.
+    pub neighborhood_loops: usize,
     pub steps: usize,
 }
 
@@ -612,6 +616,7 @@ pub fn drive_ground(
         .ok_or(DriveError::NoEntry)?
         .function
         .clone();
+    let strategy = DriveStrategy::default();
     let mut context = DriveContext {
         graph,
         visited: Vec::new(),
@@ -625,6 +630,8 @@ pub fn drive_ground(
         configurations: Vec::new(),
         configuration_transitions: Vec::new(),
         active_configuration: None,
+        strategy,
+        neighborhood_loops: 0,
         steps: 0,
         max_steps,
     };
@@ -668,6 +675,27 @@ pub fn drive_symbolic_with_input(
     input: Vec<CoreTerm>,
     max_steps: usize,
 ) -> Result<SymbolicDriveReport, DriveError> {
+    drive_symbolic_with_strategy(graph, input, max_steps, DriveStrategy::default())
+}
+
+/// The symbolic argument `drive_symbolic` starts from: one expression variable.
+pub fn input_expression_variable() -> CoreTerm {
+    CoreTerm {
+        kind: CoreTermKind::Variable {
+            kind: VariableKind::Expression,
+            name: "Input".to_string(),
+        },
+        span: Span { start: 0, end: 0 },
+    }
+}
+
+/// [`drive_symbolic_with_input`] at a chosen point on the compilation axis.
+pub fn drive_symbolic_with_strategy(
+    graph: &StateGraph,
+    input: Vec<CoreTerm>,
+    max_steps: usize,
+    strategy: DriveStrategy,
+) -> Result<SymbolicDriveReport, DriveError> {
     let entry = graph.entry.ok_or(DriveError::NoEntry)?;
     let function = graph
         .states
@@ -688,6 +716,8 @@ pub fn drive_symbolic_with_input(
         configurations: Vec::new(),
         configuration_transitions: Vec::new(),
         active_configuration: None,
+        strategy,
+        neighborhood_loops: 0,
         steps: 0,
         max_steps,
     };
@@ -759,8 +789,35 @@ pub fn drive_symbolic_with_input(
         configurations: context.configurations,
         configuration_transitions,
         split_functions: context.splits,
+        neighborhood_loops: context.neighborhood_loops,
         steps: context.steps,
     })
+}
+
+/// Where on the compilation-interpretation axis driving sits.
+///
+/// Turchin is explicit that this is a choice and not a defect (1988 p. 538):
+/// "There are several variants of the algorithm, which place the resulting
+/// program in different positions on the compilation-interpretation axis (the
+/// more detailed is the set of basic configurations, the more compilative the
+/// program; the more general the basic configurations are, the more
+/// interpretive the program)."
+///
+/// The default here is the compilative end, because that is what the metasystem
+/// transition needs: `examples/metasystem-unroll.ref` only reaches 98% fewer
+/// steps because the interpreter's counter-driven loop is unrolled, and the
+/// interpretive rule stops that unrolling.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DriveStrategy {
+    /// Whistle on a configuration that grows relative to one already seen, so
+    /// the residue stays as specialised as driving can make it. The default.
+    #[default]
+    Compilative,
+    /// Additionally loop back whenever a *first-order neighborhood* recurs,
+    /// which is Turchin's own rule in 1988 §4. Coarser, and finite for his
+    /// reason rather than by embedding: there are finitely many first-order
+    /// neighborhoods.
+    Interpretive,
 }
 
 /// A configuration whose residual has been computed.
@@ -792,6 +849,13 @@ struct ActiveConfiguration {
     /// The argument with variable names erased, so a recurrence that differs
     /// only in naming is recognised as the same configuration.
     canonical: Vec<CoreTerm>,
+    /// The argument as entered, kept so a neighborhood recurrence can
+    /// generalize back to it (1988 §4).
+    input: Vec<CoreTerm>,
+    /// The order-1 neighborhood of that argument, canonicalized. Two
+    /// configurations with the same neighborhood here have performed the same
+    /// first contraction, whatever their lengths are.
+    neighborhood: Vec<CoreTerm>,
     /// The generated function standing for this configuration when it is being
     /// built by case splitting. A recurrence folds to a call to it.
     split: Option<String>,
@@ -1056,6 +1120,11 @@ struct DriveContext<'a> {
     configurations: Vec<SymbolicConfiguration>,
     configuration_transitions: Vec<SymbolicConfigurationTransition>,
     active_configuration: Option<usize>,
+    /// Where on the compilation-interpretation axis this drive sits.
+    strategy: DriveStrategy,
+    /// How many times the driver looped back because a *neighborhood* recurred
+    /// rather than because a configuration did (1988 4).
+    neighborhood_loops: usize,
     steps: usize,
     max_steps: usize,
 }
@@ -1320,6 +1389,47 @@ impl<'a> DriveContext<'a> {
                         self.record_whistle(state.id, &previous_input, input);
                         return Ok(SymbolicInvoke::Residual);
                     }
+                    // Turchin's own loop-back rule, which makes the driver
+                    // terminate on configurations whose *shape* recurs even
+                    // though no earlier one embeds in them (1988 §4):
+                    //
+                    //   "Each time before we make the next replacement, R", we
+                    //    compare each neighborhood of the current step ...
+                    //    with all the previous neighborhoods, moving from R
+                    //    backwards, to the beginning of the walk. If we find the
+                    //    same neighborhood, we loop back to it. In this way we
+                    //    find the most general from the recurring
+                    //    neighborhoods."
+                    //
+                    // This is deliberately *not* the default. The paper is
+                    // explicit that the choice is a compilation-strategy one:
+                    // "the more general the basic configurations are, the more
+                    // interpretive the program" (p. 538). Looping back whenever
+                    // a first-order neighborhood recurs is the most interpretive
+                    // variant, and it costs real specialisation -- measured on
+                    // `examples/metasystem-unroll.ref`, where the interpreter's
+                    // counter-driven loop stops being unrolled and the residue
+                    // improves by 16% instead of 98%. It is available because it
+                    // is Turchin's own rule and because it terminates for his
+                    // reason: there are finitely many first-order neighborhoods.
+                    if self.strategy == DriveStrategy::Interpretive {
+                        let neighborhood =
+                            canonical_configuration(&neighborhood_of(input, 1).pattern);
+                        if let Some(previous_input) = self
+                            .active_path
+                            .iter()
+                            .find(|active| {
+                                active.function.eq_ignore_ascii_case(function)
+                                    && active.neighborhood == neighborhood
+                                    && !same_configuration(&active.input, input)
+                            })
+                            .map(|active| active.input.clone())
+                        {
+                            self.record_whistle(state.id, &previous_input, input);
+                            self.neighborhood_loops += 1;
+                            return Ok(SymbolicInvoke::Residual);
+                        }
+                    }
                     if self
                         .visited_inputs
                         .iter()
@@ -1341,6 +1451,8 @@ impl<'a> DriveContext<'a> {
                     self.active_path.push(ActiveConfiguration {
                         function: function.to_ascii_lowercase(),
                         canonical: canonical.clone(),
+                        input: input.to_vec(),
+                        neighborhood: canonical_configuration(&neighborhood_of(input, 1).pattern),
                         split: None,
                     });
                     let result = self.instantiate_symbolic(&state.result, &bindings);
@@ -1452,6 +1564,8 @@ impl<'a> DriveContext<'a> {
         });
         self.active_path.push(ActiveConfiguration {
             function: function.to_ascii_lowercase(),
+            neighborhood: canonical_configuration(&neighborhood_of(input, 1).pattern),
+            input: input.to_vec(),
             canonical,
             split: Some(name.clone()),
         });
@@ -2569,6 +2683,158 @@ pub fn generalize_term_sequence(previous: &[CoreTerm], repeated: &[CoreTerm]) ->
     Generalization::default().sequence(previous, repeated)
 }
 
+// ---------------------------------------------------------------------------
+// Neighborhoods (Turchin 1988, *The Algorithm of Generalization in the
+// Supercompiler*, §3)
+// ---------------------------------------------------------------------------
+//
+// Turchin's answer to "how should two configurations be generalized?" is that
+// the question has no meaning on its own:
+//
+//   "Generalization of objects has a meaning only in the context of some
+//    processes of computation in which the objects take part. Then the language
+//    of generalization should have means to describe computation histories, and
+//    generalizations should be sets of objects which have common computational
+//    histories up to a point."
+//
+// A *computation history* is the sequence of elementary contractions the Refal
+// machine performs on an expression, each recorded as executed positively or
+// negatively. The set of expressions sharing the first n of them is a
+// **neighborhood of order n**, and the tightest neighborhood containing two
+// configurations is the one the generalizer should produce.
+//
+// The paper's own worked example is the test of whether the notion has been
+// applied correctly. For a function `FAB1` whose first sentence is
+// `(e1)'A'e2`:
+//
+//   `<FAB1 ('X')'ABC'>` and `<FAB1 ('PQ')'AC'>` are indistinguishable to the
+//   machine for one step -- both peel a leading bracket, then test a symbol
+//   against `'A'` -- so they are in the *same* neighborhood.
+//   `<FAB1 ('XY')'BCD'>` is in a *different* one, because its second term is a
+//   symbol that is not `'A'`.
+//
+// In this compiler the machine's step is the driver's, so the order-n
+// neighborhood of a configuration's argument is the pattern obtained by
+// recording n leading contractions and collapsing the rest: each leading term
+// is abstracted to the kind of variable that contraction would bind, and
+// everything past them is one expression variable.
+//
+// The practical consequence is the one that matters: two arguments of
+// *different lengths* that share a prefix are in a common neighborhood, so the
+// generalizer can keep that prefix instead of collapsing to a single variable.
+
+/// The set of arguments sharing the first `order` contractions of a history.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Neighborhood {
+    /// How many leading contractions the pattern records. Order 0 is the
+    /// coarsest neighborhood: every expression at all.
+    pub order: usize,
+    /// The pattern folding those contractions into one expression.
+    pub pattern: Vec<CoreTerm>,
+}
+
+/// What one leading contraction does to a term.
+///
+/// `None` means the contraction has nothing left to say: an `e.`-variable, a
+/// call or a block already stands for an unbounded part of the expression, so
+/// no later contraction can distinguish anything past it.
+fn contracted_shape(term: &CoreTerm) -> Option<CoreTerm> {
+    let kind = match &term.kind {
+        CoreTermKind::Char(_)
+        | CoreTermKind::Number(_)
+        | CoreTermKind::Identifier(_)
+        | CoreTermKind::Variable {
+            kind: VariableKind::Symbol,
+            ..
+        } => CoreTermKind::Variable {
+            kind: VariableKind::Symbol,
+            name: "N".to_string(),
+        },
+        CoreTermKind::Bracket(_) => CoreTermKind::Bracket(vec![CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind: VariableKind::Expression,
+                name: "N".to_string(),
+            },
+            span: empty_span(),
+        }]),
+        CoreTermKind::Variable {
+            kind: VariableKind::Term,
+            ..
+        } => CoreTermKind::Variable {
+            kind: VariableKind::Term,
+            name: "N".to_string(),
+        },
+        _ => return None,
+    };
+    Some(CoreTerm {
+        kind,
+        span: empty_span(),
+    })
+}
+
+fn trailing_expression_variable() -> CoreTerm {
+    CoreTerm {
+        kind: CoreTermKind::Variable {
+            kind: VariableKind::Expression,
+            name: "N".to_string(),
+        },
+        span: empty_span(),
+    }
+}
+
+/// The order-`order` neighborhood of an argument.
+pub fn neighborhood_of(input: &[CoreTerm], order: usize) -> Neighborhood {
+    if order == 0 {
+        return Neighborhood {
+            order: 0,
+            pattern: vec![trailing_expression_variable()],
+        };
+    }
+    let mut pattern = Vec::new();
+    for term in input.iter().take(order) {
+        match contracted_shape(term) {
+            Some(shape) => pattern.push(shape),
+            // The contraction carries no information -- an `e.`-variable, a
+            // call or a block already stands for an unbounded part of the
+            // expression. The neighborhood then says only that everything from
+            // here on is unknown, which is an expression variable and *not* an
+            // empty pattern: recording nothing would claim the argument is
+            // empty, and two unrelated arguments would land in one
+            // neighborhood.
+            None => {
+                pattern.push(trailing_expression_variable());
+                return Neighborhood { order, pattern };
+            }
+        }
+    }
+    pattern.push(trailing_expression_variable());
+    Neighborhood { order, pattern }
+}
+
+/// The largest order at which two arguments are still in the same neighborhood.
+///
+/// Neighborhoods refine as the order rises, so the answers are monotone: once
+/// two arguments part company they stay apart, and the walk can stop at the
+/// first disagreement.
+pub fn common_neighborhood_order(left: &[CoreTerm], right: &[CoreTerm]) -> usize {
+    let ceiling = left.len().max(right.len());
+    let mut order = 0;
+    while order < ceiling
+        && canonical_configuration(&neighborhood_of(left, order + 1).pattern)
+            == canonical_configuration(&neighborhood_of(right, order + 1).pattern)
+    {
+        order += 1;
+    }
+    order
+}
+
+/// The tightest neighborhood containing both arguments — 1988 §2's answer to
+/// "how should these two be generalized?", and the reason the generalizer is
+/// defined by common history rather than by positional alignment.
+pub fn common_neighborhood(left: &[CoreTerm], right: &[CoreTerm]) -> Neighborhood {
+    neighborhood_of(left, common_neighborhood_order(left, right))
+}
+
 /// State for one generalization.
 ///
 /// Turchin's generalization has to be the *least* general one (1980 4.6; the
@@ -2591,24 +2857,70 @@ struct Generalization {
     mismatches: Vec<(String, String)>,
 }
 
+/// The narrowest variable kind that still covers both terms.
+///
+/// A mismatch does not need an expression variable. Two symbols meet in an
+/// `s.`, two single terms in a `t.`, and only a term against a whole
+/// expression -- or an unevaluated call, which is not a term at all -- needs
+/// the `e.` this used to produce unconditionally. Narrowing the kind is what
+/// makes the result *least* general rather than merely sound, which is what
+/// 1980 §4.6 asks for and what the 1988 paper's common-history rule delivers.
+fn narrowest_kind(left: &CoreTerm, right: &CoreTerm) -> VariableKind {
+    fn symbol(term: &CoreTerm) -> bool {
+        matches!(
+            term.kind,
+            CoreTermKind::Char(_)
+                | CoreTermKind::Number(_)
+                | CoreTermKind::Identifier(_)
+                | CoreTermKind::Variable {
+                    kind: VariableKind::Symbol,
+                    ..
+                }
+        )
+    }
+    fn term(term: &CoreTerm) -> bool {
+        symbol(term)
+            || matches!(
+                term.kind,
+                CoreTermKind::Bracket(_)
+                    | CoreTermKind::Variable {
+                        kind: VariableKind::Term,
+                        ..
+                    }
+            )
+    }
+    if symbol(left) && symbol(right) {
+        VariableKind::Symbol
+    } else if term(left) && term(right) {
+        VariableKind::Term
+    } else {
+        VariableKind::Expression
+    }
+}
+
 impl Generalization {
     fn sequence(&mut self, left: &[CoreTerm], right: &[CoreTerm]) -> Vec<CoreTerm> {
+        let shared = left.len().min(right.len());
+        let mut result = (0..shared)
+            .map(|index| self.term(&left[index], &right[index]))
+            .collect::<Vec<_>>();
         if left.len() != right.len() {
-            // There is no positional correspondence to preserve. Collapsing to
-            // a single variable loses structure, but guessing an alignment can
-            // place two expression variables next to each other, and Refal
-            // resolves those by shortest split -- which would rebind the
-            // argument wrongly at the call site. Soundness beats sharpness.
-            let span = left
-                .first()
-                .map(|term| term.span)
-                .unwrap_or(Span { start: 0, end: 0 });
-            return vec![self.variable_for(&format!("{left:?}|{right:?}"), span)];
+            // The two histories agree as far as the shorter one goes and then
+            // part company, because one of them runs out. Everything past the
+            // point of parting is one expression variable -- but only if the
+            // last term is not already one: two adjacent `e.` variables are
+            // resolved by shortest split, which would rebind the argument
+            // wrongly at the call site.
+            if !result.last().is_some_and(is_expression_variable) {
+                let key = format!("tail|{left:?}|{right:?}");
+                let span = left
+                    .first()
+                    .map(|term| term.span)
+                    .unwrap_or(Span { start: 0, end: 0 });
+                result.push(self.variable_for(&key, VariableKind::Expression, span));
+            }
         }
-        left.iter()
-            .zip(right)
-            .map(|(left, right)| self.term(left, right))
-            .collect()
+        result
     }
 
     fn term(&mut self, left: &CoreTerm, right: &CoreTerm) -> CoreTerm {
@@ -2634,7 +2946,10 @@ impl Generalization {
                 }
             }
             _ if left.kind == right.kind => left.kind.clone(),
-            _ => return self.variable_for(&format!("{left:?}|{right:?}"), left.span),
+            _ => {
+                let key = format!("{left:?}|{right:?}");
+                return self.variable_for(&key, narrowest_kind(left, right), left.span);
+            }
         };
         CoreTerm {
             kind,
@@ -2642,31 +2957,27 @@ impl Generalization {
         }
     }
 
-    fn variable_for(&mut self, key: &str, span: Span) -> CoreTerm {
+    fn variable_for(&mut self, key: &str, kind: VariableKind, span: Span) -> CoreTerm {
         if let Some(name) = self
             .mismatches
             .iter()
             .find(|(candidate, _)| candidate == key)
             .map(|(_, name)| name.clone())
         {
-            return expression_variable(&name, span);
+            return CoreTerm {
+                kind: CoreTermKind::Variable { kind, name },
+                span,
+            };
         }
         let name = match self.mismatches.len() {
             0 => "Whistle".to_string(),
             index => format!("Whistle{}", index + 1),
         };
         self.mismatches.push((key.to_string(), name.clone()));
-        expression_variable(&name, span)
-    }
-}
-
-fn expression_variable(name: &str, span: Span) -> CoreTerm {
-    CoreTerm {
-        kind: CoreTermKind::Variable {
-            kind: VariableKind::Expression,
-            name: name.to_string(),
-        },
-        span,
+        CoreTerm {
+            kind: CoreTermKind::Variable { kind, name },
+            span,
+        }
     }
 }
 
@@ -3279,14 +3590,34 @@ pub fn drive_entry_configuration(
     graph: &StateGraph,
     max_steps: usize,
 ) -> Result<SymbolicDriveReport, DriveError> {
+    drive_entry_configuration_with_strategy(graph, max_steps, DriveStrategy::default())
+}
+
+/// [`drive_entry_configuration`] at a chosen point on the compilation axis.
+pub fn drive_entry_configuration_with_strategy(
+    graph: &StateGraph,
+    max_steps: usize,
+    strategy: DriveStrategy,
+) -> Result<SymbolicDriveReport, DriveError> {
     let closed = graph
         .entry
         .and_then(|entry| graph.states.get(entry.0))
         .is_some_and(|state| state.pattern.is_empty());
     if closed {
-        return drive_symbolic_with_input(graph, Vec::new(), max_steps);
+        return drive_symbolic_with_strategy(graph, Vec::new(), max_steps, strategy);
     }
-    drive_symbolic(graph, max_steps)
+    drive_symbolic_with_strategy(
+        graph,
+        vec![CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind: VariableKind::Expression,
+                name: "Input".to_string(),
+            },
+            span: Span { start: 0, end: 0 },
+        }],
+        max_steps,
+        strategy,
+    )
 }
 
 /// Residualise the entry configuration into a checked Core Refal program.
@@ -3298,7 +3629,17 @@ pub fn residualize_entry_graph(
     graph: &StateGraph,
     max_steps: usize,
 ) -> Result<DrivenResidualization, DriveError> {
-    let report = drive_entry_configuration(graph, max_steps)?;
+    residualize_entry_graph_with_strategy(program, graph, max_steps, DriveStrategy::default())
+}
+
+/// [`residualize_entry_graph`] at a chosen point on the compilation axis.
+pub fn residualize_entry_graph_with_strategy(
+    program: &CoreProgram,
+    graph: &StateGraph,
+    max_steps: usize,
+    strategy: DriveStrategy,
+) -> Result<DrivenResidualization, DriveError> {
+    let report = drive_entry_configuration_with_strategy(graph, max_steps, strategy)?;
     let residual_program = residualize_symbolic_program(program, &report);
     let generalized_states = generalized_residual_states(&report);
     Ok(DrivenResidualization {
@@ -5138,7 +5479,10 @@ mod tests {
         );
         assert_eq!(
             format_term_sequence(&report.whistle_events[0].generalized_input),
-            "e.Whistle"
+            "e.Input",
+            "the two histories share their whole shorter prefix, so the \\
+             tightest generalization is that prefix -- Turchin's direct \\
+             reduction, the easy case, rather than a fresh variable"
         );
         assert_eq!(format_term_sequence(&report.residual), "<Loop e.Input 'a'>");
     }
@@ -5347,6 +5691,71 @@ mod tests {
         );
     }
 
+    /// Turchin's own loop-back rule, as a selectable strategy (1988 §4).
+    ///
+    /// The same program that produces no whistle at all under the compilative
+    /// default loops back under the interpretive one, because `'a'` and `'b'`
+    /// are in the same first-order neighborhood — both are symbol-headed, so
+    /// the machine's first contraction is the same. The paper's justification
+    /// for stopping there is the one this asserts: finitely many first-order
+    /// neighborhoods, so a walk that loops back whenever one recurs is finite.
+    #[test]
+    fn the_interpretive_strategy_loops_back_on_a_recurring_neighborhood() {
+        let input = core_var(VariableKind::Expression, "Input");
+        let program = CoreProgram {
+            declarations: vec![],
+            functions: vec![
+                core_function(
+                    "Go",
+                    Visibility::Entry,
+                    vec![core_sentence(
+                        vec![input.clone()],
+                        vec![core_call("Loop", vec![core_char('a')])],
+                    )],
+                ),
+                core_function(
+                    "Loop",
+                    Visibility::Local,
+                    vec![core_sentence(
+                        vec![input.clone()],
+                        vec![core_call("Loop", vec![core_char('b')])],
+                    )],
+                ),
+            ],
+        };
+        let graph = build_seed_graph(&program);
+
+        let compilative =
+            drive_symbolic_with_input(&graph, vec![input.clone()], 10).expect("drive");
+        assert_eq!(
+            compilative.neighborhood_loops, 0,
+            "the compilative default must not take the interpretive loop-back"
+        );
+        assert!(compilative.whistle_events.is_empty());
+
+        let interpretive =
+            drive_symbolic_with_strategy(&graph, vec![input], 10, DriveStrategy::Interpretive)
+                .expect("drive");
+        assert_eq!(
+            interpretive.neighborhood_loops, 1,
+            "the recurring neighborhood is what stopped the walk"
+        );
+        assert_eq!(interpretive.whistle_events.len(), 1);
+        // And the generalization it whistles with is still sound: both
+        // arguments must be instances of it.
+        let event = &interpretive.whistle_events[0];
+        for argument in [&event.previous_input, &event.repeated_input] {
+            let mut bindings = HashMap::new();
+            assert!(
+                match_symbolic_pattern(&event.generalized_input, argument, &mut bindings)
+                    != SymbolicMatch::No,
+                "{} is not covered by {}",
+                format_term_sequence(argument),
+                format_term_sequence(&event.generalized_input)
+            );
+        }
+    }
+
     #[test]
     fn semantically_cleans_calls_in_condition_results() {
         let input = CoreTerm {
@@ -5426,6 +5835,7 @@ mod tests {
             configurations: vec![],
             configuration_transitions: vec![],
             split_functions: vec![],
+            neighborhood_loops: 0,
             steps: 0,
         };
         assert_eq!(
@@ -5569,8 +5979,8 @@ mod tests {
 
         assert_eq!(
             format_term_sequence(&generalized),
-            "e.Whistle e.Whistle2",
-            "different mismatches must not share a variable"
+            "s.Whistle s.Whistle2",
+            "different mismatches must not share a variable, and two symbols              need only an `s.`"
         );
         for input in [&previous, &repeated] {
             let mut bindings = HashMap::new();
@@ -5598,7 +6008,7 @@ mod tests {
 
         assert_eq!(
             format_term_sequence(&generalize_term_sequence(&previous, &repeated)),
-            "e.Whistle e.Whistle"
+            "s.Whistle s.Whistle"
         );
     }
 
@@ -5615,7 +6025,7 @@ mod tests {
 
         assert_eq!(
             format_term_sequence(&generalize_term_sequence(&previous, &repeated)),
-            "(e.Whistle 'x')",
+            "(s.Whistle 'x')",
             "the structure the two expressions agree on must survive"
         );
     }
@@ -5982,5 +6392,201 @@ mod tests {
 
         assert!(report.removed.is_empty());
         assert_eq!(report.perfection(), Perfection::Perfect);
+    }
+
+    // -- T-5: neighborhoods and generalization (Turchin 1988) ---------------
+
+    fn core_identifier(name: &str) -> CoreTerm {
+        core_term(CoreTermKind::Identifier(name.to_string()))
+    }
+
+    fn neighborhood_pattern(input: &[CoreTerm], order: usize) -> String {
+        format_term_sequence(&neighborhood_of(input, order).pattern)
+    }
+
+    /// Turchin's own worked example (1988 p. 534). `<FAB1 ('X')'ABC'>` and
+    /// `<FAB1 ('PQ')'AC'>` are indistinguishable to the machine for one step —
+    /// both peel a leading bracket — so they are in the same first-order
+    /// neighborhood. `<FAB1 ('XY')'BCD'>` is not: its leading term is a symbol.
+    #[test]
+    fn neighborhoods_match_turchins_own_example() {
+        let bracket_of_symbol = vec![core_term(CoreTermKind::Bracket(vec![core_term(
+            CoreTermKind::Char('B'),
+        )]))];
+        let empty_bracket = vec![core_term(CoreTermKind::Bracket(vec![]))];
+        let symbol_variable = vec![core_var(VariableKind::Symbol, "C")];
+
+        assert_eq!(
+            neighborhood_pattern(&bracket_of_symbol, 1),
+            "(e.N) e.N",
+            "a bracket-headed argument abstracts to a bracket with unknown contents"
+        );
+        assert_eq!(
+            neighborhood_pattern(&empty_bracket, 1),
+            neighborhood_pattern(&bracket_of_symbol, 1),
+            "an empty bracket is still a bracket: the first contraction is the same"
+        );
+        assert_ne!(
+            neighborhood_pattern(&symbol_variable, 1),
+            neighborhood_pattern(&bracket_of_symbol, 1),
+            "a symbol head is a different first contraction from a bracket head"
+        );
+
+        // Order 0 is the coarsest neighborhood: every expression at all.
+        assert_eq!(neighborhood_pattern(&bracket_of_symbol, 0), "e.N");
+        // A neighborhood records the contractions actually executed and no
+        // more, so looking past a bracket would be inventing history.
+        assert_eq!(
+            neighborhood_pattern(&bracket_of_symbol, 2),
+            "(e.N) e.N",
+            "the history stops at a bracket rather than inventing a contraction"
+        );
+    }
+
+    /// The point of a neighborhood: two arguments of *different lengths* can
+    /// share one. Turchin's strings example, `ABA` against `ABXYABA`, shares
+    /// its first three contractions and parts company at the fourth.
+    #[test]
+    fn a_common_neighborhood_survives_a_length_difference() {
+        let short = vec![
+            core_term(CoreTermKind::Char('A')),
+            core_term(CoreTermKind::Char('B')),
+            core_term(CoreTermKind::Char('A')),
+        ];
+        let long = vec![
+            core_term(CoreTermKind::Char('A')),
+            core_term(CoreTermKind::Char('B')),
+            core_term(CoreTermKind::Char('X')),
+            core_term(CoreTermKind::Char('Y')),
+            core_term(CoreTermKind::Char('A')),
+            core_term(CoreTermKind::Char('B')),
+            core_term(CoreTermKind::Char('A')),
+        ];
+
+        assert_eq!(common_neighborhood_order(&short, &long), 3);
+        assert_eq!(
+            format_term_sequence(&common_neighborhood(&short, &long).pattern),
+            "s.N s.N s.N e.N"
+        );
+    }
+
+    /// The generalizer keeps what the two histories established rather than
+    /// collapsing a length difference to one variable, which is what it used
+    /// to do. The paper's answer for `ABA` and `ABXYABA` is `'AB' s1 e2`; this
+    /// produces the same shape.
+    #[test]
+    fn generalizing_different_lengths_keeps_their_common_prefix() {
+        let short = vec![
+            core_term(CoreTermKind::Char('A')),
+            core_term(CoreTermKind::Char('B')),
+            core_term(CoreTermKind::Char('A')),
+        ];
+        let long = vec![
+            core_term(CoreTermKind::Char('A')),
+            core_term(CoreTermKind::Char('B')),
+            core_term(CoreTermKind::Char('X')),
+            core_term(CoreTermKind::Char('Y')),
+            core_term(CoreTermKind::Char('A')),
+            core_term(CoreTermKind::Char('B')),
+            core_term(CoreTermKind::Char('A')),
+        ];
+
+        let generalized = generalize_term_sequence(&short, &long);
+
+        assert_eq!(
+            format_term_sequence(&generalized),
+            "'A' 'B' s.Whistle e.Whistle2"
+        );
+        for input in [&short, &long] {
+            let mut bindings = HashMap::new();
+            assert!(
+                match_ground_pattern(&generalized, input, &mut bindings),
+                "{} is not an instance of the generalization",
+                format_term_sequence(input)
+            );
+        }
+    }
+
+    /// Narrowing a mismatch to the kind that covers both is what makes the
+    /// result *least* general. Soundness is the constraint either way, so this
+    /// checks every shape that used to fall back to an expression variable.
+    #[test]
+    fn a_narrowed_generalization_still_covers_both_inputs() {
+        let cases = [
+            // Two symbols: an `s.` is enough.
+            (vec![core_char('a')], vec![core_char('b')]),
+            // A symbol against a bracket: only a `t.` covers both.
+            (
+                vec![core_char('a')],
+                vec![core_term(CoreTermKind::Bracket(vec![core_char('x')]))],
+            ),
+            // A term against a longer expression: an `e.` is genuinely needed.
+            (
+                vec![core_char('a')],
+                vec![core_char('a'), core_char('b'), core_char('c')],
+            ),
+            // Nothing at all against something: still an `e.`, because the
+            // empty expression has to be covered.
+            (vec![], vec![core_identifier("Foo")]),
+            // Different-length brackets, so the recursion sees the mismatch.
+            (
+                vec![core_term(CoreTermKind::Bracket(vec![
+                    core_char('a'),
+                    core_char('x'),
+                ]))],
+                vec![core_term(CoreTermKind::Bracket(vec![
+                    core_char('b'),
+                    core_char('x'),
+                    core_char('y'),
+                ]))],
+            ),
+            // Identical mismatches at two positions must still share a
+            // variable, now at the narrowed kind.
+            (
+                vec![core_char('a'), core_char('a')],
+                vec![core_char('b'), core_char('b')],
+            ),
+        ];
+
+        for (left, right) in cases {
+            let generalized = generalize_term_sequence(&left, &right);
+            let rendered = format_term_sequence(&generalized);
+            for input in [&left, &right] {
+                let mut bindings = HashMap::new();
+                assert!(
+                    match_ground_pattern(&generalized, input, &mut bindings),
+                    "{rendered} does not cover {}",
+                    format_term_sequence(input)
+                );
+            }
+        }
+    }
+
+    /// A generalization must not put two expression variables next to each
+    /// other: Refal resolves those by shortest split, which rebinds the
+    /// argument wrongly at the call site.
+    #[test]
+    fn a_generalization_never_places_two_expression_variables_together() {
+        let cases = [
+            (vec![core_char('a')], vec![core_char('b'), core_char('c')]),
+            (
+                vec![core_var(VariableKind::Expression, "X")],
+                vec![core_char('a'), core_char('b')],
+            ),
+            (
+                vec![core_char('a'), core_var(VariableKind::Expression, "X")],
+                vec![core_char('b')],
+            ),
+        ];
+        for (left, right) in cases {
+            let generalized = generalize_term_sequence(&left, &right);
+            for pair in generalized.windows(2) {
+                assert!(
+                    !(is_expression_variable(&pair[0]) && is_expression_variable(&pair[1])),
+                    "{} places two expression variables together",
+                    format_term_sequence(&generalized)
+                );
+            }
+        }
     }
 }

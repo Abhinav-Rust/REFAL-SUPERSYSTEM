@@ -55,7 +55,7 @@ verification harness; it must not contain the production compiler's logic.
 
 ## Quantitative Scorecard
 
-The live accounting is [`PLAN.md`](PLAN.md) section 5, which reports **~87%** by the sub-task implementation credit method and **~81%** evidence-weighted. This contract's workstream table is a **conservative architectural gate breakdown**, not a replacement for the live weighted score: it credits only gates that are fully closed, so it sits well below the weighted figure by design. It is updated only when a gate changes.
+The live accounting is [`PLAN.md`](PLAN.md) section 5 and the README's Project Status, which publish **one** figure — **~60% product completeness** — from one table. This file's workstream table is a **gate checklist**, not a second score: it records which architectural gates are closed, and it is deliberately not turned into a percentage. Publishing a second number here is what produced the contradiction this project spent a day removing.
 
 It went *down* from an earlier 38%, deliberately, for two reasons:
 
@@ -76,7 +76,7 @@ It went *down* from an earlier 38%, deliberately, for two reasons:
 | Compiler implemented in Refal | 25.5% | Real lexer, parser, checker and emitter over the full Classic grammar. **Open:** `driver.ref`; it normalises rather than compiling pattern matching | 18.0% |
 | Verified self-hosting bootstrap | 13% | C1 = C2 = C3 at 12,599 bytes, every generation checked | 10.0% |
 | Conformance, release and compatibility evidence | 4% | Automated differential and residual corpora. **Open:** full Classic conformance claim, packaging | 2.0% |
-| **Total** | **100%** | | **~77.5% conservative gate credit; live weighted score: ~87%** |
+| **Total** | **100%** | | **A gate checklist, not a score. The project's completion figure is the single product-completeness one in [`PLAN.md`](PLAN.md) section 5** |
 
 ## Reporting Rule
 

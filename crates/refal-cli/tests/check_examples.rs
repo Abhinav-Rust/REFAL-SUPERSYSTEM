@@ -2588,7 +2588,7 @@ fn drives_a_symbolic_identity_to_a_residual_expression_variable() {
     );
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
-        "steps: 2\nvisited: S0 -> S1\nresidual: e.Input\n"
+        "steps: 2\nvisited: S0 -> S1\nneighborhood-loops: 0\nresidual: e.Input\n"
     );
 }
 
@@ -2605,7 +2605,7 @@ fn exposes_explicit_symbolic_configurations_and_transitions() {
     );
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
-        "steps: 3\nvisited: S0 -> S1\nconfigurations: 2\nC0: S0 e.Input\nC1: S1 e.Input\nconfiguration-transitions: 2\nC0 -Loop e.Input-> C1\nC1 -Loop e.Input-> C1\nresidual: <Loop e.Input>\n"
+        "steps: 3\nvisited: S0 -> S1\nneighborhood-loops: 0\nconfigurations: 2\nC0: S0 e.Input\nC1: S1 e.Input\nconfiguration-transitions: 2\nC0 -Loop e.Input-> C1\nC1 -Loop e.Input-> C1\nresidual: <Loop e.Input>\n"
     );
 }
 
@@ -2637,7 +2637,7 @@ fn partitions_an_ambiguous_symbolic_call_instead_of_leaving_it_whole() {
     );
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
-        "steps: 5\nvisited: S0 -> S1 -> S2\nresidual: <Split1 e.Input>\n"
+        "steps: 5\nvisited: S0 -> S1 -> S2\nneighborhood-loops: 0\nresidual: <Split1 e.Input>\n"
     );
 }
 
@@ -4328,4 +4328,116 @@ fn an_open_bracket_is_never_refuted_by_a_narrow_one() {
         String::from_utf8_lossy(&strict.stderr)
     );
     let _ = fs::remove_file(&path);
+}
+
+/// T-5, Turchin 1988 §3. A neighborhood is the set of arguments sharing a
+/// first-order computation history, and printing it is what makes the notion
+/// checkable rather than asserted. `case-split.ref` partitions its argument
+/// into exactly the three shapes the paper distinguishes.
+#[test]
+fn a_neighborhood_is_reported_for_each_configuration() {
+    let output = symbolic_drive_file("examples/case-split.ref", &["--neighborhoods"]);
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+
+    assert!(
+        stdout.contains("s.N e.N"),
+        "a symbol-headed argument abstracts to a symbol variable:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("(e.N) e.N"),
+        "a bracket-headed argument abstracts to a bracket with unknown contents:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("neighborhood-loops: 0"),
+        "the compilative default takes no neighborhood loop-back:\n{stdout}"
+    );
+}
+
+/// T-5, Turchin 1988 §4. His own loop-back rule is available, is *not* the
+/// default, and costs specialisation when it fires — which is exactly the
+/// compilation-interpretation trade the paper describes on p. 538. The
+/// metasystem transition needs the compilative end, so this test pins both.
+#[test]
+fn the_interpretive_strategy_is_available_and_off_by_default() {
+    let compilative = residualize_driven_file("examples/metasystem-unroll.ref", &[]);
+    assert!(compilative.status.success());
+    let compilative_stdout = String::from_utf8_lossy(&compilative.stdout).to_string();
+    assert!(
+        compilative_stdout.contains("neighborhood-loops: 0"),
+        "the default must not take the interpretive loop-back:\n{compilative_stdout}"
+    );
+
+    let interpretive = residualize_driven_file(
+        "examples/metasystem-unroll.ref",
+        &["--strategy", "interpretive"],
+    );
+    assert!(interpretive.status.success());
+    let interpretive_stdout = String::from_utf8_lossy(&interpretive.stdout).to_string();
+    assert!(
+        !interpretive_stdout.contains("neighborhood-loops: 0"),
+        "the interpretive rule must fire on a recurring neighborhood:\n{interpretive_stdout}"
+    );
+
+    // And the metasystem gate still reports what it reported before: the
+    // compilative default is what makes the interpreter's loop disappear.
+    let metasystem = metasystem_file("examples/metasystem-unroll.ref", &[]);
+    let metasystem_stdout = String::from_utf8_lossy(&metasystem.stdout).to_string();
+    assert!(
+        metasystem_stdout.contains("residual interpreter calls: 0"),
+        "the metasystem transition must still eliminate the interpreter:\n{metasystem_stdout}"
+    );
+
+    // An unknown strategy name is a usage error, not a silent default.
+    let invalid =
+        residualize_driven_file("examples/metasystem-unroll.ref", &["--strategy", "nope"]);
+    assert!(!invalid.status.success());
+}
+
+/// A residue produced at the interpretive end is still Refal and still answers
+/// what the source answered. Choosing a point on the compilation axis changes
+/// how much is specialised, never what the program means.
+#[test]
+fn an_interpretive_residue_still_checks_and_runs_like_the_source() {
+    for (path, args) in [
+        ("examples/runtime-recursion.ref", Vec::<&str>::new()),
+        ("examples/condition.ref", vec!["axb"]),
+        ("examples/clean-graph.ref", vec!["k", "x"]),
+    ] {
+        let output = residualize_driven_file(path, &["--strategy", "interpretive"]);
+        assert!(
+            output.status.success(),
+            "{path} failed to residualize:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let residue = residue_of(&String::from_utf8_lossy(&output.stdout));
+
+        let scratch = scratch_source("refal-interpretive", &residue);
+        let scratch_path = scratch.to_string_lossy().to_string();
+        let checked = check_path(&scratch_path, &[]);
+        assert!(
+            checked.status.success(),
+            "the interpretive residue for {path} does not check:\n{}\n{residue}",
+            String::from_utf8_lossy(&checked.stderr)
+        );
+
+        let source_output = run_file(path, &args);
+        let mut run_args = vec![scratch_path.as_str()];
+        run_args.extend(args.iter().copied());
+        let residue_output = Command::new(refal_bin())
+            .arg("run")
+            .args(&run_args)
+            .output()
+            .expect("run the interpretive residue");
+        assert_eq!(
+            String::from_utf8_lossy(&source_output.stdout),
+            String::from_utf8_lossy(&residue_output.stdout),
+            "the interpretive residue for {path} disagrees with the source:\n{residue}"
+        );
+        let _ = fs::remove_file(&scratch);
+    }
 }

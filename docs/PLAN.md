@@ -274,36 +274,47 @@ Native codegen (§4.7) if wanted, packaging, performance suite, compatibility st
 
 ## 5. Completion accounting
 
-**~88% today by the sub-task implementation credit method.** This is *not* the
-headline figure: the README leads with the **~81% evidence-weighted** score,
-which counts only what is tested and working for the general case. Both are
-reproduced from the same underlying work; they differ because this method
-credits planned effort coded and tested, while the README's method credits
-functional completion of the 1.0 goal. When in doubt, quote the 81%.
+**~60%. One number, one method.**
 
-The audited 19.8% baseline remains the comparison point. The figure once fell
-from a published 38%, deliberately: that figure gave full credit to two
-milestones an audit found to be Partial, and the completion target then grew by
-the two verification tiers. Both changes are permanent; the score has risen
-since because the work behind it now exists.
+The figure answers one question: *how much of a working Refal-5 compiler exists
+today?* Each workstream is credited for what is implemented **and** tested **for
+the general case** — not for the corpus, and not for effort spent. A feature that
+works on every file in `examples/` but not on Classic Refal-5 in general is
+credited only for the part that generalises.
 
-What the credit covers today, and what it does not:
+Three figures used to be published side by side — an effort-weighted ~88%, an
+evidence-weighted ~81%, and a gate-only ~78% — and they disagreed by ten points.
+Three answers to one question is not a measurement, and the flattering one was
+the one a reader met first. The effort-weighted method is retired: it measured
+how much of a *plan* had been executed, which is not what a reader of a project
+status is asking. The README and this file now publish the same number from the
+same table.
 
-| Workstream | Weight | Credit | What the credit is for |
+| Workstream | Weight | Credit | What the product is still missing |
 |---|---:|---:|---|
-| Bootstrap frontend | 8.5% | 8.0 | Broad Classic Refal-5 lexer/parser coverage; clause-complete corpus still partial |
-| Bootstrap semantics | 6.0% | 5.0 | Entry, bindings, call checks; no graph-based analysis |
-| Refal machine | 19.5% | 17.0 | No fixed depth cap; projecting matcher (§2.2); broad covered builtin suite. Heap-allocated view field (issue #7) open |
-| Graph of states / Refal emission | 8.5% | 8.5 | **T-4** — `drive → clean → residualise` verified against the interpreter over 30 corpus programs; **T-9** — a metasystem transition demonstrated; **T-6** — §4.3 cleaning implemented and gated, §4.5 perfection measured and reported. Generalization (§4.6) is tracked as **T-5** |
-| Static verification | 15.0% | 15.0 | Tier 1 complete for its published guarantee: dead sentences, recognition impossible, builtin domain errors, function formats (§2.3), `-W`/`-D`/`-A`, and a shape lattice that separates literal kinds and describes a bracket's contents recursively. No named gap left |
-| Compiler in Refal | 25.5% | 20.0 | A real lexer, parser, checker and emitter over the full Classic grammar, byte-identical to Rust `lower` on every lowerable example. `driver.ref` not written; it normalises rather than compiling pattern matching |
-| Self-hosting fixpoint | 13.0% | 12.0 | C1 = C2 = C3 at 12,599 bytes over the full grammar. Residual credit withheld until the compiler does more than normalise |
-| Conformance / release | 4.0% | 3.0 | Solid automated foundation; no full Classic conformance claim or release packaging |
-| **Total** | **100%** | **~88%** | |
+| Bootstrap frontend | 8.5% | 7.0 | Documented Classic scope with 24 traced negative fixture classes; no clause-by-clause conformance corpus, so *handles the corpus* is not yet *handles Classic Refal-5* |
+| Bootstrap semantics | 6.0% | 4.5 | Every rule of its milestone gate; exhaustiveness lives in Tier 1 rather than here |
+| Refal machine | 19.5% | 12.5 | No fixed depth cap, projecting matcher (§2.2), broad covered builtin suite. **Heap-allocated view field (issue #7) missing** — the difference between a Refal machine and a work-list interpreter over host recursion — and block sentences carrying conditions still take the recursive path |
+| Graph of states / Refal emission | 8.5% | 5.0 | **T-4, T-5, T-6, T-9** all closed and gated. What the product lacks is the consequence: it normalises rather than compiling pattern matching, and residualization is bounded rather than whole-program for general programs |
+| Static verification | 15.0% | 12.5 | Tier 1 complete for its published guarantee: dead sentences, recognition impossible, builtin domain errors, function formats (§2.3), `-W`/`-D`/`-A`, and a shape lattice that separates literal kinds and describes a bracket's contents recursively. The deduction is that the guarantee is deliberately narrow |
+| Compiler in Refal | 25.5% | 12.0 | A real lexer, parser, checker and emitter over the full Classic grammar, byte-identical to Rust `lower` on every lowerable example. The *transforming* half — driving, cleaning, generalisation — is in Rust and not wired into `compiler.ref`; `driver.ref` not written. **Half a compiler, and the largest single deduction** |
+| Self-hosting fixpoint | 13.0% | 5.5 | C1 = C2 = C3 at 12,599 bytes over the full grammar, every generation checked. It is a fixpoint of a **normaliser**, so residual credit is withheld |
+| Conformance / release | 4.0% | 1.5 | Solid automated foundation; no full Classic conformance claim or release packaging |
+| **Total** | **100%** | **~60%** | |
 
-The two heaviest workstreams are where the remaining weight sits, and both are
-held back by the same thing: the compiler normalises rather than compiling
-pattern matching, so `driver.ref` and general source compilation stay open.
+The three heaviest workstreams — Compiler in Refal, the runtime, and self-hosting
+— hold 58 of the 100 points, are the three furthest from done, and carry 28 of
+the 40 deducted points. The figure now agrees in direction with the milestone
+table in the README, which is the point: a reader counting ticks and a reader
+reading the percentage should reach the same conclusion about where the work is.
+
+The audited 19.8% baseline remains the comparison point, and the history is worth
+keeping. The project published 96%, then 38%, then a ladder between 42% and 88%.
+None was fabricated — they were computed by different methods against different
+targets, and publishing them together made the headline the most flattering of
+the set. The 38% low point was real in a different way: it followed an audit that
+found two milestones credited **Complete** when they were not, and eight
+confirmed Classic Refal-5 conformance defects. Six are fixed; two remain open.
 
 ---
 

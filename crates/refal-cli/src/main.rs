@@ -251,9 +251,11 @@ fn print_usage() {
     eprintln!(
         "  drive-symbolic  Partially drive from an expression variable [--steps N] [--configurations]"
     );
+    eprintln!("                  [--neighborhoods] [--strategy compilative|interpretive]");
     eprintln!("  residualize  Emit Refal for the supported symbolic residual subset [--steps N]");
     eprintln!("  residualize-graph  Emit structurally cleaned reachable Core Refal");
     eprintln!("  residualize-driven  Emit driven Core Refal with whistle evidence [--steps N]");
+    eprintln!("                      [--strategy compilative|interpretive]  (Turchin 1988 4)");
     eprintln!("  residualize-generalized  Emit explicit generalized residual graph [--steps N]");
     eprintln!("  clean      Drive, residualize, then clean the residue of sentences no call");
     eprintln!("             site can select (Turchin 1980 4.3) [--steps N]");
@@ -456,38 +458,80 @@ fn drive_program(program: &refal_ast::Program, args: &[String]) {
     );
 }
 
-fn drive_symbolic_program(program: &refal_ast::Program, args: &[String]) {
-    let (max_steps, show_configurations) = match args {
-        [] => (10_000, false),
-        [flag] if flag == "--configurations" => (10_000, true),
-        [flag, limit] if flag == "--steps" => match limit.parse::<usize>() {
-            Ok(limit) => (limit, false),
-            Err(_) => {
-                eprintln!("Usage: refal drive-symbolic <file.ref> [--steps N] [--configurations]");
-                process::exit(2);
+/// How the driving commands are parameterised.
+///
+/// `--strategy` picks a point on Turchin's compilation-interpretation axis
+/// (1988 p. 538). The default is the compilative end; the interpretive end
+/// adds his own 1988 §4 loop-back rule and produces a coarser residue.
+struct DriveOptions {
+    max_steps: usize,
+    strategy: refal_core::DriveStrategy,
+    show_configurations: bool,
+    show_neighborhoods: bool,
+}
+
+const DRIVE_USAGE: &str = "Usage: refal <drive-symbolic|residualize-driven> <file.ref> [--steps N]      [--strategy compilative|interpretive] [--configurations] [--neighborhoods]";
+
+fn drive_options(args: &[String]) -> Result<DriveOptions, String> {
+    let mut options = DriveOptions {
+        max_steps: 10_000,
+        strategy: refal_core::DriveStrategy::default(),
+        show_configurations: false,
+        show_neighborhoods: false,
+    };
+    let mut cursor = 0;
+    while cursor < args.len() {
+        match args[cursor].as_str() {
+            "--steps" => {
+                let Some(limit) = args.get(cursor + 1) else {
+                    return Err(DRIVE_USAGE.to_string());
+                };
+                options.max_steps = limit
+                    .parse::<usize>()
+                    .map_err(|_| DRIVE_USAGE.to_string())?;
+                cursor += 2;
             }
-        },
-        [steps_flag, limit, configurations_flag]
-            if steps_flag == "--steps" && configurations_flag == "--configurations" =>
-        {
-            match limit.parse::<usize>() {
-                Ok(limit) => (limit, true),
-                Err(_) => {
-                    eprintln!(
-                        "Usage: refal drive-symbolic <file.ref> [--steps N] [--configurations]"
-                    );
-                    process::exit(2);
-                }
+            "--strategy" => {
+                let Some(name) = args.get(cursor + 1) else {
+                    return Err(DRIVE_USAGE.to_string());
+                };
+                options.strategy = match name.as_str() {
+                    "compilative" => refal_core::DriveStrategy::Compilative,
+                    "interpretive" => refal_core::DriveStrategy::Interpretive,
+                    _ => return Err(DRIVE_USAGE.to_string()),
+                };
+                cursor += 2;
             }
+            "--configurations" => {
+                options.show_configurations = true;
+                cursor += 1;
+            }
+            "--neighborhoods" => {
+                options.show_neighborhoods = true;
+                cursor += 1;
+            }
+            _ => return Err(DRIVE_USAGE.to_string()),
         }
-        _ => {
-            eprintln!("Usage: refal drive-symbolic <file.ref> [--steps N] [--configurations]");
+    }
+    Ok(options)
+}
+
+fn drive_symbolic_program(program: &refal_ast::Program, args: &[String]) {
+    let options = match drive_options(args) {
+        Ok(options) => options,
+        Err(usage) => {
+            eprintln!("{usage}");
             process::exit(2);
         }
     };
     let core = refal_core::lower_program(program);
     let graph = refal_core::clean_unreachable_states(&refal_core::build_seed_graph(&core));
-    let report = match refal_core::drive_symbolic(&graph, max_steps) {
+    let report = match refal_core::drive_symbolic_with_strategy(
+        &graph,
+        vec![refal_core::input_expression_variable()],
+        options.max_steps,
+        options.strategy,
+    ) {
         Ok(report) => report,
         Err(error) => {
             eprintln!("symbolic drive error: {error}");
@@ -502,7 +546,23 @@ fn drive_symbolic_program(program: &refal_ast::Program, args: &[String]) {
         .join(" -> ");
     println!("steps: {}", report.steps);
     println!("visited: {visited}");
-    if show_configurations {
+    println!("neighborhood-loops: {}", report.neighborhood_loops);
+    if options.show_neighborhoods {
+        // A neighborhood is the set of arguments sharing a first-order
+        // computation history (Turchin 1988 3). Printing it is what makes the
+        // notion checkable rather than asserted.
+        for configuration in &report.configurations {
+            println!(
+                "N{}: {} [{}]",
+                configuration.id,
+                refal_core::format_term_sequence(&configuration.input),
+                refal_core::format_term_sequence(
+                    &refal_core::neighborhood_of(&configuration.input, 1).pattern
+                )
+            );
+        }
+    }
+    if options.show_configurations {
         println!("configurations: {}", report.configurations.len());
         for configuration in &report.configurations {
             println!(
@@ -636,23 +696,21 @@ fn residualize_graph_program(program: &refal_ast::Program, args: &[String]) {
 }
 
 fn residualize_driven_program(program: &refal_ast::Program, args: &[String]) {
-    let max_steps = match args {
-        [] => 10_000,
-        [flag, limit] if flag == "--steps" => match limit.parse::<usize>() {
-            Ok(limit) => limit,
-            Err(_) => {
-                eprintln!("Usage: refal residualize-driven <file.ref> [--steps N]");
-                process::exit(2);
-            }
-        },
-        _ => {
-            eprintln!("Usage: refal residualize-driven <file.ref> [--steps N]");
+    let options = match drive_options(args) {
+        Ok(options) => options,
+        Err(usage) => {
+            eprintln!("{usage}");
             process::exit(2);
         }
     };
     let core = refal_core::lower_program(program);
     let graph = refal_core::clean_unreachable_states(&refal_core::build_seed_graph(&core));
-    let residual = match refal_core::residualize_entry_graph(&core, &graph, max_steps) {
+    let residual = match refal_core::residualize_entry_graph_with_strategy(
+        &core,
+        &graph,
+        options.max_steps,
+        options.strategy,
+    ) {
         Ok(residual) => residual,
         Err(error) => {
             eprintln!("driven residualization error: {error}");
@@ -677,6 +735,7 @@ fn residualize_driven_program(program: &refal_ast::Program, args: &[String]) {
     println!("visited: {visited}");
     println!("whistles: {whistles}");
     println!("generalized: {}", residual.report.whistle_events.len());
+    println!("neighborhood-loops: {}", residual.report.neighborhood_loops);
     let generalized_states = residual
         .generalized_states
         .iter()

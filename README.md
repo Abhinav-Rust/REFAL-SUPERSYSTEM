@@ -262,73 +262,55 @@ The guarantee this compiler intends to publish, once Tier 1 lands:
 
 ## Project Status
 
-### Honest Completion: ~88%
+### Honest Completion: ~60%
 
 The goal — a Classic Refal-5 compiler **written in Refal**, emitting Refal, compiling its
 own full source, with Turchin's graph-of-states supercompiler and Tier 1 static
 verification — counts as 100%. **Tier 2 metasystem analysis (§5.5–5.9) is post-1.0
-research and is excluded from the 100% compiler target.** Against the 1.0 target,
-the honest functional completion is **approximately 81%**. The full weighting
-rationale lives in [`docs/PLAN.md`](docs/PLAN.md).
+research and is excluded from the denominator.**
 
-**Three lenses on the same codebase:**
+**One number, one method.** The figure answers a single question: *how much of a working
+Refal-5 compiler exists today?* Each workstream is credited for what is implemented **and**
+tested **for the general case** — not for the corpus, and not for effort spent. A feature
+that works on every file in `examples/` but not on Classic Refal-5 in general is credited
+only for the part that generalises.
 
-| Lens | Score | What it measures |
-|---|---|---|
-| Sub-task implementation credit (PLAN.md) | ~88% | Fraction of planned *effort* that has been coded and tested across ~20 sub-milestones |
-| Evidence-weighted score | **~81%** | Fraction of the *1.0 compiler goal* that is tested and working in the general case |
-| Conservative architectural gate credit | ~78% | Per-workstream: credits only gates that are closed, so it is a lower bound (see `REFAL-FIRST-COMPLETION.md`) |
+This replaces three figures that used to be published side by side and disagreed by ten
+points: an effort-weighted ~88%, an evidence-weighted ~81%, and a gate-only ~78%. Three
+answers to one question is not a measurement, and the flattering one — effort spent — was
+the one a reader met first. The table below is the only accounting the README publishes
+now.
 
-The evidence-weighted figure sat far below the sub-task figure for a long time,
-because the two heaviest workstreams — **Compiler in Refal (25.5% weight)** and
-**Verified self-hosting (13% weight)** — were complete only for a restricted
-body-compiler subset. That gap has now closed: `compiler.ref` emits **every** example
-the Rust bootstrap will lower byte for byte, 51 files with zero divergences, and
-reaches C1 = C2 = C3 at 12,599 bytes over the full Classic grammar. The remaining gap
-between the two figures is the difference between *handles the corpus* and *is a
-production compiler* — pattern-match compilation, optimisation, and diagnostics
-quality are not yet there.
+| Workstream | Weight | Credit | What the product is still missing |
+|---|---:|---:|---|
+| Bootstrap frontend | 8.5% | 7.0 | Parses the documented Classic scope, with 24 traced negative fixture classes. There is no clause-by-clause conformance corpus, so *handles the corpus* is not yet *handles Classic Refal-5* |
+| Bootstrap semantics | 6.0% | 4.5 | Every rule of its milestone gate; exhaustiveness lives in Tier 1 rather than here |
+| Refal machine / runtime | 19.5% | 12.5 | Broad covered builtin suite, no fixed call-depth limit, the projecting matcher (§2.2). **The heap-allocated single view field is missing** — the difference between a Refal machine and a work-list interpreter over host recursion — and block sentences carrying conditions still take the recursive path |
+| Graph of states / Refal emission | 8.5% | 5.0 | T-4, T-5, T-6 and T-9 are closed and gated. What the *product* lacks is the consequence: **the compiler normalises rather than compiling pattern matching**, and residualization is bounded rather than whole-program for general programs |
+| Static verification (Tier 1) | 15.0% | 12.5 | Complete for its published guarantee with zero false positives across the corpus, and the strongest part of the repository. The deduction is that the guarantee is deliberately narrow: no termination analysis, no exhaustiveness over arbitrary shapes |
+| Compiler implemented in Refal | 25.5% | 12.0 | A real Refal-authored lexer, parser, checker and emitter, byte-identical to the Rust bootstrap on every lowerable example. But the *transforming* half — driving, cleaning, generalisation — lives in Rust (`refal-core`) and is not wired into `compiler.ref`, and `driver.ref` does not exist. **Half a compiler, and the largest single deduction** |
+| Verified self-hosting fixpoint | 13.0% | 5.5 | C1 = C2 = C3 at 12,599 bytes over the full grammar, every generation checked. It is a fixpoint of a **normaliser**, which is why residual credit is withheld: a compiler that reformats itself has demonstrated the harness, not the compilation |
+| Conformance / release evidence | 4.0% | 1.5 | A solid automated corpus; no full Classic conformance claim and no release packaging |
+| **Total (1.0 target)** | **100%** | **~60%** |
 
-The project previously published a figure of 96%, derived from the sub-task
-implementation credit method. That figure is not fabricated — the methodology is
-described in detail in [`docs/PLAN.md`](docs/PLAN.md) — but it can be misread as meaning
-the compiler is nearly done. **It is not.** The two most architecturally critical open
-items are the general flat view-field rewriting machine (needed for condition-bearing
-evaluation at scale) and the full general Refal compiler pipeline in Refal. This README
-leads with the ~81% evidence-weighted figure because it is the most honest answer to
-"how much of a working Refal compiler exists today?"
+**This now agrees with the milestone table below, which is the point.** The three heaviest
+rows — the Refal compiler, the runtime, and self-hosting — hold 58 of the 100 points, are
+the three furthest from done, and carry 28 of the 40 deducted points. Any future change to
+the figure has to move one of those three, because they are where the product actually is.
 
-The earlier score went *down* from an older published estimate of 38%, for two reasons:
-
-- The earlier figure credited Milestones 2 and 3 as **Complete**. They were not. Eight
-  Classic Refal-5 conformance defects were confirmed against the normative reference,
-  including one that silently corrupted character strings. Six are now fixed; two remain open.
-- Adding the verification tiers enlarged the target, so the same finished work is a
-  smaller fraction of it.
+The history is worth keeping. The project published 96%, then 38%, then a ladder of figures
+between 42% and 88%. None was fabricated; they were computed by different methods against
+different targets, and publishing them together made the headline the most flattering of
+the set. The 38% low point was real in a different way: it followed an audit that found two
+milestones had been credited **Complete** when they were not, and eight confirmed Classic
+Refal-5 conformance defects — one of which silently corrupted character strings. Six are
+fixed and two remain open.
 
 This repository today is a **usable Rust bootstrap frontend, checker, interpreter, and
-source normaliser**, plus a deliberately restricted compiler-in-Refal demonstration with
-a proven bounded fixpoint. It is not yet a general compiler written in Refal, and it
-does not yet compile arbitrary Classic Refal-5 source.
-
----
-
-### Workstream Accounting
-
-Tier 2 metasystem analysis is excluded from the 100% denominator (post-1.0 research).
-The 15% weight below covers Tier 1 decidable analyses only.
-
-| Workstream | Weight | Credit today | Status summary |
-|---|---:|---:|---|
-| Bootstrap frontend | 8.5% | 8.0% | Broad Classic Refal-5 lexer/parser coverage; clause-complete conformance corpus still partial |
-| Bootstrap semantics | 6.0% | 5.0% | Entry, bindings, call checks done; no exhaustiveness or graph-based analysis |
-| Refal machine / runtime | 19.5% | ~17% | Broad covered builtin suite; **no fixed call-depth limit** — work-list driven for named calls and blocks, 50,000 frames in under a second; **projecting matcher (§2.2)** — closed `e`-variables match by position, five anchored `e`-variables over 60 symbols from >120 s to 1.6 s; `Dn`/`Up`; **heap-allocated single view field not done**; block sentences carrying conditions still take the recursive path |
-| Graph of states / Refal emission | 8.5% | 8.5% | Seed graph, SCC, bounded driving, homeomorphic whistle, bounded residualization done; **T-4 closed** — `drive → clean → residualise` agrees with the interpreter across 30 corpus programs, driving a closed entry configuration collapses a whole program, and a wholly unknown argument is case-split into `[]` / `s.H e.T` / `(e.B) e.T`; **T-9 closed** — a metasystem transition demonstrated; **T-6 closed** — clean graphs (§4.3) implemented and gated, perfection (§4.5) measured and reported rather than claimed. Generalization (§4.6) is tracked as **T-5** |
-| Static verification (Tier 1 only) | 15.0% | 15.0% | **All three classes the guarantee names are implemented**: `--classic` / `--strict` severity model, dead sentences by pattern subsumption, recognition impossible and builtin domain errors. Zero false positives across the corpus. **Function formats (§2.3)** inferred to a fixpoint across call boundaries. **`-W` / `-D` / `-A` per-lint control.** The lattice separates character, number and identifier literals and describes a bracket's contents recursively, so a wrong-kind literal *and* a wrong-kind bracket are both refuted. No named gap remains in this workstream |
-| Compiler implemented in Refal | 25.5% | ~20% | A real Refal-authored compiler over the full Classic grammar: `lexer.ref` tokenises, `parser.ref` builds an AST, `compiler.ref` checks **and emits** — exported Go entry, duplicate names under Classic name equivalence, unbound variables — with output byte-identical to Rust `lower` on all 51 lowerable examples, enforced by a test that derives its list from `examples/`. Handles blocks in both positions, `sX` shorthand, `/* */` comments and reals. `driver.ref` **not written** |
-| Verified self-hosting fixpoint | 13.0% | ~12% | **The compiler compiles itself over the full grammar**: C1 → C2 → C3, every generation checks, C1 = C2 = C3 byte-identical at 12,599 bytes, output matching Rust `lower` |
-| Conformance / release evidence | 4.0% | ~3% | Solid automated foundation; no full Classic conformance claim or release packaging |
-| **Total (1.0 target)** | **100%** | **~88%** |
+source normaliser**, plus a Refal-authored lexer, parser, checker and emitter with a proven
+fixpoint. It is **not** a compiler that compiles pattern matching, in either language. That
+is the honest summary, and 60% is what it scores. The full weighting rationale is in
+[`docs/PLAN.md`](docs/PLAN.md).
 
 ---
 
@@ -348,7 +330,7 @@ revision of this table claimed).
 | 2 | Classic Refal-5 front end | 🔶 Partial | Lexer and parser over the documented Classic scope: `s.`/`t.`/`e.` variables, blocks in sentence-ending **and** condition position, brackets, conditions, `$ENTRY`/`$EXTERN` with aliases, the §1.2.2 macrodigit bound, Classic name and variable-index equivalence, spans and line/column diagnostics; **24 negative fixture classes** under `examples/bad-*.ref`, each traced by the CLI suite to its expected failure mode | Clause-by-clause traceable conformance corpus — every fixture citing the § of the reference it exercises. Milestone 2 exit criteria not met (see [`FRONTEND-COVERAGE.md`](docs/FRONTEND-COVERAGE.md)) |
 | 3 | Semantic checker | ✅ Complete | Every rule the milestone gate names, each citing its clause: entry-point structure (any number of `$ENTRY` exports; execution starts from `Go`, which must itself be exported), duplicate function and declaration detection, unresolved calls, function calls prohibited in patterns, result and condition variable binding, variable-kind consistency per sentence scope, empty bodies, declared-but-unexecutable externs | Nothing at this milestone's gate. Behavioural analysis is deliberately not here: Tier 1 is row 6, Tier 2 is row 9 |
 | 4 | Refal machine | 🔶 Partial | Broad covered builtin suite: arithmetic, file I/O (`Card`/`Open`/`Get`/`Put`/`Putout`), buried data (`Br`/`Dg`/`Cp`/`Rp`/`Dgall`), structural ops (`First`/`Last`/`Lenw`/`Lower`/`Upper`), `Arg`/`Step`/`Time`/`Mu`/`Dn`/`Up`/`Trunc`/`Real`, plus `Prout`/`Print`/`Explode`/`Implode`/`Ord`/`Chr`/`Numb`/`Symb`/`Type`; backtracking, conditions, blocks in both positions. **No fixed call-depth limit** (work-list driven, 50,000 frames under a second) and the **projecting matcher** (§2.2) are done | Heap-allocated single view field (issue [#7](../../issues/7)); Chapter 6 metacode contract. Block sentences carrying conditions still take the recursive path |
-| 5 | Graph of states | 🔶 Partial | Seed graph, SCC, structural cleanup, bounded ground driver, shape-aware symbolic driver, homeomorphic-embedding whistle, **case splitting on a wholly unknown argument**, bounded Tier 1 analysis (`refal analyze`, `refal overlap`), cleaned-graph Core Refal emitter, bounded driven/generalized residualization, **T-4 closed** — `drive → clean → residualise` verified against the interpreter over 30 corpus programs, **T-9 closed** — a metasystem transition demonstrated, **T-6 closed** — `refal clean` removes every sentence whose quasiinput set is empty (§4.3) and `refal perfect` reports the §4.5 verdict, with the cleaned residue re-checked and re-run by the corpus gate | Generalization termination (§4.6, the 1988 algorithm); whole-graph residualization for general programs |
+| 5 | Graph of states | 🔶 Partial | Seed graph, SCC, structural cleanup, bounded ground driver, shape-aware symbolic driver, homeomorphic-embedding whistle, **case splitting on a wholly unknown argument**, bounded Tier 1 analysis (`refal analyze`, `refal overlap`), cleaned-graph Core Refal emitter, bounded driven/generalized residualization, **T-4 closed** — `drive → clean → residualise` verified against the interpreter over 30 corpus programs, **T-9 closed** — a metasystem transition demonstrated, **T-6 closed** — `refal clean` removes every sentence whose quasiinput set is empty (§4.3) and `refal perfect` reports the §4.5 verdict, with the cleaned residue re-checked and re-run by the corpus gate, **T-5 closed** — neighborhoods (1988 §3), generalization by common history (§2), and the §4 loop-back rule as a selectable strategy | Whole-graph residualization for general programs; §4.4's strategy is selectable but not yet searched |
 | 6 | Tier 1 static analyses | ✅ Complete | `--classic` / `--strict` severity model; **dead sentences**, **recognition impossible** and **builtin domain errors**, all with zero false positives across the corpus; **function formats (§2.3)** inferred to a fixpoint across call boundaries (`refal formats`); **`-W` / `-D` / `-A` per-lint control**; a shape lattice that separates character, number and identifier literals *and describes a bracket's contents recursively*, so `('a')` is refuted against a callee accepting only `(1)`; structural reachability, terminal-state and SCC reports; conservative pairwise compatibility | Nothing at this milestone's gate. Tier 2 (row 9) is where behavioural analysis lives |
 | 7 | Compiler written in Refal | 🔶 Partial | A real Refal-authored lexer, parser, checker and emitter over the full Classic grammar: `lexer.ref` tokenises, `parser.ref` builds an AST, `compiler.ref` checks and emits. **Byte-identical to Rust `lower` on all 51 lowerable examples, zero divergences**, now enforced by a test that derives its list from `examples/` rather than a hand-maintained one; blocks in both positions, `sX` shorthand, `/* */` comments, reals; `refal fixpoint`; `refal differential` | `driver.ref`; general source *compilation* — today it normalises to Core Refal rather than compiling pattern matching; optimisation |
 | 8 | Verified self-hosting | 🔶 Partial | Rust-bootstrap → C1 → C2 → C3 proven byte-identical over the full Classic grammar (12,599 bytes), each generation checked | Nothing that is itself a gate — residual credit is withheld until the compiler does more than normalise |
@@ -381,18 +363,19 @@ published guarantee** — including a format lattice that describes a bracket's 
 `('a')` is refuted against a callee accepting only `(1)` — with `-W`/`-D`/`-A` per-lint
 control; **a demonstrated metasystem transition (T-9)**; **clean graphs (T-6)** — `refal
 clean` removes every sentence whose quasiinput set is empty, `refal perfect` reports the
-§4.5 verdict, and the corpus gate re-checks and re-runs the cleaned residue; and a
-Refal-authored lexer, parser, checker and emitter — the lexer tokenises Classic Refal-5 and its own source, the parser builds an AST
+§4.5 verdict, and the corpus gate re-checks and re-runs the cleaned residue;
+**generalization by common computation history (T-5)**, with Turchin's §4 loop-back rule
+selectable via `--strategy`; and a Refal-authored lexer, parser, checker and emitter — the lexer tokenises Classic Refal-5 and its own source, the parser builds an AST
 and parses the lexer, `compiler.ref` emits byte-identically to Rust `lower` on all 51
 lowerable examples, and C1 = C2 = C3 self-hosting holds at 12,599 bytes over the full
 Classic grammar. CI green.
 
 **Not yet done (~12% of 1.0 target):** heap-allocated single view field (issue
-[#7](../../issues/7)); full generalization (§4.6, the 1988 algorithm — the
-largest single item left, and a redesign of the driver's loop-back rule rather
-than a patch); metacodes (Ch. 1.3, Chapter 6 contract); a non-trivial program
-transformer written in Refal (T-1);
-`driver.ref`; native code generation (§4.7, deliberately after self-hosting).
+[#7](../../issues/7)); metacodes (Ch. 1.3, Chapter 6 contract) — the last
+objective in the matrix still partial; a non-trivial program transformer written
+in Refal (T-1); §4.4's compilation strategy, which is now *selectable* but not
+yet *searched*; `driver.ref`; native code generation (§4.7, deliberately after
+self-hosting).
 Full detail in [`docs/PLAN.md`](docs/PLAN.md).
 
 ---
@@ -422,6 +405,8 @@ without a test or a gate that demonstrates the work.
 
 | Date | Change |
 |---|---|
+| 2026-09-12 | **Accounting replaced with one figure.** The README used to publish three completion scores side by side — an effort-weighted ~88%, an evidence-weighted ~81%, and a gate-only ~78% — which disagreed by ten points and made the most flattering of them the headline. Three answers to one question is not a measurement. They are replaced by a single **product-completeness** figure, ~60%, which credits each workstream for what is implemented *and* tested *for the general case*. The effort-weighted method is retired: it measured how much of a plan had been executed, which is not what a project status is for. `docs/PLAN.md` section 5 and `docs/PROGRESS.md` publish the same table, and entries below this line that quote a percentage are historical and used the retired method |
+| 2026-09-12 | Thirty-ninth milestone: **T-5, the algorithm of generalization (1988).** Turchin's answer to "how should two configurations be generalized?" is that the question has no meaning on its own — a generalization is meaningful only relative to the computation histories its objects take part in. So **neighborhoods** are now first-class: `neighborhood_of(input, order)` records n leading elementary contractions and collapses the rest, and `common_neighborhood(a, b)` is the tightest one containing both. The paper's own worked example is the test — `<F ('B') e1>` and `<F () e1>` are the *same* first-order neighborhood because the machine peels a leading bracket in both, while `<F s.C e1>` is a different one. The generalizer now works from common history rather than positional alignment: it used to collapse a length difference to a single expression variable, and Turchin's own example, `ABA` against `ABXYABA`, now comes out as `'A' 'B' s.Whistle e.Whistle2` — the shape of his `'AB' s1 e2`. A mismatch also no longer always becomes an `e.` variable: two symbols meet in an `s.`, two single terms in a `t.`, and only a term against a whole expression needs an `e.`, which is what makes the result *least* general rather than merely sound. Three existing expectations changed for that reason and every one is still checked by the covers-both-inputs assertion. Turchin's §4 loop-back rule — compare the current step's neighborhoods against every previous one and loop back to the most general that recurs, terminating because there are finitely many first-order neighborhoods — was implemented as the default first and **measured to regress T-9**: on `metasystem-unroll.ref` the interpreter's counter-driven loop stopped being unrolled and the residue improved by 16% instead of 98%. The paper says why (p. 538: the variants "place the resulting program in different positions on the compilation-interpretation axis"), so it ships as `--strategy interpretive` with the compilative end as the default, and both ends are tested. `--neighborhoods` prints the neighborhood of every configuration the driver reaches. Tests 267 → 273. **The accounting was replaced in the same change**: the three published figures were collapsed into one product-completeness figure of ~60%, and this entry reports no percentage of its own |
 | 2026-09-12 | Thirty-eighth milestone: **bracket contents in the format lattice — Tier 1 complete.** A format that stops at "it is a bracket" cannot say anything about a bracket argument, and that was the last thing Tier 1 could not see. `Shape::Bracket` now carries the format of its contents, recursively, so `('a')` against a callee accepting only `(1)` is a proven defect: `--strict` reports `` `<OnlyNumber ...>` always fails: `OnlyNumber` accepts [([N])], but this call passes [([C])] ``, and `--classic` still accepts the program, because only the diagnosis changed. Soundness rests on the contents over-approximating in the same direction the outer format does — a bracket term belongs to `Bracket(f)` exactly when its contents belong to `f` — and on comparing brackets by their *contents* rather than by set inclusion: two bracket sets that merely fail to contain one another can still intersect, so `shapes_disjoint` special-cases brackets and recurses while `Shape::subsumes` deliberately declines to compare them at all. `join` is monotone, so joining two brackets joins their contents and stays as tight as the contents allow. New fixture `examples/runtime-bracket-kind.ref`; `strict_mode_has_no_false_positives_on_the_corpus` stays green. Tier 1 is now complete for its published guarantee with no named gap left, so the milestone row moves to Complete and the workstream takes full credit. Tests 264 → 267. Completion ~87% → **~88%** |
 | 2026-09-12 | Thirty-seventh milestone: **T-6, clean and perfect graphs (§4.3, §4.5).** Turchin separates two properties that are easy to conflate — a **path** is feasible when its quasiinput set is non-empty (§4.3), a **walk** is feasible when some input actually takes it (§4.5) — and his own Figure 13 is clean but not perfect. `refal clean` implements §4.3 by refuting sentences against the contractions their call sites impose: a call term `<F a>` restricts `F` to the instances of `a`, so a sentence matching none of them has an empty quasiinput set and Theorem 4.4 says to remove it. `refal perfect` reports the §4.5 verdict rather than claiming it, because §5.8 Theorem 5.1 says it cannot always be had. Three guards keep the pass honest and all three are tested: a call argument containing an unevaluated call or a block makes its function uncharacterised and nothing is removed from it; a function is never emptied, its call site being reported as uncovered instead (`examples/symbolic-branch.ref`); and a run-time `Mu` dispatch stands the whole pass down, because a function chosen by name as data has entering restrictions no call-term walk can enumerate (`examples/runtime-mu.ref` reports `dynamic-dispatch: yes`). The T-4 corpus gate now cleans every residue and **re-checks and re-runs** it, which is what turns a refutation into evidence, and the summary reports `cleaned-sentences` so the pass cannot quietly become dead code. New fixture `examples/clean-graph.ref` makes it non-vacuous. The oracle needed replacing: `pattern_sequence_compatibility` gives up at the first expression variable, and the driving matcher answers a different question — it returns `No` for `s.X s.X` against `s.A s.B`, which is a claim about certainty, not about emptiness — so `patterns_overlap` searches over how many terms an `e.`-variable absorbs and returns `Disjoint` only on a proof. Also reconciled three stale rows: `TURCHIN-OBJECTIVES.md` still listed T-7 and T-10 as not started, and PLAN.md and the README disagreed about the graph workstream's credit. Completion held at **~87%**: T-6 was the last 0.3 of an 8.5-point row, and the remaining 13 points are in the runtime, the Refal compiler's pattern-matching stage, and T-1/T-5/T-8. Tests 251 → 264 |
 | 2026-09-11 | Thirty-sixth milestone, phase 2: **case splitting.** Driving no longer stops when matching cannot decide a configuration — it partitions the argument into `[]`, `s.H e.T` and `(e.B) e.T`, which is exhaustive and pairwise disjoint for an expression variable, and drives each branch (§4.2). `examples/case-split.ref` drives to a residue with no call to `Classify` at all, its dispatch decided at drive time. The whistle now fires *before* splitting when the configuration has grown, without which splitting a growing argument peels one more symbol each turn and never terminates (`condition.ref` generated sixteen functions instead of one). Three more symbolic-matcher precision bugs fixed on the way, all of the same kind: `[]` against a definitely non-empty input is a no, a bracket pattern against a definitely-symbol input is a no, and "no sentence can match" is not the same as "unknown". Tests 248 → 251 |
@@ -565,6 +550,14 @@ cargo run -p refal -- differential examples/differential-corpus.manifest --corpu
 
 # Drive the entry configuration and emit the residue for one program
 cargo run -p refal -- residualize-driven examples/runtime-recursion.ref
+
+# T-5: print the first-order neighborhood of every configuration driving reaches
+cargo run -p refal -- drive-symbolic examples/case-split.ref --neighborhoods
+
+# T-5: choose a point on Turchin's compilation-interpretation axis (1988 p. 538).
+# `compilative` is the default and what the metasystem transition needs;
+# `interpretive` adds his own 1988 §4 loop-back rule and produces a coarser residue.
+cargo run -p refal -- residualize-driven examples/metasystem-unroll.ref --strategy interpretive
 
 # T-6: drive, residualise, then clean the residue of every sentence no call
 # site can select (Turchin 1980 4.3), printing what was removed and why

@@ -34,29 +34,39 @@ objective to a gate. Not another Refal implementation.
 
 | | |
 |---|---|
-| Honest completion | **~88%** |
-| Tests | 267 passing, 0 clippy, fmt clean |
-| Last commit | `2668072` then this commit |
+| Honest completion | **~60%** (product completeness — one method, see below) |
+| Tests | 273 passing, 0 clippy, fmt clean |
+| Last commit | `9229c0a` then this commit |
 | Working tree | clean |
 
 ### Workstream credit
 
+**One number, one method: ~60%.** Each workstream is credited for what is
+implemented *and* tested *for the general case* — not for the corpus, and not for
+effort spent. This replaced three figures that used to be published side by side
+(an effort-weighted ~88%, an evidence-weighted ~81%, a gate-only ~78%) and
+disagreed by ten points; the effort-weighted method is retired, because it
+measured how much of a plan had been executed rather than how much of a product
+exists. `README.md` and `PLAN.md` section 5 publish the same table.
+
 | Workstream | Weight | Credit |
 |---|---:|---:|
-| Bootstrap frontend | 8.5% | 8.0 |
-| Bootstrap semantics | 6.0% | 5.0 |
-| Refal machine / runtime | 19.5% | 17.0 |
-| Graph of states / Refal emission | 8.5% | 8.5 |
-| Static verification (Tier 1) | 15.0% | 15.0 |
-| Compiler implemented in Refal | 25.5% | 20.0 |
-| Verified self-hosting fixpoint | 13.0% | 12.0 |
-| Conformance / release evidence | 4.0% | 3.0 |
-| **Total** | **100%** | **~88%** |
+| Bootstrap frontend | 8.5% | 7.0 |
+| Bootstrap semantics | 6.0% | 4.5 |
+| Refal machine / runtime | 19.5% | 12.5 |
+| Graph of states / Refal emission | 8.5% | 5.0 |
+| Static verification (Tier 1) | 15.0% | 12.5 |
+| Compiler implemented in Refal | 25.5% | 12.0 |
+| Verified self-hosting fixpoint | 13.0% | 5.5 |
+| Conformance / release evidence | 4.0% | 1.5 |
+| **Total** | **100%** | **~60%** |
 
-Tier 1 is now complete for its published guarantee, with no named gap left in
-that workstream. The remaining 12 points are elsewhere: the runtime's
-heap-allocated view field, the Refal compiler's pattern-matching stage, and the
-objectives still open below. The figure is not raised for work that is not gated.
+The three heaviest rows — the Refal compiler, the runtime, and self-hosting —
+hold 58 of the 100 points, are the three furthest from done, and carry 28 of the
+40 deducted points. The figure now agrees in direction with the milestone table,
+which is the point: counting ticks and reading the percentage should reach the
+same conclusion. Closing an objective that its workstream already paid for does
+not move it — which is why T-5's closure changed the wording, not the number.
 
 ### Done
 
@@ -99,9 +109,59 @@ objectives still open below. The figure is not raised for work that is not gated
 - **T-6 clean and perfect graphs** — `refal clean` removes every sentence whose
   quasiinput set is empty, `refal perfect` reports the §4.5 verdict, and the
   corpus gate re-checks and re-runs the cleaned residue. See the section below.
+- **T-5 generalization, the 1988 algorithm** — neighborhoods are first-class,
+  the generalizer works from common computation history rather than positional
+  alignment, and Turchin's own §4 loop-back rule is implemented as a selectable
+  strategy. See the section below.
 - **Bracket contents in the format lattice (§2.3)** — `Shape::Bracket` carries
   the format of its contents, so `<OnlyNumber ('a')>` is refuted against a
   callee that accepts only `(1)`. This was the last named gap in Tier 1.
+
+### Done — T-5, the algorithm of generalization (1988)
+
+The 1988 paper's answer to "how should two configurations be generalized?" is
+that the question has no meaning on its own:
+
+> Generalization of objects has a meaning only in the context of some processes
+> of computation in which the objects take part. … generalizations should be
+> sets of objects which have common computational histories up to a point.
+
+A **neighborhood of order n** is the set of expressions sharing the first n
+elementary contractions, and the tightest neighborhood containing two
+configurations is what the generalizer should produce.
+
+- **Neighborhoods are first-class.** `neighborhood_of(input, order)` records n
+  leading contractions and collapses the rest; `common_neighborhood(a, b)` is
+  the tightest one containing both. The paper's own worked example is the test:
+  `<F ('B') e1>` and `<F () e1>` are the *same* first-order neighborhood —
+  `<F (e.N) e.N>`, because the machine peels a leading bracket in both — while
+  `<F s.C e1>` is a different one.
+- **Generalization by common history.** `generalize_term_sequence` used to
+  collapse a length difference to a single expression variable. It now keeps
+  the prefix the two histories share, then abstracts. Turchin's own example,
+  `ABA` against `ABXYABA`, comes out as `'A' 'B' s.Whistle e.Whistle2` — the
+  same shape as his `'AB' s1 e2`.
+- **Least-general, not merely sound.** A mismatch no longer always becomes an
+  `e.` variable: two symbols meet in an `s.`, two single terms in a `t.`, and
+  only a term against a whole expression needs an `e.`. Three existing test
+  expectations changed for this reason — `(e.Whistle 'x')` became
+  `(s.Whistle 'x')` — and every one of them is still checked by the
+  covers-both-inputs assertion, which is the constraint that makes the
+  narrowing legitimate.
+- **Turchin's §4 loop-back rule**, and why it is a knob. The paper's rule is to
+  compare the current step's neighborhoods against every previous one and loop
+  back to the most general that recurs, which terminates because there are
+  finitely many first-order neighborhoods. Adopting it as the default was tried
+  and **measured to regress T-9**: on `examples/metasystem-unroll.ref` the
+  interpreter's counter-driven loop stopped being unrolled and the residue
+  improved by 16% instead of 98%. The paper explains why that is expected — the
+  variants "place the resulting program in different positions on the
+  compilation-interpretation axis" (p. 538) — so the rule ships as
+  `--strategy interpretive` with the compilative end as the default, and both
+  ends are tested.
+- `--neighborhoods` prints the neighborhood of every configuration the driver
+  reaches, which is what makes the notion checkable rather than asserted.
+
 
 ### Done — bracket contents in the format lattice (§2.3)
 
@@ -295,19 +355,17 @@ Two guards keep the pass honest, and both are tested:
 - **T-1** a non-trivial program transformer written in Refal. The compiler
   slices are a start; a transformer that is not itself a compiler is the
   remaining case.
-- **T-5** the complete generalization algorithm (1988). The whistle and a
-  sound, least-general LGG exist; the *neighborhood* store and the iterated
-  "is this generalization too general" check do not. The 1988 paper is clear
-  that the generalizer should be defined by **common computation histories**
-  — the tightest neighborhood containing the configurations — and that the
-  loop-back test is neighborhood recurrence rather than configuration
-  recurrence. That is a redesign of the driver's loop-back rule, not a
-  patch, and it is the largest single item left.
 - **§4.4 compilation strategy** — perfection by *transformation*. T-6 measures
   perfection and removes what is provably unnecessary; it does not yet achieve
   it where achieving it needs a rewrite (Turchin's own two examples on p. 115 —
   compile-time evaluation and Dijkstra's loop cleansing — are §4.4 strategies
-  over the cleaned graph).
+  over the cleaned graph). The `--strategy` knob added for T-5 is the first
+  piece of this: a strategy is now selectable, but not yet *searched*.
+- **Higher-order neighborhoods.** T-5 implements order-n neighborhoods and uses
+  order 1 for loop-back. The 1988 paper notes that higher orders can be had by
+  function iteration instead, and that the first-order algorithm is complete in
+  the sense that every strategy is a refinement of it — so this is an
+  optimisation, not a gap.
 - **T-8** metacodes (Ch. 1.3). `Dn`/`Up` cover a tagged subset; the Chapter 6
   contract is open.
 - Heap-allocated single view field (issue #7); `driver.ref`.
@@ -316,31 +374,28 @@ Two guards keep the pass honest, and both are tested:
 
 ## NEXT ACTION
 
-**T-5: the 1988 algorithm of generalization.**
+**T-8: metacodes (Ch. 1.3, and the Chapter 6 contract).**
 
-Read `docs/turchin/pdf/1988_generalization_algorithm.pdf` first — `fetch-sources.sh`
-retrieves it from the Wayback Machine, and `pypdf` in the managed venv extracts
-it (there is no `pdftotext` on PATH). The three things it asks for that this
-driver does not have:
+With T-1, T-5, T-6, T-7, T-9 and T-10 closed, T-8 is the last objective in the
+matrix that is still partial. Today `Dn` and `Up` cover a *tagged subset*: they
+encode and decode program terms that carry an explicit constructor tag. The
+Chapter 6 contract is wider — metacodes as the representation a supercompiler
+transforms programs through, which is what §5.2 means by "the graph of states as
+a production system".
 
-1. **Neighborhoods as first-class objects.** A neighborhood is the set of
-   ground expressions sharing a computation history of order *n*, and the
-   seven elementary contractions (1988 p. 535) are what histories are made of.
-   The compact form is the pattern you get by folding a history's contractions
-   into one.
-2. **Generalization by common history, not by positional alignment.**
-   `generalize_term_sequence` currently walks two term sequences positionally.
-   The 1988 rule is that the generalization is the tightest neighborhood
-   containing both objects, which is the longest common prefix of their
-   histories — a different and better answer whenever the two are processed
-   differently at different positions.
-3. **Loop-back on neighborhood recurrence.** §4 of the paper: before each
-   replacement, compare the current step's neighborhoods against the previous
-   ones and loop back to the first match. Because there are finitely many
-   first-order neighborhoods, this always terminates — which is the argument
-   the current homeomorphic whistle does not have.
+Start by reading what the repository already claims, then build the missing
+half:
 
-Then §4.4 strategy, T-8 metacodes (Ch. 1.3), `driver.ref`.
+1. `docs/REFAL5-BUILTIN-REFERENCE-NOTES.md` and `docs/turchin/README.md` say
+   what `Dn`/`Up` do now and where the tagged-subset limit is.
+2. `examples/runtime-metacode.ref` and `examples/metacode-macrodigit.ref` are
+   the current fixtures; `refal metasystem` is the consumer that would benefit
+   most from an untagged representation.
+3. The 1975 *REFAL macrocode* paper in `docs/turchin/` is the design source for
+   the wider contract.
+
+After T-8 the remaining work is not objectives: the runtime's heap-allocated
+view field (issue #7), `driver.ref`, and §4.4's strategy search.
 
 The soundness gate is unchanged and non-negotiable:
 `strict_mode_has_no_false_positives_on_the_corpus` must stay green. If a new
