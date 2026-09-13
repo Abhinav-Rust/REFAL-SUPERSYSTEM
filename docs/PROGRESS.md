@@ -35,8 +35,8 @@ objective to a gate. Not another Refal implementation.
 | | |
 |---|---|
 | Honest completion | **~60%** (product completeness — one method, see below) |
-| Tests | 273 passing, 0 clippy, fmt clean |
-| Last commit | `9229c0a` then this commit |
+| Tests | 280 passing, 0 clippy, fmt clean |
+| Last commit | `8cf8a37` then this commit |
 | Working tree | clean |
 
 ### Workstream credit
@@ -66,7 +66,8 @@ hold 58 of the 100 points, are the three furthest from done, and carry 28 of the
 40 deducted points. The figure now agrees in direction with the milestone table,
 which is the point: counting ticks and reading the percentage should reach the
 same conclusion. Closing an objective that its workstream already paid for does
-not move it — which is why T-5's closure changed the wording, not the number.
+not move it — which is why T-5's and T-8's closures changed the wording, not the
+number.
 
 ### Done
 
@@ -116,6 +117,65 @@ not move it — which is why T-5's closure changed the wording, not the number.
 - **Bracket contents in the format lattice (§2.3)** — `Shape::Bracket` carries
   the format of its contents, so `<OnlyNumber ('a')>` is refuted against a
   callee that accepts only `(1)`. This was the last named gap in Tier 1.
+- **T-8 metacodes (Ch. 1.3, and the Chapter 6 contract)** — `Dn`/`Up` implement
+  the manual's metacode table for ground expressions: only the asterisk is
+  rewritten, brackets keep their shape, `Up` *activates* the calls it recovers,
+  and a free-variable metacode is an error rather than a pass-through. See the
+  section below.
+
+### Done — T-8, metacodes and the Chapter 6 contract
+
+The last partial objective in the matrix. Section C.5 of the reference gives only
+the direction of the two builtins and defers everything else to Chapter 6, so
+Chapter 6 is the contract, and it is precise:
+
+| Expression `E` | Its metacode ↓`E` |
+|---|---|
+| `s.I` | `'*S'.I` |
+| `t.I` | `'*T'.I` |
+| `e.I` | `'*E'.I` |
+| `<F E>` | `'*'((F) ↓E)` |
+| `(E)` | `(↓E)` |
+| `E1 E2` | `{↓E1} ↓E2` |
+| `'*'` | `'*V'` |
+| any other symbol `S` | `S` |
+
+The design goal is stated in the manual — "the differences between an object
+expression and its metacode are minimized" — and exactly one symbol moves: the
+asterisk. `'*!'(E0)` is *deferred* metacode, an expression already in the form
+the transformation wants, which the inverse reproduces verbatim; that is what
+keeps the inverse unique.
+
+Two consequences shape the implementation. First, `Up` **activates** what it
+recovers. The manual's own worked example is `<Up '*'((F)'abc')> == <F 'abc'>`,
+so lifting metacode is not syntax rebuilding — it runs the call, which is why
+`Up` now needs the evaluator and a call depth exactly as `Mu` does. Second, the
+manual requires an error outside the domain: Exercise 6.2 observes that raising
+`'*E'.X` would put the free variable `e.X` in the view field, which the Refal
+machine forbids, so `Up` aborts on the metacode of a free variable instead of
+passing it through.
+
+The previous implementation was a tagged tree — `(Char c)`, `(Number '12')`,
+`(Identifier 'x')`, `(Bracket ...)` — which is not the manual's metacode at all
+and was documented as such. It is replaced.
+
+**A dialect finding worth recording.** The manual writes each marker as one
+symbol, and in Refal-5's programming form `'*V'` is one symbol. In this
+dialect's lexer the asterisk is a *one-character* symbol, so `'*V'` lexes as two
+terms (`*`, `V`). The marker is therefore the two-term sequence `*` followed by
+its letter, and the printed form is identical: `'a*b'` still metacodes to
+`a*Vb`. `examples/metacode-chapter6.ref` exercises all five behaviours — the
+manual's own example, the inverse, a bracket round trip, call activation, and
+deferred metacode — and the CLI corpus runs it.
+
+**Still open, and deliberately not claimed.** The §6.4 `unknown(t,n,i)` values
+used for metacoding non-ground expressions during driving. Every `Value` in this
+runtime is ground, so the rules `<Dn unknown(s.T,0,s.I)> = '*'s.T s.I` and
+`<Up '*'s.T s.I> = unknown(s.T,0,s.I)` have nothing to act on yet; they become
+reachable when the driver carries symbolic values in the runtime rather than only
+in `refal-core`. Chapter 6 also makes the builtin `Up` *static*
+(module-scoped visibility, like `Mu`); this bootstrap has whole-program
+visibility, which is the static contract for a single-module program.
 
 ### Done — T-5, the algorithm of generalization (1988)
 
@@ -366,36 +426,41 @@ Two guards keep the pass honest, and both are tested:
   function iteration instead, and that the first-order algorithm is complete in
   the sense that every strategy is a refinement of it — so this is an
   optimisation, not a gap.
-- **T-8** metacodes (Ch. 1.3). `Dn`/`Up` cover a tagged subset; the Chapter 6
-  contract is open.
+- **T-8** metacodes (Ch. 1.3) — closed for ground expressions; see the section
+  above. The §6.4 `unknown` values remain open and are recorded there.
 - Heap-allocated single view field (issue #7); `driver.ref`.
 
 ---
 
 ## NEXT ACTION
 
-**T-8: metacodes (Ch. 1.3, and the Chapter 6 contract).**
+**T-1: a non-trivial program transformer written in Refal.**
 
-With T-1, T-5, T-6, T-7, T-9 and T-10 closed, T-8 is the last objective in the
-matrix that is still partial. Today `Dn` and `Up` cover a *tagged subset*: they
-encode and decode program terms that carry an explicit constructor tag. The
-Chapter 6 contract is wider — metacodes as the representation a supercompiler
-transforms programs through, which is what §5.2 means by "the graph of states as
-a production system".
+With T-2 through T-12 now closed, T-1 is the last open objective in the matrix,
+and it sits on the two largest credit gaps at once: *compiler implemented in
+Refal* (25.5% weight, 12.0 earned) and *verified self-hosting fixpoint* (13.0%
+weight, 5.5 earned).
 
-Start by reading what the repository already claims, then build the missing
-half:
+The compiler slices under `examples/compiler-refal-*.ref` are the start; what T-1
+asks for is a transformer that is **not** itself a compiler. T-8 has just removed
+the obstacle that made this awkward: a program is now data in the manual's own
+metacode, so a transformer can consume a metacoded program and emit one.
 
-1. `docs/REFAL5-BUILTIN-REFERENCE-NOTES.md` and `docs/turchin/README.md` say
-   what `Dn`/`Up` do now and where the tagged-subset limit is.
-2. `examples/runtime-metacode.ref` and `examples/metacode-macrodigit.ref` are
-   the current fixtures; `refal metasystem` is the consumer that would benefit
-   most from an untagged representation.
-3. The 1975 *REFAL macrocode* paper in `docs/turchin/` is the design source for
-   the wider contract.
+The natural candidate is a §4.4 strategy written in Refal — constant folding, or
+Turchin's own Dijkstra loop-cleansing example (1980 p. 115) — transforming
+metacode in and metacode out:
 
-After T-8 the remaining work is not objectives: the runtime's heap-allocated
-view field (issue #7), `driver.ref`, and §4.4's strategy search.
+1. The T-8 section above and `docs/REFAL5-BUILTIN-REFERENCE-NOTES.md` fix the
+   representation the transformer reads and writes.
+2. `examples/metacode-chapter6.ref` shows `Dn`/`Up` round-tripping an expression,
+   including activating the calls they recover.
+3. Verification follows the emitter's precedent: a byte-identical differential
+   against a Rust reference transformer over the corpus, not a hand-checked
+   example.
+
+After T-1 the remaining work is not objectives: the runtime's heap-allocated view
+field (issue #7), `driver.ref`, §4.4's strategy search, and T-8's §6.4 `unknown`
+values.
 
 The soundness gate is unchanged and non-negotiable:
 `strict_mode_has_no_false_positives_on_the_corpus` must stay green. If a new

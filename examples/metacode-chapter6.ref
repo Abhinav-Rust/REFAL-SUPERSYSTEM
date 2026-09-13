@@ -1,0 +1,28 @@
+* The metacode of Chapter 6 of the Refal-5 manual, exercised end to end.
+*
+* The metacode table rewrites exactly one symbol -- the asterisk becomes
+* *V -- and leaves brackets alone. Dn metacodes its argument, Up restores it,
+* and Up *activates* the calls it recovers, because the metacode of the call
+* <F e.Args> is the asterisk followed by a bracket holding the function name
+* and the metacoded arguments.
+*
+* A deferred metacode is the asterisk, an exclamation mark, and a bracket: an
+* expression already in the form the transformation wants, which Up reproduces
+* verbatim instead of lifting.
+*
+* In this dialect the asterisk is a one-character symbol, so the manual's
+* single-symbol markers are written as two terms here; they print the same.
+
+$EXTERNAL Dn, Prout, Up;
+
+$ENTRY Go {
+  = <Prout 'dn ' <Dn 'a*b'>>
+    <Prout 'up ' <Up 'a*Vb'>>
+    <Prout 'br ' <Up <Dn ('a' ('b') 'c')>>>
+    <Prout 'ca ' <Up '*'((Echo) 'Z')>>
+    <Prout 'df ' <Up '*!'('*E')>>;
+}
+
+Echo {
+  e.X = e.X;
+}

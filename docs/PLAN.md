@@ -150,7 +150,7 @@ Turchin Ch. 1–2. Replaces `refal-runtime`.
   2. **Arithmetic** — `Add`, `Sub`, `Mul`, `Div`, `Divmod`, `Mod`, `Compare`, `Trunc`, and `Real`
      are implemented.
   3. **Buried data** — `Br`, `Dg`, `Cp`, `Rp`, `Dgall` are implemented with evaluator-owned stack state.
-  4. `Lenw`, `First`, `Last`, `Upper`, `Lower`, `Arg`, and `Step` are implemented; `Mu` and `Time` have tested bootstrap-runtime support, and `Up`/`Dn` now have a tagged invertible subset for supported runtime values. The official Chapter 6 metacode contract remains open.
+  4. `Lenw`, `First`, `Last`, `Upper`, `Lower`, `Arg`, and `Step` are implemented; `Mu` and `Time` have tested bootstrap-runtime support, and `Up`/`Dn` implement the official Chapter 6 metacode table for ground expressions, exercised end to end by `examples/metacode-chapter6.ref`. §6.4's `unknown` values for metacoding non-ground expressions remain open.
 - **1e** Refal-5 blocks (`, arg : { block }`) end-to-end — issue #13.
 
 **Gate:** tokenise a 50 KB source file in Refal, on this machine, in reasonable time and memory.

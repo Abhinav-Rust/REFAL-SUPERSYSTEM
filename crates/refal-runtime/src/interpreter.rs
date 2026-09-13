@@ -885,7 +885,7 @@ impl<'a> Evaluator<'a> {
                 self.start_time.elapsed().as_millis().to_string(),
             )])),
             "DN" => Some(dn(args)),
-            "UP" => Some(up(args)),
+            "UP" => Some(self.up(args, call_depth)),
             "MU" => Some(self.mu(args, call_depth)),
             _ => None,
         }
@@ -1221,92 +1221,236 @@ fn condition_pattern_is_matchable(terms: &[Term]) -> bool {
     })
 }
 
-const META_CHAR: &str = "Char";
-const META_IDENTIFIER: &str = "Identifier";
-const META_NUMBER: &str = "Number";
-const META_BRACKET: &str = "Bracket";
+// --- Metacode (Refal-5 manual, Chapter 6, section 6.2) ----------------------
+//
+// The manual's metacode table maps an expression to its metacode:
+//
+//   s.I      ->  '*S'.I          <F E>  ->  '*'((F) <metacode of E>)
+//   t.I      ->  '*T'.I          (E)    ->  (<metacode of E>)
+//   e.I      ->  '*E'.I          E1 E2  ->  <metacode of E1> <metacode of E2>
+//   '*'      ->  '*V'            any other symbol S  ->  S
+//
+// The manual states the design goal: keep an object expression's metacode as
+// close to the expression as possible, so exactly one symbol -- the asterisk --
+// is rewritten. A *deferred* metacode `'*!'(E0)` marks an expression that is
+// already in the form the transformation wants; writing it explicitly is what
+// keeps the inverse unique.
+//
+// `Dn` and `Up` are the builtin pair that performs this mapping (manual 6.2,
+// 6.4). They are what section 5.2 means by "the graph of states as a production
+// system": a supercompiler transforms programs *through* metacode, and these
+// two builtins are the translation in both directions.
 
+/// The metacode marker. The manual writes each marker as a single symbol --
+/// `'*V'` for the object asterisk, `'*S'`/`'*T'`/`'*E'` for the three variable
+/// kinds, `'*!'` for deferred metacode -- and in Refal-5's programming form each
+/// is one symbol. In this dialect's lexer the asterisk is a one-character
+/// symbol, so a marker is the two-term sequence `*` followed by its letter. The
+/// printed form is identical: `'*V'` prints as `*V` either way.
+const META_MARKER: char = '*';
+/// The letter marking the metacode of the object asterisk. Rewriting the
+/// asterisk this way is the whole of what distinguishes an object expression
+/// from its metacode, and it is what lets `Up` tell an object asterisk from the
+/// call marker below.
+const META_ASTERISK: char = 'V';
+/// The letter marking deferred metacode: `'*!'(e.Expr)` stands for an expression
+/// already in the desired form, which `Up` reproduces verbatim.
+const META_DEFER: char = '!';
+/// The letters marking the metacodes of the three free-variable kinds. None can
+/// occur in the metacode of a ground expression, which is the domain of `Up`.
+const META_VARIABLE_TYPES: [char; 3] = ['S', 'T', 'E'];
+
+/// `<Dn e.Expr>` lowers an expression into metacode (manual 6.2).
+///
+/// The manual's own Refal definition is
+///
+/// ```text
+/// Dn { '*'e.1 = '*V' <Dn e.1>;  s.2 e.1 = s.2 <Dn e.1>;
+///      (e.2)e.1 = (<Dn e.2>) <Dn e.1>;  = ; }
+/// ```
+///
+/// so a value is its own metacode except that the asterisk becomes `*V`. The
+/// remaining table rows (`s.I`, `t.I`, `e.I`, `<F E>`) describe *program text*,
+/// which carries free variables and calls; a builtin argument is an evaluated
+/// value and can contain neither. Round-tripping therefore holds for every
+/// ground expression, which is exactly the manual's `<Dn E0> == E0` for an
+/// object expression `E0`.
 fn dn(args: &[Value]) -> Result<Vec<Value>, EvalError> {
-    Ok(vec![Value::Bracket(encode_values(args))])
+    Ok(metacode_sequence(args))
 }
 
-fn up(args: &[Value]) -> Result<Vec<Value>, EvalError> {
-    let [Value::Bracket(encoded)] = args else {
-        return Err(invalid_builtin_arguments(
-            "Up",
-            "expected exactly one bootstrap metacode bracket produced by Dn",
-        ));
-    };
-    decode_values(encoded).map_err(|message| invalid_builtin_arguments("Up", &message))
-}
-
-fn encode_values(values: &[Value]) -> Vec<Value> {
-    values.iter().map(encode_value).collect()
-}
-
-fn encode_value(value: &Value) -> Value {
-    let (tag, payload) = match value {
-        Value::Char(character) => (META_CHAR, Value::Char(*character)),
-        Value::Identifier(identifier) => (
-            META_IDENTIFIER,
-            Value::Bracket(identifier.chars().map(Value::Char).collect()),
-        ),
-        Value::Number(number) => (
-            META_NUMBER,
-            Value::Bracket(number.chars().map(Value::Char).collect()),
-        ),
-        Value::Bracket(values) => (META_BRACKET, Value::Bracket(encode_values(values))),
-    };
-    Value::Bracket(vec![Value::Identifier(tag.to_string()), payload])
-}
-
-fn decode_values(values: &[Value]) -> Result<Vec<Value>, String> {
-    values.iter().map(decode_value).collect()
-}
-
-fn decode_value(value: &Value) -> Result<Value, String> {
-    let Value::Bracket(fields) = value else {
-        return Err("each bootstrap metacode term must be a tagged bracket".to_string());
-    };
-    let [Value::Identifier(tag), payload] = fields.as_slice() else {
-        return Err(
-            "each bootstrap metacode term must contain one tag and one payload".to_string(),
-        );
-    };
-    match tag.as_str() {
-        META_CHAR => {
-            let Value::Char(character) = payload else {
-                return Err("Char metacode payload must be one character".to_string());
-            };
-            Ok(Value::Char(*character))
+fn metacode_sequence(values: &[Value]) -> Vec<Value> {
+    let mut encoded = Vec::new();
+    for value in values {
+        if is_marker(value, META_MARKER) {
+            encoded.push(Value::Char(META_MARKER));
+            encoded.push(Value::Char(META_ASTERISK));
+        } else if let Value::Bracket(inner) = value {
+            encoded.push(Value::Bracket(metacode_sequence(inner)));
+        } else {
+            encoded.push(value.clone());
         }
-        META_IDENTIFIER => Ok(Value::Identifier(decode_text(payload, "Identifier")?)),
-        META_NUMBER => Ok(Value::Number(decode_text(payload, "Number")?)),
-        META_BRACKET => {
-            let Value::Bracket(nested) = payload else {
-                return Err("Bracket metacode payload must be a metacode sequence".to_string());
-            };
-            Ok(Value::Bracket(decode_values(nested)?))
+    }
+    encoded
+}
+
+/// The single-character symbol a value stands for, if it is a symbol at all.
+/// The runtime keeps a one-character symbol as `Value::Char` and a longer one as
+/// `Value::Identifier`, so both forms are read here.
+fn marker_char(value: &Value) -> Option<char> {
+    match value {
+        Value::Char(character) => Some(*character),
+        Value::Identifier(name) => {
+            let mut characters = name.chars();
+            match (characters.next(), characters.next()) {
+                (Some(character), None) => Some(character),
+                _ => None,
+            }
         }
-        _ => Err(format!("unknown bootstrap metacode tag `{tag}`")),
+        Value::Number(_) | Value::Bracket(_) => None,
     }
 }
 
-fn decode_text(value: &Value, kind: &str) -> Result<String, String> {
-    let Value::Bracket(chars) = value else {
-        return Err(format!(
-            "{kind} metacode payload must be a character string"
-        ));
-    };
-    chars
-        .iter()
-        .map(|value| match value {
-            Value::Char(character) => Ok(*character),
-            _ => Err(format!(
-                "{kind} metacode payload must contain only characters"
-            )),
-        })
-        .collect()
+fn is_marker(value: &Value, character: char) -> bool {
+    marker_char(value) == Some(character)
+}
+
+/// `Up` needs the evaluator and a call depth, exactly as `Mu` does, because the
+/// manual extends the domain to the metacode of any ground expression and
+/// requires an error outside it (Exercise 6.2); the free-variable check in
+/// [`Evaluator::lift_sequence`] enforces that.
+impl<'a> Evaluator<'a> {
+    /// `<Up e.Expr>` lifts an expression from metacode (manual 6.2). The manual's
+    /// Refal definition is
+    ///
+    /// ```text
+    /// Up {
+    ///   '*V'e.1            = '*' <Up e.1>;
+    ///   '*'((s.F) e.1)e.2  = <Mu s.F <Up e.1>> <Up e.2>;
+    ///   '*!'(e.2)e.1       = e.2 <Up e.1>;
+    ///   s.2 e.1            = s.2 <Up e.1>;
+    ///   (e.2)e.1           = (<Up e.2>) <Up e.1>;
+    ///    = ; }
+    /// ```
+    ///
+    /// so `Up` inverts `Dn` on ground expressions and *activates* the calls it
+    /// recovers: the metacode of `<F 'abc'>` is `'*'((F)'abc')`, and lifting it
+    /// runs `F`.
+    fn up(&self, args: &[Value], call_depth: usize) -> Result<Vec<Value>, EvalError> {
+        self.lift_sequence(args, call_depth)
+    }
+
+    fn lift_sequence(&self, values: &[Value], call_depth: usize) -> Result<Vec<Value>, EvalError> {
+        let mut lifted = Vec::new();
+        let mut index = 0;
+        while let Some(value) = values.get(index) {
+            if is_marker(value, META_MARKER) {
+                index += self.lift_marker(values, index, call_depth, &mut lifted)?;
+            } else if let Value::Bracket(inner) = value {
+                lifted.push(Value::Bracket(self.lift_sequence(inner, call_depth)?));
+                index += 1;
+            } else {
+                lifted.push(value.clone());
+                index += 1;
+            }
+        }
+        Ok(lifted)
+    }
+
+    /// Lifts the metacode marker at `values[index]`, appending what it denotes to
+    /// `lifted` and returning how many input terms it consumed. A marker is the
+    /// asterisk followed by a letter or a bracket, and the follower selects the
+    /// manual's rule:
+    ///
+    /// ```text
+    /// '*'V'          ->  the object asterisk
+    /// '*'((F) e.1)   ->  the call <F e.1>, which is activated
+    /// '*!'(e.1)      ->  deferred metacode, reproduced verbatim
+    /// '*S'|'*T'|'*E' ->  a free variable, which is outside the domain
+    /// ```
+    fn lift_marker(
+        &self,
+        values: &[Value],
+        index: usize,
+        call_depth: usize,
+        lifted: &mut Vec<Value>,
+    ) -> Result<usize, EvalError> {
+        let follower = values.get(index + 1);
+        let follower_char = follower.and_then(marker_char);
+
+        if follower_char == Some(META_ASTERISK) {
+            lifted.push(Value::Char(META_MARKER));
+            return Ok(2);
+        }
+        if follower_char == Some(META_DEFER) {
+            let Some(Value::Bracket(deferred)) = values.get(index + 2) else {
+                return Err(up_domain_error(
+                    "`*!` must be followed by a bracketed expression",
+                ));
+            };
+            lifted.extend(deferred.iter().cloned());
+            return Ok(3);
+        }
+        if let Some(kind) = follower_char.filter(|kind| META_VARIABLE_TYPES.contains(kind)) {
+            return Err(up_domain_error(&format!(
+                "`*{kind}` is the metacode of a free variable"
+            )));
+        }
+        if matches!(follower, Some(Value::Bracket(_))) {
+            let (result, consumed) = self.lift_call(values, index, call_depth)?;
+            lifted.extend(result);
+            return Ok(consumed);
+        }
+        // Out of domain: a bare asterisk. The manual's definition passes it
+        // through on its generic symbol rule rather than failing.
+        lifted.push(Value::Char(META_MARKER));
+        Ok(1)
+    }
+
+    /// Lifts `'*'((s.F) e.Args)` at `values[index]`, returning the activated
+    /// call's result and how many input terms the metacode consumed.
+    fn lift_call(
+        &self,
+        values: &[Value],
+        index: usize,
+        call_depth: usize,
+    ) -> Result<(Vec<Value>, usize), EvalError> {
+        let Some(Value::Bracket(fields)) = values.get(index + 1) else {
+            return Err(up_domain_error(
+                "the call marker `*` must be followed by a bracketed call",
+            ));
+        };
+        let Some((Value::Bracket(head), arguments)) = fields.split_first() else {
+            return Err(up_domain_error(
+                "a metacoded call must begin with its bracketed function name",
+            ));
+        };
+        let Some(function) = metacoded_function_name(head) else {
+            return Err(up_domain_error(
+                "a metacoded call must name exactly one function symbol",
+            ));
+        };
+        let arguments = self.lift_sequence(arguments, call_depth)?;
+        let result = self.evaluate_function_at_depth(&function, &arguments, call_depth + 1)?;
+        Ok((result, 2))
+    }
+}
+
+/// The function name of a metacoded call. The manual binds it with `s.F`, so it
+/// is a symbol: an identifier, or a one-character name.
+fn metacoded_function_name(head: &[Value]) -> Option<String> {
+    match head {
+        [Value::Identifier(name)] => Some(name.clone()),
+        [Value::Char(character)] => Some(character.to_string()),
+        _ => None,
+    }
+}
+
+fn up_domain_error(message: &str) -> EvalError {
+    invalid_builtin_arguments(
+        "Up",
+        &format!("argument is not the metacode of a ground expression: {message}"),
+    )
 }
 
 fn invalid_builtin_arguments(name: &str, message: &str) -> EvalError {
@@ -2304,32 +2448,148 @@ mod tests {
     }
 
     #[test]
-    fn dn_and_up_round_trip_supported_metacode_values() {
+    fn dn_metacodes_the_manuals_own_example() {
+        // Manual 6.2: "the metacode of 'a*b' is 'a*Vb'". A marker is the
+        // two-term sequence `*` `V` here, which prints as `*V`.
+        let expression = vec![Value::Char('a'), Value::Char('*'), Value::Char('b')];
+
+        assert_eq!(
+            dn(&expression).unwrap(),
+            vec![
+                Value::Char('a'),
+                Value::Char('*'),
+                Value::Char('V'),
+                Value::Char('b'),
+            ]
+        );
+    }
+
+    #[test]
+    fn dn_rewrites_only_the_asterisk_and_recurses_into_brackets() {
+        // Manual 6.2: "the differences between an object expression and its
+        // metacode are minimized" -- exactly one symbol, the asterisk, moves,
+        // and brackets keep their shape.
+        let expression = vec![
+            Value::Char('a'),
+            Value::Char('*'),
+            Value::Number("42".to_string()),
+            Value::Bracket(vec![
+                Value::Char('*'),
+                Value::Identifier("Inner".to_string()),
+            ]),
+        ];
+
+        assert_eq!(
+            dn(&expression).unwrap(),
+            vec![
+                Value::Char('a'),
+                Value::Char('*'),
+                Value::Char('V'),
+                Value::Number("42".to_string()),
+                Value::Bracket(vec![
+                    Value::Char('*'),
+                    Value::Char('V'),
+                    Value::Identifier("Inner".to_string()),
+                ]),
+            ]
+        );
+    }
+
+    #[test]
+    fn dn_and_up_round_trip_ground_expressions() {
         let original = vec![
             Value::Char('A'),
             Value::Identifier("Foo-Bar".to_string()),
             Value::Number("42".to_string()),
+            Value::Char('*'),
             Value::Bracket(vec![
                 Value::Char('x'),
+                Value::Char('*'),
                 Value::Identifier("Inner".to_string()),
             ]),
         ];
-        let encoded = dn(&original).unwrap();
+        let program = program(vec![]);
+        let evaluator = Evaluator::new(&program);
 
-        assert_eq!(up(&encoded).unwrap(), original);
+        let encoded = dn(&original).unwrap();
+        assert_eq!(
+            evaluator.evaluate_function("Up", &encoded).unwrap(),
+            original
+        );
     }
 
     #[test]
-    fn up_rejects_untagged_metacode() {
-        let error = up(&[Value::Char('A')]).unwrap_err();
+    fn up_activates_the_calls_it_lifts_out_of_metacode() {
+        // The manual's own worked example (6.2):
+        //   <Up '*'((F)'abc')>  ==  <F 'abc'>
+        // so lifting metacode does not merely rebuild syntax, it runs the call.
+        let echo = Sentence {
+            pattern: vec![var(VariableKind::Expression, "X")],
+            conditions: vec![],
+            result: vec![var(VariableKind::Expression, "X")],
+            span: span(),
+        };
+        let program = program(vec![
+            function("Go", Visibility::Entry, vec![]),
+            function("Echo", Visibility::Local, vec![echo]),
+        ]);
+        let evaluator = Evaluator::new(&program);
+
+        let metacoded_call = vec![
+            Value::Char('*'),
+            Value::Bracket(vec![
+                Value::Bracket(vec![Value::Identifier("Echo".to_string())]),
+                Value::Char('Z'),
+            ]),
+        ];
+
+        assert_eq!(
+            evaluator.evaluate_function("Up", &metacoded_call).unwrap(),
+            vec![Value::Char('Z')]
+        );
+    }
+
+    #[test]
+    fn up_rejects_the_metacode_of_a_free_variable() {
+        // Manual 6.2, Exercise 6.2: raising '*E'.X would place the free variable
+        // e.X in the view field, which the Refal machine forbids, so Up must
+        // abort rather than pass it through unchanged.
+        let program = program(vec![]);
+        let evaluator = Evaluator::new(&program);
+
+        let error = evaluator
+            .evaluate_function("Up", &[Value::Char('*'), Value::Char('E')])
+            .unwrap_err();
 
         assert_eq!(
             error,
             EvalError::InvalidBuiltinArguments {
                 name: "Up".to_string(),
-                message: "expected exactly one bootstrap metacode bracket produced by Dn"
-                    .to_string(),
+                message: "argument is not the metacode of a ground expression: `*E` is the metacode of a free variable".to_string(),
             }
+        );
+    }
+
+    #[test]
+    fn up_reproduces_deferred_metacode_verbatim() {
+        // '*!'(e.Expr) marks an expression that is already in the form the
+        // transformation wants, so Up reproduces its contents without lifting
+        // them -- even when those contents look like a free-variable metacode.
+        let program = program(vec![]);
+        let evaluator = Evaluator::new(&program);
+
+        assert_eq!(
+            evaluator
+                .evaluate_function(
+                    "Up",
+                    &[
+                        Value::Char('*'),
+                        Value::Char('!'),
+                        Value::Bracket(vec![Value::Char('*'), Value::Char('E')]),
+                    ],
+                )
+                .unwrap(),
+            vec![Value::Char('*'), Value::Char('E')]
         );
     }
 
