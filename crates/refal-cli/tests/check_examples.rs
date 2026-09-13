@@ -4457,3 +4457,200 @@ fn an_interpretive_residue_still_checks_and_runs_like_the_source() {
         let _ = fs::remove_file(&scratch);
     }
 }
+
+/// The transformation `examples/transformer-rename.ref` performs, written out
+/// again in Rust, so the Refal transformer is checked against an independent
+/// implementation rather than against output somebody once read and believed.
+///
+/// The reference reads the *same source text* the generated fixture is given,
+/// so the two cannot disagree about the input. What must not drift is the
+/// transformer itself, and that is not restated here: the test splices the
+/// committed file's own `Rename` definition into the generated program.
+mod transformer_reference {
+    #[derive(Debug, Clone, PartialEq)]
+    pub enum Expression {
+        Symbol(String),
+        Bracket(Vec<Expression>),
+    }
+
+    /// Parse the restricted grammar the differential uses: symbols separated by
+    /// whitespace, and parentheses for brackets. The inputs deliberately avoid
+    /// quoted strings and the asterisk, so this reader and the dialect's lexer
+    /// agree on every input by construction -- a one-character token is a
+    /// character and a longer uppercase token is an identifier, and both render
+    /// back to the same text either way.
+    pub fn parse(source: &str) -> Vec<Expression> {
+        let mut frames: Vec<Vec<Expression>> = vec![Vec::new()];
+        let mut token = String::new();
+        for character in source.chars() {
+            if character == '(' {
+                push_token(&mut frames, &mut token);
+                frames.push(Vec::new());
+            } else if character == ')' {
+                push_token(&mut frames, &mut token);
+                let inner = frames.pop().expect("a bracket to close");
+                frames
+                    .last_mut()
+                    .expect("an enclosing frame")
+                    .push(Expression::Bracket(inner));
+            } else if character.is_whitespace() {
+                push_token(&mut frames, &mut token);
+            } else {
+                token.push(character);
+            }
+        }
+        push_token(&mut frames, &mut token);
+        frames.pop().expect("the outermost frame")
+    }
+
+    fn push_token(frames: &mut [Vec<Expression>], token: &mut String) {
+        if !token.is_empty() {
+            frames
+                .last_mut()
+                .expect("a frame")
+                .push(Expression::Symbol(std::mem::take(token)));
+        }
+    }
+
+    /// Replace every occurrence of one symbol by another, at every bracket level.
+    pub fn rename(expressions: &[Expression], old: &str, new: &str) -> Vec<Expression> {
+        expressions
+            .iter()
+            .map(|expression| match expression {
+                Expression::Symbol(symbol) if symbol == old => Expression::Symbol(new.to_string()),
+                Expression::Symbol(symbol) => Expression::Symbol(symbol.clone()),
+                Expression::Bracket(inner) => Expression::Bracket(rename(inner, old, new)),
+            })
+            .collect()
+    }
+
+    /// Render an expression the way the runtime's `Prout` does: characters and
+    /// identifiers concatenated, brackets parenthesised, no separators.
+    pub fn render(expressions: &[Expression]) -> String {
+        expressions
+            .iter()
+            .map(|expression| match expression {
+                Expression::Symbol(symbol) => symbol.clone(),
+                Expression::Bracket(inner) => format!("({})", render(inner)),
+            })
+            .collect()
+    }
+
+    /// A deterministic enumeration of small expressions over a fixed alphabet,
+    /// so the differential covers hundreds of shapes rather than the dozen
+    /// somebody listed by hand. Nesting the symbol at several depths is the
+    /// point: the transformer's recursion is what is under test.
+    pub fn enumerate_inputs() -> Vec<String> {
+        let atoms = ["Plus", "Minus", "A", "B"];
+        let mut expressions: Vec<String> = atoms.iter().map(|atom| atom.to_string()).collect();
+        for _ in 0..2 {
+            let current = expressions.clone();
+            for left in &current {
+                expressions.push(format!("({left})"));
+            }
+            for left in &current {
+                for right in atoms {
+                    expressions.push(format!("({left} {right})"));
+                }
+            }
+        }
+        expressions
+    }
+}
+
+/// T-1's closure standard, following the emitter's precedent for T-10: the
+/// Refal-authored transformer must agree with an independent implementation,
+/// over inputs the two sides read from the same text, and the transformer under
+/// test must be the committed file rather than a copy of it.
+#[test]
+fn refal_authored_transformer_matches_a_rust_reference() {
+    use transformer_reference::{parse, rename, render};
+
+    // Inputs for the differential. A hand-picked list fixes the interesting
+    // shapes -- a bare symbol, an empty bracket, the symbol nested at depth four
+    // -- and the enumeration below then covers the bulk deterministically, so
+    // the differential is not a handful of cases somebody chose.
+    //
+    // They are listed here rather than read out of the corpus because the corpus
+    // programs are not ground expressions; what must not drift is the
+    // transformer, and that is read from the committed fixture.
+    let mut inputs: Vec<String> = [
+        "Plus",
+        "(Plus)",
+        "(Plus A (Plus B))",
+        "(Minus (Plus C))",
+        "((Plus A) (Plus B) (Minus C))",
+        "(Plus 1 2)",
+        "A (B (C (Plus D)))",
+        "(Plus (Plus (Plus A)))",
+        "Minus",
+        "((Plus A) B)",
+        "(Plus A B C D E)",
+        "((((Plus))))",
+    ]
+    .iter()
+    .map(|input| input.to_string())
+    .collect();
+    inputs.extend(transformer_reference::enumerate_inputs());
+
+    let fixture = fs::read_to_string(workspace_path("examples/transformer-rename.ref"))
+        .expect("read the committed transformer");
+    let rename_definition = fixture
+        .find("Rename {")
+        .map(|start| &fixture[start..])
+        .expect("the committed transformer defines Rename");
+
+    let mut generated = String::from("$EXTERNAL Dn, Prout, Up;\n\n$ENTRY Go {\n  =");
+    for input in &inputs {
+        generated.push_str(&format!(
+            "\n    <Prout <Up <Rename Plus Minus <Dn {input}>>>>"
+        ));
+    }
+    generated.push_str(";\n}\n\n");
+    generated.push_str(rename_definition);
+
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock is after Unix epoch")
+        .as_nanos();
+    let path = env::temp_dir().join(format!("refal-transformer-{}-{unique}.ref", process::id()));
+    fs::write(&path, &generated).expect("write the generated transformer program");
+    let output = Command::new(refal_bin())
+        .args(["run", path.to_str().expect("temporary path is UTF-8")])
+        .output()
+        .expect("run the generated transformer program");
+    fs::remove_file(&path).expect("remove the generated transformer program");
+
+    assert!(
+        output.status.success(),
+        "the generated transformer should run\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let expected: String = inputs
+        .iter()
+        .map(|input| format!("{}\n", render(&rename(&parse(input), "Plus", "Minus"))))
+        .collect();
+
+    // Guard against a vacuous pass. A differential that cannot fail proves
+    // nothing, so assert the reference actually transformed its inputs and that
+    // the two sides are not merely echoing them back.
+    let untransformed: String = inputs
+        .iter()
+        .map(|input| format!("{}\n", render(&parse(input))))
+        .collect();
+    assert_ne!(
+        expected, untransformed,
+        "the reference must actually rewrite its inputs"
+    );
+    assert!(
+        expected.contains("Minus") && !expected.contains("Plus"),
+        "every occurrence of the old symbol should be gone, got:\n{expected}"
+    );
+
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        expected,
+        "the Refal transformer disagrees with the Rust reference"
+    );
+}

@@ -35,7 +35,7 @@ objective to a gate. Not another Refal implementation.
 | | |
 |---|---|
 | Honest completion | **~60%** (product completeness — one method, see below) |
-| Tests | 280 passing, 0 clippy, fmt clean |
+| Tests | 281 passing, 0 clippy, fmt clean |
 | Last commit | `8cf8a37` then this commit |
 | Working tree | clean |
 
@@ -413,11 +413,17 @@ Two guards keep the pass honest, and both are tested:
 ### Open
 
 - **T-1** a non-trivial program transformer written in Refal.
-  `examples/transformer-rename.ref` is the first that is not itself a compiler:
-  it consumes a metacoded program, rewrites a symbol at every level of bracket
-  nesting, and lifts the result back out with `Up`. What remains is the
-  differential against a Rust reference over the corpus — the standard the
-  emitter had to meet before T-10 closed.
+  `examples/transformer-rename.ref` is a transformer that is not itself a
+  compiler: it consumes a metacoded program, rewrites a symbol at every level of
+  bracket nesting, and lifts the result back out with `Up`. It is verified the
+  way T-10's emitter had to be —
+  `refal_authored_transformer_matches_a_rust_reference` compares it against an
+  independent Rust implementation over 156 enumerated inputs, with a vacuity
+  guard, and splices the committed file's own `Rename` definition into the
+  generated program so the transformer under test cannot drift from the example.
+  What remains is a transformer that does real work on *programs* rather than
+  renaming symbols — a §4.4 strategy. That is the same gap as the Refal
+  compiler's, which is why closing this objective would not move the figure.
 - **§4.4 compilation strategy** — perfection by *transformation*. T-6 measures
   perfection and removes what is provably unnecessary; it does not yet achieve
   it where achieving it needs a rewrite (Turchin's own two examples on p. 115 —
@@ -437,39 +443,35 @@ Two guards keep the pass honest, and both are tested:
 
 ## NEXT ACTION
 
-**T-1: a non-trivial program transformer written in Refal.**
+**The transforming half in Refal: `driver.ref`, and a §4.4 strategy.**
 
-With T-2 through T-12 now closed, T-1 is the last open objective in the matrix,
-and it sits on the two largest credit gaps at once: *compiler implemented in
-Refal* (25.5% weight, 12.0 earned) and *verified self-hosting fixpoint* (13.0%
-weight, 5.5 earned).
+Every objective in the matrix is now closed or advanced as far as its evidence
+supports, and T-1 is the one that stays Partial — because its residual is the same
+as the largest single deduction in the accounting: the *transforming* half of the
+compiler (driving, cleaning, generalisation) lives in Rust (`refal-core`) and is
+not wired into `compiler.ref`, and `driver.ref` does not exist. Row 7 of the
+README calls it "half a compiler".
 
-The compiler slices under `examples/compiler-refal-*.ref` are the start; what T-1
-asks for is a transformer that is **not** itself a compiler. T-8 has just removed
-the obstacle that made this awkward: a program is now data in the manual's own
-metacode, so a transformer can consume a metacoded program and emit one.
+The pieces are now in place to start:
 
-`examples/transformer-rename.ref` is the first piece: it consumes a metacoded
-program, renames a symbol at every level of bracket nesting, and lifts the result
-back out with `Up` — metacode in, transform, metacode out. It is registered in
-the CLI corpus and its output is asserted. That is a transformer, but not yet a
-*verified* one in the sense this repository uses, which is the differential below.
+1. T-8 gives programs a representation a Refal transformer can consume and emit
+   (the T-8 section above, and `docs/REFAL5-BUILTIN-REFERENCE-NOTES.md`).
+2. `examples/transformer-rename.ref` shows the pipeline — metacode in, structural
+   rewrite, metacode out — and
+   `refal_authored_transformer_matches_a_rust_reference` shows how to verify such
+   a transformer against an independent Rust implementation without letting the
+   two drift.
+3. `refal-core`'s `drive_symbolic_with_strategy`, the cleaning pass and the
+   generalizer are the Rust behaviour a Refal `driver.ref` would have to
+   reproduce, exactly as `compiler.ref` had to reproduce `lower`.
 
-The natural next step is a §4.4 strategy written in Refal — constant folding, or
-Turchin's own Dijkstra loop-cleansing example (1980 p. 115) — transforming
-metacode in and metacode out:
+The natural first target is a §4.4 strategy written in Refal — constant folding,
+or Turchin's own Dijkstra loop-cleansing example (1980 p. 115) — because it is
+real transformation of programs rather than symbol renaming, and it is
+differentially checkable against the Rust behaviour it mirrors.
 
-1. The T-8 section above and `docs/REFAL5-BUILTIN-REFERENCE-NOTES.md` fix the
-   representation the transformer reads and writes.
-2. `examples/metacode-chapter6.ref` shows `Dn`/`Up` round-tripping an expression,
-   including activating the calls they recover.
-3. Verification follows the emitter's precedent: a byte-identical differential
-   against a Rust reference transformer over the corpus, not a hand-checked
-   example.
-
-After T-1 the remaining work is not objectives: the runtime's heap-allocated view
-field (issue #7), `driver.ref`, §4.4's strategy search, and T-8's §6.4 `unknown`
-values.
+Also open, and not objectives: the runtime's heap-allocated view field (issue
+#7), §4.4's strategy *search*, and T-8's §6.4 `unknown` values.
 
 The soundness gate is unchanged and non-negotiable:
 `strict_mode_has_no_false_positives_on_the_corpus` must stay green. If a new
