@@ -2661,6 +2661,7 @@ fn accepts_positive_examples() {
         "examples/runtime-time.ref",
         "examples/runtime-metacode.ref",
         "examples/metacode-chapter6.ref",
+        "examples/transformer-rename.ref",
         "examples/multiple-entry.ref",
         "examples/quote-escape.ref",
         "examples/shorthand-variables.ref",
@@ -3200,6 +3201,11 @@ fn runs_runtime_conformance_examples() {
             &[] as &[&str],
             "dn a*Vb\nup a*b\nbr (a(b)c)\nca Z\ndf *E\n",
         ),
+        (
+            "examples/transformer-rename.ref",
+            &[] as &[&str],
+            "(Minus*(Minusa))\n",
+        ),
     ] {
         let output = run_file(path, args);
 
@@ -3293,6 +3299,7 @@ fn proves_byte_identical_lowering_across_the_valid_corpus() {
         "examples/runtime-mu.ref",
         "examples/runtime-metacode.ref",
         "examples/metacode-chapter6.ref",
+        "examples/transformer-rename.ref",
         "examples/compiler-refal-subset.ref",
         "examples/compiler-refal-parser-subset.ref",
         "examples/compiler-refal-checker-subset.ref",
@@ -3378,6 +3385,7 @@ fn compares_original_and_lowered_runtime_outputs_across_the_supported_corpus() {
         ("examples/runtime-mu.ref", &[] as &[&str]),
         ("examples/runtime-metacode.ref", &[] as &[&str]),
         ("examples/metacode-chapter6.ref", &[] as &[&str]),
+        ("examples/transformer-rename.ref", &[] as &[&str]),
         (
             "examples/compiler-refal-body-subset.ref",
             &["Echo { ('a') = 'A'; e.Input = e.Input; } Identity { e.Input = e.Input; }"]

@@ -412,9 +412,12 @@ Two guards keep the pass honest, and both are tested:
 
 ### Open
 
-- **T-1** a non-trivial program transformer written in Refal. The compiler
-  slices are a start; a transformer that is not itself a compiler is the
-  remaining case.
+- **T-1** a non-trivial program transformer written in Refal.
+  `examples/transformer-rename.ref` is the first that is not itself a compiler:
+  it consumes a metacoded program, rewrites a symbol at every level of bracket
+  nesting, and lifts the result back out with `Up`. What remains is the
+  differential against a Rust reference over the corpus — the standard the
+  emitter had to meet before T-10 closed.
 - **§4.4 compilation strategy** — perfection by *transformation*. T-6 measures
   perfection and removes what is provably unnecessary; it does not yet achieve
   it where achieving it needs a rewrite (Turchin's own two examples on p. 115 —
@@ -446,7 +449,13 @@ asks for is a transformer that is **not** itself a compiler. T-8 has just remove
 the obstacle that made this awkward: a program is now data in the manual's own
 metacode, so a transformer can consume a metacoded program and emit one.
 
-The natural candidate is a §4.4 strategy written in Refal — constant folding, or
+`examples/transformer-rename.ref` is the first piece: it consumes a metacoded
+program, renames a symbol at every level of bracket nesting, and lifts the result
+back out with `Up` — metacode in, transform, metacode out. It is registered in
+the CLI corpus and its output is asserted. That is a transformer, but not yet a
+*verified* one in the sense this repository uses, which is the differential below.
+
+The natural next step is a §4.4 strategy written in Refal — constant folding, or
 Turchin's own Dijkstra loop-cleansing example (1980 p. 115) — transforming
 metacode in and metacode out:
 
