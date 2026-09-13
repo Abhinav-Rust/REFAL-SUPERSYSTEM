@@ -465,10 +465,51 @@ The pieces are now in place to start:
    generalizer are the Rust behaviour a Refal `driver.ref` would have to
    reproduce, exactly as `compiler.ref` had to reproduce `lower`.
 
-The natural first target is a §4.4 strategy written in Refal — constant folding,
-or Turchin's own Dijkstra loop-cleansing example (1980 p. 115) — because it is
-real transformation of programs rather than symbol renaming, and it is
-differentially checkable against the Rust behaviour it mirrors.
+**First target, specified: the §4.2 seed graph in Refal.**
+
+This is the substrate a driver walks, it is the smallest self-contained piece of
+the transforming half, and its oracle already exists and is corpus-tested. The
+reconnaissance below was done on 2026-09-13 and is the design, not a guess.
+
+*Layering — no duplication.* Add a `Graph` function to `examples/compiler.ref` and
+a `('GRAPH') (e.Source)` arm to its `$ENTRY Go`, exactly parallel to the existing
+`('CHECK') (e.Source)` arm. `compiler.ref` already lexes and parses to the
+normalised AST, so the graph builder reuses `Lex`/`Parse` rather than restating
+them. Drive it from a test with
+`run_file("examples/compiler.ref", &["GRAPH", source])`, the same way the checker
+tests pass `CHECK`.
+
+*Oracle.* `refal graph <file>` over the corpus, byte-identical — the standard
+`proves_byte_identical_lowering_across_the_valid_corpus` already uses. Compare
+both directions on every example the Rust bootstrap can lower.
+
+*Semantics to reproduce exactly* — `build_seed_graph`
+(`crates/refal-core/src/lib.rs:2261`) and `format_seed_graph` (`:4072`):
+
+1. One state per sentence, in program order: functions in order, sentences in
+   order, ids assigned 0,1,2,… `$EXTERN` declarations produce no state.
+2. `first_states[to_ascii_uppercase(function.name)] = the function's first state
+   id`. Later functions with the same name do not overwrite it.
+3. One transition per *call occurrence*, in state order and, within a state, in
+   the order the terms appear: pattern, then each condition's expression and then
+   its pattern, then the result. **No deduplication** — two calls to the same
+   function in one sentence produce two transitions.
+4. A transition is emitted only when the callee's uppercased name is in
+   `first_states`, so calls to builtins produce none. The callee is emitted *as
+   written*, not uppercased.
+5. `entry` is the state of the function named `Go` (case-insensitive), or
+   `entry: <none>`.
+6. Output, in this order: `entry: S{n}\n`, then `S{id} = {name}#{index}\n` per
+   state, then `S{from} -{callee}-> S{to}\n` per transition.
+
+*The AST to walk*, as `compiler.ref` represents it (its own header documents
+this): `(PROG e.Items)`, `(FUN (Ident e.Name) (e.V) e.Sents)`, `(EXT e.Names)`,
+`(SENT (e.Pat) (e.Conds) (e.Res))`, `(COND (e.Expr) (e.CPat))`,
+`(CALL (ID e.Name) e.Args)`, `(BR e.Inner)`, `(ID w)`, `(NUM d)`, `(VAR k i)`,
+`(SYM c)`. **Names are character sequences**, not identifiers: `(Ident 'Go')` is
+`'G' 'o'`. `Upper` uppercases both forms (probed), which is what step 2 needs.
+
+After the graph, the driver itself: walking that graph is `driver.ref`.
 
 Also open, and not objectives: the runtime's heap-allocated view field (issue
 #7), §4.4's strategy *search*, and T-8's §6.4 `unknown` values.
