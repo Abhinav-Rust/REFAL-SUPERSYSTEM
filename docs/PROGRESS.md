@@ -509,6 +509,39 @@ this): `(PROG e.Items)`, `(FUN (Ident e.Name) (e.V) e.Sents)`, `(EXT e.Names)`,
 `(SYM c)`. **Names are character sequences**, not identifiers: `(Ident 'Go')` is
 `'G' 'o'`. `Upper` uppercases both forms (probed), which is what step 2 needs.
 
+*Traps that cost a full session, so the next one does not pay again.* Each failed
+silently or misleadingly:
+
+- **`e.X e.Rest` where one term was meant.** Two adjacent expression variables
+  split *shortest-first*, so `e.X` binds empty and the recursion never consumes
+  its argument — an infinite loop that looks like a hang. Use `t.` (or `s.`) for
+  "exactly one term". This is the biggest trap in this codebase, and it was
+  written in five places at once.
+- **`(() e.Rest)` matches a bracket *containing* an empty bracket**, not an empty
+  bracket. An exhausted list needs a bare `()` pattern.
+- **`'NONE'` is a four-character string**, not one symbol, so a bracket sentinel
+  binds four terms and matches nothing. Distinguish cases by *shape* — an empty
+  bracket versus a bracketed id — not by a sentinel symbol.
+- **A failure inside a `Go` mode sentence falls through to the next sentence**, so
+  a graph bug silently becomes the *compile* path and the parser spins on garbage
+  instead of reporting. Add a duplicate mode sentence that prints a failure
+  marker, or the bug presents as a hang.
+- **Miscounted call nesting** is reported as `parse error at <the block's closing
+  brace>: expected term, found RParen` — the position points at the `}`, not at
+  the mistake.
+- **`Upper` preserves shape**: character sequence in, character sequence out;
+  identifier in, identifier out. Stored names are character sequences
+  (`TakeWord` accumulates `s.C`), so an uppercased key is a character sequence.
+
+*Left unresolved, and where to resume.* The seed graph and the reachability pass
+were both written. State lines and the `entry:` line rendered correctly, and a
+four-example spot check passed *before* cleaning was added. After cleaning, the
+entry lookup `FirstOr` matches a **literal** firsts value but not the value
+`Rebuild`/`FirstsOf` produces, and the cause was not found. `FirstOr` itself is
+proven correct by the literal case, so the next session should print the cleaned
+firsts with an unambiguous delimiter and compare it term by term against
+`(('G' 'O') 0)`.
+
 After the graph, the driver itself: walking that graph is `driver.ref`.
 
 Also open, and not objectives: the runtime's heap-allocated view field (issue
