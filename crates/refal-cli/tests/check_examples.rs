@@ -1965,6 +1965,200 @@ fn strict_mode_fails_on_statically_proven_defects() {
 }
 
 #[test]
+fn accepts_realfun_and_the_macrodigit_operand_convention() {
+    // `Realfun` is a runtime extern (§C.2), so `check` has to know it in both
+    // modes; before this test the name was rejected as unresolved.
+    let source = "$EXTERN Realfun, Prout;\n$ENTRY Go {\n  = <Prout <Realfun ('log') 2.0>>;\n}\n";
+    let path = scratch_source("refal-realfun-check", source);
+    for extra in [&[] as &[&str], &["--strict"]] {
+        let output = check_path(&path.to_string_lossy(), extra);
+        assert!(
+            output.status.success(),
+            "`check {extra:?}` rejected a legal Realfun call:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let _ = fs::remove_file(&path);
+
+    // §C.2's operand convention: with the round brackets omitted, one
+    // macrodigit is taken from the front of the argument and the rest forms the
+    // second operand, so `<Add 1 2 3>` is the call `1 + (2 3)` and always
+    // succeeds. The builtin-domain lint must not report a defect it cannot
+    // prove -- under `--strict` that would fail the build of a legal program.
+    let source = "$EXTERN Add, Prout;\n$ENTRY Go {\n  = <Prout <Add 1 2 3>>;\n}\n";
+    let path = scratch_source("refal-macrodigit-lint", source);
+    let strict = check_path(&path.to_string_lossy(), &["--strict"]);
+    assert!(
+        strict.status.success(),
+        "`<Add 1 2 3>` is the legal call `1 + (2 3)`:\n{}",
+        String::from_utf8_lossy(&strict.stderr)
+    );
+    let _ = fs::remove_file(&path);
+
+    // A missing second operand is still a proven defect.
+    let source = "$EXTERN Add;\n$ENTRY Go {\n  = <Add 1>;\n}\n";
+    let path = scratch_source("refal-macrodigit-lint", source);
+    let strict = check_path(&path.to_string_lossy(), &["--strict"]);
+    assert!(!strict.status.success(), "`<Add 1>` has no second operand");
+    let reported = String::from_utf8_lossy(&strict.stderr);
+    assert!(
+        reported.contains("two integer numbers"),
+        "unexpected diagnostic: {reported}"
+    );
+    let _ = fs::remove_file(&path);
+}
+
+#[test]
+fn runs_realfun_macrodigit_arithmetic_and_dgall_order_end_to_end() {
+    // The hand-written acceptance program for the three gaps of issue #7:
+    // `Realfun` (§C.2's C-library call), integer arithmetic as base-2^32
+    // macrodigit sequences (§C.2) and `<Dgall>`'s newest-first order (§C.3).
+    // `Terms` prints one `|` after each term, so a multi-macrodigit integer is
+    // printed as terms rather than as a decimal number.
+    let source = "\
+$EXTERN Add, Sub, Divmod, Br, Dgall, Realfun, Prout;\n\
+\n\
+$ENTRY Go {\n\
+  = <Prout <Terms <Add (4294967295 4294967295) 1>>>\n\
+    <Prout <Terms <Sub 2 7>>>\n\
+    <Prout <Terms <Divmod <Sub 2 7> 2>>>\n\
+    <Prout <Realfun ('sqrt') 9.0>>\n\
+    <Prout <Realfun ('pow') 2.0 10.0>>\n\
+    <Br Old '=' 'first'> <Br New '=' 'second'>\n\
+    <Prout <Terms <Dgall>>>;\n\
+}\n\
+\n\
+Terms {\n\
+  = ;\n\
+  t.T e.Rest = t.T '|' <Terms e.Rest>;\n\
+}\n";
+    let path = scratch_source("refal-realfun-run", source);
+    let output = Command::new(refal_bin())
+        .args(["run", &path.to_string_lossy()])
+        .output()
+        .expect("run refal binary");
+    let _ = fs::remove_file(&path);
+
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    // (2^64 - 1) + 1 = 2^64 = 1 * 2^64 + 0 * 2^32 + 0, three macrodigits;
+    // 2 - 7 is the standard form `-` `5`; Divmod gives (-2) -1 with the
+    // remainder taking the sign of e.N1; sqrt 9.0 and pow 2 10 are exact; and
+    // Dgall lists the newest burial first.
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "1|0|0|\n-|5|\n(-2)|-|1|\n3.0\n1024.0\n(New=second)|(Old=first)|\n"
+    );
+}
+
+#[test]
+fn runs_real_number_arithmetic_end_to_end() {
+    // §C.2 with real operands: "Real numbers (of arbitrary sign) are
+    // represented as single symbols", so a real needs no round brackets, and
+    // "if both arguments of an arithmetic function are integers, the result is
+    // also an integer; otherwise it is a real number." `Terms` prints one `|`
+    // after each term, which is the only unambiguous way to read a
+    // multi-macrodigit integer back from `Prout`.
+    let source = "\
+$EXTERN Add, Sub, Mul, Div, Divmod, Compare, Realfun, Prout;\n\
+\n\
+$ENTRY Go {\n\
+  = <Prout <Add 1.5 2>>\n\
+    <Prout <Sub 5 1.25>>\n\
+    <Prout <Mul 2.5 4>>\n\
+    <Prout <Div 7.0 2.0>>\n\
+    <Prout <Div 7 2.0>>\n\
+    <Prout <Div 7 2>>\n\
+    <Prout <Compare 1.5 2.5>>\n\
+    <Prout <Compare 2.5 1.5>>\n\
+    <Prout <Compare 2.0 2>>\n\
+    <Prout <Add <Realfun ('log') 1.0> 1.0>>\n\
+    <Prout <Realfun ('sqrt') <Add 3.0 1.0>>>\n\
+    <Prout <Terms <Add (4294967295 4294967295) 1>>>\n\
+    <Prout <Terms <Mul 4294967295 4294967295>>>\n\
+    <Prout <Terms <Divmod <Sub 2 7> 2>>>;\n\
+}\n\
+\n\
+Terms {\n\
+  = ;\n\
+  t.T e.Rest = t.T '|' <Terms e.Rest>;\n\
+}\n";
+    let path = scratch_source("refal-real-arithmetic", source);
+    let output = Command::new(refal_bin())
+        .args(["run", &path.to_string_lossy()])
+        .output()
+        .expect("run refal binary");
+    let _ = fs::remove_file(&path);
+
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    // A real result is a real however whole it looks (`10.0`, not `10`), two
+    // integers keep the integer result (`7 / 2` is 3) and the §C.2 standard form
+    // for a value needing more than one macrodigit (`1|0|0|` is 2^64, not the
+    // decimal 18446744073709551616 that the lexer would refuse to read back).
+    // `Realfun` composes with arithmetic in both directions, and the integer
+    // quotient of a negative dividend keeps its macrodigit form.
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "3.5\n3.75\n10.0\n3.5\n3.5\n3\n-\n+\n0\n1.0\n2.0\n1|0|0|\n4294967294|1|\n(-2)|-|1|\n"
+    );
+}
+
+#[test]
+fn real_arithmetic_errors_are_named_and_never_silent() {
+    // §C.2: "division by zero is an error in this and the two other division
+    // functions" -- with a real divisor as with an integer one -- and `Divmod`
+    // and `Mod` are "intended for integer arguments", so a real operand there is
+    // an argument error naming the builtin rather than a silent truncation. No
+    // case may exit successfully with a NaN, an infinity, or a wrong answer.
+    let cases = [
+        (
+            "$EXTERN Div;\n$ENTRY Go {\n  = <Div 7.0 0.0>;\n}\n",
+            "built-in `Div`: division by zero",
+        ),
+        (
+            "$EXTERN Div;\n$ENTRY Go {\n  = <Div 7 0.0>;\n}\n",
+            "built-in `Div`: division by zero",
+        ),
+        (
+            "$EXTERN Divmod;\n$ENTRY Go {\n  = <Divmod 1.5 2>;\n}\n",
+            "built-in `Divmod`: expected the first operand as an integer, but `1.5` is a real \
+             number",
+        ),
+        (
+            "$EXTERN Mod;\n$ENTRY Go {\n  = <Mod 4 2.0>;\n}\n",
+            "built-in `Mod`: expected the second operand as an integer, but `2.0` is a real \
+             number",
+        ),
+        (
+            "$EXTERN Mul;\n$ENTRY Go {\n  = <Mul 1.0E308 1.0E308>;\n}\n",
+            "built-in `Mul`: the result is not a finite real number",
+        ),
+    ];
+    for (source, expected) in cases {
+        let path = scratch_source("refal-real-error", source);
+        let output = Command::new(refal_bin())
+            .args(["run", &path.to_string_lossy()])
+            .output()
+            .expect("run refal binary");
+        let _ = fs::remove_file(&path);
+
+        assert!(!output.status.success(), "this program ran: {source:?}");
+        let reported = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            reported.contains(expected),
+            "reported {reported:?}, which does not mention {expected:?}"
+        );
+    }
+}
+
+#[test]
 fn classic_mode_reports_lints_without_failing_the_build() {
     // A lint that is not reported is a lint nobody will act on, so classic mode
     // still prints it -- it just does not refuse to run the program.

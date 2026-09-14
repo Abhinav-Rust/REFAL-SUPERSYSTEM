@@ -35,9 +35,9 @@ objective to a gate. Not another Refal implementation.
 | | |
 |---|---|
 | Honest completion | **~60%** (product completeness — one method, see below) |
-| Tests | 281 passing, 0 clippy, fmt clean |
-| Last commit | `8cf8a37` then this commit |
-| Working tree | clean |
+| Tests | 303 passing, 0 clippy, fmt clean |
+| Last commit | `d93d753` |
+| Working tree | modified: the §C.2 real-number arithmetic, its tests, and these notes are uncommitted |
 
 ### Workstream credit
 
@@ -437,7 +437,8 @@ Two guards keep the pass honest, and both are tested:
   optimisation, not a gap.
 - **T-8** metacodes (Ch. 1.3) — closed for ground expressions; see the section
   above. The §6.4 `unknown` values remain open and are recorded there.
-- Heap-allocated single view field (issue #7); `driver.ref`.
+- Heap-allocated single view field — the work list copies term slices, so the
+  term sequence is not yet Turchin's one flat view field; `driver.ref`.
 
 ---
 
@@ -544,8 +545,9 @@ firsts with an unambiguous delimiter and compare it term by term against
 
 After the graph, the driver itself: walking that graph is `driver.ref`.
 
-Also open, and not objectives: the runtime's heap-allocated view field (issue
-#7), §4.4's strategy *search*, and T-8's §6.4 `unknown` values.
+Also open, and not objectives: the runtime's heap-allocated view field (the work
+list copies term slices rather than rewriting one flat view), §4.4's strategy
+*search*, and T-8's §6.4 `unknown` values.
 
 The soundness gate is unchanged and non-negotiable:
 `strict_mode_has_no_false_positives_on_the_corpus` must stay green. If a new

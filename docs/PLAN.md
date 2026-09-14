@@ -109,8 +109,8 @@ pass before the next begins.
 ### Phase 0 — Truth and foundations · effort S · IN PROGRESS
 
 - [x] Conformance defects #6, #8, #9, #10, #11, #12 fixed (`641ffc0`); tests 83 -> 102
-- [ ] #13 Refal-5 blocks — deferred into Phase 1, it touches every crate
-- [ ] #7 builtin library — Phase 1
+- [x] #13 Refal-5 blocks — implemented in Phase 1, in every crate it touches: blocks parse, check, evaluate and round-trip through `lower` in both positions
+- [x] #7 builtin library — implemented in Phase 1 (issue #7 tracks the builtin library, not the heap-allocated view field, which stays open)
 - [x] Nineteen Turchin primary sources indexed with a verifying fetch script (`6a2ae3a`)
 - [x] README rewritten to carry the vision and the honest status
 - [ ] `TURCHIN-ARCHITECTURE.md`
@@ -143,15 +143,16 @@ Turchin Ch. 1–2. Replaces `refal-runtime`.
   `e.`) before open splits; generate candidates lazily. Removes the measured blowup
   (5 open `e`-vars over 60 symbols currently takes 9 s).
 - **1c** Macrodigit model corrected to §1.2.2: bounded at 2³²−1, big numbers as *sequences*.
-  Must land before arithmetic.
+  Must land before arithmetic. **Landed:** integer arithmetic computes on base-2³² macrodigit
+  sequences and returns the reference's standard form (§C.2), so `<Add 4294967295 1>` is `1 0`.
 - **1d** Builtin library, in dependency order:
   1. **File I/O** — `Card`, `Open`, `Get`, `Put`, `Putout`. *Without these a Refal compiler cannot
      read a source file.* Hard gate on Phase 4.
-  2. **Arithmetic** — `Add`, `Sub`, `Mul`, `Div`, `Divmod`, `Mod`, `Compare`, `Trunc`, and `Real`
-     are implemented.
+  2. **Arithmetic** — `Add`, `Sub`, `Mul`, `Div`, `Divmod`, `Mod`, `Compare`, `Trunc`, `Real`, and
+     `Realfun` are implemented.
   3. **Buried data** — `Br`, `Dg`, `Cp`, `Rp`, `Dgall` are implemented with evaluator-owned stack state.
   4. `Lenw`, `First`, `Last`, `Upper`, `Lower`, `Arg`, and `Step` are implemented; `Mu` and `Time` have tested bootstrap-runtime support, and `Up`/`Dn` implement the official Chapter 6 metacode table for ground expressions, exercised end to end by `examples/metacode-chapter6.ref`. §6.4's `unknown` values for metacoding non-ground expressions remain open.
-- **1e** Refal-5 blocks (`, arg : { block }`) end-to-end — issue #13.
+- **1e** Refal-5 blocks (`, arg : { block }`) end-to-end — issue #13. **Done:** blocks parse, check, evaluate and round-trip through `lower` in both positions, so the phase item is closed and the issue with it.
 
 **Gate:** tokenise a 50 KB source file in Refal, on this machine, in reasonable time and memory.
 Recursion depth bounded only by RAM. Full conformance corpus green.
@@ -294,7 +295,7 @@ same table.
 |---|---:|---:|---|
 | Bootstrap frontend | 8.5% | 7.0 | Documented Classic scope with 24 traced negative fixture classes; no clause-by-clause conformance corpus, so *handles the corpus* is not yet *handles Classic Refal-5* |
 | Bootstrap semantics | 6.0% | 4.5 | Every rule of its milestone gate; exhaustiveness lives in Tier 1 rather than here |
-| Refal machine | 19.5% | 12.5 | No fixed depth cap, projecting matcher (§2.2), broad covered builtin suite. **Heap-allocated view field (issue #7) missing** — the difference between a Refal machine and a work-list interpreter over host recursion — and block sentences carrying conditions still take the recursive path |
+| Refal machine | 19.5% | 12.5 | No fixed depth cap, projecting matcher (§2.2), broad covered builtin suite. **The heap-allocated view field is missing** — the work list copies term slices, which is the difference between a Refal machine and a work-list interpreter over host recursion — and block sentences carrying conditions still take the recursive path |
 | Graph of states / Refal emission | 8.5% | 5.0 | **T-4, T-5, T-6, T-9** all closed and gated. What the product lacks is the consequence: it normalises rather than compiling pattern matching, and residualization is bounded rather than whole-program for general programs |
 | Static verification | 15.0% | 12.5 | Tier 1 complete for its published guarantee: dead sentences, recognition impossible, builtin domain errors, function formats (§2.3), `-W`/`-D`/`-A`, and a shape lattice that separates literal kinds and describes a bracket's contents recursively. The deduction is that the guarantee is deliberately narrow |
 | Compiler in Refal | 25.5% | 12.0 | A real lexer, parser, checker and emitter over the full Classic grammar, byte-identical to Rust `lower` on every lowerable example. The *transforming* half — driving, cleaning, generalisation — is in Rust and not wired into `compiler.ref`; `driver.ref` not written. **Half a compiler, and the largest single deduction** |

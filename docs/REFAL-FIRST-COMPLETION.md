@@ -62,7 +62,8 @@ It went *down* from an earlier 38%, deliberately, for two reasons:
 - The earlier figure gave full credit to the Classic frontend and to semantic checking.
   An audit against the normative reference on 2026-08-05 found eight conformance defects,
   including one that silently corrupted character strings and two that rejected legal
-  programs. Six are fixed in `641ffc0`; two remain open (#7, #13).
+  programs. Six are fixed in `641ffc0`; the last two — the builtin library (#7) and
+  blocks (#13) — closed in Phase 1, so no conformance defect from that audit is open.
 - The completion target now includes the two verification tiers described in `PLAN.md`,
   so the denominator grew.
 

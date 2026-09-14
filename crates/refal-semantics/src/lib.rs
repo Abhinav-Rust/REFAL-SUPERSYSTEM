@@ -16,8 +16,8 @@ use refal_ast::{
 const SUPPORTED_RUNTIME_EXTERNS: &[&str] = &[
     "ADD", "ARG", "BR", "CARD", "CHR", "COMPARE", "CP", "DG", "DGALL", "DIV", "DIVMOD", "EXPLODE",
     "FIRST", "GET", "IMPLODE", "LAST", "LENW", "LOWER", "MOD", "MUL", "NUMB", "OPEN", "ORD",
-    "PRINT", "PROUT", "PUT", "PUTOUT", "REAL", "RP", "STEP", "SUB", "SYMB", "TIME", "TRUNC",
-    "TYPE", "UP", "MU", "DN", "UPPER",
+    "PRINT", "PROUT", "PUT", "PUTOUT", "REAL", "REALFUN", "RP", "STEP", "SUB", "SYMB", "TIME",
+    "TRUNC", "TYPE", "UP", "MU", "DN", "UPPER",
 ];
 
 /// How a diagnostic is treated.

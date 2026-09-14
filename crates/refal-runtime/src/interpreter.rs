@@ -854,21 +854,31 @@ impl<'a> Evaluator<'a> {
             "NUMB" => Some(numb(args)),
             "SYMB" => Some(symb(args)),
             "TYPE" => Some(Ok(type_of(args))),
-            "ADD" => Some(arithmetic_binary("Add", args, |left, right| {
-                left.checked_add(right)
-            })),
-            "SUB" => Some(arithmetic_binary("Sub", args, |left, right| {
-                left.checked_sub(right)
-            })),
-            "MUL" => Some(arithmetic_binary("Mul", args, |left, right| {
-                left.checked_mul(right)
-            })),
+            "ADD" => Some(arithmetic_binary(
+                "Add",
+                args,
+                Integer::plus,
+                |left, right| left + right,
+            )),
+            "SUB" => Some(arithmetic_binary(
+                "Sub",
+                args,
+                Integer::minus,
+                |left, right| left - right,
+            )),
+            "MUL" => Some(arithmetic_binary(
+                "Mul",
+                args,
+                Integer::times,
+                |left, right| left * right,
+            )),
             "DIV" => Some(divide(args, false)),
             "DIVMOD" => Some(divide(args, true)),
             "MOD" => Some(modulo(args)),
             "COMPARE" => Some(compare_numbers(args)),
             "TRUNC" => Some(trunc(args)),
             "REAL" => Some(real(args)),
+            "REALFUN" => Some(realfun(args)),
             "FIRST" => Some(split_first(args)),
             "LAST" => Some(split_last(args)),
             "LENW" => Some(length_with_expression(args)),
@@ -921,7 +931,11 @@ impl<'a> Evaluator<'a> {
     fn dgall(&self) -> Result<Vec<Value>, EvalError> {
         let stack = self.stack.replace(Vec::new());
         let mut result = Vec::new();
-        for (name, value) in stack {
+        // §C.3: the stack is a string of `(e.Name '=' e.Value)` terms and
+        // "every time `Br` is called, such a term is added to the LEFT part",
+        // so `<Dgall>` returns the newest term first and the oldest last. The
+        // internal vector stores burial order, hence the reversal.
+        for (name, value) in stack.into_iter().rev() {
             result.push(Value::Bracket({
                 let mut entry = name;
                 entry.push(Value::Char('='));
@@ -1633,50 +1647,534 @@ fn normalize_macrodigit(digits: &str) -> String {
     }
 }
 
-fn arithmetic_binary(
-    name: &str,
-    args: &[Value],
-    operation: impl FnOnce(i128, i128) -> Option<i128>,
-) -> Result<Vec<Value>, EvalError> {
-    let (left, right) = integer_pair(name, args)?;
-    let result = operation(left, right).ok_or_else(|| {
-        invalid_builtin_arguments(name, "integer result exceeds the bootstrap numeric range")
-    })?;
-    Ok(vec![Value::Number(format_integer(result))])
+// --- Integer arithmetic on macrodigit sequences (reference §C.2) ------------
+//
+// §C.2: "Integers are represented as sequences of macrodigits using base
+// 2^32. A '-' symbol is placed before negative integers. Positive numbers may
+// be preceded by a '+' sign. Arithmetic functions return integers in standard
+// form: '-' and a sequence of macrodigits for a negative number; no '+' sign
+// for 0 or for a positive number."
+//
+// So an integer is not a decimal string but a run of symbol values, each a
+// macrodigit below 2^32, most significant first, with at most one sign symbol
+// in front. Doing the arithmetic in that representation is what keeps the
+// runtime in agreement with a reference implementation: every result is a
+// legal macrodigit sequence, which is exactly what an input to the next call
+// may be, so `<Mul 4294967295 4294967295>` yields the two macrodigits
+// `4294967294 1` rather than a decimal number the compiler's lexer would
+// reject (B.1.2.2 bounds a literal macrodigit at 2^32 - 1).
+
+/// The greatest macrodigit, `2^32 - 1` (reference B.1.2.2).
+const MAX_MACRODIGIT: u32 = u32::MAX;
+/// The number of bits one macrodigit carries; the base of the representation
+/// (§C.2).
+const MACRODIGIT_BASE: u64 = MAX_MACRODIGIT as u64 + 1;
+
+/// An integer in the reference's representation (§C.2): a sign and a magnitude
+/// that is a sequence of macrodigits in base 2^32, most significant first.
+/// Zero has an empty magnitude and is never negative, so the standard form
+/// (§C.2) has exactly one spelling per value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Integer {
+    negative: bool,
+    digits: Vec<u32>,
 }
 
-fn divide(args: &[Value], return_remainder: bool) -> Result<Vec<Value>, EvalError> {
-    let (left, right) = integer_pair(if return_remainder { "Divmod" } else { "Div" }, args)?;
-    if right == 0 {
+impl Integer {
+    /// Builds an integer from a magnitude that may carry leading zero
+    /// macrodigits, the way a source expression may (`0 7` is the reference's
+    /// integer 7).
+    fn from_magnitude(digits: Vec<u32>, negative: bool) -> Self {
+        let mut digits = digits;
+        let leading_zeros = digits.iter().take_while(|digit| **digit == 0).count();
+        digits.drain(..leading_zeros);
+        Self {
+            negative: negative && !digits.is_empty(),
+            digits,
+        }
+    }
+
+    fn is_zero(&self) -> bool {
+        self.digits.is_empty()
+    }
+
+    /// The sum (§C.2 `Add`, or `+`).
+    fn plus(&self, other: &Self) -> Self {
+        if self.negative == other.negative {
+            return Self::from_magnitude(add_magnitude(&self.digits, &other.digits), self.negative);
+        }
+        match compare_magnitude(&self.digits, &other.digits) {
+            std::cmp::Ordering::Equal => Self::from_magnitude(Vec::new(), false),
+            std::cmp::Ordering::Greater => {
+                Self::from_magnitude(sub_magnitude(&self.digits, &other.digits), self.negative)
+            }
+            std::cmp::Ordering::Less => {
+                Self::from_magnitude(sub_magnitude(&other.digits, &self.digits), other.negative)
+            }
+        }
+    }
+
+    /// The difference `self - other` (§C.2 `Sub`, or `-`).
+    fn minus(&self, other: &Self) -> Self {
+        self.plus(&Self::from_magnitude(other.digits.clone(), !other.negative))
+    }
+
+    /// The product (§C.2 `Mul`, or `*`).
+    fn times(&self, other: &Self) -> Self {
+        Self::from_magnitude(
+            mul_magnitude(&self.digits, &other.digits),
+            self.negative != other.negative,
+        )
+    }
+
+    /// The quotient and remainder of dividing by `other`, or `None` when
+    /// `other` is zero -- an error in all three division functions (§C.2).
+    /// Division truncates toward zero, so the quotient is negative exactly
+    /// when the signs differ and the remainder keeps the sign of the dividend:
+    /// "the remainder is given the sign of e.N1" (§C.2 `Divmod`).
+    fn divmod(&self, other: &Self) -> Option<(Self, Self)> {
+        if other.is_zero() {
+            return None;
+        }
+        let (quotient, remainder) = divmod_magnitude(&self.digits, &other.digits);
+        Some((
+            Self::from_magnitude(quotient, self.negative != other.negative),
+            Self::from_magnitude(remainder, self.negative),
+        ))
+    }
+
+    fn compare(&self, other: &Self) -> std::cmp::Ordering {
+        match (self.negative, other.negative) {
+            (false, true) => std::cmp::Ordering::Greater,
+            (true, false) => std::cmp::Ordering::Less,
+            (false, false) => compare_magnitude(&self.digits, &other.digits),
+            (true, true) => compare_magnitude(&other.digits, &self.digits),
+        }
+    }
+
+    /// The value as a real number, for `Real` and for a `Realfun` argument.
+    /// `None` when the magnitude exceeds what a real number can hold: §C.2
+    /// gives a real number a single symbol and one 32-bit word, so an integer
+    /// that would overflow to infinity has no real counterpart to return.
+    fn to_real(&self) -> Option<f64> {
+        let mut value = 0.0f64;
+        for digit in &self.digits {
+            value = value * MACRODIGIT_BASE as f64 + f64::from(*digit);
+        }
+        if self.negative {
+            value = -value;
+        }
+        value.is_finite().then_some(value)
+    }
+
+    /// The reference's standard result form (§C.2): a `-` symbol and the
+    /// macrodigits for a negative number, the bare macrodigits for zero or a
+    /// positive one, most significant first.
+    fn terms(&self) -> Vec<Value> {
+        let mut terms = Vec::with_capacity(self.digits.len() + 1);
+        if self.negative {
+            terms.push(Value::Char('-'));
+        }
+        if self.digits.is_empty() {
+            terms.push(Value::Number("0".to_string()));
+        } else {
+            terms.extend(
+                self.digits
+                    .iter()
+                    .map(|digit| Value::Number(digit.to_string())),
+            );
+        }
+        terms
+    }
+}
+
+/// Strips leading zero macrodigits, so that equal magnitudes are equal
+/// sequences.
+fn normalize_magnitude(digits: &mut Vec<u32>) {
+    let leading_zeros = digits.iter().take_while(|digit| **digit == 0).count();
+    digits.drain(..leading_zeros);
+}
+
+fn compare_magnitude(left: &[u32], right: &[u32]) -> std::cmp::Ordering {
+    match left.len().cmp(&right.len()) {
+        std::cmp::Ordering::Equal => left.cmp(right),
+        other => other,
+    }
+}
+
+/// The macrodigit of `magnitude` at `index` counted from the least
+/// significant end, or zero past the most significant one.
+fn magnitude_digit(magnitude: &[u32], index: usize) -> u64 {
+    magnitude
+        .len()
+        .checked_sub(index + 1)
+        .map_or(0, |position| u64::from(magnitude[position]))
+}
+
+fn add_magnitude(left: &[u32], right: &[u32]) -> Vec<u32> {
+    let mut result = Vec::with_capacity(left.len().max(right.len()) + 1);
+    let mut carry = 0u64;
+    for index in 0..left.len().max(right.len()) {
+        let sum = magnitude_digit(left, index) + magnitude_digit(right, index) + carry;
+        result.push((sum % MACRODIGIT_BASE) as u32);
+        carry = sum / MACRODIGIT_BASE;
+    }
+    if carry > 0 {
+        result.push(carry as u32);
+    }
+    result.reverse();
+    result
+}
+
+/// `left - right` for magnitudes with `left >= right`.
+fn sub_magnitude(left: &[u32], right: &[u32]) -> Vec<u32> {
+    debug_assert!(compare_magnitude(left, right) != std::cmp::Ordering::Less);
+    let mut result = Vec::with_capacity(left.len());
+    let mut borrow = 0u64;
+    for index in 0..left.len() {
+        let difference =
+            magnitude_digit(left, index) + MACRODIGIT_BASE - magnitude_digit(right, index) - borrow;
+        result.push((difference % MACRODIGIT_BASE) as u32);
+        borrow = u64::from(difference < MACRODIGIT_BASE);
+    }
+    result.reverse();
+    normalize_magnitude(&mut result);
+    result
+}
+
+/// The schoolbook product of two magnitudes.
+fn mul_magnitude(left: &[u32], right: &[u32]) -> Vec<u32> {
+    if left.is_empty() || right.is_empty() {
+        return Vec::new();
+    }
+    let mut result = vec![0u32; left.len() + right.len()];
+    for (offset, left_digit) in left.iter().rev().enumerate() {
+        let mut carry = 0u64;
+        for (position, right_digit) in right.iter().rev().enumerate() {
+            let index = result.len() - 1 - offset - position;
+            let product =
+                u64::from(*left_digit) * u64::from(*right_digit) + u64::from(result[index]) + carry;
+            result[index] = (product % MACRODIGIT_BASE) as u32;
+            carry = product / MACRODIGIT_BASE;
+        }
+        let index = result.len() - 1 - offset - right.len();
+        let sum = u64::from(result[index]) + carry;
+        result[index] = (sum % MACRODIGIT_BASE) as u32;
+    }
+    normalize_magnitude(&mut result);
+    result
+}
+
+/// The schoolbook quotient and remainder of two magnitudes: one macrodigit of
+/// the quotient per macrodigit of the dividend, each found by binary search
+/// because a trial digit may overshoot by at most one.
+fn divmod_magnitude(dividend: &[u32], divisor: &[u32]) -> (Vec<u32>, Vec<u32>) {
+    debug_assert!(
+        !divisor.is_empty(),
+        "the divisor must be a non-zero magnitude"
+    );
+    if compare_magnitude(dividend, divisor) == std::cmp::Ordering::Less {
+        return (Vec::new(), dividend.to_vec());
+    }
+    let mut quotient = vec![0u32; dividend.len()];
+    let mut remainder: Vec<u32> = Vec::new();
+    for (position, digit) in dividend.iter().enumerate() {
+        // Bring the next macrodigit down: remainder = remainder * 2^32 + digit.
+        remainder.push(*digit);
+        normalize_magnitude(&mut remainder);
+        let quotient_digit = if compare_magnitude(&remainder, divisor) == std::cmp::Ordering::Less {
+            0
+        } else {
+            // The largest digit whose product with the divisor still fits the
+            // remainder. It exists because the remainder stays below
+            // divisor * 2^32.
+            let (mut low, mut high) = (1u32, u32::MAX);
+            while low < high {
+                let middle = low + (high - low).div_ceil(2);
+                if compare_magnitude(&mul_magnitude(divisor, &[middle]), &remainder)
+                    == std::cmp::Ordering::Greater
+                {
+                    high = middle - 1;
+                } else {
+                    low = middle;
+                }
+            }
+            low
+        };
+        if quotient_digit > 0 {
+            remainder = sub_magnitude(&remainder, &mul_magnitude(divisor, &[quotient_digit]));
+        }
+        quotient[position] = quotient_digit;
+    }
+    normalize_magnitude(&mut quotient);
+    normalize_magnitude(&mut remainder);
+    (quotient, remainder)
+}
+
+/// One macrodigit (reference B.1.2.2): a decimal digit string whose value is
+/// at most `2^32 - 1`.
+fn parse_macrodigit(text: &str) -> Option<u32> {
+    if text.is_empty() || !text.chars().all(|ch| ch.is_ascii_digit()) {
+        return None;
+    }
+    let value = text.parse::<u64>().ok()?;
+    (value <= MAX_MACRODIGIT as u64).then_some(value as u32)
+}
+
+/// Splits a binary arithmetic call's arguments into its two operands (§C.2):
+/// "The basic format of a binary arithmetic operation is `<ar-function
+/// (e.N1) e.N2>` -- however the round brackets may be omitted. ... When the
+/// first argument is an integer, by default one macrodigit (possibly with a
+/// preceding sign) is taken from it, while the remainder goes into the second
+/// argument."
+fn split_arithmetic_operands(args: &[Value]) -> (&[Value], &[Value]) {
+    if let Some(Value::Bracket(inner)) = args.first() {
+        return (inner, &args[1..]);
+    }
+    let head = usize::from(matches!(args.first(), Some(Value::Char('-' | '+')))) + 1;
+    let split = head.min(args.len());
+    (&args[..split], &args[split..])
+}
+
+/// Reads one integer operand: an optional sign symbol followed by one or more
+/// macrodigit symbols, most significant first (§C.2).
+///
+/// Every builtin that reads an operand this way takes integers only: §C.2 gives
+/// `<Trunc e.N>` and `<Real e.N>` "where e.N is an integer", and says of
+/// `Divmod` and `Mod` that each "is intended for integer arguments". A real
+/// number is one symbol, so a real where an integer belongs is reported as that
+/// rather than as a malformed macrodigit sequence.
+fn integer_operand(name: &str, position: &str, terms: &[Value]) -> Result<Integer, EvalError> {
+    if let [Value::Number(text)] = terms
+        && is_real_number(text)
+    {
         return Err(invalid_builtin_arguments(
-            if return_remainder { "Divmod" } else { "Div" },
-            "division by zero",
+            name,
+            &format!(
+                "expected {position} as an integer, but `{text}` is a real number; §C.2 gives \
+                 `{name}` integer arguments only"
+            ),
         ));
     }
 
-    let quotient = left / right;
-    let remainder = left % right;
+    let error = |detail: &str| {
+        invalid_builtin_arguments(
+            name,
+            &format!(
+                "expected {position} as an integer (§C.2: an optional `-` sign followed by \
+                 macrodigits -- decimal integers in 0..=4294967295, most significant first): \
+                 {detail}"
+            ),
+        )
+    };
+    let (negative, digits) = match terms.first() {
+        Some(Value::Char('+')) => (false, &terms[1..]),
+        Some(Value::Char('-')) => (true, &terms[1..]),
+        _ => (false, terms),
+    };
+    if digits.is_empty() {
+        return Err(error("no macrodigit was given"));
+    }
+    let mut magnitude = Vec::with_capacity(digits.len());
+    for term in digits {
+        let Value::Number(text) = term else {
+            return Err(error("every term of an integer must be a macrodigit"));
+        };
+        let Some(digit) = parse_macrodigit(text) else {
+            return Err(error("a macrodigit is a decimal integer in 0..=4294967295"));
+        };
+        magnitude.push(digit);
+    }
+    Ok(Integer::from_magnitude(magnitude, negative))
+}
+
+/// One operand of an arithmetic function (§C.2): an integer in the reference's
+/// macrodigit representation, or a real number.
+#[derive(Debug, Clone, PartialEq)]
+enum Operand {
+    Integer(Integer),
+    Real(f64),
+}
+
+/// Reads one operand of `Add`, `Sub`, `Mul`, `Div` and `Compare` (§C.2), each of
+/// which takes an integer or a real in either position.
+///
+/// §C.2: "Real numbers (of arbitrary sign) are represented as single symbols
+/// and occupy a 32-bit word", and the round brackets around the first operand
+/// may be omitted because "every such number is represented by exactly one
+/// symbol" -- so a real operand is exactly one number symbol, and one that the
+/// runtime already recognises as a real (the predicate `Type` uses to return
+/// `'R'`, and the syntax `Real` emits). Anything else is read as an integer,
+/// which keeps the reference's operand convention intact: `<Add 1.5 2 3>` is
+/// the call `1.5 + (2 3)` because the real is one symbol, while `<Add 1 2.5 3>`
+/// takes the single macrodigit `1` as its first operand and then fails on the
+/// second.
+fn arithmetic_operand(name: &str, position: &str, terms: &[Value]) -> Result<Operand, EvalError> {
+    if let [Value::Number(text)] = terms
+        && is_real_number(text)
+    {
+        let value = parse_numeric_symbol(text).ok_or_else(|| {
+            invalid_builtin_arguments(
+                name,
+                &format!("expected {position} as a real number (B.1.2.3), but `{text}` is not one"),
+            )
+        })?;
+        if !value.is_finite() {
+            return Err(invalid_builtin_arguments(
+                name,
+                &format!("expected {position} as a finite real number, and `{text}` is not finite"),
+            ));
+        }
+        return Ok(Operand::Real(value));
+    }
+    Ok(Operand::Integer(integer_operand(name, position, terms)?))
+}
+
+/// The operand as a real number, for the operations §C.2 decides in real
+/// arithmetic. §C.2 gives a real number a single symbol and one 32-bit word, so
+/// an integer with no real counterpart is refused rather than rounded to
+/// infinity.
+fn operand_as_real(name: &str, position: &str, operand: &Operand) -> Result<f64, EvalError> {
+    let value = match operand {
+        Operand::Integer(integer) => integer.to_real(),
+        Operand::Real(value) => Some(*value),
+    };
+    value.ok_or_else(|| {
+        invalid_builtin_arguments(
+            name,
+            &format!(
+                "{position} is an integer too large to be a real number; §C.2 gives a real number \
+                 one 32-bit word"
+            ),
+        )
+    })
+}
+
+/// The result of an operation §C.2 decides in real arithmetic: one real symbol,
+/// in the same rendering `Real` and `Realfun` produce, so a value has one
+/// spelling however it was computed. A result outside the finite range is an
+/// error rather than a silent infinity or NaN.
+fn real_result(name: &str, value: f64) -> Result<Vec<Value>, EvalError> {
+    if !value.is_finite() {
+        return Err(invalid_builtin_arguments(
+            name,
+            "the result is not a finite real number; §C.2 gives a real number one 32-bit word",
+        ));
+    }
+    Ok(vec![Value::Number(format_real(value))])
+}
+
+fn integer_operands(name: &str, args: &[Value]) -> Result<(Integer, Integer), EvalError> {
+    let (left, right) = split_arithmetic_operands(args);
+    Ok((
+        integer_operand(name, "the first operand", left)?,
+        integer_operand(name, "the second operand", right)?,
+    ))
+}
+
+/// §C.2: "If both arguments of an arithmetic function are integers, the result
+/// is also an integer; otherwise it is a real number." So `integer` -- the exact
+/// operation on macrodigit sequences -- runs only when both operands are
+/// integers, and `real` runs as soon as one of them is a real number.
+fn arithmetic_binary(
+    name: &str,
+    args: &[Value],
+    integer: impl FnOnce(&Integer, &Integer) -> Integer,
+    real: impl FnOnce(f64, f64) -> f64,
+) -> Result<Vec<Value>, EvalError> {
+    let (left, right) = split_arithmetic_operands(args);
+    let left = arithmetic_operand(name, "the first operand", left)?;
+    let right = arithmetic_operand(name, "the second operand", right)?;
+    match (&left, &right) {
+        (Operand::Integer(left), Operand::Integer(right)) => Ok(integer(left, right).terms()),
+        _ => {
+            let left = operand_as_real(name, "the first operand", &left)?;
+            let right = operand_as_real(name, "the second operand", &right)?;
+            real_result(name, real(left, right))
+        }
+    }
+}
+
+/// `Div` (or `/`) and `Divmod` (§C.2).
+///
+/// §C.2: "Div ... if at least one argument is real it returns the real quotient;
+/// if both are integers it returns the integer quotient of e.N1 by e.N2 and
+/// ignores the remainder; division by zero is an error in this and the two other
+/// division functions." `Divmod` is one of those two others and is "intended for
+/// integer arguments", so it keeps reading integers only; a real operand is
+/// refused by name rather than truncated.
+fn divide(args: &[Value], return_remainder: bool) -> Result<Vec<Value>, EvalError> {
     if return_remainder {
-        Ok(vec![
-            Value::Bracket(vec![Value::Number(format_integer(quotient))]),
-            Value::Number(format_integer(remainder)),
-        ])
-    } else {
-        Ok(vec![Value::Number(format_integer(quotient))])
+        let (left, right) = integer_operands("Divmod", args)?;
+        let Some((quotient, remainder)) = left.divmod(&right) else {
+            return Err(invalid_builtin_arguments("Divmod", "division by zero"));
+        };
+        // `Divmod` "returns (e.Quotient) e.Remainder" (§C.2): the quotient is
+        // bracketed, the remainder follows it.
+        let mut result = vec![Value::Bracket(quotient.terms())];
+        result.extend(remainder.terms());
+        return Ok(result);
+    }
+
+    let (left, right) = split_arithmetic_operands(args);
+    let left = arithmetic_operand("Div", "the first operand", left)?;
+    let right = arithmetic_operand("Div", "the second operand", right)?;
+    match (&left, &right) {
+        (Operand::Integer(left), Operand::Integer(right)) => {
+            let Some((quotient, _)) = left.divmod(right) else {
+                return Err(invalid_builtin_arguments("Div", "division by zero"));
+            };
+            Ok(quotient.terms())
+        }
+        _ => {
+            let left = operand_as_real("Div", "the first operand", &left)?;
+            let right = operand_as_real("Div", "the second operand", &right)?;
+            // A real divisor of zero is the same error as an integer one: the
+            // quotient of a division by zero is not a number in either
+            // representation.
+            if right == 0.0 {
+                return Err(invalid_builtin_arguments("Div", "division by zero"));
+            }
+            real_result("Div", left / right)
+        }
     }
 }
 
+/// `Mod` (§C.2), which "is intended for integer arguments": the remainder of
+/// dividing e.N1 by e.N2, with the sign of e.N1.
 fn modulo(args: &[Value]) -> Result<Vec<Value>, EvalError> {
-    let (left, right) = integer_pair("Mod", args)?;
-    if right == 0 {
+    let (left, right) = integer_operands("Mod", args)?;
+    let Some((_, remainder)) = left.divmod(&right) else {
         return Err(invalid_builtin_arguments("Mod", "division by zero"));
-    }
-    Ok(vec![Value::Number(format_integer(left % right))])
+    };
+    Ok(remainder.terms())
 }
 
+/// `Compare` (§C.2): "compares two numbers and returns '-' when e.N1 is less
+/// than e.N2, '+' when it is greater, and '0' when the numbers are equal".
 fn compare_numbers(args: &[Value]) -> Result<Vec<Value>, EvalError> {
-    let (left, right) = integer_pair("Compare", args)?;
-    let result = match left.cmp(&right) {
+    let (left, right) = split_arithmetic_operands(args);
+    let left = arithmetic_operand("Compare", "the first operand", left)?;
+    let right = arithmetic_operand("Compare", "the second operand", right)?;
+    let ordering = match (&left, &right) {
+        // Two integers compare exactly, macrodigit by macrodigit.
+        (Operand::Integer(left), Operand::Integer(right)) => left.compare(right),
+        // One real puts the comparison in real arithmetic -- the same rule that
+        // decides the result type of the other four functions, where "otherwise
+        // it is a real number" converts the integer operand to a real. §C.2
+        // gives a real number one 32-bit word, so an integer operand with more
+        // significant digits than a real number carries is rounded to the
+        // nearest real, as it is in `Add` and `Sub`: the integer 2^53 + 1
+        // compares equal to the real `9007199254740992.0`.
+        _ => {
+            let left = operand_as_real("Compare", "the first operand", &left)?;
+            let right = operand_as_real("Compare", "the second operand", &right)?;
+            // Both operands are finite, so neither is NaN and this is total.
+            left.partial_cmp(&right)
+                .expect("two finite real numbers always compare")
+        }
+    };
+    let result = match ordering {
         std::cmp::Ordering::Less => '-',
         std::cmp::Ordering::Equal => '0',
         std::cmp::Ordering::Greater => '+',
@@ -1684,62 +2182,286 @@ fn compare_numbers(args: &[Value]) -> Result<Vec<Value>, EvalError> {
     Ok(vec![Value::Char(result)])
 }
 
+/// `<Trunc e.N>` where `e.N` is an integer returns that integer (§C.2). The
+/// argument is a whole macrodigit sequence, not one macrodigit.
 fn trunc(args: &[Value]) -> Result<Vec<Value>, EvalError> {
-    let [Value::Number(number)] = args else {
-        return Err(invalid_builtin_arguments(
-            "Trunc",
-            "expected exactly one integer number",
-        ));
-    };
-    let value = parse_integer(number)
-        .ok_or_else(|| invalid_builtin_arguments("Trunc", "expected exactly one integer number"))?;
-    Ok(vec![Value::Number(format_integer(value))])
+    Ok(integer_operand("Trunc", "the argument", args)?.terms())
 }
 
+/// `<Real e.N>` where `e.N` is an integer returns the equal real number
+/// (§C.2). A real number is a single symbol, so the macrodigit sequence is
+/// converted to its value here, and rendered exactly as arithmetic renders a
+/// real result.
 fn real(args: &[Value]) -> Result<Vec<Value>, EvalError> {
-    let [Value::Number(number)] = args else {
-        return Err(invalid_builtin_arguments(
+    let value = integer_operand("Real", "the argument", args)?;
+    let converted = value.to_real().ok_or_else(|| {
+        invalid_builtin_arguments(
             "Real",
-            "expected exactly one integer number",
-        ));
-    };
-    let value = parse_integer(number)
-        .ok_or_else(|| invalid_builtin_arguments("Real", "expected exactly one integer number"))?;
-    Ok(vec![Value::Number(format!("{}.0", format_integer(value)))])
+            "the integer is too large for a real number, which §C.2 gives one 32-bit word",
+        )
+    })?;
+    Ok(vec![Value::Number(format_real(converted))])
 }
 
-fn integer_pair(name: &str, args: &[Value]) -> Result<(i128, i128), EvalError> {
-    let [Value::Number(left), Value::Number(right)] = args else {
-        return Err(invalid_builtin_arguments(
-            name,
-            "expected exactly two integer numbers",
-        ));
-    };
-    let left = parse_integer(left)
-        .ok_or_else(|| invalid_builtin_arguments(name, "expected exactly two integer numbers"))?;
-    let right = parse_integer(right)
-        .ok_or_else(|| invalid_builtin_arguments(name, "expected exactly two integer numbers"))?;
-    Ok((left, right))
+/// Renders a real number as the runtime's real syntax: one symbol that always
+/// contains a decimal point, so `2.0` rather than `2` (reference B.1.2.3).
+/// Rust's shortest round-trip rendering is deterministic and independent of
+/// the platform, which keeps a `Realfun` result reproducible.
+///
+/// `Real`, `Realfun`, and the arithmetic functions all render through here, so
+/// one value has one spelling however it was computed -- `<Add 1.5 0.5>` and
+/// `<Real 2>` both give `2.0`. A zero is rendered as `0.0`: `-0.0` and `0.0`
+/// compare equal, so two spellings would give the same number two names.
+fn format_real(value: f64) -> String {
+    let value = if value == 0.0 { 0.0 } else { value };
+    let rendered = format!("{value}");
+    if rendered.contains(['.', 'E', 'e']) {
+        rendered
+    } else {
+        format!("{rendered}.0")
+    }
 }
 
-fn parse_integer(value: &str) -> Option<i128> {
-    let digits = value.strip_prefix('+').unwrap_or(value);
-    let (negative, digits) = digits
-        .strip_prefix('-')
-        .map_or((false, digits), |digits| (true, digits));
-    if digits.is_empty() || !digits.chars().all(|ch| ch.is_ascii_digit()) {
+// --- `Realfun`: C library functions of one or two real arguments (§C.2) -----
+
+/// §C.2: "`<Realfun (e.Function) s.N>` or `<Realfun (e.Function) s.N1 s.N2>`
+/// returns the value of the function e.Function of one or two arguments.
+/// e.Function must be a character string which is the name of a function
+/// available in the C language. For example `<Realfun ('log') s.N>` returns
+/// the logarithm of s.N."
+fn realfun(args: &[Value]) -> Result<Vec<Value>, EvalError> {
+    let Some((function, operands)) = args.split_first() else {
+        return Err(realfun_error(
+            "expected a bracketed function name and one or two real-number arguments",
+        ));
+    };
+    let Value::Bracket(name) = function else {
+        return Err(realfun_error(
+            "the first argument must be the character string naming a C function, in brackets: \
+             `<Realfun ('log') 2.0>`",
+        ));
+    };
+    let name = name
+        .iter()
+        .map(|value| match value {
+            Value::Char(ch) => Some(*ch),
+            Value::Identifier(_) | Value::Number(_) | Value::Bracket(_) => None,
+        })
+        .collect::<Option<String>>()
+        .ok_or_else(|| {
+            realfun_error("the function name must be a character string, as in `('log')`")
+        })?
+        .to_ascii_lowercase();
+
+    let Some(function) = realfun_function(&name) else {
+        return Err(realfun_error(&format!(
+            "unknown C function `{name}`; `Realfun` supports {REALFUN_FUNCTIONS}"
+        )));
+    };
+    let value = match function {
+        RealfunFunction::Unary {
+            function,
+            domain,
+            message,
+        } => {
+            let [argument] = operands else {
+                return Err(realfun_arity_error(&name, 1, operands.len()));
+            };
+            let argument = real_operand(1, argument)?;
+            if !domain(argument) {
+                return Err(realfun_domain_error(&name, message));
+            }
+            function(argument)
+        }
+        RealfunFunction::Binary {
+            function,
+            domain,
+            message,
+        } => {
+            let [first, second] = operands else {
+                return Err(realfun_arity_error(&name, 2, operands.len()));
+            };
+            let first = real_operand(1, first)?;
+            let second = real_operand(2, second)?;
+            if !domain(first, second) {
+                return Err(realfun_domain_error(&name, message));
+            }
+            function(first, second)
+        }
+    };
+
+    if !value.is_finite() {
+        return Err(realfun_error(&format!(
+            "`{name}` did not produce a finite real number; its arguments are outside the \
+             function's range"
+        )));
+    }
+    Ok(vec![Value::Number(format_real(value))])
+}
+
+/// A C math function of one or two real arguments, with the predicate its
+/// arguments must satisfy.
+enum RealfunFunction {
+    Unary {
+        function: fn(f64) -> f64,
+        domain: fn(f64) -> bool,
+        message: &'static str,
+    },
+    Binary {
+        function: fn(f64, f64) -> f64,
+        domain: fn(f64, f64) -> bool,
+        message: &'static str,
+    },
+}
+
+/// The functions `Realfun` exposes, named in its error for an unknown one.
+const REALFUN_FUNCTIONS: &str = "log (also `ln`), log2, log10, exp, sqrt, sin, cos, tan, asin, \
+                                 acos, atan, floor and ceil with one argument, and pow and fmod \
+                                 with two";
+
+/// The supported C functions. The reference defers the full list to the system
+/// disk, so this is a documented subset: the standard C math functions whose
+/// value is a deterministic function of their arguments.
+fn realfun_function(name: &str) -> Option<RealfunFunction> {
+    Some(match name {
+        // Natural logarithms are what C's `log` computes, so the alias names
+        // the same function.
+        "log" | "ln" => RealfunFunction::Unary {
+            function: f64::ln,
+            domain: |argument| argument > 0.0,
+            message: "the argument must be greater than 0",
+        },
+        "log2" => RealfunFunction::Unary {
+            function: f64::log2,
+            domain: |argument| argument > 0.0,
+            message: "the argument must be greater than 0",
+        },
+        "log10" => RealfunFunction::Unary {
+            function: f64::log10,
+            domain: |argument| argument > 0.0,
+            message: "the argument must be greater than 0",
+        },
+        "exp" => RealfunFunction::Unary {
+            function: f64::exp,
+            domain: |_| true,
+            message: "",
+        },
+        "sqrt" => RealfunFunction::Unary {
+            function: f64::sqrt,
+            domain: |argument| argument >= 0.0,
+            message: "the argument must not be negative",
+        },
+        "sin" => RealfunFunction::Unary {
+            function: f64::sin,
+            domain: |_| true,
+            message: "",
+        },
+        "cos" => RealfunFunction::Unary {
+            function: f64::cos,
+            domain: |_| true,
+            message: "",
+        },
+        "tan" => RealfunFunction::Unary {
+            function: f64::tan,
+            domain: |_| true,
+            message: "",
+        },
+        "asin" => RealfunFunction::Unary {
+            function: f64::asin,
+            domain: |argument| (-1.0..=1.0).contains(&argument),
+            message: "the argument must be between -1 and 1",
+        },
+        "acos" => RealfunFunction::Unary {
+            function: f64::acos,
+            domain: |argument| (-1.0..=1.0).contains(&argument),
+            message: "the argument must be between -1 and 1",
+        },
+        "atan" => RealfunFunction::Unary {
+            function: f64::atan,
+            domain: |_| true,
+            message: "",
+        },
+        "floor" => RealfunFunction::Unary {
+            function: f64::floor,
+            domain: |_| true,
+            message: "",
+        },
+        "ceil" => RealfunFunction::Unary {
+            function: f64::ceil,
+            domain: |_| true,
+            message: "",
+        },
+        "pow" => RealfunFunction::Binary {
+            function: f64::powf,
+            domain: |_, _| true,
+            message: "",
+        },
+        // C's `fmod`: the remainder of a truncating division, so it takes the
+        // sign of the dividend, like `Mod` (§C.2).
+        "fmod" => RealfunFunction::Binary {
+            function: |left, right| left % right,
+            domain: |_, right| right != 0.0,
+            message: "the second argument must not be 0",
+        },
+        _ => return None,
+    })
+}
+
+/// One numeric argument of `Realfun`. §C.2 gives every real number a single
+/// symbol, and the reference's own examples write the arguments as `s.N`, `s.N1`
+/// and `s.N2` -- single symbols -- so each argument is exactly one number
+/// symbol. A negative integer has no single-symbol spelling (`-5` is the sign
+/// symbol followed by a macrodigit); write it as a negative real, `-5.0`.
+fn real_operand(position: usize, value: &Value) -> Result<f64, EvalError> {
+    let Value::Number(text) = value else {
+        return Err(realfun_error(&format!(
+            "argument {position} must be one real number symbol, e.g. `2.0`"
+        )));
+    };
+    parse_numeric_symbol(text).ok_or_else(|| {
+        realfun_error(&format!(
+            "argument {position} must be one real number symbol, e.g. `2.0`, not `{text}`"
+        ))
+    })
+}
+
+/// The value of a number symbol that is an integer macrodigit (reference
+/// B.1.2.2) or a real number (reference B.1.2.3). Anything else -- an
+/// identifier, an empty string, `inf`, `NaN` -- is not a number, so a
+/// `Realfun` argument can never smuggle a non-finite value past the domain
+/// checks.
+fn parse_numeric_symbol(text: &str) -> Option<f64> {
+    let digits = text.strip_prefix(['+', '-']).unwrap_or(text);
+    if digits.is_empty()
+        || !digits.chars().any(|ch| ch.is_ascii_digit())
+        || !digits
+            .chars()
+            .all(|ch| ch.is_ascii_digit() || matches!(ch, '.' | 'E'))
+    {
         return None;
     }
-    let magnitude = digits.parse::<i128>().ok()?;
-    if negative {
-        magnitude.checked_neg()
-    } else {
-        Some(magnitude)
-    }
+    text.parse::<f64>().ok()
 }
 
-fn format_integer(value: i128) -> String {
-    value.to_string()
+fn realfun_error(message: &str) -> EvalError {
+    invalid_builtin_arguments("Realfun", message)
+}
+
+fn realfun_arity_error(name: &str, expected: usize, given: usize) -> EvalError {
+    let arguments = if expected == 1 {
+        "argument"
+    } else {
+        "arguments"
+    };
+    realfun_error(&format!(
+        "`{name}` takes {expected} {arguments} but got {given}"
+    ))
+}
+
+/// §C.2 leaves each function's domain to C; outside it the call is an error
+/// rather than a silent `NaN` or `inf` result.
+fn realfun_domain_error(name: &str, message: &str) -> EvalError {
+    realfun_error(&format!("`{name}` is outside its domain: {message}"))
 }
 
 fn type_of(args: &[Value]) -> Vec<Value> {
@@ -1829,6 +2551,54 @@ mod tests {
         Program {
             items: functions.into_iter().map(Item::Function).collect(),
         }
+    }
+
+    /// Calls a runtime builtin through the evaluator's dispatch, so the name
+    /// mapping is exercised too.
+    fn builtin(name: &str, args: &[Value]) -> Result<Vec<Value>, EvalError> {
+        let program = program(vec![]);
+        let evaluator = Evaluator::new(&program);
+        evaluator.evaluate_function(name, args)
+    }
+
+    /// A run of macrodigit terms.
+    fn numbers(texts: &[&str]) -> Vec<Value> {
+        texts
+            .iter()
+            .map(|text| Value::Number((*text).to_string()))
+            .collect()
+    }
+
+    /// An integer written as Refal-5 writes one (§C.2): macrodigits with `-`
+    /// and `+` sign symbols in front of them.
+    fn integer_terms(terms: &[&str]) -> Vec<Value> {
+        terms
+            .iter()
+            .map(|term| match *term {
+                "-" => Value::Char('-'),
+                "+" => Value::Char('+'),
+                text => Value::Number(text.to_string()),
+            })
+            .collect()
+    }
+
+    /// A `Br` argument: a name, `=`, and a value expression (§C.3).
+    fn stack_entry(name: &str, value: &str) -> Vec<Value> {
+        let mut entry = vec![Value::Identifier(name.to_string()), Value::Char('=')];
+        entry.extend(value.chars().map(Value::Char));
+        entry
+    }
+
+    /// A `Realfun` argument list: the bracketed function name and its numeric
+    /// arguments (§C.2).
+    fn realfun_args(name: &str, operands: &[&str]) -> Vec<Value> {
+        let mut args = vec![Value::Bracket(name.chars().map(Value::Char).collect())];
+        args.extend(
+            operands
+                .iter()
+                .map(|text| Value::Number((*text).to_string())),
+        );
+        args
     }
 
     #[test]
@@ -2284,15 +3054,15 @@ mod tests {
         ];
 
         assert_eq!(
-            arithmetic_binary("Add", &numbers, |left, right| left.checked_add(right)).unwrap(),
+            arithmetic_binary("Add", &numbers, Integer::plus, |left, right| left + right).unwrap(),
             vec![Value::Number("17".to_string())]
         );
         assert_eq!(
-            arithmetic_binary("Sub", &numbers, |left, right| left.checked_sub(right)).unwrap(),
+            arithmetic_binary("Sub", &numbers, Integer::minus, |left, right| left - right).unwrap(),
             vec![Value::Number("7".to_string())]
         );
         assert_eq!(
-            arithmetic_binary("Mul", &numbers, |left, right| left.checked_mul(right)).unwrap(),
+            arithmetic_binary("Mul", &numbers, Integer::times, |left, right| left * right).unwrap(),
             vec![Value::Number("60".to_string())]
         );
         assert_eq!(
@@ -2315,28 +3085,730 @@ mod tests {
 
     #[test]
     fn numeric_conversion_builtins_follow_classic_integer_conventions() {
+        // §C.2: a sign is a symbol of its own and a macrodigit never carries
+        // one, so `+ 00042` is two terms and not one signed number symbol.
         assert_eq!(
-            trunc(&[Value::Number("+00042".to_string())]).unwrap(),
+            trunc(&[Value::Char('+'), Value::Number("00042".to_string())]).unwrap(),
             vec![Value::Number("42".to_string())]
         );
         assert_eq!(
-            real(&[Value::Number("-7".to_string())]).unwrap(),
+            real(&[Value::Char('-'), Value::Number("7".to_string())]).unwrap(),
             vec![Value::Number("-7.0".to_string())]
         );
         assert!(trunc(&[Value::Number("2.5".to_string())]).is_err());
         assert!(real(&[Value::Number("2.5".to_string())]).is_err());
     }
 
+    /// §C.2: "Real numbers (of arbitrary sign) are represented as single
+    /// symbols and occupy a 32-bit word"; and "if both arguments of an
+    /// arithmetic function are integers, the result is also an integer;
+    /// otherwise it is a real number."
+    #[test]
+    fn real_operands_make_an_arithmetic_result_real() {
+        // One real is enough, in either position, and the result is a real
+        // however small the fractional part is.
+        assert_eq!(
+            builtin("Add", &numbers(&["1.5", "2"])).unwrap(),
+            numbers(&["3.5"])
+        );
+        assert_eq!(
+            builtin("Sub", &numbers(&["5", "1.25"])).unwrap(),
+            numbers(&["3.75"])
+        );
+        assert_eq!(
+            builtin("Mul", &numbers(&["2.5", "4"])).unwrap(),
+            numbers(&["10.0"])
+        );
+        // §C.2 `Div`: "if at least one argument is real it returns the real
+        // quotient; if both are integers it returns the integer quotient of
+        // e.N1 by e.N2 and ignores the remainder."
+        assert_eq!(
+            builtin("Div", &numbers(&["7.0", "2.0"])).unwrap(),
+            numbers(&["3.5"])
+        );
+        assert_eq!(
+            builtin("Div", &numbers(&["7", "2.0"])).unwrap(),
+            numbers(&["3.5"])
+        );
+        assert_eq!(
+            builtin("Div", &numbers(&["7", "2"])).unwrap(),
+            numbers(&["3"])
+        );
+        assert_eq!(
+            builtin("Div", &integer_terms(&["-", "7", "2"])).unwrap(),
+            integer_terms(&["-", "3"])
+        );
+        // §C.2 `Compare` returns `'-'`, `'+'` or `'0'`, and compares two reals
+        // as readily as a real and an integer.
+        assert_eq!(
+            builtin("Compare", &numbers(&["1.5", "2.5"])).unwrap(),
+            vec![Value::Char('-')]
+        );
+        assert_eq!(
+            builtin("Compare", &numbers(&["2.5", "1.5"])).unwrap(),
+            vec![Value::Char('+')]
+        );
+        assert_eq!(
+            builtin("Compare", &numbers(&["2.0", "2"])).unwrap(),
+            vec![Value::Char('0')]
+        );
+        // A negative real is one symbol, sign and all (B.1.2.3).
+        assert_eq!(
+            builtin("Add", &numbers(&["-1.5", "2"])).unwrap(),
+            numbers(&["0.5"])
+        );
+        // A comparison with one real operand is decided in real arithmetic, so
+        // an integer below 2^53 compares exactly and one above it is rounded to
+        // the nearest real first -- the same conversion `Add` performs, and the
+        // same precision §C.2 accepts by giving a real number one 32-bit word.
+        let mixed = |first: &[&str], second: &str| {
+            vec![
+                Value::Bracket(numbers(first)),
+                Value::Number(second.to_string()),
+            ]
+        };
+        // 2^53 = 2097152 * 2^32 + 0, which a real number represents exactly.
+        assert_eq!(
+            builtin("Compare", &mixed(&["2097152", "0"], "9007199254740992.0")).unwrap(),
+            vec![Value::Char('0')]
+        );
+        assert_eq!(
+            builtin("Compare", &mixed(&["2097152", "2"], "9007199254740992.0")).unwrap(),
+            vec![Value::Char('+')]
+        );
+        // 2^53 + 1 has no real counterpart, so it rounds to 2^53 and compares
+        // equal to it.
+        assert_eq!(
+            builtin("Compare", &mixed(&["2097152", "1"], "9007199254740992.0")).unwrap(),
+            vec![Value::Char('0')]
+        );
+    }
+
+    /// §C.2: the round brackets around the first operand "may be omitted. For
+    /// real numbers this causes no problem, since every such number is
+    /// represented by exactly one symbol" -- but when the first operand is an
+    /// integer, one macrodigit is taken from it and the rest forms the second
+    /// operand.
+    #[test]
+    fn a_real_first_operand_takes_one_symbol_and_an_integer_takes_one_macrodigit() {
+        // The real is the whole first operand: 1.5 + (2 * 2^32 + 3).
+        assert_eq!(
+            builtin("Add", &numbers(&["1.5", "2", "3"])).unwrap(),
+            numbers(&["8589934596.5"])
+        );
+        // The integer is not: `1` is the first operand and `2.5 3` the second,
+        // which is not an integer.
+        let error = builtin("Add", &numbers(&["1", "2.5", "3"])).unwrap_err();
+        assert!(error.to_string().contains("macrodigit"), "{error}");
+        // Brackets around a real first operand make no difference -- the
+        // operand is the same one symbol either way.
+        assert_eq!(
+            builtin(
+                "Add",
+                &[
+                    Value::Bracket(numbers(&["1.5"])),
+                    Value::Number("2".to_string()),
+                ],
+            )
+            .unwrap(),
+            numbers(&["3.5"])
+        );
+    }
+
+    /// An operand is an integer or exactly one real symbol, read by the same
+    /// predicate `Type` uses to answer `'R'`.
+    #[test]
+    fn an_operand_is_an_integer_or_one_real_symbol() {
+        let operand = |terms: &[Value]| arithmetic_operand("Add", "the first operand", terms);
+        assert_eq!(operand(&numbers(&["2.5"])).unwrap(), Operand::Real(2.5));
+        assert_eq!(operand(&numbers(&["-1.5"])).unwrap(), Operand::Real(-1.5));
+        assert_eq!(operand(&numbers(&["+4E2"])).unwrap(), Operand::Real(400.0));
+        assert_eq!(
+            operand(&numbers(&["2"])).unwrap(),
+            Operand::Integer(Integer::from_magnitude(vec![2], false))
+        );
+        // `-` `5` is a sign symbol and a macrodigit, not one real symbol.
+        assert_eq!(
+            operand(&integer_terms(&["-", "5"])).unwrap(),
+            Operand::Integer(Integer::from_magnitude(vec![5], true))
+        );
+        // One symbol that is not a legal real number (B.1.2.3) is refused
+        // rather than read as zero or as an integer.
+        let error = operand(&numbers(&["."])).unwrap_err();
+        assert!(error.to_string().contains("real number"), "{error}");
+        let error = operand(&numbers(&["1E"])).unwrap_err();
+        assert!(error.to_string().contains("real number"), "{error}");
+    }
+
+    /// §C.2's real numbers are one symbol in one syntax (B.1.2.3), so arithmetic
+    /// and `Real` render the same value identically, and a result is accepted
+    /// wherever a real number is an argument.
+    #[test]
+    fn real_results_and_real_conversions_share_one_rendering() {
+        assert_eq!(real(&numbers(&["2"])).unwrap(), numbers(&["2.0"]));
+        assert_eq!(
+            builtin("Add", &numbers(&["1.5", "0.5"])).unwrap(),
+            numbers(&["2.0"])
+        );
+        assert_eq!(
+            builtin("Sub", &numbers(&["2.0", "2.0"])).unwrap(),
+            numbers(&["0.0"])
+        );
+        assert_eq!(
+            real(&integer_terms(&["-", "7"])).unwrap(),
+            numbers(&["-7.0"])
+        );
+        // `-0.0` is the same number as `0.0`, so it is written the same way.
+        assert_eq!(
+            builtin("Mul", &numbers(&["-1.0", "0.0"])).unwrap(),
+            numbers(&["0.0"])
+        );
+        let mut args = realfun_args("sqrt", &[]);
+        args.extend(builtin("Add", &numbers(&["3.0", "1.0"])).unwrap());
+        assert_eq!(builtin("Realfun", &args).unwrap(), numbers(&["2.0"]));
+    }
+
+    /// §C.2: "division by zero is an error in this and the two other division
+    /// functions", and a real number that leaves the finite range is an error
+    /// rather than a silent infinity or NaN.
+    #[test]
+    fn real_division_by_zero_and_non_finite_results_are_errors() {
+        for args in [
+            numbers(&["7.0", "0.0"]),
+            numbers(&["7.0", "0"]),
+            numbers(&["7", "0.0"]),
+            numbers(&["0.0", "-0.0"]),
+        ] {
+            let error = builtin("Div", &args).unwrap_err();
+            assert!(error.to_string().contains("division by zero"), "{error}");
+        }
+        let error = builtin("Mul", &numbers(&["1.0E308", "1.0E308"])).unwrap_err();
+        assert!(error.to_string().contains("not a finite"), "{error}");
+        let error = builtin("Div", &numbers(&["1.0E308", "0.1"])).unwrap_err();
+        assert!(error.to_string().contains("not a finite"), "{error}");
+    }
+
+    /// §C.2 gives `Divmod` and `Mod` integer arguments and reads `<Trunc e.N>`
+    /// and `<Real e.N>` "where e.N is an integer", so a real operand is a named
+    /// argument error -- never a panic, never a silent truncation.
+    #[test]
+    fn integer_only_builtins_refuse_a_real_operand() {
+        for name in ["Divmod", "Mod", "Trunc", "Real"] {
+            let error = builtin(name, &numbers(&["1.5"])).unwrap_err();
+            let message = error.to_string();
+            assert!(message.contains(name), "{message}");
+            assert!(message.contains("real number"), "{message}");
+        }
+        let error = builtin("Divmod", &numbers(&["1", "1.5"])).unwrap_err();
+        assert!(error.to_string().contains("real number"), "{error}");
+        let error = builtin("Mod", &numbers(&["4", "2.0"])).unwrap_err();
+        assert!(error.to_string().contains("real number"), "{error}");
+
+        // An integer too large for a real number has no real counterpart, so a
+        // mixed operation refuses it rather than rounding it to infinity.
+        let huge = Value::Bracket(numbers(&["4294967295"; 40]));
+        let error = builtin("Add", &[huge.clone(), Value::Number("1.5".to_string())]).unwrap_err();
+        assert!(error.to_string().contains("too large"), "{error}");
+        // Two integers are unaffected: macrodigit arithmetic is exact at any
+        // size, and only a real operand has to fit inside a real number.
+        let sum = builtin("Add", &[huge, Value::Number("1".to_string())]).unwrap();
+        assert_eq!(sum.len(), 41);
+        assert_eq!(sum[0], Value::Number("1".to_string()));
+        assert!(
+            sum[1..]
+                .iter()
+                .all(|term| *term == Value::Number("0".to_string()))
+        );
+    }
+
     #[test]
     fn arithmetic_builtins_reject_division_by_zero() {
-        let numbers = [
+        let by_zero = [
             Value::Number("12".to_string()),
             Value::Number("0".to_string()),
         ];
-        let error = divide(&numbers, false).unwrap_err();
+        let error = divide(&by_zero, false).unwrap_err();
         assert!(error.to_string().contains("division by zero"));
-        let error = modulo(&numbers).unwrap_err();
+        let error = modulo(&by_zero).unwrap_err();
         assert!(error.to_string().contains("division by zero"));
+
+        // `Divmod` errors for a zero divisor too (§C.2: "an error arises if the
+        // value of e.N2 is 0" in this and the two other division functions),
+        // including when the divisor is a sequence of zero macrodigits.
+        let error = builtin("Divmod", &numbers(&["12", "0"])).unwrap_err();
+        assert!(error.to_string().contains("division by zero"));
+        let error = builtin("Mod", &numbers(&["12", "0", "0"])).unwrap_err();
+        assert!(error.to_string().contains("division by zero"));
+        let error = builtin(
+            "Div",
+            &[
+                Value::Bracket(numbers(&["1", "0"])),
+                numbers(&["0"])[0].clone(),
+            ],
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("division by zero"));
+    }
+
+    /// §C.2: "Integers are represented as sequences of macrodigits using base
+    /// 2^32. ... Arithmetic functions return integers in standard form: `'-'`
+    /// and a sequence of macrodigits for a negative number; no `'+'` sign for
+    /// 0 or for a positive number."
+    #[test]
+    fn integer_arithmetic_carries_across_the_macrodigit_boundary() {
+        // The greatest macrodigit plus one is the two-macrodigit sequence
+        // `1 0` (1 * 2^32 + 0), not the decimal `4294967296` that the compiler
+        // refuses to read back as a macrodigit literal.
+        assert_eq!(
+            builtin("Add", &numbers(&["4294967295", "1"])).unwrap(),
+            numbers(&["1", "0"])
+        );
+        // (2^32 - 1)^2 = 4294967294 * 2^32 + 1, a large `Mul`.
+        assert_eq!(
+            builtin("Mul", &numbers(&["4294967295", "4294967295"])).unwrap(),
+            numbers(&["4294967294", "1"])
+        );
+        // The bracketed operand form `<ar-function (e.N1) e.N2>`: (2^64 - 1) + 1
+        // = 2^64 = 1 * 2^64 + 0 * 2^32 + 0.
+        assert_eq!(
+            builtin(
+                "Add",
+                &[
+                    Value::Bracket(numbers(&["4294967295", "4294967295"])),
+                    Value::Number("1".to_string()),
+                ],
+            )
+            .unwrap(),
+            numbers(&["1", "0", "0"])
+        );
+        // A macrodigit above 2^32 - 1 is not an operand at all (B.1.2.2).
+        let error = builtin("Add", &numbers(&["4294967296", "1"])).unwrap_err();
+        assert!(error.to_string().contains("macrodigit"), "{error}");
+
+        // Borrowing across the macrodigit boundary: 2^32 divided by 3, with the
+        // quotient one macrodigit and the remainder 1.
+        let two_to_the_thirty_two = Value::Bracket(numbers(&["1", "0"]));
+        assert_eq!(
+            builtin(
+                "Div",
+                &[two_to_the_thirty_two.clone(), numbers(&["3"])[0].clone()]
+            )
+            .unwrap(),
+            numbers(&["1431655765"])
+        );
+        assert_eq!(
+            builtin(
+                "Mod",
+                &[two_to_the_thirty_two.clone(), numbers(&["3"])[0].clone()]
+            )
+            .unwrap(),
+            numbers(&["1"])
+        );
+        // `<Compare (e.N1) e.N2>` (§C.2) on a two-macrodigit integer.
+        assert_eq!(
+            builtin(
+                "Compare",
+                &[
+                    two_to_the_thirty_two,
+                    Value::Number("4294967295".to_string())
+                ],
+            )
+            .unwrap(),
+            vec![Value::Char('+')]
+        );
+        // `Trunc` takes the whole sequence and rejects a bracketed argument:
+        // an integer is a macrodigit sequence, and a bracket is not one.
+        let error = builtin("Trunc", &[Value::Bracket(numbers(&["1", "0"]))]).unwrap_err();
+        assert!(error.to_string().contains("macrodigit"), "{error}");
+        assert_eq!(
+            builtin("Real", &numbers(&["1", "0"])).unwrap(),
+            numbers(&["4294967296.0"])
+        );
+    }
+
+    #[test]
+    fn integer_arithmetic_uses_the_reference_standard_form() {
+        // §C.2: the standard form of a negative integer is the `-` symbol
+        // followed by its macrodigits -- two terms, not a signed number symbol.
+        assert_eq!(
+            builtin("Sub", &numbers(&["2", "7"])).unwrap(),
+            vec![Value::Char('-'), Value::Number("5".to_string())]
+        );
+        // Zero never takes a sign, whichever way it is produced.
+        assert_eq!(
+            builtin("Sub", &numbers(&["5", "5"])).unwrap(),
+            numbers(&["0"])
+        );
+        assert_eq!(
+            builtin("Mul", &integer_terms(&["-", "5", "0"])).unwrap(),
+            numbers(&["0"])
+        );
+        // A plus sign is accepted on the way in (§C.2: "Positive numbers may be
+        // preceded by a '+' sign") and never produced.
+        assert_eq!(
+            builtin("Add", &integer_terms(&["+", "3", "4"])).unwrap(),
+            numbers(&["7"])
+        );
+        // Division truncates toward zero, so the quotient is negative exactly
+        // when the signs differ ...
+        assert_eq!(
+            builtin("Div", &integer_terms(&["-", "7", "2"])).unwrap(),
+            vec![Value::Char('-'), Value::Number("3".to_string())]
+        );
+        // ... and the remainder is given the sign of e.N1 (§C.2 `Divmod`).
+        assert_eq!(
+            builtin("Divmod", &integer_terms(&["-", "5", "2"])).unwrap(),
+            vec![
+                Value::Bracket(vec![Value::Char('-'), Value::Number("2".to_string())]),
+                Value::Char('-'),
+                Value::Number("1".to_string()),
+            ]
+        );
+        assert_eq!(
+            builtin("Divmod", &integer_terms(&["-", "5", "-", "2"])).unwrap(),
+            vec![
+                Value::Bracket(numbers(&["2"])),
+                Value::Char('-'),
+                Value::Number("1".to_string()),
+            ]
+        );
+        assert_eq!(
+            builtin("Mod", &integer_terms(&["-", "5", "2"])).unwrap(),
+            vec![Value::Char('-'), Value::Number("1".to_string())]
+        );
+        assert_eq!(
+            builtin("Compare", &integer_terms(&["-", "5", "2"])).unwrap(),
+            vec![Value::Char('-')]
+        );
+    }
+
+    #[test]
+    fn arithmetic_rejects_a_missing_operand() {
+        // §C.2 gives zero a spelling of its own -- the macrodigit `0` -- and
+        // never says an empty expression is an integer, so an operand that is
+        // not there is an error and not the integer 0.
+        for args in [
+            numbers(&["1"]),
+            vec![Value::Bracket(numbers(&["1"]))],
+            integer_terms(&["-"]),
+            Vec::new(),
+        ] {
+            let error = builtin("Add", &args).unwrap_err();
+            assert!(
+                error.to_string().contains("expected") && error.to_string().contains("integer"),
+                "{args:?}: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn trunc_and_real_take_a_whole_macrodigit_sequence() {
+        // §C.2: `<Trunc e.N>` where e.N is an integer returns that integer, so
+        // the argument is the whole sequence, not one macrodigit.
+        assert_eq!(
+            builtin("Trunc", &numbers(&["1", "0"])).unwrap(),
+            numbers(&["1", "0"])
+        );
+        assert_eq!(
+            builtin("Trunc", &integer_terms(&["-", "1", "0"])).unwrap(),
+            integer_terms(&["-", "1", "0"])
+        );
+        // `<Real e.N>` returns the equal real number: one symbol (§C.2).
+        assert_eq!(
+            builtin("Real", &numbers(&["1", "0"])).unwrap(),
+            numbers(&["4294967296.0"])
+        );
+    }
+
+    #[test]
+    fn arithmetic_results_are_legal_macrodigit_sequences() {
+        // The compiler's lexer rejects a literal macrodigit above 2^32 - 1
+        // (reference B.1.2.2), so every integer the runtime produces has to be
+        // readable back as Refal source: macrodigits in range, most
+        // significant first, at most one sign symbol in front.
+        for result in [
+            builtin("Add", &numbers(&["4294967295", "1"])).unwrap(),
+            builtin("Mul", &numbers(&["4294967295", "4294967295"])).unwrap(),
+            builtin("Sub", &numbers(&["2", "7"])).unwrap(),
+            builtin("Divmod", &numbers(&["7", "2"])).unwrap(),
+            builtin("Trunc", &numbers(&["4294967295", "4294967295"])).unwrap(),
+        ] {
+            for value in &result {
+                match value {
+                    Value::Number(text) => {
+                        let digit = text.parse::<u64>().unwrap();
+                        assert!(digit <= u32::MAX as u64, "`{text}` is not a macrodigit");
+                    }
+                    Value::Char('-') | Value::Bracket(_) => {}
+                    other => panic!("unexpected term {other:?} in an integer result"),
+                }
+            }
+        }
+    }
+
+    /// The macrodigit algorithms are checked against exact native arithmetic
+    /// over deterministic pseudo-random pairs, including multi-macrodigit
+    /// operands and quotients, so the schoolbook `mul`/`divmod` cannot be
+    /// quietly wrong on the cases the hand-written tests do not name.
+    #[test]
+    fn macrodigit_arithmetic_agrees_with_native_arithmetic() {
+        let mut seed = 0x2545_F491_4F6C_DD1Du64;
+        let mut next = move || {
+            seed = seed
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            seed
+        };
+        // Three macrodigits, so the sum stays inside 128 bits.
+        let mask = (1u128 << 96) - 1;
+        for _ in 0..200 {
+            let left = ((u128::from(next()) << 64) | u128::from(next())) & mask;
+            let right = (((u128::from(next()) << 64) | u128::from(next())) & mask) | 1;
+
+            assert_eq!(
+                builtin("Add", &binary_operands(left, right)).unwrap(),
+                native(left + right),
+                "{left} + {right}"
+            );
+            assert_eq!(
+                builtin("Sub", &binary_operands(left, right)).unwrap(),
+                signed_native(left as i128 - right as i128),
+                "{left} - {right}"
+            );
+            assert_eq!(
+                builtin("Div", &binary_operands(left, right)).unwrap(),
+                native(left / right),
+                "{left} / {right}"
+            );
+            assert_eq!(
+                builtin("Mod", &binary_operands(left, right)).unwrap(),
+                native(left % right),
+                "{left} % {right}"
+            );
+            let mut expected = vec![Value::Bracket(native(left / right))];
+            expected.extend(native(left % right));
+            assert_eq!(
+                builtin("Divmod", &binary_operands(left, right)).unwrap(),
+                expected,
+                "{left} divmod {right}"
+            );
+            let ordering = match left.cmp(&right) {
+                std::cmp::Ordering::Less => '-',
+                std::cmp::Ordering::Equal => '0',
+                std::cmp::Ordering::Greater => '+',
+            };
+            assert_eq!(
+                builtin("Compare", &binary_operands(left, right)).unwrap(),
+                vec![Value::Char(ordering)],
+                "{left} vs {right}"
+            );
+
+            // A 63-bit pair, so the product stays inside 128 bits.
+            let small_left = u128::from(next() >> 1);
+            let small_right = u128::from(next() >> 1) | 1;
+            assert_eq!(
+                builtin("Mul", &binary_operands(small_left, small_right)).unwrap(),
+                native(small_left * small_right),
+                "{small_left} * {small_right}"
+            );
+        }
+    }
+
+    /// The macrodigit terms of a native unsigned integer, most significant
+    /// first; zero is the single macrodigit `0`.
+    fn native(value: u128) -> Vec<Value> {
+        let mut digits = Vec::new();
+        let mut rest = value;
+        while rest > 0 {
+            digits.push((rest % MACRODIGIT_BASE as u128) as u32);
+            rest /= MACRODIGIT_BASE as u128;
+        }
+        digits.reverse();
+        if digits.is_empty() {
+            return numbers(&["0"]);
+        }
+        digits
+            .iter()
+            .map(|digit| Value::Number(digit.to_string()))
+            .collect()
+    }
+
+    /// The reference's standard form (§C.2) of a native signed integer.
+    fn signed_native(value: i128) -> Vec<Value> {
+        if value < 0 {
+            let mut terms = vec![Value::Char('-')];
+            terms.extend(native(value.unsigned_abs()));
+            return terms;
+        }
+        native(value as u128)
+    }
+
+    /// The bracketed operand form `<ar-function (e.N1) e.N2>` (§C.2), which is
+    /// the only spelling that can pass a first operand of several macrodigits.
+    fn binary_operands(left: u128, right: u128) -> Vec<Value> {
+        let mut args = vec![Value::Bracket(native(left))];
+        args.extend(native(right));
+        args
+    }
+
+    /// §C.3: "Every time `Br` is called, such a term is added to the LEFT
+    /// part", so `<Dgall>` returns the newest burial first and the oldest
+    /// last. The internal stack is append-ordered, which is the opposite.
+    #[test]
+    fn dgall_returns_the_stack_newest_first() {
+        let program = program(vec![]);
+        let evaluator = Evaluator::new(&program);
+
+        evaluator.br(&stack_entry("Oldest", "1")).unwrap();
+        evaluator.br(&stack_entry("Middle", "2")).unwrap();
+        evaluator.br(&stack_entry("Newest", "3")).unwrap();
+
+        assert_eq!(
+            evaluator.dgall().unwrap(),
+            vec![
+                Value::Bracket(stack_entry("Newest", "3")),
+                Value::Bracket(stack_entry("Middle", "2")),
+                Value::Bracket(stack_entry("Oldest", "1")),
+            ]
+        );
+        // Dgall buries the whole stack away.
+        assert!(evaluator.dgall().unwrap().is_empty());
+
+        // Dg still selects the newest term buried under a name, which is the
+        // leftmost one, and removes it (§C.3).
+        let name = vec![Value::Identifier("Name".to_string())];
+        evaluator.br(&stack_entry("Name", "first")).unwrap();
+        evaluator.br(&stack_entry("Name", "second")).unwrap();
+        assert_eq!(
+            evaluator.dg(&name, true).unwrap(),
+            "second".chars().map(Value::Char).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            evaluator.dg(&name, true).unwrap(),
+            "first".chars().map(Value::Char).collect::<Vec<_>>()
+        );
+    }
+
+    /// §C.2: "`<Realfun (e.Function) s.N>` or `<Realfun (e.Function) s.N1
+    /// s.N2>` returns the value of the function e.Function of one or two
+    /// arguments. ... For example `<Realfun ('log') s.N>` returns the logarithm
+    /// of s.N."
+    #[test]
+    fn realfun_calls_the_c_function_named_by_its_first_argument() {
+        let logarithm = builtin("Realfun", &realfun_args("log", &["2.0"])).unwrap();
+        let [Value::Number(text)] = logarithm.as_slice() else {
+            panic!("Realfun returns one real-number symbol, got {logarithm:?}");
+        };
+        // A real number is one symbol that contains a decimal point (B.1.2.3).
+        assert!(text.contains('.'), "`{text}` is not a real-number symbol");
+        let value = text.parse::<f64>().unwrap();
+        assert!(
+            (value - std::f64::consts::LN_2).abs() < 1e-12,
+            "log(2.0) returned {value}"
+        );
+        // `ln` names the same C function, so it returns the same symbol.
+        assert_eq!(
+            builtin("Realfun", &realfun_args("ln", &["2.0"])).unwrap(),
+            logarithm
+        );
+
+        // Exact results, so these assertions need no tolerance.
+        for (function, operands, expected) in [
+            ("sqrt", &["4.0"][..], "2.0"),
+            ("floor", &["2.75"][..], "2.0"),
+            ("ceil", &["-2.75"][..], "-2.0"),
+            ("exp", &["0.0"][..], "1.0"),
+            ("cos", &["0.0"][..], "1.0"),
+            ("atan", &["0.0"][..], "0.0"),
+            ("pow", &["2", "10"][..], "1024.0"),
+            ("fmod", &["7.0", "3.0"][..], "1.0"),
+        ] {
+            assert_eq!(
+                builtin("Realfun", &realfun_args(function, operands)).unwrap(),
+                numbers(&[expected]),
+                "{function}{operands:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn realfun_refuses_an_unknown_c_function() {
+        // §C.2 names a function that must exist in C; a name that does not is
+        // an error, never a silent success.
+        for name in ["nosuchfunction", "", "LOGARITHM"] {
+            let error = builtin("Realfun", &realfun_args(name, &["2.0"])).unwrap_err();
+            let message = error.to_string();
+            assert!(
+                message.contains("Realfun") && message.contains("unknown C function"),
+                "{name}: {message}"
+            );
+        }
+    }
+
+    #[test]
+    fn realfun_refuses_a_malformed_function_argument() {
+        // The function name arrives as the bracketed character string
+        // `(e.Function)`, so anything else is a builtin argument error.
+        let cases = [
+            vec![
+                Value::Identifier("Log".to_string()),
+                Value::Number("2.0".to_string()),
+            ],
+            vec![
+                Value::Bracket(vec![Value::Identifier("Log".to_string())]),
+                Value::Number("2.0".to_string()),
+            ],
+            vec![Value::Bracket(vec![]), Value::Number("2.0".to_string())],
+            vec![],
+        ];
+        for args in cases {
+            let error = builtin("Realfun", &args).unwrap_err();
+            assert!(
+                error.to_string().contains("Realfun"),
+                "unexpected error for {args:?}: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn realfun_refuses_a_wrong_arity_or_a_non_numeric_argument() {
+        for (function, operands) in [
+            ("log", &[][..]),
+            ("log", &["1.0", "2.0"][..]),
+            ("pow", &["2.0"][..]),
+            ("pow", &["2.0", "3.0", "4.0"][..]),
+            ("log", &["abc"][..]),
+            ("sqrt", &["2.0", "(3.0)"][..]),
+        ] {
+            let error = builtin("Realfun", &realfun_args(function, operands)).unwrap_err();
+            assert!(
+                error.to_string().contains("Realfun"),
+                "unexpected error for {function}{operands:?}: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn realfun_refuses_arguments_outside_the_functions_domain() {
+        // A domain error is reported with a message naming Realfun -- not a
+        // panic, a NaN, or an infinity.
+        for (function, operands, expected) in [
+            ("sqrt", &["-1.0"][..], "must not be negative"),
+            ("log", &["0.0"][..], "greater than 0"),
+            ("log2", &["-2.0"][..], "greater than 0"),
+            ("asin", &["2.0"][..], "between -1 and 1"),
+            ("acos", &["-3.0"][..], "between -1 and 1"),
+            ("fmod", &["1.0", "0.0"][..], "must not be 0"),
+            ("pow", &["-1.0", "0.5"][..], "finite"),
+            ("exp", &["1000.0"][..], "finite"),
+        ] {
+            let error = builtin("Realfun", &realfun_args(function, operands)).unwrap_err();
+            let message = error.to_string();
+            assert!(
+                message.contains("Realfun") && message.contains(expected),
+                "{function}{operands:?}: {message}"
+            );
+        }
     }
 
     #[test]

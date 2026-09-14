@@ -149,12 +149,24 @@ guessed. A call with a variable argument is left to the runtime.
 
 | Call | Rejected when |
 |---|---|
-| `Add` `Sub` `Mul` `Compare` `Div` `Mod` `Divmod` | the argument count is not two, or an argument is not an integer literal |
+| `Add` `Sub` `Mul` `Compare` `Div` `Mod` `Divmod` | the literal argument leaves no second operand (`<Add 1>`) |
 | `Div` `Mod` `Divmod` | the divisor is the literal `0` |
 | `Numb` | the argument is not a non-empty string of decimal digits |
 
-The static verdict mirrors `parse_integer` in the runtime, so the two cannot
-disagree about what an integer literal denotes.
+The static verdict mirrors the runtime's operand decoding
+(`split_arithmetic_operands` and `parse_macrodigit` in
+`crates/refal-runtime/src/interpreter.rs`), so the two cannot disagree about
+what an integer operand denotes. §C.2 takes one macrodigit from the front of the
+argument and gives the rest to the second operand when the round brackets are
+omitted, so `<Add 1 2 3>` is the legal call `1 + (2 3)` and is not reported; a
+bracketed, variable, or otherwise non-literal operand is left to the runtime.
+
+A **real** literal is outside this check, because the decoder above reads
+macrodigits only: `<Divmod 1.5 2>` and `<Div 1.0 0.0>` are refused when the
+program runs (naming the builtin) rather than when it is checked. The guarantee
+is one-directional — nothing is reported that is not proven — so leaving them to
+the runtime cannot make a sound program fail `--strict`; it does mean a real
+operand defect is not caught statically.
 
 ## Not yet implemented
 

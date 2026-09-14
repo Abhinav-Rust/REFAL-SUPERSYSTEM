@@ -307,22 +307,14 @@ fn check_terms(terms: &[Term], out: &mut Vec<Diagnostic>) {
 }
 
 fn check_call(name: &str, args: &[Term], span: Span, out: &mut Vec<Diagnostic>) {
-    // Only all-literal calls are decided; anything else is left to the runtime.
-    let literals = args.iter().map(literal_integer).collect::<Option<Vec<_>>>();
     let canonical = canonical_identifier(name);
 
     if matches!(
         canonical.as_str(),
         "ADD" | "SUB" | "MUL" | "DIV" | "MOD" | "DIVMOD" | "COMPARE"
-    ) && let Some(values) = &literals
+    ) && let Some(reason) = arithmetic_literal_failure(&canonical, args)
     {
-        if values.len() != 2 {
-            out.push(fails(name, "expected exactly two integer numbers", span));
-            return;
-        }
-        if matches!(canonical.as_str(), "DIV" | "MOD" | "DIVMOD") && values[1] == 0 {
-            out.push(fails(name, "division by zero", span));
-        }
+        out.push(fails(name, reason, span));
         return;
     }
 
@@ -347,30 +339,61 @@ fn fails(name: &str, reason: &str, span: Span) -> Diagnostic {
     }
 }
 
-/// The integer a literal argument denotes, when the argument is exactly one
-/// number symbol. Mirrors `parse_integer` in the runtime so the static verdict
-/// and the runtime verdict cannot disagree.
-fn literal_integer(term: &Term) -> Option<i128> {
+/// The reason an arithmetic call with literal arguments is proven to fail.
+///
+/// The operand decoding mirrors the runtime's (§C.2 of the reference): an
+/// integer operand is an optional sign symbol followed by one or more
+/// macrodigit literals, most significant first, and when the round brackets
+/// around the first operand are omitted one macrodigit -- with its optional
+/// sign -- is taken from the front of the call's argument while the rest forms
+/// the second operand. So `<Add 1 2 3>` is the legal call `1 + (2 3)` and must
+/// not be reported, while `<Add 1>` has no second operand and always fails.
+///
+/// `None` means "not decidable here": a bracketed operand, a variable, or any
+/// argument that is not a literal macrodigit is left to the runtime.
+fn arithmetic_literal_failure(name: &str, args: &[Term]) -> Option<&'static str> {
+    let head = usize::from(matches!(
+        args.first().map(|term| &term.kind),
+        Some(TermKind::Symbol(Symbol::Char('-' | '+')))
+    )) + 1;
+    let split = head.min(args.len());
+    let first = literal_integer_operand(&args[..split])?;
+    let second = literal_integer_operand(&args[split..])?;
+    if first.is_empty() || second.is_empty() {
+        return Some("expected exactly two integer numbers");
+    }
+    if matches!(name, "DIV" | "MOD" | "DIVMOD") && second.iter().all(|digit| *digit == 0) {
+        return Some("division by zero");
+    }
+    None
+}
+
+/// The macrodigits of one literal integer operand (§C.2): an optional sign
+/// symbol followed by macrodigit literals, most significant first.
+fn literal_integer_operand(terms: &[Term]) -> Option<Vec<u32>> {
+    let digits = match terms.first() {
+        Some(Term {
+            kind: TermKind::Symbol(Symbol::Char('-')) | TermKind::Symbol(Symbol::Char('+')),
+            ..
+        }) => &terms[1..],
+        _ => terms,
+    };
+    digits.iter().map(literal_macrodigit).collect()
+}
+
+/// The macrodigit a literal term denotes, when the term is exactly one number
+/// symbol holding a value in `0..=2^32 - 1` (reference 1.2.2). Mirrors
+/// `parse_macrodigit` in the runtime so the static verdict and the runtime
+/// verdict cannot disagree about what an integer literal denotes.
+fn literal_macrodigit(term: &Term) -> Option<u32> {
     let TermKind::Symbol(Symbol::Number(text)) = &term.kind else {
         return None;
     };
-    parse_integer(text)
-}
-
-fn parse_integer(text: &str) -> Option<i128> {
-    let digits = text.strip_prefix('+').unwrap_or(text);
-    let (negative, digits) = digits
-        .strip_prefix('-')
-        .map_or((false, digits), |digits| (true, digits));
-    if digits.is_empty() || !digits.chars().all(|ch| ch.is_ascii_digit()) {
+    if text.is_empty() || !text.chars().all(|ch| ch.is_ascii_digit()) {
         return None;
     }
-    let magnitude = digits.parse::<i128>().ok()?;
-    if negative {
-        magnitude.checked_neg()
-    } else {
-        Some(magnitude)
-    }
+    let value = text.parse::<u64>().ok()?;
+    (value <= u32::MAX as u64).then_some(value as u32)
 }
 
 /// The characters of an all-character-literal argument list, or `None` when
