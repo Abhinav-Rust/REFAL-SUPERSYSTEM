@@ -4848,3 +4848,74 @@ fn refal_authored_transformer_matches_a_rust_reference() {
         "the Refal transformer disagrees with the Rust reference"
     );
 }
+
+/// Turchin 1980 4.2 in Refal: `compiler.ref` builds the graph of states from
+/// the parsed program and prints it byte-identically to the Rust bootstrap's
+/// `refal graph`. This is the first piece of the *transforming* half of the
+/// compiler to live in Refal rather than in `refal-core`, and it reuses Lex
+/// and Parse exactly as the checker and the emitter do.
+///
+/// The list is derived from `examples/` so it cannot silently cover nothing,
+/// and the sweep is checked for non-vacuity: at least one graph must contain a
+/// transition, or a builder that printed only the entry line would pass.
+#[test]
+fn refal_authored_seed_graph_matches_the_rust_oracle() {
+    let mut names: Vec<String> = fs::read_dir(workspace_path("examples"))
+        .expect("read the examples directory")
+        .filter_map(|entry| {
+            let path = entry.ok()?.path();
+            let name = path.file_name()?.to_string_lossy().into_owned();
+            (name.ends_with(".ref") && name != "compiler.ref").then_some(name)
+        })
+        .collect();
+    names.sort();
+
+    let mut checked = 0usize;
+    let mut with_transitions = 0usize;
+    let mut failures = Vec::new();
+    for name in names {
+        let path = format!("examples/{name}");
+        let oracle = graph_file(&path);
+        // A negative fixture is one the Rust bootstrap refuses to graph; it is
+        // out of scope here exactly as it is for the byte-identical emitter
+        // sweep, which filters the same way.
+        if !oracle.status.success() {
+            continue;
+        }
+        checked += 1;
+        let expected = String::from_utf8_lossy(&oracle.stdout).into_owned();
+        if expected.contains("->") {
+            with_transitions += 1;
+        }
+        let source = fs::read_to_string(workspace_path(&path)).expect("read example");
+        let actual = run_file("examples/compiler.ref", &["GRAPH", &source]);
+        if !actual.status.success() {
+            failures.push(format!(
+                "{name}: compiler.ref GRAPH failed\n{}",
+                String::from_utf8_lossy(&actual.stderr)
+            ));
+            continue;
+        }
+        let actual = String::from_utf8_lossy(&actual.stdout).into_owned();
+        if actual != expected {
+            failures.push(format!(
+                "{name}:\n  graph: {expected:?}\n  refal: {actual:?}"
+            ));
+        }
+    }
+
+    assert!(
+        checked >= 40,
+        "the graph sweep should cover the examples, only checked {checked}"
+    );
+    assert!(
+        with_transitions >= 10,
+        "the graph sweep is vacuous: only {with_transitions} graphs contained a transition"
+    );
+    assert!(
+        failures.is_empty(),
+        "{} of {checked} examples diverge from the Rust bootstrap:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+}

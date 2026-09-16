@@ -1,4 +1,4 @@
-$EXTERN Prout, Chr, Ord, Add, Compare;
+$EXTERN Prout, Chr, Ord, Add, Compare, Upper;
 
 * Refal-authored lexer + parser + checker + emitter for Classic Refal-5.
 *
@@ -32,6 +32,8 @@ $EXTERN Prout, Chr, Ord, Add, Compare;
 $ENTRY Go {
   ('CHECK') (e.Source) =
     <Prout <Check <Parse <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>>>;
+  ('GRAPH') (e.Source) =
+    <Prout <Graph <Parse <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>>>;
   (e.Source) = <Compile <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>;
 }
 
@@ -570,4 +572,317 @@ EmitCallArgs {
 EmitChar {
   "'" = '"' "'" '"';
   s.C = "'" s.C "'";
+}
+
+* ------------------------------------------------------------------ graph
+*
+* Turchin 1980 4.2, the graph of states, built in Refal and printed
+* byte-identically to the Rust bootstrap's `refal graph`. A state is a
+* sentence, in program order; a transition is one call occurrence whose callee
+* names a function that appears in the program; the entry is the state of Go.
+* `refal graph` prints the graph after clean_unreachable_states, so the
+* reachability cleanup and the renumbering it implies are reproduced here too,
+* which is what makes the two comparable byte for byte.
+*
+* This is the first piece of the *transforming* half of the compiler -- the
+* half Turchin's Chapter 4 makes the centre of compilation -- to be written in
+* Refal rather than in refal-core. It reuses Lex and Parse exactly as the
+* checker and the emitter do, so nothing is restated.
+*
+* One convention runs through the section, because getting it wrong fails
+* silently: a function that walks a list takes the list SPREAD (one argument
+* per element) and separates its base case by arity, while a function that
+* wants a list as a single value takes it as one bracketed argument and
+* destructures it with `(e.X)`. Choosing the wrong one binds the first element
+* where the whole list was meant, which is a wrong answer rather than an error.
+
+Graph {
+  (PROG e.Items) = <FormatGraph <CleanG <BuildG e.Items>>>;
+}
+
+* ---- build the seed graph
+
+BuildG {
+  e.Items = <BuildG2 (<FlatStates e.Items>)>;
+}
+
+* One record per sentence, in program order: (name characters, sentence index,
+* the sentence itself). The item is taken whole and destructured in FlatItem,
+* because `e.Sents e.Rest` would be two adjacent e. variables and split
+* shortest-first, leaving the recursion no argument to consume.
+FlatStates {
+  = ;
+  t.Item e.Rest = <FlatItem t.Item> <FlatStates e.Rest>;
+}
+
+* A non-function item ($EXTERN) contributes no state and must not stall the
+* walk, so the second sentence accepts any bracket at all.
+FlatItem {
+  (FUN (Ident e.N) (e.V) e.Sents) = <SPairs (e.N) 0 e.Sents>;
+  (e.Any) = ;
+}
+
+SPairs {
+  (e.N) s.I = ;
+  (e.N) s.I t.Sent e.Rest = ((e.N) s.I t.Sent) <SPairs (e.N) <Add s.I 1> e.Rest>;
+}
+
+BuildG2 {
+  (e.Pairs) = <BuildG3 (<StatesOf (e.Pairs)>) (<FirstsOf (e.Pairs)>)>;
+}
+
+* States carry ids 0,1,2... in program order.
+StatesOf {
+  (e.Pairs) = <StatesOf2 0 e.Pairs>;
+}
+
+StatesOf2 {
+  s.I = ;
+  s.I ((e.N) s.J t.Sent) e.Rest = (ST s.I (e.N) s.J t.Sent) <StatesOf2 <Add s.I 1> e.Rest>;
+}
+
+BuildG3 {
+  (e.States) (e.Firsts) =
+    (GR (<LookupGo (e.Firsts)>) (e.States) (<TransOf (e.States) (e.Firsts)>));
+}
+
+* first_states[uppercase(name)] = the function's first state id. A later
+* function with the same name does not overwrite it, so the accumulator only
+* ever grows and the lookup decides.
+FirstsOf {
+  (e.Pairs) = <FirstsL () <StatesOf (e.Pairs)>>;
+}
+
+FirstsL {
+  (e.Acc) = e.Acc;
+  (e.Acc) (ST s.Id (e.N) s.J t.Sent) e.Rest =
+    <FirstsL <FirstAdd (e.Acc) (<Upper e.N>) s.Id> e.Rest>;
+}
+
+FirstAdd {
+  (e.Acc) (e.U) s.Id = <FirstAdd2 (e.Acc) (e.U) s.Id <Lookup (e.Acc) (e.U)>>;
+}
+
+FirstAdd2 {
+  (e.Acc) (e.U) s.Id s.P = (e.Acc);
+  (e.Acc) (e.U) s.Id = (e.Acc ((e.U) s.Id));
+}
+
+Lookup {
+  (e.Acc) (e.Q) = <LookupL e.Acc (e.Q)>;
+}
+
+* Key equality is exact after uppercasing, which is all build_seed_graph asks
+* for: to_ascii_uppercase, with no '-'/'_' folding.
+LookupL {
+  (e.Q) = ;
+  ((e.U) s.Id) e.Rest (e.Q), <SameChars (e.U) (e.Q)> : '1' = s.Id;
+  (e.F) e.Rest (e.Q) = <LookupL e.Rest (e.Q)>;
+}
+
+LookupGo {
+  (e.Firsts) = <LookupGoL e.Firsts>;
+}
+
+LookupGoL {
+  = ;
+  ((e.U) s.Id) e.Rest, <SameChars (e.U) ('GO')> : '1' = s.Id;
+  (e.F) e.Rest = <LookupGoL e.Rest>;
+}
+
+SameChars {
+  (e.A) (e.A) = '1';
+  (e.A) (e.B) = ;
+}
+
+* ---- transitions: one per call occurrence, in term order
+
+TransOf {
+  (e.States) (e.Firsts) = <TransOf2 (e.Firsts) e.States>;
+}
+
+TransOf2 {
+  (e.Firsts) = ;
+  (e.Firsts) (ST s.Id (e.N) s.J t.Sent) e.Rest =
+    <StateTrans s.Id (e.Firsts) <SentenceCalls t.Sent>> <TransOf2 (e.Firsts) e.Rest>;
+}
+
+StateTrans {
+  s.Id (e.Firsts) = ;
+  s.Id (e.Firsts) (e.Callee) e.Rest =
+    <EmitTrans s.Id (e.Firsts) (e.Callee)> <StateTrans s.Id (e.Firsts) e.Rest>;
+}
+
+EmitTrans {
+  s.Id (e.Firsts) (e.Callee) =
+    <EmitTrans2 s.Id (e.Callee) <Lookup (e.Firsts) (<Upper e.Callee>)>>;
+}
+
+* A transition exists only when the callee names a function in the program, so
+* a call to anything else produces none, and two identical calls are not
+* deduplicated. The callee is emitted as written, not uppercased.
+EmitTrans2 {
+  s.Id (e.Callee) s.To = (TR s.Id (e.Callee) s.To);
+  s.Id (e.Callee) = ;
+}
+
+* The order is the one collect_graph_state_call_names uses: the pattern, then
+* for each condition its expression and then its pattern, then the result.
+SentenceCalls {
+  (SENT (e.Pat) (e.Conds) (e.Res)) = <TermCalls e.Pat> <CondCalls e.Conds> <TermCalls e.Res>;
+}
+
+CondCalls {
+  = ;
+  (COND (e.Expr) (e.CPat)) e.Rest = <TermCalls e.Expr> <TermCalls e.CPat> <CondCalls e.Rest>;
+}
+
+TermCalls {
+  = ;
+  t.Term e.Rest = <OneTermCalls t.Term> <TermCalls e.Rest>;
+}
+
+OneTermCalls {
+  (SYM s.C) = ;
+  (ID e.N) = ;
+  (NUM e.D) = ;
+  (VAR s.K e.I) = ;
+  (BR e.Inner) = <TermCalls e.Inner>;
+  (BLK (e.Arg) e.Sents) = <TermCalls e.Arg> <SentCalls e.Sents>;
+  (CALL (ID e.N) e.Args) = (e.N) <TermCalls e.Args>;
+  t.Other = ;
+}
+
+SentCalls {
+  = ;
+  t.Sent e.Rest = <SentenceCalls t.Sent> <SentCalls e.Rest>;
+}
+
+* ---- clean: keep only what the entry can reach (clean_unreachable_states)
+
+CleanG {
+  (GR (e.Entry) (e.States) (e.Trans)) = <CleanG2 (e.Entry) (e.States) (e.Trans)>;
+}
+
+CleanG2 {
+  () (e.States) (e.Trans) = (CG () () ());
+  (s.E) (e.States) (e.Trans) =
+    <Renumber2 (e.Trans) s.E <RenumS 0 () () (<Reach s.E (e.States) (e.Trans)>) e.States>>;
+}
+
+* Breadth-first from the entry. From a state the walk reaches every state of
+* the same function, by case-insensitive name, and every transition target.
+Reach {
+  s.E (e.States) (e.Trans) = <ReachLoop (s.E) () (e.States) (e.Trans)>;
+}
+
+ReachLoop {
+  () (e.Seen) (e.States) (e.Trans) = e.Seen;
+  (s.Id e.Q) (e.Seen) (e.States) (e.Trans), <Member s.Id (e.Seen)> : '1' =
+    <ReachLoop (e.Q) (e.Seen) (e.States) (e.Trans)>;
+  (s.Id e.Q) (e.Seen) (e.States) (e.Trans) =
+    <ReachLoop <Enqueue (e.Q) <Successors s.Id (e.States) (e.Trans)>> (s.Id e.Seen) (e.States) (e.Trans)>;
+}
+
+Enqueue {
+  (e.Q) = (e.Q);
+  (e.Q) s.X e.Rest = <Enqueue (e.Q s.X) e.Rest>;
+}
+
+Successors {
+  s.Id (e.States) (e.Trans) = <SameFunc s.Id (e.States)> <TransFrom s.Id e.Trans>;
+}
+
+SameFunc {
+  s.Id (e.States) = <SameFunc2 <FuncName s.Id e.States> (e.States)>;
+}
+
+FuncName {
+  s.Id = ;
+  s.Id (ST s.Id (e.N) s.J t.Sent) e.Rest = (e.N);
+  s.Id (e.S) e.Rest = <FuncName s.Id e.Rest>;
+}
+
+SameFunc2 {
+  (e.N) (e.States) = <SameFunc3 (<Upper e.N>) e.States>;
+}
+
+SameFunc3 {
+  (e.U) = ;
+  (e.U) (ST s.Id (e.M) s.J t.Sent) e.Rest, <SameChars (<Upper e.M>) (e.U)> : '1' =
+    s.Id <SameFunc3 (e.U) e.Rest>;
+  (e.U) (e.S) e.Rest = <SameFunc3 (e.U) e.Rest>;
+}
+
+TransFrom {
+  s.Id = ;
+  s.Id (TR s.Id (e.Callee) s.To) e.Rest = s.To <TransFrom s.Id e.Rest>;
+  s.Id (e.T) e.Rest = <TransFrom s.Id e.Rest>;
+}
+
+Member {
+  s.X (e.S) = <MemberL s.X e.S>;
+}
+
+MemberL {
+  s.X = ;
+  s.X s.X e.Rest = '1';
+  s.X s.Y e.Rest = <MemberL s.X e.Rest>;
+}
+
+* Renumber the reachable states 0,1,2... in program order and carry the
+* remapping into the transitions; an edge with an unmapped endpoint is the one
+* that led to a state which was removed.
+RenumS {
+  s.Next (e.Map) (e.New) (e.Reach) = (RS (e.Map) (e.New));
+  s.Next (e.Map) (e.New) (e.Reach) (ST s.Id (e.N) s.J t.Sent) e.Rest,
+    <Member s.Id (e.Reach)> : '1' =
+      <RenumS <Add s.Next 1> (e.Map (RM s.Id s.Next)) (e.New (ST s.Next (e.N) s.J t.Sent)) (e.Reach) e.Rest>;
+  s.Next (e.Map) (e.New) (e.Reach) (ST s.Id (e.N) s.J t.Sent) e.Rest =
+      <RenumS s.Next (e.Map) (e.New) (e.Reach) e.Rest>;
+}
+
+Renumber2 {
+  (e.Trans) s.E (RS (e.Map) (e.New)) =
+    (CG (<LookupM (e.Map) s.E>) (e.New) (<RenumT (e.Map) e.Trans>));
+}
+
+LookupM {
+  (e.Map) s.X = <LookupML e.Map s.X>;
+}
+
+LookupML {
+  s.X = ;
+  (RM s.X s.N) e.Rest s.X = s.N;
+  (e.R) e.Rest s.X = <LookupML e.Rest s.X>;
+}
+
+RenumT {
+  (e.Map) = ;
+  (e.Map) (TR s.F (e.Callee) s.T) e.Rest,
+    <LookupM (e.Map) s.F> : s.NF,
+    <LookupM (e.Map) s.T> : s.NT =
+      (TR s.NF (e.Callee) s.NT) <RenumT (e.Map) e.Rest>;
+  (e.Map) (e.T) e.Rest = <RenumT (e.Map) e.Rest>;
+}
+
+* ---- print: `format_seed_graph`, with the final newline left to Prout
+
+FormatGraph {
+  (CG () (e.States) (e.Trans)) = "entry: <none>" <FmtTail (e.States) (e.Trans)>;
+  (CG (s.E) (e.States) (e.Trans)) = "entry: S" s.E <FmtTail (e.States) (e.Trans)>;
+}
+
+FmtTail {
+  (e.States) (e.Trans) = <FmtStates e.States> <FmtTrans e.Trans>;
+}
+
+FmtStates {
+  = ;
+  (ST s.Id (e.N) s.J t.Sent) e.Rest = <NL> "S" s.Id " = " e.N "#" s.J <FmtStates e.Rest>;
+}
+
+FmtTrans {
+  = ;
+  (TR s.F (e.Callee) s.T) e.Rest = <NL> "S" s.F " -" e.Callee "-> S" s.T <FmtTrans e.Rest>;
 }
