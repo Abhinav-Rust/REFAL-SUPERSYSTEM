@@ -34,14 +34,14 @@ objective to a gate. Not another Refal implementation.
 
 | | |
 |---|---|
-| Honest completion | **~60%** (product completeness — one method, see below) |
-| Tests | 305 passing, 0 clippy, fmt clean |
-| Last commit | `3059517` then this commit |
+| Honest completion | **~61%** (product completeness — one method, see below) |
+| Tests | 306 passing, 0 clippy, fmt clean |
+| Last commit | `44e78f2` then this commit |
 | Working tree | clean |
 
 ### Workstream credit
 
-**One number, one method: ~60%.** Each workstream is credited for what is
+**One number, one method: ~61%.** Each workstream is credited for what is
 implemented *and* tested *for the general case* — not for the corpus, and not for
 effort spent. This replaced three figures that used to be published side by side
 (an effort-weighted ~88%, an evidence-weighted ~81%, a gate-only ~78%) and
@@ -56,14 +56,14 @@ exists. `README.md` and `PLAN.md` section 5 publish the same table.
 | Refal machine / runtime | 19.5% | 12.5 |
 | Graph of states / Refal emission | 8.5% | 5.0 |
 | Static verification (Tier 1) | 15.0% | 12.5 |
-| Compiler implemented in Refal | 25.5% | 12.0 |
+| Compiler implemented in Refal | 25.5% | 13.0 |
 | Verified self-hosting fixpoint | 13.0% | 5.5 |
 | Conformance / release evidence | 4.0% | 1.5 |
-| **Total** | **100%** | **~60%** |
+| **Total** | **100%** | **~61%** |
 
 The three heaviest rows — the Refal compiler, the runtime, and self-hosting —
-hold 58 of the 100 points, are the three furthest from done, and carry 28 of the
-40 deducted points. The figure now agrees in direction with the milestone table,
+hold 58 of the 100 points, are the three furthest from done, and carry 27 of the
+39 deducted points. The figure now agrees in direction with the milestone table,
 which is the point: counting ticks and reading the percentage should reach the
 same conclusion. Closing an objective that its workstream already paid for does
 not move it — which is why T-5's and T-8's closures changed the wording, not the
@@ -132,6 +132,14 @@ number.
   `refal residualize-graph` on 55 of 55 examples, with a vacuity guard that
   requires a residue to differ from the whole program. This is the first stage of
   the transforming half that produces *source*. See the section below.
+- **The ground driver in Refal** — `compiler.ref` gained a `DRIVE` mode that
+  **contracts** a configuration: it reproduces `refal drive` (`drive_ground`)
+  over the closed entry `<Go>`, byte-identically on every example `refal drive`
+  accepts. `GRAPH` and `RESIDUALIZE` report on a program; this one runs it. It
+  carries the whole of the machinery the symbolic driver needs — the ground
+  matcher, sentence selection with conditions, blocks in condition position,
+  call instantiation and the visited-state trace — which is why it is the
+  substrate the next milestone builds on. See the section below.
 
 ### Done — T-8, metacodes and the Chapter 6 contract
 
@@ -489,6 +497,72 @@ recorded in the section:
   function was emitted as an empty `F { }` — a program the checker would reject.
   Bracketing the list is what tells the two apart.
 
+### Done — the ground driver: contracting a configuration
+
+The first mode of `compiler.ref` that does not *report on* a program but **runs**
+one. `refal drive <file.ref>` is `drive_ground`: it contracts the closed entry
+configuration `<Go>`, records the state of every sentence selected along the
+way, and prints three lines. The `DRIVE` mode reproduces it, verified by
+`refal_authored_driver_matches_refal_drive` over every example `refal drive`
+accepts, **zero divergences**.
+
+What the stage contains is deliberately the whole of the machinery the symbolic
+driver will need, so that the next milestone adds case splitting and folding to
+a working contract rather than to a sketch:
+
+- **The ground matcher.** `s.` binds any symbol, `t.` any single term, `e.` any
+  expression, brackets are terms rather than sequences, and a repeated variable
+  must bind the identical value everywhere. One ordering detail is not
+  arbitrary: an `e.`-variable tries the **longest** prefix first, because that is
+  `match_ground_pattern`'s order and not the runtime matcher's. `(e.X) (e.Y)` is
+  where the two orders are distinguishable, and the oracle decides.
+- **Sentence selection with conditions**, where a failed condition falls through
+  to the next sentence, and a block in condition position is applied as an
+  anonymous function whose bindings stay inside it.
+- **Instantiation** — a call is instantiated by instantiating its arguments,
+  invoking, and splicing the result in place; a variable by its binding; a
+  bracket by recursing inside it. A block in *result* position is a different
+  case from one in condition position and gets its own path.
+- **The visited trace**, mapped back through the graph's `(ST id name index
+  sentence)` records.
+
+Two semantic details are the oracle's and are documented in the file rather than
+papered over. `drive_ground` special-cases `Prout` to return its argument
+instead of printing, so `output:` is the value the program computed. And the
+step counter is threaded through **failures** as well as successes, because the
+Rust driver's condition matcher advances it before returning false;
+`condition-block.ref` is the case that makes that observable, and a driver that
+counted only successes would disagree on it.
+
+Two supporting changes were needed to get here.
+
+- **`--input-file`.** Each argument to `refal run` becomes a bracket of
+  characters, and Windows caps a command line at 32 KB while the compiler's own
+  source is now 47 KB — so the self-hosting stage could not be launched at all.
+  The flag moves a program's input onto disk. The fixpoint test uses it.
+- **Bindings as a shared immutable spine.** The work list carried an owned map
+  and deep-copied it once per nested term, which is quadratic in the length of
+  the bound run: a `s.C e.Rest` walk over n symbols copies n−k values at step k.
+  An `Rc` makes the copy a refcount bump, and `Rc::try_unwrap` recovers the map
+  without copying wherever the frame that owned it has already finished — which
+  is the usual case, because the work list completes frames in stack order.
+
+A third fix came out of the dead-sentence lint, and it is the interesting one
+because the lint was wrong rather than the program. `pattern_subsumes` treated
+`t.X` as subsuming `e.A`, which is false whenever the expression is empty or
+holds more than one term — an *occurrence* of a variable is one term, but the
+*value* it binds need not be. The false subsumption had been reporting a real
+sentence of `DvSingle` as dead. `is_single_term` draws the distinction, and the
+one case where the length genuinely is known is a **repeated** `e.`-variable,
+whose earlier occurrence already fixed it.
+
+**Measured on the way, and published rather than filed away:** `refal run` is
+super-quadratic in its input's length — 63 B in 0.5 s, 9.4 KB in 17 s, 47.5 KB in
+587 s — because every step copies the remaining expression into a binding and
+copies it again into the next call's argument list. That is the heap-allocated
+view field, it is the single largest remaining engineering item, and the `Rc`
+spine above removes one of the two copies rather than both.
+
 ### Open
 
 - **T-1** a non-trivial program transformer written in Refal.
@@ -516,58 +590,68 @@ recorded in the section:
   optimisation, not a gap.
 - **T-8** metacodes (Ch. 1.3) — closed for ground expressions; see the section
   above. The §6.4 `unknown` values remain open and are recorded there.
-- Heap-allocated single view field — the work list copies term slices, so the
-  term sequence is not yet Turchin's one flat view field; `driver.ref`.
+- Heap-allocated single view field — **now the top of `NEXT ACTION`**, because it
+  is measured rather than suspected: the work list copies the term run a variable
+  binds, so `refal run` is super-quadratic in its input's length and the
+  self-hosting tests OOM when the suite runs them in parallel. See below.
 
 ---
 
 ## NEXT ACTION
 
-**The driver: contracting a configuration.**
+**The view field: a binding is a range, not a value.**
 
-The substrate is in place. `compiler.ref` builds the §4.2 seed graph, cleans it,
-prints it byte-identically to `refal graph`, and now emits the residual program
-the cleaned graph denotes, byte-identically to `refal residualize-graph`. What it
-cannot yet do is the thing Chapter 4 is actually about: **drive** a configuration
-— contract it against the program's sentences, fold what recurs, and residualise
-the result.
-
-That gap is the whole of row 6's 13.5 unearned points and most of row 7's 7.5.
-`refal-core`'s `drive_symbolic_with_strategy` (`crates/refal-core/src/lib.rs:693`)
-is the behaviour to reproduce, exactly as `compiler.ref` had to reproduce `lower`.
-
-**Start with the ground driver, because it has the cleanest oracle.**
-`refal drive <file.ref>` is `drive_ground`: it contracts the closed entry
-configuration and prints three lines —
+The ground driver is done, so the transforming half now runs in Refal as far as
+*contracting a ground configuration*. What stops the next stage — symbolic
+driving, and with it the self-hosting fixpoint of a real compiler rather than a
+normaliser — is not a missing algorithm. It is that the runtime cannot carry the
+compiler's own source, and the numbers are measured rather than assumed:
 
 ```
-steps: {n}
-visited: S0 -> S2 -> S2 -> S2 -> S1
-output: {the result expression}
+refal run examples/compiler.ref --input-file examples/compiler.ref
+  63 B   ->    0.5 s
+  9.4 KB ->   17 s
+  47.5 KB -> 587 s          (and under a parallel test run: OOM)
 ```
 
-— which is byte-comparable in the same way `refal graph` and
-`refal residualize-graph` are, and it exercises exactly the machinery the
-symbolic driver needs: pattern matching against a configuration, sentence
-selection, contraction, and a visited-state trace. Fifteen corpus examples drive
-successfully today, so a differential over them is thin but non-vacuous; widen it
-by teaching the Refal driver the builtins the rest need.
+The compiler's own source is 47 KB, so **the self-hosting gate costs ten minutes
+per generation and two generations per fixpoint check**. A parallel
+`cargo test --all` runs the four tests that compile that source concurrently and
+the process dies with `memory allocation of 913568 bytes failed` — an
+out-of-memory abort, not a divergence. The suite is green serially and red in
+parallel, and the reason is this item.
 
-*What the ground driver needs, in order.*
+The cause is that every step copies the remaining expression into a binding and
+copies it again into the next call's argument list. A `s.C e.Rest` walk over n
+symbols therefore copies n−k values at step k. The `Rc` spine landed with the
+ground driver removes *one* of those two copies — it makes the map a refcount
+bump instead of a deep copy — but the run of terms a variable binds is still an
+owned `Vec<Value>`, and `Value` is an enum holding `String` and `Vec<Value>`, so
+copying a run is a deep tree copy.
 
-1. **A matcher over ground expressions.** `s.` binds any symbol, `t.` any single
-   term, `e.` any expression; a repeated variable must bind the same value
-   everywhere. Brackets are terms, not sequences. The runtime matcher in
-   `crates/refal-runtime/src/matcher.rs` is the oracle for matching semantics —
-   when the drivers disagree with it, the drivers are wrong.
-2. **Sentence selection with conditions**, including a failed condition falling
-   through to the next sentence, and blocks in condition position applied as an
-   anonymous function.
-3. **Contraction and the visited trace.** `visited` lists the state of every
-   sentence selected, in order, so the driver must map a selected sentence back
-   to its state id — the graph already carries `(ST id name index sentence)`.
-4. **Builtins**, which is what widens the corpus: `Prout` first, then the
-   arithmetic and structural set.
+**Turchin's answer, and the invariant to implement.** The Refal machine does not
+have an expression and a copy of it; it has **one heap-allocated view field**, a
+flat sequence, with the matcher holding a cursor. Matching `s.C e.Rest` does not
+produce a value for `e.Rest` — it produces a *range*: the same flat field, a new
+offset, a shorter length. That is the whole of §2.2 and it is what makes a step
+cost O(1) in the length of the expression rather than O(n).
+
+*What the invariant requires, in order.*
+
+1. **A term sequence that is a shared immutable arena.** `Seq = Rc<[Value]>`,
+   with `Slice { seq: Seq, start: usize, len: usize }`. A binding maps a variable
+   to a `Slice`, so binding is a pointer bump and two integer writes.
+2. **`Value` shares its payload.** `Bracket(Rc<[Value]>)` and interned symbols,
+   so that copying a run of *bracketed* terms is a run of refcount bumps rather
+   than a run of deep tree copies. Without this, step 1 moves the quadratic from
+   terms to trees and the OOM survives.
+3. **Materialisation only at a call boundary.** A call's argument list is built by
+   concatenating slices, which costs O(n) — but only once per call, where today it
+   is once per *step*. The result is wrapped in a fresh `Seq`.
+4. **The gate is the existing one.** The differential corpus, the emitter sweep,
+   the graph and residualization differentials and the self-hosting fixpoint must
+   all stay byte-identical. This is a representation change, so any behavioural
+   difference is a bug in the change and not a finding.
 
 *Traps this repository has already paid for.* Each failed silently:
 
@@ -591,12 +675,19 @@ by teaching the Refal driver the builtins the rest need.
 - **Miscounted call nesting** is reported at the block's closing brace, not at the
   mistake. Count one `>` per open `<`.
 
-**Layering.** The stage belongs inside `examples/compiler.ref` as one more
-`$ENTRY Go` mode, so it reuses `Lex`, `Parse` and `Graph` with no duplication —
-the same reason `GRAPH` and `RESIDUALIZE` live there.
+**Then, and only then, the symbolic driver.** `refal-core`'s
+`drive_symbolic_with_strategy` (`crates/refal-core/src/lib.rs:693`) is the
+behaviour to reproduce, exactly as `compiler.ref` had to reproduce `lower`, `graph`
+and `drive`. The ground driver already holds the whole of its machinery — the
+matcher, sentence selection with conditions, blocks in condition position, call
+instantiation and the visited trace — so the symbolic stage adds case splitting
+(§4.2), folding against the active path, and generalisation (§4.4/T-5), and
+nothing else. It is the same `$ENTRY Go` mode pattern as `GRAPH`, `RESIDUALIZE`
+and `DRIVE`. Doing it *before* the view field means writing it against a runtime
+that cannot carry its own input, which is why the order here is not negotiable.
 
-Also open, and not objectives: the runtime's heap-allocated view field (issue
-#7), §4.4's strategy *search*, and T-8's §6.4 `unknown` values.
+Also open, and not objectives: §4.4's strategy *search*, and T-8's §6.4
+`unknown` values.
 
 The soundness gate is unchanged and non-negotiable:
 `strict_mode_has_no_false_positives_on_the_corpus` must stay green. If a new
@@ -609,3 +700,17 @@ This is developed on an HP laptop running Windows 11 Pro. Keep the load
 balanced: build and test with `-j 2`, prefer a targeted
 `cargo test -p <crate> <filter>` over a full workspace run, and leave a pause
 between heavy commands rather than chaining them back to back.
+
+**`cargo test --all` in parallel is not a usable gate while the view field is
+missing.** Four tests compile `examples/compiler.ref` with the Refal-authored
+compiler — `compile_command_compiles_the_compiler_itself`,
+`compiler_ref_reaches_a_self_hosting_fixpoint`,
+`the_refal_authored_compiler_matches_lower_on_every_lowerable_example` and
+`refal_authored_residualization_matches_residualize_graph` — and each runs a
+ten-minute, memory-hungry interpreter stage. Run together they exhaust memory and
+abort with `memory allocation of 913568 bytes failed`, which reads like a
+semantic failure and is not one. Until the view field lands, gate with
+`cargo test --all -j 2 -- --test-threads=1`, or run those four by name with
+`--test-threads=1`. Recording this is the point: a red suite that is red for a
+known environmental reason still has to be explained, or it will be misread as a
+regression the next time it is seen.

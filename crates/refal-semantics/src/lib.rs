@@ -1155,6 +1155,34 @@ mod tests {
         assert!(pattern_subsumes(&general, &[bracket(vec![ch('a')])]));
         assert!(pattern_subsumes(&general, &[var(VariableKind::Term, "Y")]));
         assert!(!pattern_subsumes(&general, &[]));
+        // An e-variable occupies one position but denotes a run of any length,
+        // so `t.X` cannot be bound to it: the value may be empty or long, and
+        // `t.X` matches neither. Without this the whole nested shape below --
+        // the `DvSingle` dispatch, where the second sentence exists exactly to
+        // catch a bracket holding more than one term -- is reported as dead.
+        assert!(!pattern_subsumes(
+            &general,
+            &[var(VariableKind::Expression, "Y")]
+        ));
+        assert!(!pattern_subsumes(
+            &[bracket(vec![var(VariableKind::Term, "X")])],
+            &[bracket(vec![var(VariableKind::Expression, "A")])]
+        ));
+        assert!(pattern_subsumes(
+            &[bracket(vec![var(VariableKind::Term, "X")])],
+            &[bracket(vec![ch('a')])]
+        ));
+        // A *repeated* e-variable is the one case where the length is known:
+        // the earlier occurrence already fixed it at one term, so a `t.`-variable
+        // meeting it in `specific` is decidable.
+        assert!(pattern_subsumes(
+            &[
+                var(VariableKind::Expression, "A"),
+                var(VariableKind::Term, "X"),
+                var(VariableKind::Expression, "A"),
+            ],
+            &[ch('c'), var(VariableKind::Expression, "A"), ch('c')]
+        ));
     }
 
     #[test]

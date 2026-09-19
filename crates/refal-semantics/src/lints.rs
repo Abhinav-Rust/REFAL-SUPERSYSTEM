@@ -422,6 +422,14 @@ type Bindings = HashMap<(VariableKind, String), Vec<Term>>;
 /// `e.`-variable in `specific` is opaque because at run time it may denote a
 /// bracket, which an `s.`-variable cannot match.
 ///
+/// The converse discipline matters just as much, and was missing: an `s.`- or
+/// `t.`-variable in `general` consumes exactly one term, so the term it is
+/// bound to in `specific` must itself be guaranteed to denote one term. An
+/// `e.`-variable is not, whatever position it occupies. Without that check
+/// `[(t.X)]` was reported to subsume `[(e.A)]`, and `DvSingle`'s second sentence
+/// — which exists precisely to catch a bracket that holds more than one term —
+/// was reported as dead.
+///
 /// Literals are compared conservatively — numbers by their exact text, since
 /// deciding that `1` and `1.0` denote the same value is a different question —
 /// so this under-approximates subsumption rather than over-approximating it.
@@ -455,7 +463,10 @@ fn match_terms(general: &[Term], specific: &[Term], bindings: &mut Bindings) -> 
                     try_bind(key, &specific[..1], rest, &specific[1..], bindings)
                 }
                 VariableKind::Term => {
-                    if specific.is_empty() {
+                    if !specific
+                        .first()
+                        .is_some_and(|term| is_single_term(term, bindings))
+                    {
                         return false;
                     }
                     try_bind(key, &specific[..1], rest, &specific[1..], bindings)
@@ -518,6 +529,31 @@ fn is_symbol_like(term: &Term) -> bool {
         TermKind::Symbol(_) => true,
         TermKind::Variable(variable) => variable.kind == VariableKind::Symbol,
         TermKind::Bracket(_) | TermKind::Call { .. } | TermKind::Block { .. } => false,
+    }
+}
+
+/// A term guaranteed to denote exactly **one** term, which is what a `t.`- or
+/// `s.`-variable in `general` consumes from `specific`.
+///
+/// The distinction this draws is the one the whole analysis turns on: an
+/// *occurrence* of a variable in a pattern is one term, but the *value* it binds
+/// need not be. `t.X` against `e.A` cannot be decided by position — `e.A` may
+/// bind any run, including the empty one and a run of two or more — so binding
+/// `t.X` to `e.A` would claim that `[(t.X)]` subsumes `[(e.A)]`, which is false
+/// for every argument of length other than one. A repeated `e.`-variable is the
+/// one case where the length *is* known, because the earlier occurrence already
+/// fixed it.
+fn is_single_term(term: &Term, bindings: &Bindings) -> bool {
+    match &term.kind {
+        TermKind::Symbol(_) | TermKind::Bracket(_) => true,
+        TermKind::Variable(variable) => match variable.kind {
+            VariableKind::Symbol | VariableKind::Term => true,
+            VariableKind::Expression => {
+                let key = (variable.kind, canonical_variable_index(&variable.name));
+                bindings.get(&key).is_some_and(|bound| bound.len() == 1)
+            }
+        },
+        TermKind::Call { .. } | TermKind::Block { .. } => false,
     }
 }
 

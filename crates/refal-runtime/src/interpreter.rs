@@ -5,6 +5,7 @@ use std::collections::{HashMap, hash_map::Entry};
 use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufRead, BufReader, BufWriter, Write};
+use std::rc::Rc;
 use std::time::Instant;
 
 use refal_ast::{
@@ -87,10 +88,25 @@ enum FileHandle {
     Writer(BufWriter<File>),
 }
 
+/// Bindings as the work list carries them: shared, never mutated in place.
+///
+/// A frame's bindings are read by that frame and by every child frame it opens,
+/// and none of them ever writes. Carrying an owned map meant deep-copying it
+/// once per nested term, which is quadratic in the size of the bound run: a
+/// `s.C e.Rest` walk over n symbols copies n-k values at step k. On the
+/// compiler's own source that is the difference between seconds and not
+/// finishing. An `Rc` makes the copy a refcount bump.
+///
+/// The map is handed back as an owned `Bindings` only where the matcher needs
+/// to extend it, and there `Rc::try_unwrap` recovers it without copying whenever
+/// the frame that owned it has already finished -- which is the usual case,
+/// because the work list completes frames in stack order.
+type SharedBindings = Rc<Bindings>;
+
 struct WorkTermsFrame<'a> {
     terms: &'a [Term],
     next: usize,
-    bindings: Bindings,
+    bindings: SharedBindings,
     output: Vec<Value>,
     depth: usize,
     pending: Option<PendingTerm<'a>>,
@@ -128,9 +144,9 @@ enum WorkTask<'a> {
         conditions: &'a [Condition],
         result_terms: &'a [Term],
         condition_index: usize,
-        pending_bindings: Vec<Bindings>,
-        matched_bindings: Vec<Bindings>,
-        current_bindings: Option<Bindings>,
+        pending_bindings: Vec<SharedBindings>,
+        matched_bindings: Vec<SharedBindings>,
+        current_bindings: Option<SharedBindings>,
         depth: usize,
     },
 }
@@ -442,12 +458,19 @@ impl<'a> Evaluator<'a> {
                         let Some(bindings) = current_bindings else {
                             return Ok(None);
                         };
+                        // The matcher extends the map, so it needs it owned.
+                        // The frame that shared it has finished by now, which
+                        // makes this a refcount check rather than a copy.
+                        let bindings =
+                            Rc::try_unwrap(bindings).unwrap_or_else(|shared| (*shared).clone());
                         match match_pattern_with_bindings_candidates(
                             &conditions[condition_index].pattern,
                             &values,
                             bindings,
                         ) {
-                            Ok(matches) => matched_bindings.extend(matches),
+                            Ok(matches) => {
+                                matched_bindings.extend(matches.into_iter().map(Rc::new));
+                            }
                             Err(MatchError::NoMatch) => {}
                             Err(error) => return Err(EvalError::Match(error)),
                         }
@@ -530,16 +553,23 @@ impl<'a> Evaluator<'a> {
                             sentence_index: sentence_index + 1,
                         });
                     } else if sentence.conditions.is_empty() {
+                        // Moved, not cloned: the candidate map holds the runs the
+                        // pattern bound, and those can be as long as the argument.
+                        let bindings = candidates
+                            .into_iter()
+                            .next()
+                            .expect("candidates was checked non-empty");
                         tasks.push(WorkTask::Terms(WorkTermsFrame {
                             terms: &sentence.result,
                             next: 0,
-                            bindings: candidates[0].clone(),
+                            bindings: Rc::new(bindings),
                             output: Vec::new(),
                             depth,
                             pending: None,
                         }));
                     } else {
-                        let mut pending_bindings = candidates;
+                        let mut pending_bindings: Vec<SharedBindings> =
+                            candidates.into_iter().map(Rc::new).collect();
                         pending_bindings.reverse();
                         tasks.push(WorkTask::ConditionEval {
                             function_name: name,
@@ -587,7 +617,7 @@ impl<'a> Evaluator<'a> {
                             tasks.push(WorkTask::Terms(WorkTermsFrame {
                                 terms: &sentence.result,
                                 next: 0,
-                                bindings,
+                                bindings: Rc::new(bindings),
                                 output: Vec::new(),
                                 depth,
                                 pending: None,
@@ -626,7 +656,7 @@ impl<'a> Evaluator<'a> {
                             condition_index,
                             pending_bindings,
                             matched_bindings,
-                            current_bindings: Some(bindings.clone()),
+                            current_bindings: Some(Rc::clone(&bindings)),
                             depth,
                         });
                         tasks.push(WorkTask::Terms(WorkTermsFrame {
@@ -696,7 +726,7 @@ impl<'a> Evaluator<'a> {
                             let child = WorkTermsFrame {
                                 terms: inner,
                                 next: 0,
-                                bindings: frame.bindings.clone(),
+                                bindings: Rc::clone(&frame.bindings),
                                 output: Vec::new(),
                                 depth: frame.depth,
                                 pending: None,
@@ -709,7 +739,7 @@ impl<'a> Evaluator<'a> {
                             let child = WorkTermsFrame {
                                 terms: args,
                                 next: 0,
-                                bindings: frame.bindings.clone(),
+                                bindings: Rc::clone(&frame.bindings),
                                 output: Vec::new(),
                                 depth: frame.depth,
                                 pending: None,
@@ -725,7 +755,7 @@ impl<'a> Evaluator<'a> {
                             let child = WorkTermsFrame {
                                 terms: argument,
                                 next: 0,
-                                bindings: frame.bindings.clone(),
+                                bindings: Rc::clone(&frame.bindings),
                                 output: Vec::new(),
                                 depth: frame.depth,
                                 pending: None,

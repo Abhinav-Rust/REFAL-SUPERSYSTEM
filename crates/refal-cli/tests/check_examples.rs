@@ -2425,8 +2425,14 @@ fn compiler_ref_reaches_a_self_hosting_fixpoint() {
     // C1 compiles it to C2, C2 to C3, and C2 must equal C3 byte for byte. This
     // is a genuine fixpoint: every stage really lexes, parses, checks and
     // emits, unlike the source-preserving artifacts this supersedes.
-    let source = fs::read_to_string(workspace_path("examples/compiler.ref"))
-        .expect("read the compiler source");
+    //
+    // The input is handed over with `--input-file` rather than as an argument,
+    // and that is not cosmetic. Each argument becomes a bracket of characters,
+    // and Windows caps a command line at 32 KB while the compiler's own source
+    // is 47 KB -- so the self-hosting stage could not be launched at all. The
+    // flag is what makes this test possible on the machine the project is
+    // developed on.
+    let source_path = workspace_path("examples/compiler.ref");
 
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -2438,7 +2444,7 @@ fn compiler_ref_reaches_a_self_hosting_fixpoint() {
         let output = Command::new(refal_bin())
             .args(["run"])
             .arg(compiler)
-            .arg(&source)
+            .args(["--input-file", &source_path])
             .output()
             .expect("run a compiler stage");
         assert!(
@@ -4994,6 +5000,98 @@ fn refal_authored_residualization_matches_residualize_graph() {
         dropped_a_function >= 1,
         "the sweep is vacuous: no example's residue differs from its whole program, \
          so an implementation that echoed its input would pass"
+    );
+    assert!(
+        failures.is_empty(),
+        "{} of {checked} examples diverge from the Rust bootstrap:/n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+}
+
+/// The ground driver, in Refal.
+///
+/// `refal drive <file.ref>` is `drive_ground`: it contracts the closed entry
+/// configuration `<Go>`, records the state of every sentence it selects, and
+/// prints `steps:`, `visited:` and `output:`. The `DRIVE` mode in
+/// `examples/compiler.ref` reproduces that on top of the `GRAPH` and
+/// `RESIDUALIZE` stages, so this is the first differential over a stage that
+/// actually *contracts* a configuration rather than reporting on one.
+///
+/// The corpus is whatever `refal drive` accepts, which is 15 of the examples --
+/// the rest have an open entry (`Go` taking `e.Input`) or call a builtin the
+/// driver has no state for. Fifteen is thin, so the test says so and guards
+/// against the thinness hiding a trivial pass: it requires at least four
+/// examples whose trace visits more than one state and at least three whose step
+/// count exceeds the two a program with no calls would produce. A driver that
+/// returned the source unchanged, or that only ever selected one sentence, would
+/// fail those.
+#[test]
+fn refal_authored_driver_matches_refal_drive() {
+    let mut names: Vec<String> = fs::read_dir(workspace_path("examples"))
+        .expect("read the examples directory")
+        .filter_map(|entry| {
+            let path = entry.ok()?.path();
+            let name = path.file_name()?.to_string_lossy().into_owned();
+            (name.ends_with(".ref") && name != "compiler.ref").then_some(name)
+        })
+        .collect();
+    names.sort();
+
+    let mut checked = 0usize;
+    let mut multi_state = 0usize;
+    let mut non_trivial_steps = 0usize;
+    let mut failures = Vec::new();
+    for name in names {
+        let path = format!("examples/{name}");
+        let oracle = drive_file(&path, &[]);
+        // An open entry, or a builtin the driver has no state for, is out of
+        // scope exactly as a negative fixture is for the emitter sweep.
+        if !oracle.status.success() {
+            continue;
+        }
+        checked += 1;
+        let expected = String::from_utf8_lossy(&oracle.stdout).into_owned();
+        if expected.contains(" -> ") {
+            multi_state += 1;
+        }
+        if let Some(steps) = expected
+            .lines()
+            .find_map(|line| line.strip_prefix("steps: "))
+            .and_then(|value| value.trim().parse::<usize>().ok())
+            && steps > 2
+        {
+            non_trivial_steps += 1;
+        }
+
+        let source = fs::read_to_string(workspace_path(&path)).expect("read example");
+        let actual = run_file("examples/compiler.ref", &["DRIVE", &source]);
+        if !actual.status.success() {
+            failures.push(format!(
+                "{name}: compiler.ref DRIVE failed\n{}",
+                String::from_utf8_lossy(&actual.stderr)
+            ));
+            continue;
+        }
+        let actual = String::from_utf8_lossy(&actual.stdout).into_owned();
+        if actual != expected {
+            failures.push(format!(
+                "{name}:\n  drive: {expected:?}\n  refal: {actual:?}"
+            ));
+        }
+    }
+
+    assert!(
+        checked >= 12,
+        "the drive sweep should cover the driveable examples, only checked {checked}"
+    );
+    assert!(
+        multi_state >= 4,
+        "the drive sweep is vacuous: only {multi_state} examples visited more than one state"
+    );
+    assert!(
+        non_trivial_steps >= 3,
+        "the drive sweep is vacuous: only {non_trivial_steps} examples did more than two contractions"
     );
     assert!(
         failures.is_empty(),

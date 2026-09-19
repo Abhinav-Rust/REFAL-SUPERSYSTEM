@@ -28,22 +28,34 @@ $EXTERN Prout, Chr, Ord, Add, Compare, Upper;
 
 * The CLI runs Go, so Go is the compiler: it emits. Passing CHECK as a first
 * argument asks for the checker's verdict instead, which is what the checker
-* tests drive, GRAPH asks for the section 4.2 seed graph, and RESIDUALIZE asks
-* for the residual program the cleaned graph denotes.
+* tests drive, GRAPH asks for the section 4.2 seed graph, RESIDUALIZE asks for
+* the residual program the cleaned graph denotes, and DRIVE contracts the closed
+* entry configuration.
 *
-* Every mode that a failure inside could fall through from has a duplicate
-* sentence printing a marker: without it a bug in the mode would fall through to
-* the compile sentence below and the parser would spin on `('MODE') (source)`
-* instead of reporting. A bug in a stage must not look like a hang.
+* The mode that is *not* recognised gets its own sentence, and it is load
+* bearing. A mode-shaped call -- two brackets -- that names nothing this file
+* implements would otherwise reach the compile sentence below, which would try
+* to parse `('MODE') (source)` as a program and spin. Reporting is the point: a
+* bug in a stage must not look like a hang.
+*
+* A duplicate sentence printing a marker is NOT the way to do that, and this
+* file used to carry three of them. Refal-5 does not fall through to the next
+* sentence when a right-hand side fails -- `evaluate_sentences` returns the
+* result of the selected sentence directly, and a probe confirms it: `Mid { =
+* <Boom>; = 'caught'; }` reports `no sentence matched in function Boom` rather
+* than reaching the second sentence. So a duplicate of the sentence above it is
+* unreachable, and a stage failure is already loud. What is reachable is the
+* case below: an argument shape no mode claims.
 $ENTRY Go {
   ('CHECK') (e.Source) =
     <Prout <Check <Parse <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>>>;
   ('GRAPH') (e.Source) =
     <Prout <Graph <Parse <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>>>;
-  ('GRAPH') (e.Source) = <Prout 'GRAPH FAILED'>;
   ('RESIDUALIZE') (e.Source) =
     <Prout <Residualize <Parse <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>>>;
-  ('RESIDUALIZE') (e.Source) = <Prout 'RESIDUALIZE FAILED'>;
+  ('DRIVE') (e.Source) =
+    <Prout <Drive <Parse <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>>>;
+  (e.Mode) (e.Source) = <Prout 'unknown mode: ' e.Mode>;
   (e.Source) = <Compile <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>;
 }
 
@@ -963,4 +975,476 @@ ResidSents2 {
   (e.U) (ST s.Id (e.M) s.J t.Sent) e.Rest, <SameChars (<Upper e.M>) (e.U)> : '1' =
     t.Sent <ResidSents2 (e.U) e.Rest>;
   (e.U) (e.S) e.Rest = <ResidSents2 (e.U) e.Rest>;
+}
+
+* ------------------------------------------------------------------ drive
+*
+* Section 4.2's other half. The graph says which sentences exist; driving says
+* which of them a configuration actually reaches, by contracting calls until
+* nothing is left to contract. This reproduces `refal drive`, which is
+* drive_ground over the closed entry configuration <Go>: every selected sentence
+* is recorded as a visited state, and the fully instantiated result is printed.
+*
+* The semantics are refal-core's, not the runtime's, and one difference is
+* visible in the output: Prout is *not* a printer here, it is the identity.
+* drive_ground special-cases it to return its argument, so `output:` is the
+* value the program computed rather than what it printed.
+*
+* Two conventions run through the section, both of them responses to traps this
+* repository has paid for.
+*
+* 1. Every list is passed BRACKETED. A function that appends to a list can then
+*    do so without an adjacent e-variable splitting shortest-first and binding
+*    empty, which is the silent hang; and "no list" is a different shape from
+*    "empty list" when it matters.
+* 2. Every computed result is passed FIRST, never last after a spread list. A
+*    trailing spread list followed by a pattern term is matched by trying the
+*    shortest split first, which works but backtracks over the whole list; a
+*    result in first position cannot be misread at all.
+*
+* The step counter is threaded through *failures* as well as successes, because
+* that is what the Rust driver does: `match_ground_conditions` mutates `self`
+* before it returns false, so a sentence whose condition fails still costs the
+* steps its condition expression spent. `condition-block.ref` is the case that
+* makes this observable -- its condition calls `Approve`, and the reported step
+* count only comes out right if that call is counted once per attempt.
+
+Drive {
+  (PROG e.Items) = <DriveRun <CleanG <BuildG e.Items>>>;
+}
+
+DriveRun {
+  (CG () (e.States) (e.Trans)) = "entry: <none>";
+  (CG (s.E) (e.States) (e.Trans)) =
+    <DriveEntry (e.States) <DvNameOf s.E (e.States)>>;
+}
+
+* The entry is a state id; the driver needs the function that state belongs to.
+DvNameOf {
+  s.E () = (NONE);
+  s.E ((ST s.E (e.N) s.J t.Sent) e.Rest) = (SOME (e.N));
+  s.E (e.S) e.Rest = <DvNameOf s.E e.Rest>;
+}
+
+DriveEntry {
+  (e.States) (NONE) = "entry: <none>";
+  (e.States) (SOME (e.Fn)) =
+    <DriveOut <DvInvoke (CTX (e.States) 0 ()) (e.Fn) ()>>;
+}
+
+DriveOut {
+  (OK (e.Out) (CTX (e.States) s.Steps (e.Visited))) =
+    "steps: " s.Steps <NL>
+    "visited: " <DvVis (e.Visited)> <NL>
+    "output: " <EmitTerms e.Out>;
+  (e.Err) = "drive error";
+}
+
+DvVis {
+  () = ;
+  (s.Id) = "S" s.Id;
+  (s.Id e.Rest) = "S" s.Id " -> " <DvVis (e.Rest)>;
+}
+
+* ---- contraction
+
+* The context is (CTX <states> <steps> <visited>). It is threaded through every
+* evaluation, including the ones that fail, because the step count is a property
+* of the whole walk and not of the successful path through it.
+DvInvoke {
+  (e.Ctx) (e.Fn) (e.In) = <DvInvokeGo (e.Ctx) (e.Fn) (e.In) <DvProut (e.Fn)>>;
+}
+
+DvInvokeGo {
+  (CTX (e.States) s.Steps (e.Visited)) (e.Fn) (e.In) '1' =
+    (OK (e.In) (CTX (e.States) <Add s.Steps 1> (e.Visited)));
+  (CTX (e.States) s.Steps (e.Visited)) (e.Fn) (e.In), <Compare s.Steps 10000> : '-' =
+    <DvSent (CTX (e.States) <Add s.Steps 1> (e.Visited)) (e.Fn) (e.In) e.States>;
+  (e.Ctx) (e.Fn) (e.In) = (ERR (STEPLIMIT));
+}
+
+DvProut {
+  (e.Fn) = <SameChars (<Upper e.Fn>) ('PROUT')>;
+}
+
+* States are tried in order and the first whose pattern and conditions hold
+* wins. The state list is spread, so "no states left" is an arity, not a
+* sentinel.
+DvSent {
+  (e.Ctx) (e.Fn) (e.In) = <DvNoSent (e.Fn)>;
+  (e.Ctx) (e.Fn) (e.In) (ST s.Id (e.N) s.J t.Sent) e.Rest,
+    <SameChars (<Upper e.N>) (<Upper e.Fn>)> : '1' =
+      <DvState (e.Ctx) (e.Fn) (e.In) s.Id t.Sent e.Rest>;
+  (e.Ctx) (e.Fn) (e.In) (ST s.Id (e.N) s.J t.Sent) e.Rest =
+      <DvSent (e.Ctx) (e.Fn) (e.In) e.Rest>;
+}
+
+DvNoSent {
+  (e.Fn) = (ERR (NOSENTENCE));
+}
+
+DvState {
+  (e.Ctx) (e.Fn) (e.In) s.Id (SENT (e.Pat) (e.Conds) (e.Res)) e.Rest =
+    <DvState2 <DvMatch (e.Pat) (e.In) ()> (e.Ctx) (e.Fn) (e.In) s.Id (e.Conds) (e.Res) e.Rest>;
+}
+
+DvState2 {
+  (OK (e.B)) (e.Ctx) (e.Fn) (e.In) s.Id (e.Conds) (e.Res) e.Rest =
+    <DvState3 <DvConds (e.Ctx) (e.B) (e.Conds)> (e.Ctx) (e.Fn) (e.In) s.Id (e.Res) e.Rest>;
+  (NO) (e.Ctx) (e.Fn) (e.In) s.Id (e.Conds) (e.Res) e.Rest =
+    <DvSent (e.Ctx) (e.Fn) (e.In) e.Rest>;
+}
+
+* The state is recorded BEFORE its result is instantiated, which is why a
+* recursive function's own state appears once per turn.
+DvState3 {
+  (OK (e.B2) (CTX (e.States) s.Steps (e.Visited))) (e.Ctx) (e.Fn) (e.In) s.Id (e.Res) e.Rest =
+    <DvInst (CTX (e.States) s.Steps (e.Visited s.Id)) (e.B2) (e.Res)>;
+  (NO (e.Ctx1)) (e.Ctx) (e.Fn) (e.In) s.Id (e.Res) e.Rest =
+    <DvSent (e.Ctx1) (e.Fn) (e.In) e.Rest>;
+}
+
+* ---- conditions
+
+* (OK <bindings> <ctx>) or (NO <ctx>). A condition's expression is instantiated
+* first -- and may invoke -- and only then is its pattern matched against the
+* value.
+DvConds {
+  (e.Ctx) (e.B) () = (OK (e.B) (e.Ctx));
+  (e.Ctx) (e.B) ((COND (e.Expr) ((BLK (e.Arg) e.Sents))) e.More) =
+    <DvCondsBlk (e.Ctx) (e.B) (e.Arg) (e.Sents) (e.More)>;
+  (e.Ctx) (e.B) ((COND (e.Expr) (e.CPat)) e.More) =
+    <DvCondsVal <DvInst (e.Ctx) (e.B) (e.Expr)> (e.Ctx) (e.B) (e.CPat) (e.More)>;
+}
+
+DvCondsVal {
+  (OK (e.Val) (e.Ctx1)) (e.Ctx) (e.B) (e.CPat) (e.More) =
+    <DvCondsPat <DvMatch (e.CPat) (e.Val) (e.B)> (e.Ctx1) (e.B) (e.More)>;
+  (e.Err) (e.Ctx) (e.B) (e.CPat) (e.More) = (NO (e.Ctx));
+}
+
+DvCondsPat {
+  (OK (e.B2)) (e.Ctx) (e.B) (e.More) = <DvConds (e.Ctx) (e.B2) (e.More)>;
+  (NO) (e.Ctx) (e.B) (e.More) = (NO (e.Ctx));
+}
+
+DvCondsBlk {
+  (e.Ctx) (e.B) (e.Arg) (e.Sents) (e.More) =
+    <DvCondsBlk2 <DvInst (e.Ctx) (e.B) (e.Arg)> (e.Ctx) (e.B) (e.Sents) (e.More)>;
+}
+
+DvCondsBlk2 {
+  (OK (e.Val) (e.Ctx1)) (e.Ctx) (e.B) (e.Sents) (e.More) =
+    <DvCondsBlk3 <DvBlkTest (e.Ctx1) (e.B) (e.Val) (e.Sents)> (e.B) (e.More)>;
+  (e.Err) (e.Ctx) (e.B) (e.Sents) (e.More) = (NO (e.Ctx));
+}
+
+DvCondsBlk3 {
+  (OK (e.Ctx)) (e.B) (e.More) = <DvConds (e.Ctx) (e.B) (e.More)>;
+  (NO (e.Ctx)) (e.B) (e.More) = (NO (e.Ctx));
+}
+
+* A block in condition position is an anonymous function applied to the value:
+* the condition holds exactly when one of the block's sentences matches. The
+* bindings a block makes stay inside it, which is why the block is tested
+* against the enclosing bindings but never writes back to them.
+DvBlkTest {
+  (e.Ctx) (e.B) (e.Val) (e.Sents) = <DvBlkTestL (e.Ctx) (e.B) (e.Val) (e.Sents)>;
+}
+
+DvBlkTestL {
+  (e.Ctx) (e.B) (e.Val) () = (NO (e.Ctx));
+  (e.Ctx) (e.B) (e.Val) ((SENT (e.Pat) (e.Conds) (e.Res)) e.More) =
+    <DvBlkTest2 <DvMatch (e.Pat) (e.Val) (e.B)> (e.Ctx) (e.B) (e.Val) (e.Conds) (e.More)>;
+}
+
+DvBlkTest2 {
+  (OK (e.B2)) (e.Ctx) (e.B) (e.Val) (e.Conds) (e.More) =
+    <DvBlkTest3 <DvConds (e.Ctx) (e.B2) (e.Conds)> (e.B) (e.Val) (e.More)>;
+  (NO) (e.Ctx) (e.B) (e.Val) (e.Conds) (e.More) =
+    <DvBlkTestL (e.Ctx) (e.B) (e.Val) (e.More)>;
+}
+
+DvBlkTest3 {
+  (OK (e.B3) (e.Ctx)) (e.B) (e.Val) (e.More) = (OK (e.Ctx));
+  (NO (e.Ctx)) (e.B) (e.Val) (e.More) = <DvBlkTestL (e.Ctx) (e.B) (e.Val) (e.More)>;
+}
+
+* ---- instantiation
+
+* (OK <terms> <ctx>) or an error. A call is instantiated by instantiating its
+* arguments, invoking, and splicing the result in place; a variable by its
+* binding; a bracket by recursing inside it.
+DvInst {
+  (e.Ctx) (e.B) (e.Terms) = <DvInstL (e.Ctx) (e.B) (e.Terms)>;
+}
+
+DvInstL {
+  (e.Ctx) (e.B) () = (OK () (e.Ctx));
+  (e.Ctx) (e.B) (t.T e.Rest) = <DvInstOne (e.Ctx) (e.B) t.T (e.Rest)>;
+}
+
+DvInstOne {
+  (e.Ctx) (e.B) (VAR s.K e.I) (e.Rest) =
+    <DvInstVar <DvLookup (e.B) (<Canon e.I>)> (e.Ctx) (e.B) (e.Rest)>;
+  (e.Ctx) (e.B) (BR e.Inner) (e.Rest) = <DvInstBr (e.Ctx) (e.B) (e.Inner) (e.Rest)>;
+  (e.Ctx) (e.B) (CALL (ID e.N) e.Args) (e.Rest) =
+    <DvInstCall (e.Ctx) (e.B) (e.N) (e.Args) (e.Rest)>;
+  (e.Ctx) (e.B) (BLK (e.Arg) e.Sents) (e.Rest) =
+    <DvInstBlk (e.Ctx) (e.B) (e.Arg) (e.Sents) (e.Rest)>;
+  (e.Ctx) (e.B) t.T (e.Rest) = <DvInstJoin (t.T) <DvInstL (e.Ctx) (e.B) (e.Rest)>>;
+}
+
+DvInstVar {
+  (SOME (e.V)) (e.Ctx) (e.B) (e.Rest) = <DvInstL (e.Ctx) (e.B) (e.V e.Rest)>;
+  (NONE) (e.Ctx) (e.B) (e.Rest) = (ERR (UNBOUND));
+}
+
+DvInstBr {
+  (e.Ctx) (e.B) (e.Inner) (e.Rest) =
+    <DvInstBr2 <DvInst (e.Ctx) (e.B) (e.Inner)> (e.B) (e.Rest)>;
+}
+
+DvInstBr2 {
+  (OK (e.In) (e.Ctx)) (e.B) (e.Rest) =
+    <DvInstJoin ((BR e.In)) <DvInstL (e.Ctx) (e.B) (e.Rest)>>;
+  (e.Err) (e.B) (e.Rest) = (e.Err);
+}
+
+DvInstCall {
+  (e.Ctx) (e.B) (e.N) (e.Args) (e.Rest) =
+    <DvInstCall2 <DvInst (e.Ctx) (e.B) (e.Args)> (e.B) (e.N) (e.Rest)>;
+}
+
+DvInstCall2 {
+  (OK (e.ArgsOut) (e.Ctx)) (e.B) (e.N) (e.Rest) =
+    <DvInstCall3 <DvInvoke (e.Ctx) (e.N) (e.ArgsOut)> (e.B) (e.Rest)>;
+  (e.Err) (e.B) (e.N) (e.Rest) = (e.Err);
+}
+
+DvInstCall3 {
+  (OK (e.Out) (e.Ctx)) (e.B) (e.Rest) =
+    <DvInstJoin (e.Out) <DvInstL (e.Ctx) (e.B) (e.Rest)>>;
+  (e.Err) (e.B) (e.Rest) = (e.Err);
+}
+
+DvInstBlk {
+  (e.Ctx) (e.B) (e.Arg) (e.Sents) (e.Rest) =
+    <DvInstBlk2 <DvInst (e.Ctx) (e.B) (e.Arg)> (e.B) (e.Sents) (e.Rest)>;
+}
+
+DvInstBlk2 {
+  (OK (e.Val) (e.Ctx)) (e.B) (e.Sents) (e.Rest) =
+    <DvInstBlk3 <DvBlkRun (e.Ctx) (e.B) (e.Val) (e.Sents)> (e.B) (e.Rest)>;
+  (e.Err) (e.B) (e.Sents) (e.Rest) = (e.Err);
+}
+
+DvInstBlk3 {
+  (OK (e.Out) (e.Ctx)) (e.B) (e.Rest) =
+    <DvInstJoin (e.Out) <DvInstL (e.Ctx) (e.B) (e.Rest)>>;
+  (e.Err) (e.B) (e.Rest) = (e.Err);
+}
+
+* A block in RESULT position is different from one in condition position: this
+* one's matched sentence result is instantiated and its value returned.
+DvBlkRun {
+  (e.Ctx) (e.B) (e.Val) (e.Sents) = <DvBlkRunL (e.Ctx) (e.B) (e.Val) (e.Sents)>;
+}
+
+DvBlkRunL {
+  (e.Ctx) (e.B) (e.Val) () = (ERR (BLOCK));
+  (e.Ctx) (e.B) (e.Val) ((SENT (e.Pat) (e.Conds) (e.Res)) e.More) =
+    <DvBlkRun2 <DvMatch (e.Pat) (e.Val) (e.B)> (e.Ctx) (e.B) (e.Val) (e.Conds) (e.Res) (e.More)>;
+}
+
+DvBlkRun2 {
+  (OK (e.B2)) (e.Ctx) (e.B) (e.Val) (e.Conds) (e.Res) (e.More) =
+    <DvBlkRun3 <DvConds (e.Ctx) (e.B2) (e.Conds)> (e.B) (e.Val) (e.Res) (e.More)>;
+  (NO) (e.Ctx) (e.B) (e.Val) (e.Conds) (e.Res) (e.More) =
+    <DvBlkRunL (e.Ctx) (e.B) (e.Val) (e.More)>;
+}
+
+DvBlkRun3 {
+  (OK (e.B3) (e.Ctx)) (e.B) (e.Val) (e.Res) (e.More) = <DvInst (e.Ctx) (e.B3) (e.Res)>;
+  (NO (e.Ctx)) (e.B) (e.Val) (e.Res) (e.More) = <DvBlkRunL (e.Ctx) (e.B) (e.Val) (e.More)>;
+}
+
+DvInstJoin {
+  (e.Emit) (OK (e.Out) (e.Ctx)) = (OK (e.Emit e.Out) (e.Ctx));
+  (e.Emit) (e.Err) = (e.Err);
+}
+
+* ---- matching, the ground case
+
+* match_ground_pattern, with the same backtracking and the same search order:
+* an e-variable tries the LONGEST prefix first, an s- or t-variable has exactly
+* one candidate and it must be a single term. (e.X) (e.Y) is where that order
+* shows, and it is the Rust matcher's order, not the runtime's.
+DvMatch {
+  (e.Pat) (e.In) (e.B) = <DvMatchL <DvFirst (e.Pat)> (e.In) (e.B)>;
+}
+
+DvMatchL {
+  (NONE) (e.In) (e.B) = <DvMatchEnd (e.In) (e.B)>;
+  (SOME t.P (e.PRest)) (e.In) (e.B) = <DvMatchTerm t.P (e.PRest) (e.In) (e.B)>;
+}
+
+DvMatchEnd {
+  () (e.B) = (OK (e.B));
+  t.X (e.B) = (NO);
+}
+
+DvMatchTerm {
+  (VAR s.K e.I) (e.PRest) (e.In) (e.B) = <DvMatchVar s.K (e.I) (e.PRest) (e.In) (e.B)>;
+  t.P (e.PRest) (e.In) (e.B) = <DvMatchLit t.P (e.PRest) (e.In) (e.B)>;
+}
+
+DvMatchLit {
+  t.P (e.PRest) (e.In) (e.B) = <DvMatchLit2 <DvFirst (e.In)> t.P (e.PRest) (e.B)>;
+}
+
+DvMatchLit2 {
+  (NONE) t.P (e.PRest) (e.B) = (NO);
+  (SOME t.Q (e.IRest)) t.P (e.PRest) (e.B) =
+    <DvMatchLit3 <DvGround t.P t.Q> (e.PRest) (e.IRest) (e.B)>;
+}
+
+DvMatchLit3 {
+  '1' (e.PRest) (e.IRest) (e.B) = <DvMatch (e.PRest) (e.IRest) (e.B)>;
+  (e.PRest) (e.IRest) (e.B) = (NO);
+}
+
+DvMatchVar {
+  s.K (e.I) (e.PRest) (e.In) (e.B) =
+    <DvVarTryL <DvVarCands s.K (e.In)> s.K (e.I) (e.PRest) (e.In) (e.B)>;
+}
+
+* The candidate list is a BRACKET holding split brackets, not a spread list:
+* a spread list handed to a function whose base case is "no candidates" cannot
+* tell "empty" from "absent", and the first version of this wrapped it once too
+* often so the head pattern never matched at all.
+DvVarCands {
+  'e' (e.In) = <DvRev (<DvSplits (e.In)>)>;
+  's' (e.In) = <DvOneCand (e.In)>;
+  't' (e.In) = <DvOneCand (e.In)>;
+}
+
+* Every prefix/suffix split, shortest prefix first.
+DvSplits {
+  (e.In) = <DvSplits2 () (e.In)>;
+}
+
+DvSplits2 {
+  (e.Pre) (e.Suf) = ((e.Pre) (e.Suf)) <DvSplits3 (e.Pre) (e.Suf)>;
+}
+
+DvSplits3 {
+  (e.Pre) () = ;
+  (e.Pre) (t.X e.Rest) = <DvSplits2 (e.Pre t.X) (e.Rest)>;
+}
+
+DvRev {
+  (e.Splits) = <DvRevL (e.Splits) ()>;
+}
+
+* The accumulator is passed as a BRACKET and bound by its contents, so the
+* recursive construction `(t.X e.Acc)` prepends a term to the list instead of
+* appending a bracket to it. Binding it as a bracket and constructing with it
+* adds the bracket itself as a term, which is how the first version turned the
+* empty tail into a stray `()` that no later pattern matched.
+DvRevL {
+  () (e.Acc) = (e.Acc);
+  (t.X e.Rest) (e.Acc) = <DvRevL (e.Rest) (t.X e.Acc)>;
+}
+
+DvOneCand {
+  () = ();
+  (t.X e.Rest) = (((t.X) (e.Rest)));
+}
+
+DvVarTryL {
+  () s.K (e.I) (e.PRest) (e.In) (e.B) = (NO);
+  (((e.Pre) (e.Suf)) e.More) s.K (e.I) (e.PRest) (e.In) (e.B) =
+    <DvVarCand <DvVarOk s.K (e.Pre)> s.K (e.I) (e.PRest) (e.In) (e.B) (e.Pre) (e.Suf) (e.More)>;
+}
+
+DvVarOk {
+  'e' (e.Pre) = '1';
+  't' (e.Pre) = <DvSingle (e.Pre)>;
+  's' (e.Pre) = <DvSymbol (e.Pre)>;
+}
+
+* An `s.` binds any symbol -- a character, a number or an identifier -- but
+* never a bracket. A `t.` binds any single term, bracket included (reference
+* 1.3).
+DvSingle {
+  (t.X) = '1';
+  (e.A) = ;
+}
+
+DvSymbol {
+  ((SYM s.C)) = '1';
+  ((ID e.N)) = '1';
+  ((NUM e.D)) = '1';
+  (e.A) = ;
+}
+
+DvVarCand {
+  '1' s.K (e.I) (e.PRest) (e.In) (e.B) (e.Pre) (e.Suf) (e.More) =
+    <DvVarBind <DvLookup (e.B) (<Canon e.I>)> s.K (e.I) (e.PRest) (e.In) (e.B) (e.Pre) (e.Suf) (e.More)>;
+  s.K (e.I) (e.PRest) (e.In) (e.B) (e.Pre) (e.Suf) (e.More) =
+    <DvVarTryL (e.More) s.K (e.I) (e.PRest) (e.In) (e.B)>;
+}
+
+DvVarBind {
+  (NONE) s.K (e.I) (e.PRest) (e.In) (e.B) (e.Pre) (e.Suf) (e.More) =
+    <DvVarAccept <DvMatch (e.PRest) (e.Suf) (e.B (VE (<Canon e.I>) (e.Pre)))>
+      s.K (e.I) (e.PRest) (e.In) (e.B) (e.More)>;
+  (SOME (e.Old)) s.K (e.I) (e.PRest) (e.In) (e.B) (e.Pre) (e.Suf) (e.More) =
+    <DvVarRep <SameChars (e.Old) (e.Pre)> s.K (e.I) (e.PRest) (e.In) (e.B) (e.Pre) (e.Suf) (e.More)>;
+}
+
+* A repeated variable must bind the same terms everywhere it occurs, so the
+* existing binding is reused rather than replaced.
+DvVarRep {
+  '1' s.K (e.I) (e.PRest) (e.In) (e.B) (e.Pre) (e.Suf) (e.More) =
+    <DvVarAccept <DvMatch (e.PRest) (e.Suf) (e.B)> s.K (e.I) (e.PRest) (e.In) (e.B) (e.More)>;
+  s.K (e.I) (e.PRest) (e.In) (e.B) (e.Pre) (e.Suf) (e.More) =
+    <DvVarTryL (e.More) s.K (e.I) (e.PRest) (e.In) (e.B)>;
+}
+
+DvVarAccept {
+  (OK (e.B2)) s.K (e.I) (e.PRest) (e.In) (e.B) (e.More) = (OK (e.B2));
+  (NO) s.K (e.I) (e.PRest) (e.In) (e.B) (e.More) =
+    <DvVarTryL (e.More) s.K (e.I) (e.PRest) (e.In) (e.B)>;
+}
+
+DvGround {
+  (SYM s.A) (SYM s.B) = <SameChars (s.A) (s.B)>;
+  (ID e.A) (ID e.B) = <SameChars (<Upper e.A>) (<Upper e.B>)>;
+  (NUM e.A) (NUM e.B) = <SameChars (e.A) (e.B)>;
+  (BR e.A) (BR e.B) = <DvMatched <DvMatch (e.A) (e.B) ()>>;
+  t.X t.Y = ;
+}
+
+DvMatched {
+  (OK (e.B)) = '1';
+  (NO) = ;
+}
+
+* ---- small list utilities
+
+DvFirst {
+  () = (NONE);
+  (t.X e.Rest) = (SOME t.X (e.Rest));
+}
+
+DvLookup {
+  (e.B) (e.Key) = <DvLookupL (e.B) (e.Key)>;
+}
+
+DvLookupL {
+  () (e.Key) = (NONE);
+  ((VE (e.K) (e.V)) e.Rest) (e.Key), <SameChars (e.K) (e.Key)> : '1' = (SOME (e.V));
+  (t.F e.Rest) (e.Key) = <DvLookupL (e.Rest) (e.Key)>;
 }

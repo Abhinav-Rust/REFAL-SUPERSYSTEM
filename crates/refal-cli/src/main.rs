@@ -29,6 +29,13 @@ fn main() {
     };
     let input_args: Vec<String> = args.collect();
     let (mode, levels, input_args) = parse_mode(input_args);
+    let input_args = match expand_input_file_args(input_args) {
+        Ok(input_args) => input_args,
+        Err(error) => {
+            eprintln!("{error}");
+            process::exit(1);
+        }
+    };
 
     if command == "differential" && input_args.first().is_some_and(|flag| flag == "--corpus") {
         differential_corpus(&path);
@@ -270,6 +277,9 @@ fn print_usage() {
     eprintln!("  fixpoint   Apply a source-to-source compiler twice and check byte stability");
     eprintln!("  differential  Compare original and lowered-source runtime outputs [--corpus]");
     eprintln!("  run        Run a Refal source file with the bootstrap interpreter");
+    eprintln!("             [--input-file <path>]  pass a file's contents as one argument,");
+    eprintln!("                                    which is how inputs too large for a");
+    eprintln!("                                    command line reach the program");
 }
 
 fn lower_program(program: &refal_ast::Program, args: &[String]) {
@@ -1422,6 +1432,36 @@ fn args_to_values(args: &[String]) -> Vec<Value> {
     args.iter()
         .map(|arg| Value::Bracket(arg.chars().map(Value::Char).collect()))
         .collect()
+}
+
+/// Replaces `--input-file <path>` with the contents of that file, as one
+/// argument.
+///
+/// The Refal machine reads no files, so a program's input has to arrive as an
+/// argument, and each argument becomes a bracket of characters. That is fine
+/// until the input is the compiler's own source: 47 KB does not fit in a
+/// Windows command line, which stops at 32 KB, and the self-hosting fixpoint
+/// needs exactly that. The flag moves the payload off the command line and onto
+/// the disk the CLI already reads from, so a stage can be run on a source file
+/// however large it is.
+fn expand_input_file_args(args: Vec<String>) -> Result<Vec<String>, String> {
+    let mut expanded = Vec::with_capacity(args.len());
+    let mut cursor = 0;
+    while cursor < args.len() {
+        if args[cursor] == "--input-file" {
+            let Some(path) = args.get(cursor + 1) else {
+                return Err("--input-file needs a path".to_string());
+            };
+            let contents = fs::read_to_string(path)
+                .map_err(|error| format!("failed to read --input-file {path}: {error}"))?;
+            expanded.push(contents);
+            cursor += 2;
+        } else {
+            expanded.push(args[cursor].clone());
+            cursor += 1;
+        }
+    }
+    Ok(expanded)
 }
 
 fn render_values(values: &[Value]) -> String {
