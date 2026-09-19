@@ -28,12 +28,22 @@ $EXTERN Prout, Chr, Ord, Add, Compare, Upper;
 
 * The CLI runs Go, so Go is the compiler: it emits. Passing CHECK as a first
 * argument asks for the checker's verdict instead, which is what the checker
-* tests drive.
+* tests drive, GRAPH asks for the section 4.2 seed graph, and RESIDUALIZE asks
+* for the residual program the cleaned graph denotes.
+*
+* Every mode that a failure inside could fall through from has a duplicate
+* sentence printing a marker: without it a bug in the mode would fall through to
+* the compile sentence below and the parser would spin on `('MODE') (source)`
+* instead of reporting. A bug in a stage must not look like a hang.
 $ENTRY Go {
   ('CHECK') (e.Source) =
     <Prout <Check <Parse <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>>>;
   ('GRAPH') (e.Source) =
     <Prout <Graph <Parse <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>>>;
+  ('GRAPH') (e.Source) = <Prout 'GRAPH FAILED'>;
+  ('RESIDUALIZE') (e.Source) =
+    <Prout <Residualize <Parse <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>>>;
+  ('RESIDUALIZE') (e.Source) = <Prout 'RESIDUALIZE FAILED'>;
   (e.Source) = <Compile <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>;
 }
 
@@ -885,4 +895,72 @@ FmtStates {
 FmtTrans {
   = ;
   (TR s.F (e.Callee) s.T) e.Rest = <NL> "S" s.F " -" e.Callee "-> S" s.T <FmtTrans e.Rest>;
+}
+
+* ------------------------------------------------------------- residualize
+*
+* The cleaned graph denotes a program, and emitting that program is the first
+* stage of the transforming half that produces *source* rather than a report.
+* `refal residualize-graph` is lower -> build_seed_graph ->
+* clean_unreachable_states -> residualize_cleaned_graph -> format_program, and
+* this reproduces the last two steps on top of the Graph stage above, reusing the
+* emitter that already matches `refal lower` byte for byte.
+*
+* residualize_cleaned_graph walks the ORIGINAL program's functions in order and
+* keeps, for each, the surviving states whose function name matches
+* case-insensitively. A function with no surviving sentence disappears, which is
+* the reachability dead-code elimination that cleaning performed: in
+* `metacode-chapter6.ref` the function Echo is named only inside a quoted string,
+* nothing calls it, and it is not in the residue. Declarations ($EXTERN) are
+* carried through untouched, and a function's visibility comes from the program
+* rather than from the graph, because a state does not record it.
+*
+* The sentences come out in state order, which is program order, which is the
+* span order residualize_cleaned_graph sorts by. So the rebuilt PROG differs from
+* the source PROG in exactly one respect -- the functions cleaning removed -- and
+* the emitter renders it byte-identically to `refal residualize-graph`.
+
+Residualize {
+  (PROG e.Items) = <Emit (PROG <ResidItems (<CleanG <BuildG e.Items>>) e.Items>)>;
+}
+
+* The graph is carried bracketed and last, because a function that survives needs
+* it again for the next item. A list returned unwrapped spreads across the
+* caller's arguments -- the bug that hid the seed graph's firsts table.
+ResidItems {
+  (e.G) = ;
+  (e.G) (EXT e.Names) e.Rest = (EXT e.Names) <ResidItems (e.G) e.Rest>;
+  (e.G) (FUN (Ident e.N) (e.V) e.Sents) e.Rest =
+    <ResidFun (e.N) (e.V) (e.G) (e.Rest)>;
+  (e.G) t.Other e.Rest = <ResidItems (e.G) e.Rest>;
+}
+
+ResidFun {
+  (e.N) (e.V) (e.G) (e.Rest) =
+    <ResidFun2 (e.N) (e.V) (e.G) (e.Rest) <ResidSents (e.N) e.G>>;
+}
+
+* A function whose every sentence cleaning removed is not emitted at all: its
+* sentences are gone from the graph, so there is nothing left to print. An empty
+* FUN would not be Refal, which is why the case is separate from the general one.
+* The surviving sentences arrive *bracketed*, because an unbracketed list of
+* length zero is indistinguishable from an absent argument -- `() ` would then
+* never match and every dropped function would come out as an empty `F { }`.
+ResidFun2 {
+  (e.N) (e.V) (e.G) (e.Rest) () = <ResidItems (e.G) e.Rest>;
+  (e.N) (e.V) (e.G) (e.Rest) (e.Sents) =
+    (FUN (Ident e.N) (e.V) e.Sents) <ResidItems (e.G) e.Rest>;
+}
+
+ResidSents {
+  (e.N) (CG (e.Entry) (e.States) (e.Trans)) = (<ResidSents2 (<Upper e.N>) e.States>);
+}
+
+* Name equality is exact after uppercasing, which is what
+* residualize_cleaned_graph asks for with eq_ignore_ascii_case on ASCII names.
+ResidSents2 {
+  (e.U) = ;
+  (e.U) (ST s.Id (e.M) s.J t.Sent) e.Rest, <SameChars (<Upper e.M>) (e.U)> : '1' =
+    t.Sent <ResidSents2 (e.U) e.Rest>;
+  (e.U) (e.S) e.Rest = <ResidSents2 (e.U) e.Rest>;
 }

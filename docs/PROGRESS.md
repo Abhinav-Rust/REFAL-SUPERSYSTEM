@@ -35,9 +35,9 @@ objective to a gate. Not another Refal implementation.
 | | |
 |---|---|
 | Honest completion | **~60%** (product completeness — one method, see below) |
-| Tests | 303 passing, 0 clippy, fmt clean |
-| Last commit | `d93d753` |
-| Working tree | modified: the §C.2 real-number arithmetic, its tests, and these notes are uncommitted |
+| Tests | 305 passing, 0 clippy, fmt clean |
+| Last commit | `3059517` then this commit |
+| Working tree | clean |
 
 ### Workstream credit
 
@@ -122,6 +122,16 @@ number.
   rewritten, brackets keep their shape, `Up` *activates* the calls it recovers,
   and a free-variable metacode is an error rather than a pass-through. See the
   section below.
+- **The §4.2 seed graph in Refal** — `compiler.ref` gained a `GRAPH` mode that
+  builds the graph of states and prints it byte-identically to `refal graph` on
+  55 of 55 graphable examples, including `clean_unreachable_states`. This is the
+  first piece of the *transforming* half that lives in Refal rather than
+  `refal-core`, and the substrate a driver walks. See the section below.
+- **Residualization in Refal** — `compiler.ref` gained a `RESIDUALIZE` mode that
+  rebuilds the program from the cleaned graph and emits it, byte-identically to
+  `refal residualize-graph` on 55 of 55 examples, with a vacuity guard that
+  requires a residue to differ from the whole program. This is the first stage of
+  the transforming half that produces *source*. See the section below.
 
 ### Done — T-8, metacodes and the Chapter 6 contract
 
@@ -410,6 +420,75 @@ Two guards keep the pass honest, and both are tested:
   `compiler.ref` — whose `Mu`-dispatched helpers make 28 functions
   uncharacterised — is the second.
 
+### Done — the §4.2 seed graph in Refal
+
+The first piece of the *transforming* half to leave Rust. `refal graph` is
+`build_seed_graph` → `clean_unreachable_states` → `format_seed_graph`, and all
+three now exist in `compiler.ref` as the `GRAPH` mode, verified by
+`refal_authored_seed_graph_matches_the_rust_oracle`: byte-identical output on
+**55 of the 55 examples** `graph` accepts, zero divergences, with a non-vacuity
+guard requiring at least ten graphs to contain a transition.
+
+Two design points carried the work. First, **the stage belongs inside
+`compiler.ref`**, not in a new file: its `$ENTRY Go` already takes a mode
+(`CHECK` versus the default compile), so `GRAPH` is one more sentence and the
+stage reuses `Lex` and `Parse` with zero duplication. A standalone `graph.ref`
+would have had to restate the entire lexer and parser. Second, **the oracle
+cleans**: `refal graph` prints the graph *after* `clean_unreachable_states`, so
+states unreachable from the entry are dropped and the survivors renumbered. That
+is not a detail — `metacode-chapter6.ref` is the case that proves it, because
+`Echo` is named only inside a quoted string, nothing calls it, and the Rust side
+reports one state where the raw seed graph has two.
+
+Three classes of bug were found and fixed on the way, and each failed silently
+rather than loudly:
+
+- a list returned by a helper was passed **unwrapped**, so a record's brackets
+  were lost and the receiving pattern bound the first element where the whole
+  list was meant;
+- `(t.X)` was used as a catch-all where records have four or five elements, and
+  `(t.X)` matches only a single-term bracket;
+- `e.Sents e.Rest` appeared adjacent, which splits shortest-first, binds
+  `e.Sents` empty, and leaves the recursion no argument to consume — the silent
+  hang this repository has paid for before.
+
+The section states the convention that avoids all three: a function that walks a
+list takes it spread and separates its base case by arity, while a function that
+wants a list as one value takes a bracketed argument.
+
+### Done — residualization: the cleaned graph denotes a program
+
+The first stage of the transforming half that produces **source** rather than a
+report. `refal residualize-graph` is `lower` → `build_seed_graph` →
+`clean_unreachable_states` → `residualize_cleaned_graph` → `format_program`; the
+`GRAPH` mode already reproduces the first three, so `RESIDUALIZE` holds the last
+two on top of it, reusing the emitter that already matches `refal lower` byte for
+byte. Verified by
+`refal_authored_residualization_matches_residualize_graph`: **55 of 55
+residualizable examples**, zero divergences.
+
+What makes the stage non-trivial is that cleaning *removed* something. The pass
+walks the original program's functions in order and keeps, for each, the
+surviving states whose function name matches case-insensitively; a function with
+no surviving sentence disappears. `metacode-chapter6.ref` is again the witness —
+its residue has no `Echo` — and the test's vacuity guard is built on exactly
+that: it requires at least one example whose residue differs from `lower`'s whole
+program, so an implementation that merely echoed its input cannot pass. A
+differential that cannot fail proves nothing.
+
+Three more silent failures, all of the same shape as the graph's and all now
+recorded in the section:
+
+- the graph argument was passed in the **wrong position** relative to the item
+  list, so every function collected no sentences and the whole residue came back
+  empty — a success exit with no output, which reads like a stage that works;
+- the graph value was **re-bracketed** on the way into the sentence lookup, so
+  the lookup's pattern saw a bracket containing a bracket and matched nothing;
+- the surviving sentence list was returned **unbracketed**, so "no sentences"
+  and "no argument" were the same shape, `()` never matched, and every dropped
+  function was emitted as an empty `F { }` — a program the checker would reject.
+  Bracketing the list is what tells the two apart.
+
 ### Open
 
 - **T-1** a non-trivial program transformer written in Refal.
@@ -444,110 +523,80 @@ Two guards keep the pass honest, and both are tested:
 
 ## NEXT ACTION
 
-**The transforming half in Refal: `driver.ref`, and a §4.4 strategy.**
+**The driver: contracting a configuration.**
 
-Every objective in the matrix is now closed or advanced as far as its evidence
-supports, and T-1 is the one that stays Partial — because its residual is the same
-as the largest single deduction in the accounting: the *transforming* half of the
-compiler (driving, cleaning, generalisation) lives in Rust (`refal-core`) and is
-not wired into `compiler.ref`, and `driver.ref` does not exist. Row 7 of the
-README calls it "half a compiler".
+The substrate is in place. `compiler.ref` builds the §4.2 seed graph, cleans it,
+prints it byte-identically to `refal graph`, and now emits the residual program
+the cleaned graph denotes, byte-identically to `refal residualize-graph`. What it
+cannot yet do is the thing Chapter 4 is actually about: **drive** a configuration
+— contract it against the program's sentences, fold what recurs, and residualise
+the result.
 
-The pieces are now in place to start:
+That gap is the whole of row 6's 13.5 unearned points and most of row 7's 7.5.
+`refal-core`'s `drive_symbolic_with_strategy` (`crates/refal-core/src/lib.rs:693`)
+is the behaviour to reproduce, exactly as `compiler.ref` had to reproduce `lower`.
 
-1. T-8 gives programs a representation a Refal transformer can consume and emit
-   (the T-8 section above, and `docs/REFAL5-BUILTIN-REFERENCE-NOTES.md`).
-2. `examples/transformer-rename.ref` shows the pipeline — metacode in, structural
-   rewrite, metacode out — and
-   `refal_authored_transformer_matches_a_rust_reference` shows how to verify such
-   a transformer against an independent Rust implementation without letting the
-   two drift.
-3. `refal-core`'s `drive_symbolic_with_strategy`, the cleaning pass and the
-   generalizer are the Rust behaviour a Refal `driver.ref` would have to
-   reproduce, exactly as `compiler.ref` had to reproduce `lower`.
+**Start with the ground driver, because it has the cleanest oracle.**
+`refal drive <file.ref>` is `drive_ground`: it contracts the closed entry
+configuration and prints three lines —
 
-**First target, specified: the §4.2 seed graph in Refal.**
+```
+steps: {n}
+visited: S0 -> S2 -> S2 -> S2 -> S1
+output: {the result expression}
+```
 
-This is the substrate a driver walks, it is the smallest self-contained piece of
-the transforming half, and its oracle already exists and is corpus-tested. The
-reconnaissance below was done on 2026-09-13 and is the design, not a guess.
+— which is byte-comparable in the same way `refal graph` and
+`refal residualize-graph` are, and it exercises exactly the machinery the
+symbolic driver needs: pattern matching against a configuration, sentence
+selection, contraction, and a visited-state trace. Fifteen corpus examples drive
+successfully today, so a differential over them is thin but non-vacuous; widen it
+by teaching the Refal driver the builtins the rest need.
 
-*Layering — no duplication.* Add a `Graph` function to `examples/compiler.ref` and
-a `('GRAPH') (e.Source)` arm to its `$ENTRY Go`, exactly parallel to the existing
-`('CHECK') (e.Source)` arm. `compiler.ref` already lexes and parses to the
-normalised AST, so the graph builder reuses `Lex`/`Parse` rather than restating
-them. Drive it from a test with
-`run_file("examples/compiler.ref", &["GRAPH", source])`, the same way the checker
-tests pass `CHECK`.
+*What the ground driver needs, in order.*
 
-*Oracle.* `refal graph <file>` over the corpus, byte-identical — the standard
-`proves_byte_identical_lowering_across_the_valid_corpus` already uses. Compare
-both directions on every example the Rust bootstrap can lower.
+1. **A matcher over ground expressions.** `s.` binds any symbol, `t.` any single
+   term, `e.` any expression; a repeated variable must bind the same value
+   everywhere. Brackets are terms, not sequences. The runtime matcher in
+   `crates/refal-runtime/src/matcher.rs` is the oracle for matching semantics —
+   when the drivers disagree with it, the drivers are wrong.
+2. **Sentence selection with conditions**, including a failed condition falling
+   through to the next sentence, and blocks in condition position applied as an
+   anonymous function.
+3. **Contraction and the visited trace.** `visited` lists the state of every
+   sentence selected, in order, so the driver must map a selected sentence back
+   to its state id — the graph already carries `(ST id name index sentence)`.
+4. **Builtins**, which is what widens the corpus: `Prout` first, then the
+   arithmetic and structural set.
 
-*Semantics to reproduce exactly* — `build_seed_graph`
-(`crates/refal-core/src/lib.rs:2261`) and `format_seed_graph` (`:4072`):
-
-1. One state per sentence, in program order: functions in order, sentences in
-   order, ids assigned 0,1,2,… `$EXTERN` declarations produce no state.
-2. `first_states[to_ascii_uppercase(function.name)] = the function's first state
-   id`. Later functions with the same name do not overwrite it.
-3. One transition per *call occurrence*, in state order and, within a state, in
-   the order the terms appear: pattern, then each condition's expression and then
-   its pattern, then the result. **No deduplication** — two calls to the same
-   function in one sentence produce two transitions.
-4. A transition is emitted only when the callee's uppercased name is in
-   `first_states`, so calls to builtins produce none. The callee is emitted *as
-   written*, not uppercased.
-5. `entry` is the state of the function named `Go` (case-insensitive), or
-   `entry: <none>`.
-6. Output, in this order: `entry: S{n}\n`, then `S{id} = {name}#{index}\n` per
-   state, then `S{from} -{callee}-> S{to}\n` per transition.
-
-*The AST to walk*, as `compiler.ref` represents it (its own header documents
-this): `(PROG e.Items)`, `(FUN (Ident e.Name) (e.V) e.Sents)`, `(EXT e.Names)`,
-`(SENT (e.Pat) (e.Conds) (e.Res))`, `(COND (e.Expr) (e.CPat))`,
-`(CALL (ID e.Name) e.Args)`, `(BR e.Inner)`, `(ID w)`, `(NUM d)`, `(VAR k i)`,
-`(SYM c)`. **Names are character sequences**, not identifiers: `(Ident 'Go')` is
-`'G' 'o'`. `Upper` uppercases both forms (probed), which is what step 2 needs.
-
-*Traps that cost a full session, so the next one does not pay again.* Each failed
-silently or misleadingly:
+*Traps this repository has already paid for.* Each failed silently:
 
 - **`e.X e.Rest` where one term was meant.** Two adjacent expression variables
   split *shortest-first*, so `e.X` binds empty and the recursion never consumes
-  its argument — an infinite loop that looks like a hang. Use `t.` (or `s.`) for
-  "exactly one term". This is the biggest trap in this codebase, and it was
-  written in five places at once.
-- **`(() e.Rest)` matches a bracket *containing* an empty bracket**, not an empty
-  bracket. An exhausted list needs a bare `()` pattern.
-- **`'NONE'` is a four-character string**, not one symbol, so a bracket sentinel
-  binds four terms and matches nothing. Distinguish cases by *shape* — an empty
-  bracket versus a bracketed id — not by a sentinel symbol.
+  its argument — an infinite loop that looks like a hang. Use `t.` or `s.` for
+  "exactly one term". This is the biggest trap in the codebase.
+- **A computed list returned unwrapped spreads across the caller's arguments.**
+  Bracket it when the caller binds it with `(e.X)`. This hid the seed graph's
+  firsts table and emptied every residualized function.
+- **A graph value passed in the wrong argument position** collects nothing and
+  exits zero with no output, which reads like a stage that works. Check that a
+  stage's output is non-empty before believing it.
 - **A failure inside a `Go` mode sentence falls through to the next sentence**, so
-  a graph bug silently becomes the *compile* path and the parser spins on garbage
-  instead of reporting. Add a duplicate mode sentence that prints a failure
-  marker, or the bug presents as a hang.
-- **Miscounted call nesting** is reported as `parse error at <the block's closing
-  brace>: expected term, found RParen` — the position points at the `}`, not at
-  the mistake.
-- **`Upper` preserves shape**: character sequence in, character sequence out;
-  identifier in, identifier out. Stored names are character sequences
-  (`TakeWord` accumulates `s.C`), so an uppercased key is a character sequence.
+  a new mode's bug silently becomes the *compile* path and the parser spins. Every
+  mode needs a duplicate sentence that prints a failure marker.
+- **`(() e.Rest)` matches a bracket *containing* an empty bracket**, not an empty
+  bracket; an exhausted list needs a bare `()`.
+- **`'NONE'` is a four-character string**, not one symbol. Distinguish cases by
+  *shape*, never by a sentinel symbol.
+- **Miscounted call nesting** is reported at the block's closing brace, not at the
+  mistake. Count one `>` per open `<`.
 
-*Left unresolved, and where to resume.* The seed graph and the reachability pass
-were both written. State lines and the `entry:` line rendered correctly, and a
-four-example spot check passed *before* cleaning was added. After cleaning, the
-entry lookup `FirstOr` matches a **literal** firsts value but not the value
-`Rebuild`/`FirstsOf` produces, and the cause was not found. `FirstOr` itself is
-proven correct by the literal case, so the next session should print the cleaned
-firsts with an unambiguous delimiter and compare it term by term against
-`(('G' 'O') 0)`.
+**Layering.** The stage belongs inside `examples/compiler.ref` as one more
+`$ENTRY Go` mode, so it reuses `Lex`, `Parse` and `Graph` with no duplication —
+the same reason `GRAPH` and `RESIDUALIZE` live there.
 
-After the graph, the driver itself: walking that graph is `driver.ref`.
-
-Also open, and not objectives: the runtime's heap-allocated view field (the work
-list copies term slices rather than rewriting one flat view), §4.4's strategy
-*search*, and T-8's §6.4 `unknown` values.
+Also open, and not objectives: the runtime's heap-allocated view field (issue
+#7), §4.4's strategy *search*, and T-8's §6.4 `unknown` values.
 
 The soundness gate is unchanged and non-negotiable:
 `strict_mode_has_no_false_positives_on_the_corpus` must stay green. If a new

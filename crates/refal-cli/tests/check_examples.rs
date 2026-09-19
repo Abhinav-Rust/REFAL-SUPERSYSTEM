@@ -4919,3 +4919,86 @@ fn refal_authored_seed_graph_matches_the_rust_oracle() {
         failures.join("\n")
     );
 }
+
+/// The residual program the cleaned graph denotes, built by the Refal-authored
+/// compiler, must agree with `refal residualize-graph` byte for byte on every
+/// example the bootstrap will residualize.
+///
+/// `refal residualize-graph` is lower -> build_seed_graph ->
+/// clean_unreachable_states -> residualize_cleaned_graph -> format_program. The
+/// GRAPH mode already reproduces the first three, so this holds the last two:
+/// rebuilding the program from the surviving states and rendering it with the
+/// emitter that already matches `refal lower`.
+///
+/// The sweep is checked for non-vacuity in the way that matters here. An
+/// implementation that simply echoed its input would pass every comparison, so
+/// the test requires at least one example whose residue differs from `lower`'s
+/// whole program -- that is, at least one example where reachability actually
+/// removed a function. `metacode-chapter6.ref` is that example: `Echo` is named
+/// only inside a quoted string, nothing calls it, and it is not in the residue.
+#[test]
+fn refal_authored_residualization_matches_residualize_graph() {
+    let mut names: Vec<String> = fs::read_dir(workspace_path("examples"))
+        .expect("read the examples directory")
+        .filter_map(|entry| {
+            let path = entry.ok()?.path();
+            let name = path.file_name()?.to_string_lossy().into_owned();
+            (name.ends_with(".ref") && name != "compiler.ref").then_some(name)
+        })
+        .collect();
+    names.sort();
+
+    let mut checked = 0usize;
+    let mut dropped_a_function = 0usize;
+    let mut failures = Vec::new();
+    for name in names {
+        let path = format!("examples/{name}");
+        let oracle = residualize_graph_file(&path);
+        // A negative fixture is one the bootstrap refuses to residualize; it is
+        // out of scope here exactly as it is for the graph sweep.
+        if !oracle.status.success() {
+            continue;
+        }
+        checked += 1;
+        let expected = String::from_utf8_lossy(&oracle.stdout).into_owned();
+
+        // The same program without the reachability cleanup, so a residue that
+        // differs from it proves the pass did something rather than echoing.
+        let whole = lower_file(&path);
+        if whole.status.success() && String::from_utf8_lossy(&whole.stdout) != expected {
+            dropped_a_function += 1;
+        }
+
+        let source = fs::read_to_string(workspace_path(&path)).expect("read example");
+        let actual = run_file("examples/compiler.ref", &["RESIDUALIZE", &source]);
+        if !actual.status.success() {
+            failures.push(format!(
+                "{name}: compiler.ref RESIDUALIZE failed\n{}",
+                String::from_utf8_lossy(&actual.stderr)
+            ));
+            continue;
+        }
+        let actual = String::from_utf8_lossy(&actual.stdout).into_owned();
+        if actual != expected {
+            failures.push(format!(
+                "{name}:\n  residualize-graph: {expected:?}\n  refal: {actual:?}"
+            ));
+        }
+    }
+
+    assert!(
+        checked >= 40,
+        "the residualization sweep should cover the examples, only checked {checked}"
+    );
+    assert!(
+        dropped_a_function >= 1,
+        "the sweep is vacuous: no example's residue differs from its whole program, \
+         so an implementation that echoed its input would pass"
+    );
+    assert!(
+        failures.is_empty(),
+        "{} of {checked} examples diverge from the Rust bootstrap:/n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+}
