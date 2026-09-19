@@ -13,11 +13,11 @@ use refal_ast::{
     canonical_identifier,
 };
 
-use crate::Value;
 use crate::matcher::{
     Bindings, MatchError, VariableKey, match_pattern_candidates, match_pattern_first,
     match_pattern_with_bindings_candidates,
 };
+use crate::{Slice, Value};
 
 /// Refal call depth is bounded by memory, not by a constant. Turchin's machine
 /// has no fixed stack: compilation is driving a configuration through a graph of
@@ -103,13 +103,76 @@ enum FileHandle {
 /// because the work list completes frames in stack order.
 type SharedBindings = Rc<Bindings>;
 
+/// The work list's view field (1980 section 2.2).
+///
+/// A frame does not build its result term by term into a `Vec` and hand that
+/// over; it accumulates a *run*, and when the run is exactly the value of one
+/// call or one bound variable the run is the slice it already has. Two copies
+/// disappear that way, and they are the two that made execution quadratic in
+/// the length of the expression: the copy of the remaining expression into a
+/// binding, and the copy of it into the next call's argument list.
+///
+/// The distinction is observable, which is what makes it testable: a frame that
+/// materializes its result and a frame that propagates a slice agree on every
+/// program's answer and differ on how much they allocate.
 struct WorkTermsFrame<'a> {
     terms: &'a [Term],
     next: usize,
     bindings: SharedBindings,
     output: Vec<Value>,
+    /// Set when the frame's result is exactly one shared run -- the value of a
+    /// call that produced one, or a single bound expression variable. `output`
+    /// is then empty, and the run is handed on without being materialized.
+    shared: Option<Slice>,
     depth: usize,
     pending: Option<PendingTerm<'a>>,
+}
+
+impl<'a> WorkTermsFrame<'a> {
+    fn new(
+        terms: &'a [Term],
+        bindings: SharedBindings,
+        depth: usize,
+        pending: Option<PendingTerm<'a>>,
+    ) -> Self {
+        Self {
+            terms,
+            next: 0,
+            bindings,
+            output: Vec::new(),
+            shared: None,
+            depth,
+            pending,
+        }
+    }
+
+    /// True when the frame has consumed every term, so nothing can be appended
+    /// after the run it is holding.
+    fn is_complete(&self) -> bool {
+        self.next == self.terms.len()
+    }
+
+    /// The frame's result. A held run is returned as it is; anything else is
+    /// materialized into an arena of its own, which costs one allocation and no
+    /// copy of the `Vec` that was already built.
+    fn finish(self) -> Slice {
+        match self.shared {
+            Some(slice) => slice,
+            None => Slice::owned(self.output),
+        }
+    }
+
+    /// Absorbs a completed child. A run that is the frame's whole result is
+    /// propagated; one that is part of a larger expression is spliced in, which
+    /// is the copy that cannot be avoided because the result really is a new
+    /// expression.
+    fn absorb(&mut self, child: Slice) {
+        if self.output.is_empty() && self.is_complete() && self.shared.is_none() {
+            self.shared = Some(child);
+        } else {
+            self.output.extend_from_slice(child.terms());
+        }
+    }
 }
 
 enum PendingTerm<'a> {
@@ -123,7 +186,7 @@ enum PendingTerm<'a> {
 enum WorkTask<'a> {
     Function {
         name: String,
-        args: Vec<Value>,
+        args: Slice,
         depth: usize,
         sentence_index: usize,
     },
@@ -132,14 +195,14 @@ enum WorkTask<'a> {
     /// name reported when no sentence of the block matches.
     Block {
         sentences: &'a [refal_ast::Sentence],
-        args: Vec<Value>,
+        args: Slice,
         depth: usize,
         sentence_index: usize,
     },
     Terms(WorkTermsFrame<'a>),
     ConditionEval {
         function_name: String,
-        function_args: Vec<Value>,
+        function_args: Slice,
         sentence_index: usize,
         conditions: &'a [Condition],
         result_terms: &'a [Term],
@@ -372,7 +435,7 @@ impl<'a> Evaluator<'a> {
         if let Some(result) = self.evaluate_entry_worklist(&entry.name, args)? {
             return Ok(result);
         }
-        self.evaluate_function_at_depth(&entry.name, args, 0)
+        self.evaluate_function_at_depth(&entry.name, &Slice::copied(args), 0)
     }
 
     fn evaluate_entry_worklist(
@@ -393,11 +456,11 @@ impl<'a> Evaluator<'a> {
 
         let mut tasks = vec![WorkTask::Function {
             name: name.to_string(),
-            args: args.to_vec(),
+            args: Slice::copied(args),
             depth: 0,
             sentence_index: 0,
         }];
-        let mut returned: Option<Result<Vec<Value>, EvalError>> = None;
+        let mut returned: Option<Result<Slice, EvalError>> = None;
 
         while let Some(task) = tasks.pop() {
             if let Some(result) = returned.take() {
@@ -405,10 +468,15 @@ impl<'a> Evaluator<'a> {
                 match task {
                     WorkTask::Terms(mut frame) => match frame.pending.take() {
                         Some(PendingTerm::Bracket) => {
-                            frame.output.push(Value::Bracket(values));
+                            frame.output.push(Value::Bracket(values.to_values()));
                             tasks.push(WorkTask::Terms(frame));
                         }
                         Some(PendingTerm::CallArguments(call_name)) => {
+                            // The child's run becomes the call's argument list as
+                            // it stands. When the argument list is one bound
+                            // variable -- `s.C e.Rest = <F e.Rest>`, which is the
+                            // compiler's dominant recursion -- this is a slice of
+                            // the view field rather than a copy of it.
                             frame.pending = Some(PendingTerm::CallResult);
                             let call_depth = frame.depth + 1;
                             tasks.push(WorkTask::Terms(frame));
@@ -420,7 +488,7 @@ impl<'a> Evaluator<'a> {
                             });
                         }
                         Some(PendingTerm::CallResult) => {
-                            frame.output.extend(values);
+                            frame.absorb(values);
                             tasks.push(WorkTask::Terms(frame));
                         }
                         Some(PendingTerm::BlockArgument(sentences)) => {
@@ -435,7 +503,7 @@ impl<'a> Evaluator<'a> {
                             });
                         }
                         Some(PendingTerm::BlockResult) => {
-                            frame.output.extend(values);
+                            frame.absorb(values);
                             tasks.push(WorkTask::Terms(frame));
                         }
                         None => {
@@ -488,10 +556,10 @@ impl<'a> Evaluator<'a> {
                         });
                     }
                     WorkTask::Function { .. } => {
-                        return Ok(Some(values));
+                        return Ok(Some(values.to_values()));
                     }
                     WorkTask::Block { .. } => {
-                        return Ok(Some(values));
+                        return Ok(Some(values.to_values()));
                     }
                 }
                 continue;
@@ -513,8 +581,10 @@ impl<'a> Evaluator<'a> {
                     }
                     let canonical = canonical_identifier(&name);
                     let Some(function) = self.functions.get(&canonical) else {
-                        returned =
-                            Some(self.evaluate_function_at_depth_without_step(&name, &args, depth));
+                        returned = Some(
+                            self.evaluate_function_at_depth_without_step(&name, &args, depth)
+                                .map(Slice::owned),
+                        );
                         continue;
                     };
                     let Some(sentence) = function.sentences.get(sentence_index) else {
@@ -527,8 +597,10 @@ impl<'a> Evaluator<'a> {
                                 || !condition_pattern_is_matchable(&condition.pattern)
                         })
                     {
-                        returned =
-                            Some(self.evaluate_function_at_depth_without_step(&name, &args, depth));
+                        returned = Some(
+                            self.evaluate_function_at_depth_without_step(&name, &args, depth)
+                                .map(Slice::owned),
+                        );
                         continue;
                     }
 
@@ -559,14 +631,12 @@ impl<'a> Evaluator<'a> {
                             .into_iter()
                             .next()
                             .expect("candidates was checked non-empty");
-                        tasks.push(WorkTask::Terms(WorkTermsFrame {
-                            terms: &sentence.result,
-                            next: 0,
-                            bindings: Rc::new(bindings),
-                            output: Vec::new(),
+                        tasks.push(WorkTask::Terms(WorkTermsFrame::new(
+                            &sentence.result,
+                            Rc::new(bindings),
                             depth,
-                            pending: None,
-                        }));
+                            None,
+                        )));
                     } else {
                         let mut pending_bindings: Vec<SharedBindings> =
                             candidates.into_iter().map(Rc::new).collect();
@@ -608,20 +678,20 @@ impl<'a> Evaluator<'a> {
                     // recursive path; the common case is a plain sentence.
                     if !sentence.conditions.is_empty() || !terms_are_worklist_safe(&sentence.result)
                     {
-                        returned =
-                            Some(self.evaluate_sentences(BLOCK_SENTINEL, sentences, &args, depth));
+                        returned = Some(
+                            self.evaluate_sentences(BLOCK_SENTINEL, sentences, &args, depth)
+                                .map(Slice::owned),
+                        );
                         continue;
                     }
                     match match_pattern_first(&sentence.pattern, &args) {
                         Ok(bindings) => {
-                            tasks.push(WorkTask::Terms(WorkTermsFrame {
-                                terms: &sentence.result,
-                                next: 0,
-                                bindings: Rc::new(bindings),
-                                output: Vec::new(),
+                            tasks.push(WorkTask::Terms(WorkTermsFrame::new(
+                                &sentence.result,
+                                Rc::new(bindings),
                                 depth,
-                                pending: None,
-                            }));
+                                None,
+                            )));
                         }
                         Err(MatchError::NoMatch) => {
                             tasks.push(WorkTask::Block {
@@ -659,14 +729,12 @@ impl<'a> Evaluator<'a> {
                             current_bindings: Some(Rc::clone(&bindings)),
                             depth,
                         });
-                        tasks.push(WorkTask::Terms(WorkTermsFrame {
-                            terms: &conditions[condition_index].result,
-                            next: 0,
+                        tasks.push(WorkTask::Terms(WorkTermsFrame::new(
+                            &conditions[condition_index].result,
                             bindings,
-                            output: Vec::new(),
                             depth,
-                            pending: None,
-                        }));
+                            None,
+                        )));
                     } else if matched_bindings.is_empty() {
                         tasks.push(WorkTask::Function {
                             name: function_name,
@@ -675,14 +743,12 @@ impl<'a> Evaluator<'a> {
                             sentence_index: sentence_index + 1,
                         });
                     } else if condition_index + 1 == conditions.len() {
-                        tasks.push(WorkTask::Terms(WorkTermsFrame {
-                            terms: result_terms,
-                            next: 0,
-                            bindings: matched_bindings.remove(0),
-                            output: Vec::new(),
+                        tasks.push(WorkTask::Terms(WorkTermsFrame::new(
+                            result_terms,
+                            matched_bindings.remove(0),
                             depth,
-                            pending: None,
-                        }));
+                            None,
+                        )));
                     } else {
                         matched_bindings.reverse();
                         tasks.push(WorkTask::ConditionEval {
@@ -704,8 +770,8 @@ impl<'a> Evaluator<'a> {
                     ..
                 } => return Ok(None),
                 WorkTask::Terms(mut frame) => {
-                    if frame.next == frame.terms.len() {
-                        returned = Some(Ok(frame.output));
+                    if frame.is_complete() {
+                        returned = Some(Ok(frame.finish()));
                         continue;
                     }
                     let term = &frame.terms[frame.next];
@@ -716,34 +782,39 @@ impl<'a> Evaluator<'a> {
                             tasks.push(WorkTask::Terms(frame));
                         }
                         TermKind::Variable(variable) => {
-                            frame
-                                .output
-                                .extend(resolve_variable(variable, &frame.bindings)?);
+                            let value = resolve_variable(variable, &frame.bindings)?;
+                            // A frame whose whole result is one bound variable
+                            // does not materialize it. The binding already is a
+                            // run of the view field, and copying it here is the
+                            // copy that made `s.C e.Rest = <F e.Rest>` -- the
+                            // compiler's dominant recursion -- quadratic in the
+                            // length of its input.
+                            if frame.output.is_empty() && frame.is_complete() {
+                                frame.shared = Some(value);
+                            } else {
+                                frame.output.extend_from_slice(value.terms());
+                            }
                             tasks.push(WorkTask::Terms(frame));
                         }
                         TermKind::Bracket(inner) => {
                             frame.pending = Some(PendingTerm::Bracket);
-                            let child = WorkTermsFrame {
-                                terms: inner,
-                                next: 0,
-                                bindings: Rc::clone(&frame.bindings),
-                                output: Vec::new(),
-                                depth: frame.depth,
-                                pending: None,
-                            };
+                            let child = WorkTermsFrame::new(
+                                inner,
+                                Rc::clone(&frame.bindings),
+                                frame.depth,
+                                None,
+                            );
                             tasks.push(WorkTask::Terms(frame));
                             tasks.push(WorkTask::Terms(child));
                         }
                         TermKind::Call { name, args } => {
                             frame.pending = Some(PendingTerm::CallArguments(name.clone()));
-                            let child = WorkTermsFrame {
-                                terms: args,
-                                next: 0,
-                                bindings: Rc::clone(&frame.bindings),
-                                output: Vec::new(),
-                                depth: frame.depth,
-                                pending: None,
-                            };
+                            let child = WorkTermsFrame::new(
+                                args,
+                                Rc::clone(&frame.bindings),
+                                frame.depth,
+                                None,
+                            );
                             tasks.push(WorkTask::Terms(frame));
                             tasks.push(WorkTask::Terms(child));
                         }
@@ -752,14 +823,12 @@ impl<'a> Evaluator<'a> {
                             sentences,
                         } => {
                             frame.pending = Some(PendingTerm::BlockArgument(sentences));
-                            let child = WorkTermsFrame {
-                                terms: argument,
-                                next: 0,
-                                bindings: Rc::clone(&frame.bindings),
-                                output: Vec::new(),
-                                depth: frame.depth,
-                                pending: None,
-                            };
+                            let child = WorkTermsFrame::new(
+                                argument,
+                                Rc::clone(&frame.bindings),
+                                frame.depth,
+                                None,
+                            );
                             tasks.push(WorkTask::Terms(frame));
                             tasks.push(WorkTask::Terms(child));
                         }
@@ -769,20 +838,22 @@ impl<'a> Evaluator<'a> {
         }
 
         match returned {
-            Some(Ok(values)) => Ok(Some(values)),
+            Some(Ok(values)) => Ok(Some(values.to_values())),
             Some(Err(error)) => Err(error),
             None => Ok(None),
         }
     }
 
     pub fn evaluate_function(&self, name: &str, args: &[Value]) -> Result<Vec<Value>, EvalError> {
-        self.evaluate_function_at_depth(name, args, 0)
+        // The one place a caller's plain slice becomes an arena. Everything
+        // below this line slices it rather than copying it.
+        self.evaluate_function_at_depth(name, &Slice::copied(args), 0)
     }
 
     fn evaluate_function_at_depth(
         &self,
         name: &str,
-        args: &[Value],
+        args: &Slice,
         call_depth: usize,
     ) -> Result<Vec<Value>, EvalError> {
         self.evaluate_function_at_depth_with_step(name, args, call_depth, true)
@@ -791,7 +862,7 @@ impl<'a> Evaluator<'a> {
     fn evaluate_function_at_depth_without_step(
         &self,
         name: &str,
-        args: &[Value],
+        args: &Slice,
         call_depth: usize,
     ) -> Result<Vec<Value>, EvalError> {
         self.evaluate_function_at_depth_with_step(name, args, call_depth, false)
@@ -800,7 +871,7 @@ impl<'a> Evaluator<'a> {
     fn evaluate_function_at_depth_with_step(
         &self,
         name: &str,
-        args: &[Value],
+        args: &Slice,
         call_depth: usize,
         count_step: bool,
     ) -> Result<Vec<Value>, EvalError> {
@@ -819,7 +890,7 @@ impl<'a> Evaluator<'a> {
             return self.evaluate_sentences(&function.name, &function.sentences, args, call_depth);
         }
 
-        if let Some(result) = self.evaluate_builtin(name, args, call_depth) {
+        if let Some(result) = self.evaluate_builtin(name, args.terms(), call_depth) {
             return result;
         }
 
@@ -835,7 +906,7 @@ impl<'a> Evaluator<'a> {
         &self,
         name: &str,
         sentences: &[refal_ast::Sentence],
-        args: &[Value],
+        args: &Slice,
         call_depth: usize,
     ) -> Result<Vec<Value>, EvalError> {
         for sentence in sentences {
@@ -1005,7 +1076,7 @@ impl<'a> Evaluator<'a> {
                 ));
             }
         };
-        self.evaluate_function_at_depth(&function_name, expression, call_depth + 1)
+        self.evaluate_function_at_depth(&function_name, &Slice::copied(expression), call_depth + 1)
     }
 
     fn arg(&self, args: &[Value]) -> Result<Vec<Value>, EvalError> {
@@ -1053,7 +1124,7 @@ impl<'a> Evaluator<'a> {
                 let condition_value = self.eval_terms(&condition.result, &bindings, call_depth)?;
                 match match_pattern_with_bindings_candidates(
                     &condition.pattern,
-                    &condition_value,
+                    &Slice::owned(condition_value),
                     bindings,
                 ) {
                     Ok(matches) => next_candidates.extend(matches),
@@ -1081,7 +1152,7 @@ impl<'a> Evaluator<'a> {
             match &term.kind {
                 TermKind::Symbol(symbol) => output.push(eval_symbol(symbol)),
                 TermKind::Variable(variable) => {
-                    output.extend(resolve_variable(variable, bindings)?);
+                    output.extend_from_slice(resolve_variable(variable, bindings)?.terms());
                 }
                 TermKind::Bracket(inner) => {
                     output.push(Value::Bracket(
@@ -1096,7 +1167,7 @@ impl<'a> Evaluator<'a> {
                     output.extend(self.evaluate_sentences(
                         BLOCK_SENTINEL,
                         sentences,
-                        &evaluated_argument,
+                        &Slice::owned(evaluated_argument),
                         call_depth,
                     )?);
                 }
@@ -1104,7 +1175,7 @@ impl<'a> Evaluator<'a> {
                     let evaluated_args = self.eval_terms(args, bindings, call_depth)?;
                     output.extend(self.evaluate_function_at_depth(
                         name,
-                        &evaluated_args,
+                        &Slice::owned(evaluated_args),
                         call_depth + 1,
                     )?);
                 }
@@ -1475,7 +1546,8 @@ impl<'a> Evaluator<'a> {
             ));
         };
         let arguments = self.lift_sequence(arguments, call_depth)?;
-        let result = self.evaluate_function_at_depth(&function, &arguments, call_depth + 1)?;
+        let result =
+            self.evaluate_function_at_depth(&function, &Slice::owned(arguments), call_depth + 1)?;
         Ok((result, 2))
     }
 }
@@ -2523,7 +2595,9 @@ fn eval_symbol(symbol: &Symbol) -> Value {
     }
 }
 
-fn resolve_variable(variable: &Variable, bindings: &Bindings) -> Result<Vec<Value>, EvalError> {
+/// The run a variable stands for. A binding already is a slice of the view
+/// field, so this is a refcount bump and never a copy of the terms bound.
+fn resolve_variable(variable: &Variable, bindings: &Bindings) -> Result<Slice, EvalError> {
     let key = VariableKey::from(variable);
     bindings.get(&key).cloned().ok_or_else(|| {
         EvalError::UnboundVariable(format!("{}.{}", variable_prefix(variable), variable.name))

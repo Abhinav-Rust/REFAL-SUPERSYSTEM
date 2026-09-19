@@ -6,4 +6,4 @@ pub mod value;
 
 pub use interpreter::{EvalError, Evaluator};
 pub use matcher::{Bindings, MatchError, match_pattern};
-pub use value::Value;
+pub use value::{Slice, Value};
