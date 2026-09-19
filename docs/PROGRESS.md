@@ -36,8 +36,24 @@ objective to a gate. Not another Refal implementation.
 |---|---|
 | Honest completion | **~63%** (product completeness — one method, see below) |
 | Tests | 307 passing, 0 clippy, fmt clean |
-| Last commit | `2d0bf0c` then this commit |
+| Last commit | `20c1cc6` then this commit |
 | Working tree | clean |
+
+**Verification state at `20c1cc6`, stated precisely.** The view-field change is
+verified by: the T-4/T-6 differential corpus gate, byte-identical to the
+previous run (`cases: 67`, `positive: 29`, `check-failure: 6`,
+`runtime-failure: 1`, `residual: 31`, `cleaned-sentences: 1`); the library crate
+suites, 128 tests; the new arena-sharing invariant test; and `clippy
+--all-targets -D warnings` plus `cargo fmt --check` clean. The full serial
+`cargo test --all -- --test-threads=1` was still running when the session ended,
+so **the four heavy self-hosting tests were not re-confirmed against this
+commit**. They are the ones to run first next session, before anything else:
+`compile_command_compiles_the_compiler_itself`,
+`compiler_ref_reaches_a_self_hosting_fixpoint`,
+`the_refal_authored_compiler_matches_lower_on_every_lowerable_example` and
+`refal_authored_residualization_matches_residualize_graph`. A representation
+change of this size is exactly the kind that can pass every semantic test and
+break a byte-identity gate, so treat them as unverified rather than as passing.
 
 ### Workstream credit
 
