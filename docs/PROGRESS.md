@@ -759,6 +759,25 @@ rather than on the source-preserving artefacts `PLAN.md` section 4's caveat call
 out. That is the largest single deduction in the completion table and it is now
 reachable in one step.
 
+### One item that needs a credential, not a commit
+
+**`.github/workflows/ci.yml` still skips three of the four self-hosting tests**
+— `compile_command_compiles_the_compiler_itself`,
+`compiler_ref_reaches_a_self_hosting_fixpoint`,
+`the_refal_authored_compiler_matches_lower_on_every_lowerable_example`, and
+`refal_authored_residualization_matches_residualize_graph` is not named at all.
+That skip list was written for a real reason — the four stages allocated an
+O(n^2) amount of memory between them and the runner process aborted — and the
+view field removed the reason, so the list should go. It has not, because
+neither the stored git credential nor the GitHub app has the `workflow` scope
+that editing a file under `.github/workflows/` requires; both pushes are
+rejected with `refusing to allow an OAuth App to create or update workflow`.
+The change is one line — delete the four `--skip` flags, keep
+`--test-threads=1`, and set `timeout-minutes: 45` — and it needs a token with
+`workflow` scope, or a hand edit in the GitHub UI. Until then, **CI does not
+verify the repository's headline claim**, and that is worth knowing before
+reading a green check as one.
+
 ### Two smaller items, recorded so they are not lost
 
 - **`Check` is quadratic, and it is the checker's own algorithm.** `Dups` and
