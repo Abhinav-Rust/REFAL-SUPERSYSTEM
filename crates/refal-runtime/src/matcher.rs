@@ -4,11 +4,11 @@ use std::collections::HashMap;
 
 use refal_ast::{Symbol, Term, TermKind, Variable, VariableKind};
 
-use crate::{Slice, Value};
+use crate::{Value, ViewField};
 
-/// What a pattern binds: a variable name to the **range** of the view field it
-/// matched, not a copy of the terms in it.
-pub type Bindings = HashMap<VariableKey, Slice>;
+/// What a pattern binds: a variable name to the **view field** it matched, not
+/// a copy of the terms in it.
+pub type Bindings = HashMap<VariableKey, ViewField>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VariableKey {
@@ -22,7 +22,7 @@ pub enum MatchError {
     CallsAreNotPatterns,
 }
 
-pub fn match_pattern(pattern: &[Term], input: &Slice) -> Result<Bindings, MatchError> {
+pub fn match_pattern(pattern: &[Term], input: &ViewField) -> Result<Bindings, MatchError> {
     match_pattern_candidates(pattern, input)?
         .into_iter()
         .next()
@@ -33,13 +33,13 @@ pub fn match_pattern(pattern: &[Term], input: &Slice) -> Result<Bindings, MatchE
 ///
 /// This is valid for sentence dispatch when no conditions need alternate bindings. The
 /// candidate-enumerating APIs remain available for condition backtracking and matcher tests.
-pub fn match_pattern_first(pattern: &[Term], input: &Slice) -> Result<Bindings, MatchError> {
+pub fn match_pattern_first(pattern: &[Term], input: &ViewField) -> Result<Bindings, MatchError> {
     match_first_from(pattern, input, Bindings::new())?.ok_or(MatchError::NoMatch)
 }
 
 pub fn match_pattern_with_bindings(
     pattern: &[Term],
-    input: &Slice,
+    input: &ViewField,
     bindings: Bindings,
 ) -> Result<Bindings, MatchError> {
     match_pattern_with_bindings_candidates(pattern, input, bindings)?
@@ -50,14 +50,14 @@ pub fn match_pattern_with_bindings(
 
 pub fn match_pattern_candidates(
     pattern: &[Term],
-    input: &Slice,
+    input: &ViewField,
 ) -> Result<Vec<Bindings>, MatchError> {
     match_pattern_with_bindings_candidates(pattern, input, Bindings::new())
 }
 
 pub fn match_pattern_with_bindings_candidates(
     pattern: &[Term],
-    input: &Slice,
+    input: &ViewField,
     bindings: Bindings,
 ) -> Result<Vec<Bindings>, MatchError> {
     let candidates = match_all_from(pattern, input, bindings)?;
@@ -70,7 +70,7 @@ pub fn match_pattern_with_bindings_candidates(
 
 fn match_first_from(
     pattern: &[Term],
-    input: &Slice,
+    input: &ViewField,
     bindings: Bindings,
 ) -> Result<Option<Bindings>, MatchError> {
     let Some((first, rest_pattern)) = pattern.split_first() else {
@@ -92,9 +92,11 @@ fn match_first_from(
             let Some((Value::Bracket(inner_input), rest_input)) = input.split_first() else {
                 return Ok(None);
             };
-            for inner_bindings in
-                match_all_from(inner_pattern, &Slice::copied(inner_input), bindings.clone())?
-            {
+            for inner_bindings in match_all_from(
+                inner_pattern,
+                &ViewField::copied(inner_input),
+                bindings.clone(),
+            )? {
                 if let Some(result) = match_first_from(rest_pattern, &rest_input, inner_bindings)? {
                     return Ok(Some(result));
                 }
@@ -112,7 +114,7 @@ fn match_first_from(
                 let key = VariableKey::from(variable);
                 // One term, so the binding is the first range of the view field
                 // rather than a freshly allocated sequence.
-                let Ok(next_bindings) = bind_or_check(bindings, key, input.sub(0, 1)) else {
+                let Ok(next_bindings) = bind_or_check(bindings, key, input.range(0, 1)) else {
                     return Ok(None);
                 };
                 match_first_from(rest_pattern, &rest_input, next_bindings)
@@ -122,7 +124,7 @@ fn match_first_from(
                     return Ok(None);
                 };
                 let key = VariableKey::from(variable);
-                let Ok(next_bindings) = bind_or_check(bindings, key, input.sub(0, 1)) else {
+                let Ok(next_bindings) = bind_or_check(bindings, key, input.range(0, 1)) else {
                     return Ok(None);
                 };
                 match_first_from(rest_pattern, &rest_input, next_bindings)
@@ -130,21 +132,23 @@ fn match_first_from(
             VariableKind::Expression => {
                 let key = VariableKey::from(variable);
                 if rest_pattern.is_empty() {
-                    // The whole remaining expression: the same arena, no copy.
+                    // The whole remaining expression: the same runs, no copy.
                     if let Ok(bindings) = bind_or_check(bindings, key, input.clone()) {
                         return Ok(Some(bindings));
                     }
                     return Ok(None);
                 }
                 if let Some(bound) = bindings.get(&key) {
-                    if input.terms().starts_with(bound.terms()) {
-                        return match_first_from(rest_pattern, &input.rest(bound.len()), bindings);
+                    if input.starts_with(bound) {
+                        let width = bound.len();
+                        return match_first_from(rest_pattern, &input.rest(width), bindings);
                     }
                     return Ok(None);
                 }
-                for split in expression_splits(input.terms(), rest_pattern, &bindings) {
+                let flat = input.flatten();
+                for split in expression_splits(flat.terms(), rest_pattern, &bindings) {
                     let Ok(next_bindings) =
-                        bind_or_check(bindings.clone(), key.clone(), input.sub(0, split))
+                        bind_or_check(bindings.clone(), key.clone(), input.range(0, split))
                     else {
                         continue;
                     };
@@ -163,7 +167,7 @@ fn match_first_from(
 
 fn match_all_from(
     pattern: &[Term],
-    input: &Slice,
+    input: &ViewField,
     bindings: Bindings,
 ) -> Result<Vec<Bindings>, MatchError> {
     let Some((first, rest_pattern)) = pattern.split_first() else {
@@ -191,7 +195,7 @@ fn match_all_from(
             };
             let mut candidates = Vec::new();
             for inner_bindings in
-                match_all_from(inner_pattern, &Slice::copied(inner_input), bindings)?
+                match_all_from(inner_pattern, &ViewField::copied(inner_input), bindings)?
             {
                 candidates.extend(match_all_from(rest_pattern, &rest_input, inner_bindings)?);
             }
@@ -209,7 +213,7 @@ fn match_all_from(
             VariableKind::Expression => {
                 if rest_pattern.is_empty() {
                     let key = VariableKey::from(variable);
-                    // The whole remaining expression: the same arena, no copy.
+                    // The whole remaining expression: the same runs, no copy.
                     return match bind_or_check(bindings, key, input.clone()) {
                         Ok(bindings) => Ok(vec![bindings]),
                         Err(_) => Ok(Vec::new()),
@@ -235,7 +239,7 @@ fn symbol_matches(symbol: &Symbol, value: &Value) -> bool {
 
 fn match_single_all(
     variable: &Variable,
-    input: &Slice,
+    input: &ViewField,
     rest_pattern: &[Term],
     bindings: Bindings,
     accepts: impl Fn(&Value) -> bool,
@@ -248,7 +252,7 @@ fn match_single_all(
     }
 
     let key = VariableKey::from(variable);
-    let Ok(bindings) = bind_or_check(bindings, key, input.sub(0, 1)) else {
+    let Ok(bindings) = bind_or_check(bindings, key, input.range(0, 1)) else {
         return Ok(Vec::new());
     };
     match_all_from(rest_pattern, &rest_input, bindings)
@@ -256,21 +260,23 @@ fn match_single_all(
 
 fn match_expression_all(
     variable: &Variable,
-    input: &Slice,
+    input: &ViewField,
     rest_pattern: &[Term],
     bindings: Bindings,
 ) -> Result<Vec<Bindings>, MatchError> {
     let key = VariableKey::from(variable);
     if let Some(bound) = bindings.get(&key) {
-        if input.terms().starts_with(bound.terms()) {
-            return match_all_from(rest_pattern, &input.rest(bound.len()), bindings);
+        if input.starts_with(bound) {
+            let width = bound.len();
+            return match_all_from(rest_pattern, &input.rest(width), bindings);
         }
         return Ok(Vec::new());
     }
 
     let mut candidates = Vec::new();
-    for split in expression_splits(input.terms(), rest_pattern, &bindings) {
-        if let Ok(attempt) = bind_or_check(bindings.clone(), key.clone(), input.sub(0, split)) {
+    let flat = input.flatten();
+    for split in expression_splits(flat.terms(), rest_pattern, &bindings) {
+        if let Ok(attempt) = bind_or_check(bindings.clone(), key.clone(), input.range(0, split)) {
             candidates.extend(match_all_from(rest_pattern, &input.rest(split), attempt)?);
         }
     }
@@ -292,7 +298,9 @@ fn determinate_width(term: &Term, bindings: &Bindings) -> Option<usize> {
         TermKind::Bracket(_) => Some(1),
         TermKind::Variable(variable) => match variable.kind {
             VariableKind::Symbol | VariableKind::Term => Some(1),
-            VariableKind::Expression => bindings.get(&VariableKey::from(variable)).map(Slice::len),
+            VariableKind::Expression => bindings
+                .get(&VariableKey::from(variable))
+                .map(ViewField::len),
         },
         TermKind::Call { .. } | TermKind::Block { .. } => None,
     }
@@ -340,8 +348,13 @@ fn rigid_run_matches(input: &[Value], start: usize, run: &[Term], bindings: &Bin
                     let Some(bound) = bindings.get(&VariableKey::from(variable)) else {
                         return false;
                     };
-                    if &input[position..position + width] != bound.terms() {
+                    if bound.len() != width {
                         return false;
+                    }
+                    for offset in 0..width {
+                        if input[position + offset] != *bound.term_at(offset) {
+                            return false;
+                        }
                     }
                 }
             },
@@ -386,7 +399,7 @@ fn expression_splits(input: &[Value], rest: &[Term], bindings: &Bindings) -> Vec
 fn bind_or_check(
     mut bindings: Bindings,
     key: VariableKey,
-    value: Slice,
+    value: ViewField,
 ) -> Result<Bindings, MatchError> {
     if let Some(existing) = bindings.get(&key) {
         if existing == &value {
@@ -447,10 +460,10 @@ mod tests {
         }
     }
 
-    /// An input expression as its own arena, which is what the interpreter
+    /// An input expression as its own view field, which is what the interpreter
     /// hands the matcher.
-    fn slice(values: Vec<Value>) -> Slice {
-        Slice::owned(values)
+    fn field(values: Vec<Value>) -> ViewField {
+        ViewField::owned(values)
     }
 
     /// The terms a variable bound, materialized so a test can state an expected
@@ -461,14 +474,14 @@ mod tests {
 
     #[test]
     fn matches_literal_symbols() {
-        let bindings = match_pattern(&[char_term('A')], &slice(vec![Value::Char('A')])).unwrap();
+        let bindings = match_pattern(&[char_term('A')], &field(vec![Value::Char('A')])).unwrap();
         assert!(bindings.is_empty());
     }
 
     #[test]
     fn rejects_literal_mismatch() {
         assert_eq!(
-            match_pattern(&[char_term('A')], &slice(vec![Value::Char('B')])),
+            match_pattern(&[char_term('A')], &field(vec![Value::Char('B')])),
             Err(MatchError::NoMatch)
         );
     }
@@ -477,7 +490,7 @@ mod tests {
     fn s_variable_matches_non_bracket_symbol() {
         let bindings = match_pattern(
             &[var(VariableKind::Symbol, "X")],
-            &slice(vec![Value::Char('A')]),
+            &field(vec![Value::Char('A')]),
         )
         .unwrap();
         assert_eq!(
@@ -491,7 +504,7 @@ mod tests {
         assert_eq!(
             match_pattern(
                 &[var(VariableKind::Symbol, "X")],
-                &slice(vec![Value::Bracket(vec![Value::Char('A')])])
+                &field(vec![Value::Bracket(vec![Value::Char('A')])])
             ),
             Err(MatchError::NoMatch)
         );
@@ -501,7 +514,7 @@ mod tests {
     fn t_variable_matches_single_bracket_term() {
         let input = Value::Bracket(vec![Value::Char('A')]);
         let bindings =
-            match_pattern(&[var(VariableKind::Term, "X")], &slice(vec![input.clone()])).unwrap();
+            match_pattern(&[var(VariableKind::Term, "X")], &field(vec![input.clone()])).unwrap();
         assert_eq!(bound(&bindings, VariableKind::Term, "X"), vec![input]);
     }
 
@@ -518,7 +531,7 @@ mod tests {
             Value::Char('x'),
             Value::Char('c'),
         ];
-        let bindings = match_pattern(&pattern, &slice(input)).unwrap();
+        let bindings = match_pattern(&pattern, &field(input)).unwrap();
 
         assert_eq!(
             bound(&bindings, VariableKind::Expression, "Left"),
@@ -544,7 +557,7 @@ mod tests {
             Value::Char('x'),
             Value::Char('c'),
         ];
-        let bindings = match_pattern_first(&pattern, &slice(input)).unwrap();
+        let bindings = match_pattern_first(&pattern, &field(input)).unwrap();
 
         assert_eq!(
             bound(&bindings, VariableKind::Expression, "Left"),
@@ -564,7 +577,7 @@ mod tests {
         ];
         let input = vec![Value::Char('a'), Value::Char('b')];
 
-        let candidates = match_pattern_candidates(&pattern, &slice(input)).unwrap();
+        let candidates = match_pattern_candidates(&pattern, &field(input)).unwrap();
 
         assert_eq!(candidates.len(), 3);
         assert_eq!(
@@ -581,7 +594,7 @@ mod tests {
                     var(VariableKind::Symbol, "X"),
                     var(VariableKind::Symbol, "X")
                 ],
-                &slice(vec![Value::Char('A'), Value::Char('A')])
+                &field(vec![Value::Char('A'), Value::Char('A')])
             )
             .is_ok()
         );
@@ -592,7 +605,7 @@ mod tests {
                     var(VariableKind::Symbol, "X"),
                     var(VariableKind::Symbol, "X")
                 ],
-                &slice(vec![Value::Char('A'), Value::Char('B')])
+                &field(vec![Value::Char('A'), Value::Char('B')])
             ),
             Err(MatchError::NoMatch)
         );
@@ -604,7 +617,7 @@ mod tests {
             kind: TermKind::Bracket(vec![char_term('A')]),
             span: span(),
         }];
-        let input = slice(vec![Value::Bracket(vec![Value::Char('A')])]);
+        let input = field(vec![Value::Bracket(vec![Value::Char('A')])]);
 
         assert!(match_pattern(&pattern, &input).is_ok());
     }
@@ -620,7 +633,7 @@ mod tests {
                 span: span(),
             },
         ];
-        let input = slice(vec![
+        let input = field(vec![
             Value::Bracket(vec![Value::Char('A')]),
             Value::Bracket(vec![Value::Char('A')]),
         ]);
@@ -646,7 +659,7 @@ mod tests {
         ];
         let input: Vec<Value> = "aabpaacqbb".chars().map(Value::Char).collect();
 
-        let bindings = match_pattern_first(&pattern, &slice(input)).unwrap();
+        let bindings = match_pattern_first(&pattern, &field(input)).unwrap();
 
         assert_eq!(
             bound(&bindings, VariableKind::Expression, "A"),
@@ -665,28 +678,86 @@ mod tests {
     #[test]
     fn a_binding_is_a_range_of_the_input_not_a_copy_of_it() {
         // The invariant the view field exists for: an expression variable that
-        // runs to the end of the input shares the input's arena, so the binding
-        // is a pointer and two integers however long the expression is. A
+        // runs to the end of the input shares the input's runs, so the binding
+        // is a pointer and three integers however long the expression is. A
         // materializing matcher passes every other test in this module and
         // fails this one.
-        let input = slice("abcdefghij".chars().map(Value::Char).collect());
+        let input = field("abcdefghij".chars().map(Value::Char).collect());
         let bindings = match_pattern(&[var(VariableKind::Expression, "X")], &input).unwrap();
         let tail = &bindings[&key(VariableKind::Expression, "X")];
 
-        assert_eq!(tail.terms(), input.terms());
+        assert_eq!(tail.to_values(), input.to_values());
         assert!(
-            tail.shares_arena_with(&input),
-            "the trailing e-variable should reuse the input's arena, not copy it"
+            tail.shares_field_with(&input),
+            "the trailing e-variable should reuse the input's runs, not copy them"
         );
 
-        // And a prefix of a longer expression is a range of the same arena too.
+        // And a prefix of a longer expression is a range of the same field too.
         // The anchor has to be the last term, because a pattern that runs out of
         // input without consuming it does not match.
-        let ending = slice("abcd".chars().map(Value::Char).collect());
+        let ending = field("abcd".chars().map(Value::Char).collect());
         let pattern = vec![var(VariableKind::Expression, "P"), char_term('d')];
         let bindings = match_pattern(&pattern, &ending).unwrap();
         let prefix = &bindings[&key(VariableKind::Expression, "P")];
-        assert_eq!(prefix.terms().len(), 3);
-        assert!(prefix.shares_arena_with(&ending));
+        assert_eq!(prefix.to_values().len(), 3);
+        assert!(prefix.shares_field_with(&ending));
+    }
+
+    #[test]
+    fn a_segmented_field_matches_without_being_flattened() {
+        // The second half of the view field. `s.C <F e.Rest>` gives a result
+        // made of a one-term run and the child's run; a pattern must be able to
+        // consume it segment by segment, with the trailing variable binding the
+        // rest of a run rather than a copy of it.
+        let arena: Vec<Value> = "abcdefgh".chars().map(Value::Char).collect();
+        let head = crate::Slice::owned(vec![Value::Char('Z')]);
+        let tail = crate::Slice::owned(arena).sub(3, 5);
+        let segmented = ViewField::from_runs(vec![head, tail.clone()]);
+
+        assert_eq!(segmented.len(), 6);
+        let pattern = vec![
+            var(VariableKind::Symbol, "H"),
+            char_term('d'),
+            var(VariableKind::Expression, "R"),
+        ];
+        let bindings = match_pattern(&pattern, &segmented).unwrap();
+
+        assert_eq!(
+            bound(&bindings, VariableKind::Symbol, "H"),
+            vec![Value::Char('Z')]
+        );
+        // The trailing variable is the remainder of the *shared run*, so its
+        // terms are a range of the arena the field was built from and not a
+        // fresh copy of them.
+        let rest = &bindings[&key(VariableKind::Expression, "R")];
+        assert_eq!(
+            rest.to_values(),
+            vec![
+                Value::Char('e'),
+                Value::Char('f'),
+                Value::Char('g'),
+                Value::Char('h')
+            ]
+        );
+        let runs = rest.into_runs();
+        assert_eq!(runs.len(), 1);
+        assert!(
+            runs[0].shares_arena_with(&tail),
+            "the trailing e-variable of a segmented field should be a range of it"
+        );
+    }
+
+    #[test]
+    fn adjacent_runs_of_one_arena_are_fused() {
+        // Concatenating a prefix and the rest of one arena yields one run, so a
+        // field built by walking an expression stays as short as the expression.
+        let arena = crate::Slice::owned("abcdef".chars().map(Value::Char).collect());
+        let field = ViewField::from_runs(vec![arena.sub(0, 2), arena.rest(2)]);
+        assert_eq!(field.len(), 6);
+        assert_eq!(field.to_values(), arena.to_values());
+        assert!(
+            field.is_single_run(),
+            "two adjacent ranges of one arena should fuse into a single run"
+        );
     }
 }

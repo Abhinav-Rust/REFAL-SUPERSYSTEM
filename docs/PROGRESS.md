@@ -34,30 +34,54 @@ objective to a gate. Not another Refal implementation.
 
 | | |
 |---|---|
-| Honest completion | **~63%** (product completeness — one method, see below) |
-| Tests | 307 passing, 0 clippy, fmt clean |
-| Last commit | `20c1cc6` then this commit |
+| Honest completion | **~66%** (product completeness — one method, see below) |
+| Tests | 315 passing, 0 clippy, fmt clean |
+| Last commit | this commit |
 | Working tree | clean |
 
-**Verification state at `20c1cc6`, stated precisely.** The view-field change is
-verified by: the T-4/T-6 differential corpus gate, byte-identical to the
-previous run (`cases: 67`, `positive: 29`, `check-failure: 6`,
-`runtime-failure: 1`, `residual: 31`, `cleaned-sentences: 1`); the library crate
-suites, 128 tests; the new arena-sharing invariant test; and `clippy
---all-targets -D warnings` plus `cargo fmt --check` clean. The full serial
-`cargo test --all -- --test-threads=1` was still running when the session ended,
-so **the four heavy self-hosting tests were not re-confirmed against this
-commit**. They are the ones to run first next session, before anything else:
+**Verification state at this commit, stated precisely.** The second half of the
+view field is a *representation* change, so it is verified the way the first half
+was and more: `cargo test --all -j 2 -- --test-threads=1` is **green end to end**,
+315 tests, including the four heavy self-hosting tests —
 `compile_command_compiles_the_compiler_itself`,
 `compiler_ref_reaches_a_self_hosting_fixpoint`,
 `the_refal_authored_compiler_matches_lower_on_every_lowerable_example` and
-`refal_authored_residualization_matches_residualize_graph`. A representation
-change of this size is exactly the kind that can pass every semantic test and
-break a byte-identity gate, so treat them as unverified rather than as passing.
+`refal_authored_residualization_matches_residualize_graph` — which is the check
+the previous session left open. The T-4/T-6 differential corpus gate is
+byte-identical to the previous run (`cases: 67`, `positive: 29`,
+`check-failure: 6`, `runtime-failure: 1`, `residual: 31`,
+`cleaned-sentences: 1`), `refal run` over the compiler's own source produces the
+same 30,825 bytes, and `clippy --all-targets -D warnings` and `cargo fmt --check`
+are clean.
+
+**The measurement, because a speedup that is not measured is a claim.**
+`./target/debug/refal run examples/compiler.ref --input-file examples/compiler.ref`
+(47.5 KB) went **587 s → 299 s → 69 s → 26 s**, and it is now *linear* in the
+input's length: 13.6 KB in 1.4 s, 24.5 KB in 2.0 s, 37.7 KB in 2.8 s, 47.5 KB in
+26 s, where the last step includes `Emit` and the earlier ones stop at the
+checker's first failure. The stage breakdown on the full source is `StripCR`
+1.5 s, `Lex` 3.8 s, `Parse` ~3 s, `Emit` ~3.4 s, and the rest is `Check`.
+
+**The remaining cost is not the runtime.** `Check` is quadratic in the number of
+functions, and it is the checker's *own* algorithm: `Dups`/`DupName` compare every
+function's name against every other's. A synthetic corpus of 50/100/200/400
+functions measures `Lex` 0.8/1.1/1.5/2.5 s, `Parse` 0.9/1.2/1.8/3.0 s, `Emit`
+0.9/1.2/2.0/3.4 s — linear to within a fixed ~0.8 s of process startup
+(`refal --version` alone is 0.65 s on this machine) — against `Check`
+1.3/2.7/8.1/29.4 s. That is a compiler-in-Refal workstream item, and it is
+recorded as one rather than as a runtime one.
+
+**The full suite is no longer slow.** `cargo test --all -j 2 --
+--test-threads=1` takes **7 minutes** (the CLI suite alone is 6.3), down from the
+~36 minutes four serial self-hosting stages used to cost. The `-j 2` and
+`--test-threads=1` discipline is still kept, but the OOM that used to make the
+parallel run unusable — `memory allocation of 913568 bytes failed`, which reads
+like a semantic failure and is not one — is gone with the quadratic: the machine
+no longer builds an O(n^2) amount of run-list.
 
 ### Workstream credit
 
-**One number, one method: ~63%.** Each workstream is credited for what is
+**One number, one method: ~66%.** Each workstream is credited for what is
 implemented *and* tested *for the general case* — not for the corpus, and not for
 effort spent. This replaced three figures that used to be published side by side
 (an effort-weighted ~88%, an evidence-weighted ~81%, a gate-only ~78%) and
@@ -69,21 +93,24 @@ exists. `README.md` and `PLAN.md` section 5 publish the same table.
 |---|---:|---:|
 | Bootstrap frontend | 8.5% | 7.0 |
 | Bootstrap semantics | 6.0% | 4.5 |
-| Refal machine / runtime | 19.5% | 14.0 |
+| Refal machine / runtime | 19.5% | 17.0 |
 | Graph of states / Refal emission | 8.5% | 5.0 |
 | Static verification (Tier 1) | 15.0% | 12.5 |
 | Compiler implemented in Refal | 25.5% | 13.0 |
 | Verified self-hosting fixpoint | 13.0% | 5.5 |
 | Conformance / release evidence | 4.0% | 1.5 |
-| **Total** | **100%** | **~63%** |
+| **Total** | **100%** | **~66%** |
 
 The three heaviest rows — the Refal compiler, the runtime, and self-hosting —
-hold 58 of the 100 points, are the three furthest from done, and carry 25.5 of the
-37 deducted points. The figure now agrees in direction with the milestone table,
-which is the point: counting ticks and reading the percentage should reach the
-same conclusion. Closing an objective that its workstream already paid for does
-not move it — which is why T-5's and T-8's closures changed the wording, not the
-number.
+hold 58 of the 100 points and carry 22 of the 34 deducted points. The runtime has
+left that group: it was the repository's largest engineering item, and its
+deduction now reads as one *shape* left (`<F e.X> s.C`, the `Reverse` idiom)
+rather than one *mechanism* missing. What remains concentrated is the
+Refal-authored compiler's transforming half. The figure agrees with the milestone
+table, which is the point: counting ticks and reading the percentage should reach
+the same conclusion. Closing an objective that its workstream already paid for
+does not move it — which is why T-5's and T-8's closures changed the wording, not
+the number.
 
 ### Done
 
@@ -582,11 +609,11 @@ whose earlier occurrence already fixed it.
 **Measured on the way, and published rather than filed away:** `refal run` is
 super-quadratic in its input's length — 63 B in 0.5 s, 9.4 KB in 17 s, 47.5 KB in
 587 s — because every step copies the remaining expression into a binding and
-copies it again into the next call's argument list. That is the heap-allocated
-view field, it is the single largest remaining engineering item, and the `Rc`
-spine above removes one of the two copies rather than both.
+copies it again into the next call's argument list. That was the heap-allocated
+view field, the single largest remaining engineering item; it is now closed, and
+the section below records how.
 
-### Done — the view field, first half: a binding is a range, not a value
+### Done — the view field: a binding is a range, and a result is a rope
 
 Turchin's §2.2 says a Refal machine holds **one** heap-allocated view field and a
 cursor, and that a variable binds a *range* in it. The runtime bound an owned
@@ -606,38 +633,51 @@ matters:
 | `e.X` before a rigid run | `input.sub(0, split)` |
 | `s.X` or `t.X` | `input.sub(0, 1)` |
 
-The frame that computes a result carries `shared: Option<Slice>`, and a frame
-whose result is exactly one call's value or one bound variable **propagates** it
-instead of materialising it. That is the second of the two copies, and it is what
-makes `s.C e.Rest = <F e.Rest>` — the compiler's dominant recursion — cost O(1)
-per step.
+**A frame's result is a rope.** A frame accumulates a small list of *pieces* —
+runs of literal terms it produced itself, and whole fields its children produced —
+and folds them right to left into a `ViewField`. The fold is the whole trick: a
+`Piece::Field(child)` that is the *last* piece contributes the child's own rope
+directly, so `s.C <StripCR (e.CR) e.R>` prepends one run to the child's rope and
+touches nothing else, at any depth. Appending a whole field to a prefix is one
+`Concat` node; consuming a prefix of a run yields a run. Nothing is flattened
+except where the answer really depends on the representation: a builtin that
+takes contiguous terms, a bracket's contents, split enumeration over a genuinely
+segmented field, and the printer.
 
 **Measured.** The compiler's own source, through the Refal-authored compiler:
 
 ```
-                        before      after
-63 B   (hello.ref)       0.5 s      0.38 s
-47.5 KB (compiler.ref)   587 s       299 s
+                              before   first half   segment list   rope
+47.5 KB (compiler.ref)         587 s      299 s         69 s        26 s
+13.6 KB (a quarter of it)        —          —          7.2 s       1.4 s
+24.5 KB (half of it)             —          —         16.0 s       2.0 s
+37.7 KB (three quarters)         —          —         33.7 s       2.8 s
 ```
 
-**The invariant is enforced, not asserted.**
-`a_binding_is_a_range_of_the_input_not_a_copy_of_it` matches a ten-symbol
-expression and requires the binding to `shares_arena_with` the input, and the
-same for a prefix of it. A materialising matcher passes every other test in the
-module and fails that one — which is the point, because the difference between
-the two is invisible in every program's *answer* and visible only in what they
-allocate.
+The runtime is now **linear** in the input's length, which is the property that
+distinguishes a view-field machine from a work-list interpreter over host
+recursion. The small-input row is gone from the table deliberately: `refal
+--version` alone costs 0.65 s on this machine, so a 63-byte program measures
+process startup rather than the runtime.
 
-**What is still missing, and it is not a detail.** A frame whose result is a
-*prefix* followed by a call — `s.C <StripCR (e.CR) e.R>`, which is how the
-compiler's hottest loop is written — is not a single shared run, so it is
-flattened into a new arena, and the flatten happens once per level of the
-recursion. `StripCR` is therefore still quadratic, and it is the reason the
-figure above is a factor of two and not a factor of twenty. Closing it needs the
-frame's result to *be* a segment list and the matcher to be able to consume one,
-which is the rope, and that is the next piece. The measurement is published in
-this state deliberately: the second copy is gone, the first is not, and saying
-"the view field is done" at this point would be false.
+**The invariants are enforced, not asserted.**
+`a_binding_is_a_range_of_the_input_not_a_copy_of_it` matches a ten-symbol
+expression and requires the binding to share the input's arena, and the same for
+a prefix of it — a materialising matcher passes every other test in the module
+and fails that one. On the rope, `a_prefix_followed_by_a_call_splices_the_childs_rope`
+requires that consuming the literal prefix leaves *the child's rope itself*, and
+`a_deep_prefix_chain_shares_every_level` builds the same shape 64 deep and walks
+it. `a_clamped_piece_contributes_only_its_own_terms` pins the bug that `Reverse`
+found: a piece may be a *range* of a longer arena, so reading a rope has to carry
+each node's own limit down with it.
+
+**What is still missing, and it is one shape rather than the mechanism.** A
+result that puts a call *before* other terms — `<F e.X> s.C`, which is how
+`Reverse` is written — builds a rope whose left spine is as deep as the nesting,
+so consuming that idiom costs the spine depth per term. Every prepend-shaped walk
+(`s.C <Recurse ...>`, which is what the compiler is made of) is O(1) per step,
+and the compiler's own source is linear, so this is not on a measured critical
+path. Closing it needs the rope to be balanced rather than right-nested.
 
 ### Open
 
@@ -666,76 +706,81 @@ this state deliberately: the second copy is gone, the first is not, and saying
   optimisation, not a gap.
 - **T-8** metacodes (Ch. 1.3) — closed for ground expressions; see the section
   above. The §6.4 `unknown` values remain open and are recorded there.
-- Heap-allocated single view field — **now the top of `NEXT ACTION`**, because it
-  is measured rather than suspected: the work list copies the term run a variable
-  binds, so `refal run` is super-quadratic in its input's length and the
-  self-hosting tests OOM when the suite runs them in parallel. See below.
+- **The `Reverse` shape** — a rope whose left spine is as deep as the nesting,
+  built by a result that puts a call before other terms. Every prepend-shaped
+  walk is O(1) per step and the compiler's own source is linear, so this is not
+  on a measured critical path; the fix is a height in the `Concat` node and a
+  rotation in `ViewField::concat`. Recorded in `NEXT ACTION` with the two
+  smaller items.
+- **`Check` is quadratic in the number of functions** — `Dups`/`DupName` compare
+  every function's name against every other's. It is the dominant cost of the
+  self-hosting run and it is the checker's own algorithm, not the runtime's.
 
 ---
 
 ## NEXT ACTION
 
-**The view field, second half: the result of a frame is a segment list.**
+**The symbolic driver, in Refal.**
 
-The first half landed: a binding is a range in a shared arena, and a frame whose
-result is exactly one run propagates it instead of copying it. That took the
-compiler's own source from 587 s to 299 s. It did not take it to seconds, and the
-reason is now located exactly:
+The view field is done, and that changes what is on the critical path. The
+runtime is now linear in its input's length — the compiler's own 47.5 KB source
+goes through its own pipeline in 26 s, from 587 s — so a differential that drives
+`compiler.ref` over its own source no longer costs ten minutes a run. That was
+the stated reason the symbolic driver went second:
 
-```refal
-StripCR {
-  (e.CR) s.C e.R = s.C <StripCR (e.CR) e.R>;
-}
-```
+> It goes second because writing it against a runtime that cannot carry its own
+> input is writing it against a wall: the differential would take ten minutes a
+> run.
 
-The result is a **prefix followed by a call**. It is not one run, so the frame
-flattens it into a fresh arena, and that flatten happens once per level of the
-recursion: at step k it copies n−k terms, which is quadratic in the length of the
-input. `StripCR` is the first thing the compiler does to its own source, and the
-same shape appears throughout `compiler.ref` — `s.C <Recurse ...>` is how Refal
-writes a list walk, so this is not one slow function, it is the language's
-idiom.
-
-*What closing it requires.*
-
-1. **A frame's result is a list of segments, not a buffer.** `Vec<Seg>` with
-   `Seg::One(Value) | Seg::Run(Slice)`. Appending a child is `extend`, which
-   *moves* its segments: `s.C <StripCR ...>` becomes two segments and costs
-   nothing, at every level.
-2. **A cursor over segments for the matcher.** The matcher must match against a
-   segment list without flattening it, so `e.R` can bind "the rest" — the
-   segments after the cursor, with the first one possibly partially consumed —
-   in O(1). This is the piece that makes it a machine rather than a work list,
-   and it is the same object Turchin calls the view field: a flat field with a
-   left part already scanned and a right part not yet.
-3. **Flatten only at a real boundary** — a builtin that needs contiguous terms,
-   a bracket's contents, and the printer. Those are the only places the answer
-   depends on the representation.
-4. **The gate is the existing one, and it must be byte-identical.** The
-   differential corpus, the emitter sweep, the graph and residualization
-   differentials, the ground-driver differential and the self-hosting fixpoint.
-   This is a representation change, so a behavioural difference is a bug in the
-   change and never a finding.
-
-**The invariant to test, and how.** `a_binding_is_a_range_of_the_input_not_a_copy_of_it`
-is the pattern to repeat: assert on what is *shared*, not on what is computed. A
-flattening implementation passes every semantic test in the repository and is
-wrong in exactly the way this milestone exists to fix. The measurement to publish
-is the same one as above — the compiler's own source, wall clock — because a
-speedup that is not measured is a claim.
-
-**Then the symbolic driver.** `refal-core`'s `drive_symbolic_with_strategy`
+The wall is down. `refal-core`'s `drive_symbolic_with_strategy`
 (`crates/refal-core/src/lib.rs:693`) is the behaviour to reproduce, exactly as
 `compiler.ref` had to reproduce `lower`, `graph` and `drive`. The ground driver
 already holds the whole of its machinery — the matcher, sentence selection with
 conditions, blocks in condition position, call instantiation and the visited
-trace — so the symbolic stage adds case splitting (§4.2), folding against the
-active path, and generalisation (§4.4/T-5), and nothing else. It is the same
-`$ENTRY Go` mode pattern as `GRAPH`, `RESIDUALIZE` and `DRIVE`. It goes second
-because writing it against a runtime that cannot carry its own input is writing
-it against a wall: the differential would take ten minutes a run.
+trace — so the symbolic stage adds:
 
-*Traps this repository has already paid for.* Each failed silently:
+1. **Case splitting** (§4.2): a wholly unknown argument partitioned into `[]`,
+   `s.H e.T`, and `(e.B) e.T` — exhaustive and pairwise disjoint — with each
+   branch driven, and a branch the driver cannot decide kept as a call.
+2. **Folding against the active path**: a configuration that repeats a state
+   already on the current path folds to it instead of being driven again.
+3. **Generalisation** (§4.4, T-5): the whistle fires on a homeomorphic embedding,
+   and the generalized configuration becomes a generated residual function.
+
+It is the same `$ENTRY Go` mode pattern as `GRAPH`, `RESIDUALIZE` and `DRIVE` —
+one more sentence in the dispatch, reusing `Lex` and `Parse` with no
+duplication — and the gate is the same shape: a differential against the Rust
+driver over the corpus, with a non-vacuity guard.
+
+**Then wire the transforming half into `compiler.ref`.** With the symbolic driver
+present in Refal, the compiler's own `driver.ref` exists, and the self-hosting
+fixpoint can be closed on a slice that genuinely parses, analyses and emits
+rather than on the source-preserving artefacts `PLAN.md` section 4's caveat calls
+out. That is the largest single deduction in the completion table and it is now
+reachable in one step.
+
+### Two smaller items, recorded so they are not lost
+
+- **`Check` is quadratic, and it is the checker's own algorithm.** `Dups` and
+  `DupName` compare every function's name against every other's, so a program
+  with n functions costs O(n^2) before anything is emitted. It is the dominant
+  cost of the self-hosting run (`Check` alone goes 1.3 s → 2.7 s → 8.1 s →
+  29.4 s over 50/100/200/400 synthetic functions while `Lex`, `Parse` and `Emit`
+  stay linear). The fix is a name set built once — the runtime has no map, so
+  either the checker builds one, or the driver stops re-scanning. Worth doing
+  when the corpus grows, not before.
+- **The `Reverse` shape.** A result that puts a call *before* other terms —
+  `<F e.X> s.C` — builds a rope whose left spine is as deep as the nesting, so
+  consuming that idiom costs the spine depth per term. Every prepend-shaped walk
+  (`s.C <Recurse ...>`, which is what the compiler is made of) is O(1) per step,
+  so this is not on any measured critical path. Closing it needs the rope to be
+  balanced rather than right-nested; the place to do it is `ViewField::concat`,
+  with a height in the `Concat` node and a rotation when the left subtree is more
+  than one level deeper than the right.
+
+### Traps this repository has already paid for
+
+Each failed silently:
 
 - **`e.X e.Rest` where one term was meant.** Two adjacent expression variables
   split *shortest-first*, so `e.X` binds empty and the recursion never consumes
@@ -756,6 +801,13 @@ it against a wall: the differential would take ten minutes a run.
   *shape*, never by a sentinel symbol.
 - **Miscounted call nesting** is reported at the block's closing brace, not at the
   mistake. Count one `>` per open `<`.
+- **A rope node's operand may be a *range*, not the whole node.** A binding such
+  as `s.Head` over `'abc'` is a clamped view of a three-term arena, so reading a
+  rope has to carry each node's own limit down with it or the extra terms leak
+  into the result. `Reverse` is the shape that caught it.
+- **A structure built by a recursion of depth n is n nodes deep, and its
+  destructor is recursive too.** A 47,000-level rope overflows the host stack on
+  *drop*, which reads as a crash rather than as a bug. Unwind it explicitly.
 
 Also open, and not objectives: §4.4's strategy *search*, and T-8's §6.4
 `unknown` values.
@@ -772,16 +824,19 @@ balanced: build and test with `-j 2`, prefer a targeted
 `cargo test -p <crate> <filter>` over a full workspace run, and leave a pause
 between heavy commands rather than chaining them back to back.
 
-**`cargo test --all` in parallel is not a usable gate while the view field is
-missing.** Four tests compile `examples/compiler.ref` with the Refal-authored
-compiler — `compile_command_compiles_the_compiler_itself`,
+**The parallel-test OOM is gone, and it is worth remembering why it was there.**
+Four tests compile `examples/compiler.ref` with the Refal-authored compiler —
+`compile_command_compiles_the_compiler_itself`,
 `compiler_ref_reaches_a_self_hosting_fixpoint`,
 `the_refal_authored_compiler_matches_lower_on_every_lowerable_example` and
-`refal_authored_residualization_matches_residualize_graph` — and each runs a
-ten-minute, memory-hungry interpreter stage. Run together they exhaust memory and
-abort with `memory allocation of 913568 bytes failed`, which reads like a
-semantic failure and is not one. Until the view field lands, gate with
-`cargo test --all -j 2 -- --test-threads=1`, or run those four by name with
-`--test-threads=1`. Recording this is the point: a red suite that is red for a
-known environmental reason still has to be explained, or it will be misread as a
-regression the next time it is seen.
+`refal_authored_residualization_matches_residualize_graph` — and each runs an
+interpreter stage over the compiler's own 47.5 KB source. While the machine
+copied the run list once per level of the recursion, that stage allocated an
+O(n^2) amount of memory, so four of them at once aborted with
+`memory allocation of 913568 bytes failed` — which reads like a semantic failure
+and is not one. The view field removed the quadratic, and the full suite now runs
+in 7 minutes with the CLI suite at 6.3. Keep gating with
+`cargo test --all -j 2 -- --test-threads=1` anyway: the discipline is what keeps
+the machine usable, and a red suite that is red for a known environmental reason
+still has to be explained, or it will be misread as a regression the next time it
+is seen.

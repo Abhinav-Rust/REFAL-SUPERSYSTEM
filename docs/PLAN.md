@@ -110,7 +110,7 @@ pass before the next begins.
 
 - [x] Conformance defects #6, #8, #9, #10, #11, #12 fixed (`641ffc0`); tests 83 -> 102
 - [x] #13 Refal-5 blocks — implemented in Phase 1, in every crate it touches: blocks parse, check, evaluate and round-trip through `lower` in both positions
-- [x] #7 builtin library — implemented in Phase 1 (issue #7 tracks the builtin library, not the heap-allocated view field, which stays open)
+- [x] #7 builtin library — implemented in Phase 1 (issue #7 tracked the builtin library, not the heap-allocated view field, which Phase 1a closed)
 - [x] Nineteen Turchin primary sources indexed with a verifying fetch script (`6a2ae3a`)
 - [x] README rewritten to carry the vision and the honest status
 - [ ] `TURCHIN-ARCHITECTURE.md`
@@ -133,11 +133,15 @@ pass before the next begins.
 Turchin Ch. 1–2. Replaces `refal-runtime`.
 
 - **1a** Flat view-field rewriting machine. Explicit expression heap and work list; no host-stack
-  recursion. **Partly done (2026-09-08):** the evaluator is work-list driven for named calls and
-  for blocks, and the fixed call-depth cap is gone — 50,000 frames completes in under a second,
-  so depth is bounded by memory rather than by a constant. Still open: the heap-allocated single
-  view field (the work list still copies term slices) and blocks whose sentences carry
-  conditions, which fall back to the recursive path.
+  recursion. **Done (2026-09-24):** the evaluator is work-list driven for named calls and for
+  blocks; the fixed call-depth cap is gone (50,000 frames in under a second, so depth is bounded
+  by memory rather than by a constant); and the machine's state is now Turchin's view field — one
+  flat sequence held as a rope of runs of shared arenas, with a variable binding a *range* of it
+  and a frame's result splicing its children's ropes rather than copying their terms. Execution is
+  linear in the input's length, which is the property that distinguishes a view-field machine from
+  a work-list interpreter over host recursion. Still open: blocks whose sentences carry conditions
+  fall back to the recursive path, and a result of the shape `<F e.X> s.C` builds a left spine as
+  deep as the nesting, so consuming that idiom costs the spine depth per term.
 - **1b** Compiled matching plan — Turchin's **projecting algorithm** (§2.2). Classify `e`-variables
   open vs closed at compile time; order deterministic bindings (literals, `s.`, brackets, closed
   `e.`) before open splits; generate candidates lazily. Removes the measured blowup
@@ -155,7 +159,9 @@ Turchin Ch. 1–2. Replaces `refal-runtime`.
 - **1e** Refal-5 blocks (`, arg : { block }`) end-to-end — issue #13. **Done:** blocks parse, check, evaluate and round-trip through `lower` in both positions, so the phase item is closed and the issue with it.
 
 **Gate:** tokenise a 50 KB source file in Refal, on this machine, in reasonable time and memory.
-Recursion depth bounded only by RAM. Full conformance corpus green.
+Recursion depth bounded only by RAM. Full conformance corpus green. **Green:** the compiler's own
+47.5 KB source goes through the Refal-authored lexer and the rest of its own pipeline in 26 s,
+and the runtime is linear in the input's length.
 
 ### Phase 2 — Graph of states · effort L
 
@@ -275,7 +281,7 @@ Native codegen (§4.7) if wanted, packaging, performance suite, compatibility st
 
 ## 5. Completion accounting
 
-**~60%. One number, one method.**
+**~66%. One number, one method.**
 
 The figure answers one question: *how much of a working Refal-5 compiler exists
 today?* Each workstream is credited for what is implemented **and** tested **for
@@ -295,19 +301,22 @@ same table.
 |---|---:|---:|---|
 | Bootstrap frontend | 8.5% | 7.0 | Documented Classic scope with 24 traced negative fixture classes; no clause-by-clause conformance corpus, so *handles the corpus* is not yet *handles Classic Refal-5* |
 | Bootstrap semantics | 6.0% | 4.5 | Every rule of its milestone gate; exhaustiveness lives in Tier 1 rather than here |
-| Refal machine | 19.5% | 12.5 | No fixed depth cap, projecting matcher (§2.2), broad covered builtin suite. **The heap-allocated view field is missing** — the work list copies term slices, which is the difference between a Refal machine and a work-list interpreter over host recursion — and block sentences carrying conditions still take the recursive path |
+| Refal machine | 19.5% | 17.0 | No fixed depth cap, projecting matcher (§2.2), broad covered builtin suite, and **the view field**: the state is one flat sequence held as a rope of runs of shared arenas, a variable binds a range of it, and a frame's result splices its children's ropes rather than copying their terms. `refal run` is linear in the input's length — the compiler's own 47.5 KB source went 587 s → 299 s → 26 s. What is left is one shape rather than the mechanism: a result that puts a call *before* other terms (`<F e.X> s.C`, the `Reverse` idiom) has a left spine as deep as the nesting, so consuming it costs the spine depth per term. Block sentences carrying conditions still take the recursive path, and §6.4's `unknown` values are open |
 | Graph of states / Refal emission | 8.5% | 5.0 | **T-4, T-5, T-6, T-9** all closed and gated. What the product lacks is the consequence: it normalises rather than compiling pattern matching, and residualization is bounded rather than whole-program for general programs |
 | Static verification | 15.0% | 12.5 | Tier 1 complete for its published guarantee: dead sentences, recognition impossible, builtin domain errors, function formats (§2.3), `-W`/`-D`/`-A`, and a shape lattice that separates literal kinds and describes a bracket's contents recursively. The deduction is that the guarantee is deliberately narrow |
-| Compiler in Refal | 25.5% | 12.0 | A real lexer, parser, checker and emitter over the full Classic grammar, byte-identical to Rust `lower` on every lowerable example. The *transforming* half — driving, cleaning, generalisation — is in Rust and not wired into `compiler.ref`; `driver.ref` not written. **Half a compiler, and the largest single deduction** |
+| Compiler in Refal | 25.5% | 13.0 | A real lexer, parser, checker and emitter over the full Classic grammar, byte-identical to Rust `lower` on every lowerable example, and three stages of the *transforming* half now live in `compiler.ref` as verified differentials: the §4.2 seed graph (55/55), residualization (55/55) and the **ground driver**, which contracts the entry configuration and reproduces `refal drive`'s step count, visited-state trace and output. What is still Rust is the half that makes it a compiler rather than a reporter: **symbolic driving** — case splitting, folding, generalisation — and the compilation of pattern matching. **The largest single deduction** |
 | Self-hosting fixpoint | 13.0% | 5.5 | C1 = C2 = C3 at 12,599 bytes over the full grammar, every generation checked. It is a fixpoint of a **normaliser**, so residual credit is withheld |
 | Conformance / release | 4.0% | 1.5 | Solid automated foundation; no full Classic conformance claim or release packaging |
-| **Total** | **100%** | **~60%** | |
+| **Total** | **100%** | **~66%** | |
 
 The three heaviest workstreams — Compiler in Refal, the runtime, and self-hosting
-— hold 58 of the 100 points, are the three furthest from done, and carry 28 of
-the 40 deducted points. The figure now agrees in direction with the milestone
-table in the README, which is the point: a reader counting ticks and a reader
-reading the percentage should reach the same conclusion about where the work is.
+— hold 58 of the 100 points and carry 22 of the 34 deducted points. The runtime
+has now left that group: it was the repository's largest engineering item and it
+is the one row whose deduction is small enough to read as "one shape left" rather
+than "one mechanism missing". What remains concentrated is the Refal-authored
+compiler's transforming half. The figure agrees with the milestone table in the
+README, which is the point: a reader counting ticks and a reader reading the
+percentage should reach the same conclusion about where the work is.
 
 The audited 19.8% baseline remains the comparison point, and the history is worth
 keeping. The project published 96%, then 38%, then a ladder between 42% and 88%.
