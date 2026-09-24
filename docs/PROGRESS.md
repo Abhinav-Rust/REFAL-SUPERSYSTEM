@@ -832,6 +832,69 @@ rather than on the source-preserving artefacts `PLAN.md` section 4's caveat call
 out. That is the largest single deduction in the completion table and it is now
 reachable in one step.
 
+### The recipe, read out of `refal-core` (so the next session starts here, not at the file)
+
+`drive_symbolic_with_strategy` (`crates/refal-core/src/lib.rs:693`) is a loop over
+`invoke_symbolic` (`:1254`) with a work list over the configuration transitions it
+records. Five pieces have to be reproduced, and the fourth is the one that makes
+it a compiler rather than a reporter.
+
+**1. `match_symbolic_pattern` (`:1889`) returns `Yes | No | Unknown`**, and it is
+three cases, not one:
+
+- A single `e.`-variable pattern against a single symbolic-variable input binds
+  directly and answers `Yes`. This is what makes `<Identity e.Input>` drive.
+- If the *input* contains any symbolic variable, `match_shape_pattern` (`:1915`).
+- Otherwise the ordinary ground matcher, whose answer is definite.
+
+**2. `match_shape_pattern` backtracks over expression splits in *reverse* order** —
+`for end in (input_index..=input.len()).rev()`, longest first. That is not a
+detail: the split order decides which branch a sentence takes, and therefore the
+whole residue. `Yes` short-circuits; `Unknown` is remembered and returned only if
+no `Yes` was found; an exhausted pattern with input left over is `No` unless the
+tail is entirely `e.`-variables, in which case it is `Unknown` (they can denote
+nothing).
+
+**3. `symbolic_variable_accepts` (`:2049`)** is the kind lattice: `s.` accepts
+`Char`/`Number`/`Identifier` (and an `s.`-variable) but not a `Bracket`; `t.`
+accepts any single term; `e.` accepts anything. Anything else — a wider variable,
+an unevaluated call — is `None`, i.e. `Unknown`. Guessing there is what makes an
+unsound driver.
+
+**4. `split_configuration` (`:1503`)** is Turchin's driving step (§4.2) and it has
+exactly one legal partition, because it must be exhaustive *and* pairwise
+disjoint:
+
+```text
+e.X   is   []   or   s.H e.T   or   (e.B) e.T
+```
+
+The guards matter and each is there for a reason: only a *single* top-level
+expression variable is split (splitting one of several grows the residue without
+deciding anything); a function with no states is not split; and **the entry is
+split only when its own pattern is exactly one expression variable** — otherwise
+the residue would accept more than the source did and turn a failing program into
+a looping one. The split function is named `Split{index}` with
+`index = splits.len() + 1`, **registered before its branches are driven** so that
+a recurrence inside a branch finds it, and a branch that comes back `Residual` or
+`Fails` keeps a call to the *original* function so the residue fails exactly where
+the source fails.
+
+**5. The fold.** A configuration that recurs on the active path is a cycle, and
+the whistle is what stops it: if the matching active-path entry has a `split`, the
+configuration is being built by that split, so the recurrence folds to
+`<Split{index} input>` and the split terminates. A recurrence with an
+*already-completed* configuration is not a cycle at all — reusing the residual
+already computed is what unwinds the interpreter's recursion into straight-line
+code — and a recurrence with a configuration that embeds homeomorphically in the
+current one is a whistle (`sequence_homeomorphic_embeds`).
+
+**The gate is the same shape as `GRAPH` and `DRIVE`'s**: byte-compare against
+`refal drive-symbolic` over the corpus, with a non-vacuity guard. Start from
+`examples/symbolic-identity.ref` (trivial: the `e.`-variable case, `residual:
+e.Input`) and `examples/symbolic-branch.ref` (`residual: <Split1 e.Input>`, three
+configurations, four transitions, `steps: 5`), then widen.
+
 ### One smaller item, recorded so it is not lost
 
 - **The `Reverse` shape.** A result that puts a call *before* other terms —
