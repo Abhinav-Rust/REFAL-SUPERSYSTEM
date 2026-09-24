@@ -356,7 +356,7 @@ TermsCall2 {
 * names, and unbound variables in results.
 
 Check {
-  (PROG e.Items) = <Report <HasGo e.Items> <Dups e.Items> <Vars e.Items>>;
+  (PROG e.Items) = <Report <HasGo e.Items> <Dups (e.Items)> <Vars e.Items>>;
 }
 
 Report {
@@ -375,19 +375,116 @@ HasGo {
   = "the program must define an exported Go entry point; ";
 }
 
+* Duplicate function names.
+*
+* Detecting a duplicate is a question about a *set*, so it is answered by
+* sorting: canonicalise each name once, sort the names, and look at neighbours.
+* That is O(n log n).
+*
+* The pairwise pass below answers a different question -- it reports one message
+* per ordered pair of equal names, so its *output* is quadratic in the number of
+* colliding definitions and there is nothing to save there. It therefore runs
+* only when the sorted scan has found a collision, which for a program the
+* checker accepts is never.
+*
+* Why this matters and is not a micro-optimisation: the pairwise pass descends
+* into both definitions' brackets for every pair, so on the compiler's own 201
+* definitions it was 19.4 s of a 23.9 s self-hosting run -- 81% of it, and the
+* only quadratic left in `Check`. Measured over synthetic corpora it is a clean
+* O(n^2): 375 / 1425 / 6082 / 26062 ms at 50 / 100 / 200 / 400 definitions.
 Dups {
-  = ;
-  (FUN (Ident e.N) (e.V) e.Sents) e.Rest = <DupName (e.N) e.Rest> <Dups e.Rest>;
-  t.Item e.Rest = <Dups e.Rest>;
+  (e.Items) = <DupsWhen <AnyDup (<Sort <DupNameList (e.Items) ()>>)> (e.Items)>;
 }
 
+DupsWhen {
+  () (e.Items) = ;
+  (s.Any) (e.Items) = <DupsAll (e.Items)>;
+}
+
+* The canonical name of every function definition, in a list of its own.
 * Names are compared under Classic Refal-5 name equivalence (reference 1.2.1):
 * case folds and '-' is equivalent to '_'. FOO-BAR and FOO_BAR are one function.
+DupNameList {
+  () (e.Acc) = (e.Acc);
+  ((FUN (Ident e.N) (e.V) e.Sents) e.Rest) (e.Acc) =
+    <DupNameList (e.Rest) ((<Canon e.N>) e.Acc)>;
+  (t.Item e.Rest) (e.Acc) = <DupNameList (e.Rest) (e.Acc)>;
+}
+
+* Merge sort. The list is split by dealing alternate elements, which needs no
+* arithmetic on macrodigits and keeps every half the same length to within one.
+*
+* Convention, and it matters at every call: a function that takes a *list*
+* takes it bracketed, and a function whose result is *spliced* into a larger
+* expression returns the elements unwrapped. `Merge` is the second kind -- its
+* result goes straight into `(e.K) <Merge ...>` -- so it returns an element
+* sequence, and `Sort` brackets each half before handing it over. Getting this
+* backwards costs a bracket level per merge, which reads as a wrong answer
+* rather than as a crash.
+Sort {
+  () = ;
+  ((e.X)) = (e.X);
+  (e.L) = <Merge (<Sort <Fst <Split (e.L)>>>) (<Sort <Snd <Split (e.L)>>>)>;
+}
+
+Split {
+  () = (() ());
+  ((e.X)) = (((e.X)) ());
+  ((e.A) (e.B) e.Rest) = <SplitJoin ((e.A)) ((e.B)) <Split (e.Rest)>>;
+}
+
+SplitJoin {
+  (e.A) (e.B) ((e.X) (e.Y)) = ((e.A e.X) (e.B e.Y));
+}
+
+Merge {
+  (e.A) () = e.A;
+  () (e.B) = e.B;
+  ((e.K) e.A) ((e.K2) e.B), <LeName (e.K) (e.K2)> : '1' =
+    (e.K) <Merge (e.A) ((e.K2) e.B)>;
+  ((e.K) e.A) ((e.K2) e.B) = (e.K2) <Merge ((e.K) e.A) (e.B)>;
+}
+
+Fst {
+  ((e.A) (e.B)) = (e.A);
+}
+
+Snd {
+  ((e.A) (e.B)) = (e.B);
+}
+
+LeName {
+  () () = '1';
+  () (e.B) = '1';
+  (e.A) () = ;
+  (s.X e.Rest) (s.Y e.More), <Compare <Ord s.X> <Ord s.Y>> : '-' = '1';
+  (s.X e.Rest) (s.Y e.More), <Compare <Ord s.X> <Ord s.Y>> : '0' = <LeName (e.Rest) (e.More)>;
+  (s.X e.Rest) (s.Y e.More) = ;
+}
+
+* True when two adjacent names in the sorted list are equal, which is exactly
+* the condition under which a duplicate exists.
+AnyDup {
+  () = ();
+  ((e.K)) = ();
+  ((e.K) (e.K) e.Rest) = (1);
+  ((e.K) (e.K2) e.Rest) = <AnyDup ((e.K2) e.Rest)>;
+}
+
+* One message per ordered pair of definitions with the same canonical name, in
+* source order. Only reached when a collision exists.
+DupsAll {
+  () = ;
+  ((FUN (Ident e.N) (e.V) e.Sents) e.Rest) =
+    <DupName (e.N) (e.Rest)> <DupsAll (e.Rest)>;
+  (t.Item e.Rest) = <DupsAll (e.Rest)>;
+}
+
 DupName {
-  (e.N) = ;
-  (e.N) (FUN (Ident e.M) (e.V) e.Sents) e.Rest,
+  (e.N) () = ;
+  (e.N) ((FUN (Ident e.M) (e.V) e.Sents) e.Rest),
     <EqName (<Canon e.N>) (<Canon e.M>)> : '1' = "duplicate function " e.M "; ";
-  (e.N) t.Item e.Rest = <DupName (e.N) e.Rest>;
+  (e.N) (t.Item e.Rest) = <DupName (e.N) (e.Rest)>;
 }
 
 EqName {

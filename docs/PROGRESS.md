@@ -62,14 +62,41 @@ input's length: 13.6 KB in 1.4 s, 24.5 KB in 2.0 s, 37.7 KB in 2.8 s, 47.5 KB in
 checker's first failure. The stage breakdown on the full source is `StripCR`
 1.5 s, `Lex` 3.8 s, `Parse` ~3 s, `Emit` ~3.4 s, and the rest is `Check`.
 
-**The remaining cost is not the runtime.** `Check` is quadratic in the number of
-functions, and it is the checker's *own* algorithm: `Dups`/`DupName` compare every
-function's name against every other's. A synthetic corpus of 50/100/200/400
-functions measures `Lex` 0.8/1.1/1.5/2.5 s, `Parse` 0.9/1.2/1.8/3.0 s, `Emit`
-0.9/1.2/2.0/3.4 s — linear to within a fixed ~0.8 s of process startup
-(`refal --version` alone is 0.65 s on this machine) — against `Check`
-1.3/2.7/8.1/29.4 s. That is a compiler-in-Refal workstream item, and it is
-recorded as one rather than as a runtime one.
+**The remaining cost was not the runtime, and it is now fixed.** `Check` was
+quadratic in the number of functions, and it was the checker's *own* algorithm:
+`Dups`/`DupName` compared every function's name against every other's. A synthetic
+corpus of 50/100/200/400 functions measured `Lex` 0.8/1.1/1.5/2.5 s, `Parse`
+0.9/1.2/1.8/3.0 s, `Emit` 0.9/1.2/2.0/3.4 s — linear to within a fixed ~0.8 s of
+process startup (`refal --version` alone is 0.65 s on this machine) — against
+`Check` 1.3/2.7/8.1/29.4 s. Splitting `Check` into its three passes against a
+`Lex`+`Parse` baseline of 4.55 s put `HasGo` at ~0 s, `Vars` at 1.1 s and `Dups`
+at **19.4 s**, and `Dups` alone scaled at ~4.3x per doubling: a clean O(n^2) at
+~325 us per pair.
+
+**Fixed.** Detection is a question about a set, so it is answered by a sort:
+canonicalise each name once, merge-sort the names, and look at neighbours. The
+pairwise pass — which reports one message per definition that has an equal-named
+definition after it, and therefore has quadratic *output* — now runs only when the
+sorted scan finds a collision, which for a program the checker accepts is never.
+The post-fix stage table on the same 47.5 KB source, subtracting a 0.61 s
+startup floor:
+
+| stage | incremental |
+|---|---:|
+| `StripCR` | 2.0 s |
+| `Lex` | 2.6 s |
+| `Parse` | 0.8 s |
+| `Dups` | **2.3 s** (was 19.4) |
+| `Check` (all three passes) | **3.2 s** (was 18.5) |
+| `Emit` | 0.5 s |
+| **whole run** | **10.5 s** (was 23.9) |
+
+`Check` is no longer the bottleneck — `StripCR`+`Lex` is, at 4.6 s — and the
+heaviest self-hosting tests drop with it: `compile_command_compiles_the_compiler_itself`
+24 s -> 12 s and `compiler_ref_reaches_a_self_hosting_fixpoint` 78 s -> 32 s.
+What is left of `Dups` is a constant factor rather than an exponent: `Split`
+concatenates one element onto a growing half at each level, which is O(n^2) in
+list copying with a much smaller constant. Recorded, not yet worth doing.
 
 **The full suite is no longer slow.** `cargo test --all -j 2 --
 --test-threads=1` takes **7 minutes** (the CLI suite alone is 6.3), down from the
@@ -678,6 +705,50 @@ so the rope is right-nested rather than balanced. Every prepend-shaped walk
 (`s.C <Recurse ...>`, which is what the compiler is made of) is O(1) per step.
 Measured, it does not: `Reverse` over 16,000 characters is flat, and reversing then walking the result — the case where the field is matched term by term — is 614 ms at 16,000, 712 ms at 32,000 and 911 ms at 64,000, against a 0.5 s process-startup floor. So this is a **bound, not a measured cost**: a rope that is right-nested rather than balanced *could* be made to pay the spine depth per term, and balancing it (a height in `Concat` plus a rotation in `ViewField::concat`) is the fix if a shape ever does. Recorded rather than claimed, and the measurement is what says so.
 
+### Done — the checker's duplicate-name pass, from a scan to a sort
+
+`Dups`/`DupName` compared every definition's name against every other's and
+descended into both brackets for each pair. It was 19.4 s of a 23.9 s
+self-hosting run -- 81% of it, and the last quadratic in the repository that was
+not the runtime's.
+
+Detection is a question about a *set*, so it is answered by a sort.
+`DupNameList` canonicalises each name once (`Canon`: case folds, `-` is `_`),
+`Sort` merge-sorts them, and `AnyDup` asks whether two neighbours are equal. If
+not -- which for a program the checker accepts is always -- the pairwise pass is
+skipped entirely. If a collision exists, `DupsAll`/`DupName` run exactly as
+before, so the report's order and count are unchanged; that matters because the
+pairwise pass emits one message per definition that has an equal-named definition
+*after* it, which is a quadratic amount of *output* and is therefore not
+something the sort should be allowed to change. Two fixtures in
+`executes_refal_authored_checker_end_to_end` pin it: a six-definition program
+with three collisions, and `FOO-BAR` separated from `foo_bar` by an unrelated
+definition.
+
+**Measured: `Dups` 19.4 s -> 2.3 s, `Check` 18.5 s -> 3.2 s, the whole run
+23.9 s -> 10.5 s.** `compile_command_compiles_the_compiler_itself` 24 s -> 12 s
+and `compiler_ref_reaches_a_self_hosting_fixpoint` 78 s -> 32 s. The full suite
+is 315 tests, green.
+
+Four things went wrong on the way and every one of them was a *wrong answer*
+rather than a failure, which is why they are worth recording:
+
+1. `Names` and then `NameList` were already defined in `compiler.ref`, and the
+   second blanket rename hit the **emitter's** `NameList` as well, so the checker
+   reported the compiler as having a duplicate declaration of its own helper.
+   Check a candidate name with `grep -c "^Name {"` on a list that does *not*
+   already contain your new definitions.
+2. `s.A` and `e.A` are the same variable index -- `variable A is already bound as
+   s.A`. Distinct indices are required even across kinds.
+3. **A function whose result is spliced into a larger expression must return the
+   elements unwrapped, not a bracketed list.** `Merge` returns an element
+   sequence because its result goes straight into `(e.K) <Merge ...>`; `Sort`
+   brackets each half before handing it over. Getting this backwards costs one
+   bracket level per merge, and the result is a plausible-looking wrong list.
+4. **`t.X` requires a one-term bracket.** `('cd')` holds two terms, so `((t.X))`
+   does not match it and the fix is `((e.X))`. This is the repository's own
+   documented trap, and writing it down did not stop me walking into it.
+
 ### Open
 
 - **T-1** a non-trivial program transformer written in Refal.
@@ -712,9 +783,11 @@ Measured, it does not: `Reverse` over 16,000 characters is flat, and reversing t
   this is a bound rather than a cost. Balancing the rope — a height in the
   `Concat` node and a rotation in `ViewField::concat` — is the fix if a shape
   ever does pay it.
-- **`Check` is quadratic in the number of functions** — `Dups`/`DupName` compare
-  every function's name against every other's. It is the dominant cost of the
-  self-hosting run and it is the checker's own algorithm, not the runtime's.
+- **`Dups` is linear now; what is left of it is a constant.** `Split` in the new
+  merge sort concatenates one element onto a growing half at each level, so the
+  sort is O(n^2) in list copying with a small constant — 2.3 s of the 10.5 s run.
+  Fixing it means dealing elements into two accumulators and reversing at the
+  end, or building the halves from the right.
 
 ---
 
@@ -759,35 +832,8 @@ rather than on the source-preserving artefacts `PLAN.md` section 4's caveat call
 out. That is the largest single deduction in the completion table and it is now
 reachable in one step.
 
-### One item that needs a credential, not a commit
+### One smaller item, recorded so it is not lost
 
-**`.github/workflows/ci.yml` still skips three of the four self-hosting tests**
-— `compile_command_compiles_the_compiler_itself`,
-`compiler_ref_reaches_a_self_hosting_fixpoint`,
-`the_refal_authored_compiler_matches_lower_on_every_lowerable_example`, and
-`refal_authored_residualization_matches_residualize_graph` is not named at all.
-That skip list was written for a real reason — the four stages allocated an
-O(n^2) amount of memory between them and the runner process aborted — and the
-view field removed the reason, so the list should go. It has not, because
-neither the stored git credential nor the GitHub app has the `workflow` scope
-that editing a file under `.github/workflows/` requires; both pushes are
-rejected with `refusing to allow an OAuth App to create or update workflow`.
-The change is one line — delete the four `--skip` flags, keep
-`--test-threads=1`, and set `timeout-minutes: 45` — and it needs a token with
-`workflow` scope, or a hand edit in the GitHub UI. Until then, **CI does not
-verify the repository's headline claim**, and that is worth knowing before
-reading a green check as one.
-
-### Two smaller items, recorded so they are not lost
-
-- **`Check` is quadratic, and it is the checker's own algorithm.** `Dups` and
-  `DupName` compare every function's name against every other's, so a program
-  with n functions costs O(n^2) before anything is emitted. It is the dominant
-  cost of the self-hosting run (`Check` alone goes 1.3 s → 2.7 s → 8.1 s →
-  29.4 s over 50/100/200/400 synthetic functions while `Lex`, `Parse` and `Emit`
-  stay linear). The fix is a name set built once — the runtime has no map, so
-  either the checker builds one, or the driver stops re-scanning. Worth doing
-  when the corpus grows, not before.
 - **The `Reverse` shape.** A result that puts a call *before* other terms —
   `<F e.X> s.C` — builds a rope whose left spine is as deep as the nesting, so
   the rope is right-nested rather than balanced. Measured, it does not: `Reverse` over 16,000 characters is flat, and reversing then walking the result — the case where the field is matched term by term — is 614 ms at 16,000, 712 ms at 32,000 and 911 ms at 64,000, against a 0.5 s process-startup floor. So this is a **bound, not a measured cost**: a rope that is right-nested rather than balanced *could* be made to pay the spine depth per term, and balancing it (a height in `Concat` plus a rotation in `ViewField::concat`) is the fix if a shape ever does. Recorded rather than claimed, and the measurement is what says so.

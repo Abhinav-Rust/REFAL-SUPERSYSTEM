@@ -1617,6 +1617,24 @@ fn executes_refal_authored_checker_end_to_end() {
             "$ENTRY Go { = 1; }\nG { = 2; }\nG { = 3; }",
             "ERRORS: duplicate function G; \n",
         ),
+        // Detection is a sort now, but the *report* is still the pairwise pass,
+        // and this pins what that pass emits: one message per definition that
+        // has an equal-named definition after it, in source order. `G` is
+        // reported twice (the second and the fifth definition each have one
+        // later), `H` once. A sorted scan that reported every colliding pair
+        // would print a third `G`, and one that reported each colliding *name*
+        // once would print a single line -- so this is the fixture that keeps
+        // the optimisation from changing the answer.
+        (
+            "$ENTRY Go { = 1; }\nG { = 2; }\nG { = 3; }\nH { = 4; }\nH { = 5; }\nG { = 6; }",
+            "ERRORS: duplicate function G; duplicate function G; duplicate function H; \n",
+        ),
+        // Classic name equivalence (reference 1.2.1) has to survive the sort:
+        // these two are one function, and they are not adjacent in the source.
+        (
+            "$ENTRY Go { = 1; }\nFOO-BAR { = 2; }\nOther { = 3; }\nfoo_bar { = 4; }",
+            "ERRORS: duplicate function foo_bar; \n",
+        ),
     ];
     for (source, expected) in cases {
         let output = run_file("examples/compiler.ref", &["CHECK", source]);
