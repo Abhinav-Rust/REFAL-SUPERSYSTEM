@@ -8,9 +8,10 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo test -- --test-threads=1 --skip compile_command_compiles_the_compiler_itself --skip compiler_ref_reaches_a_self_hosting_fixpoint --skip the_refal_authored_compiler_matches_lower_on_every_lowerable_example
+      - run: cargo test -- --test-threads=1
