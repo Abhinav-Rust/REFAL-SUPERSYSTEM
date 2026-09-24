@@ -671,13 +671,12 @@ it. `a_clamped_piece_contributes_only_its_own_terms` pins the bug that `Reverse`
 found: a piece may be a *range* of a longer arena, so reading a rope has to carry
 each node's own limit down with it.
 
-**What is still missing, and it is one shape rather than the mechanism.** A
+**What is still missing, and it turned out to be a bound rather than a cost.** A
 result that puts a call *before* other terms — `<F e.X> s.C`, which is how
 `Reverse` is written — builds a rope whose left spine is as deep as the nesting,
-so consuming that idiom costs the spine depth per term. Every prepend-shaped walk
-(`s.C <Recurse ...>`, which is what the compiler is made of) is O(1) per step,
-and the compiler's own source is linear, so this is not on a measured critical
-path. Closing it needs the rope to be balanced rather than right-nested.
+so the rope is right-nested rather than balanced. Every prepend-shaped walk
+(`s.C <Recurse ...>`, which is what the compiler is made of) is O(1) per step.
+Measured, it does not: `Reverse` over 16,000 characters is flat, and reversing then walking the result — the case where the field is matched term by term — is 614 ms at 16,000, 712 ms at 32,000 and 911 ms at 64,000, against a 0.5 s process-startup floor. So this is a **bound, not a measured cost**: a rope that is right-nested rather than balanced *could* be made to pay the spine depth per term, and balancing it (a height in `Concat` plus a rotation in `ViewField::concat`) is the fix if a shape ever does. Recorded rather than claimed, and the measurement is what says so.
 
 ### Open
 
@@ -708,10 +707,11 @@ path. Closing it needs the rope to be balanced rather than right-nested.
   above. The §6.4 `unknown` values remain open and are recorded there.
 - **The `Reverse` shape** — a rope whose left spine is as deep as the nesting,
   built by a result that puts a call before other terms. Every prepend-shaped
-  walk is O(1) per step and the compiler's own source is linear, so this is not
-  on a measured critical path; the fix is a height in the `Concat` node and a
-  rotation in `ViewField::concat`. Recorded in `NEXT ACTION` with the two
-  smaller items.
+  walk is O(1) per step, the compiler's own source is linear, and the shape
+  itself measures linear (16,000/32,000/64,000 characters in 614/712/911 ms), so
+  this is a bound rather than a cost. Balancing the rope — a height in the
+  `Concat` node and a rotation in `ViewField::concat` — is the fix if a shape
+  ever does pay it.
 - **`Check` is quadratic in the number of functions** — `Dups`/`DupName` compare
   every function's name against every other's. It is the dominant cost of the
   self-hosting run and it is the checker's own algorithm, not the runtime's.
@@ -790,12 +790,10 @@ reading a green check as one.
   when the corpus grows, not before.
 - **The `Reverse` shape.** A result that puts a call *before* other terms —
   `<F e.X> s.C` — builds a rope whose left spine is as deep as the nesting, so
-  consuming that idiom costs the spine depth per term. Every prepend-shaped walk
-  (`s.C <Recurse ...>`, which is what the compiler is made of) is O(1) per step,
-  so this is not on any measured critical path. Closing it needs the rope to be
-  balanced rather than right-nested; the place to do it is `ViewField::concat`,
-  with a height in the `Concat` node and a rotation when the left subtree is more
-  than one level deeper than the right.
+  the rope is right-nested rather than balanced. Measured, it does not: `Reverse` over 16,000 characters is flat, and reversing then walking the result — the case where the field is matched term by term — is 614 ms at 16,000, 712 ms at 32,000 and 911 ms at 64,000, against a 0.5 s process-startup floor. So this is a **bound, not a measured cost**: a rope that is right-nested rather than balanced *could* be made to pay the spine depth per term, and balancing it (a height in `Concat` plus a rotation in `ViewField::concat`) is the fix if a shape ever does. Recorded rather than claimed, and the measurement is what says so.
+  The place to fix it is `ViewField::concat`, with a height in the `Concat` node
+  and a rotation when the left subtree is more than one level deeper than the
+  right.
 
 ### Traps this repository has already paid for
 
