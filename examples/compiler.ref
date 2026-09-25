@@ -813,15 +813,26 @@ FirstAdd2 {
 }
 
 Lookup {
-  (e.Acc) (e.Q) = <LookupL e.Acc (e.Q)>;
+  (e.Acc) (e.Q) = <LookupL (e.Q) e.Acc>;
 }
 
 * Key equality is exact after uppercasing, which is all build_seed_graph asks
 * for: to_ascii_uppercase, with no '-'/'_' folding.
+*
+* The query is the *first* argument and the table the tail, and that is not
+* cosmetic. Written the other way round -- table spread, query last -- the
+* pattern is `((e.U) s.Id) e.Rest (e.Q)`, where a trailing bracket sits after an
+* expression variable: the matcher cannot know where `e.Rest` ends without
+* walking to the end of the list, so one step of the scan costs O(n) and a
+* single lookup costs O(n^2). With the query in front every position is
+* determinate -- two one-term bindings and a remainder -- so a step is O(1) and
+* a lookup is O(n). The table is 479 entries on this compiler and the pass
+* performs one lookup per call occurrence, so the difference is the difference
+* between a second and a minute.
 LookupL {
   (e.Q) = ;
-  ((e.U) s.Id) e.Rest (e.Q), <SameChars (e.U) (e.Q)> : '1' = s.Id;
-  (e.F) e.Rest (e.Q) = <LookupL e.Rest (e.Q)>;
+  (e.Q) ((e.U) s.Id) e.Rest, <SameChars (e.U) (e.Q)> : '1' = s.Id;
+  (e.Q) ((e.F) s.Id) e.Rest = <LookupL (e.Q) e.Rest>;
 }
 
 LookupGo {
@@ -3505,28 +3516,51 @@ DsToOfL {
     <DsConfForCall (e.Ctx) (e.Callee) (e.In)>;
 }
 
+* The configuration a call `<Callee e.In>` drove to: the first configuration, in
+* creation order, whose input is `e.In` and whose state belongs to `Callee`.
+*
+* The state test is what the shape of this pass turns on. Asking each
+* configuration for its state's *name* means resolving a state id against the
+* state list, and that is a walk of every state in the program -- per
+* configuration, per transition. The two lists are the same length, so the pass
+* costs a cube. Inverted, the question is a membership test: collect the ids of
+* the callee's own states once, then ask each configuration whether its state is
+* one of them. A function has as many states as it has sentences -- a handful --
+* so the test is constant, and the pass is a square. The membership test is the
+* same predicate the id walk computed, so the answer is unchanged.
 DsConfForCall {
   (e.Ctx) (e.Callee) (e.In) =
-    <DsConfForCallL <DsConfs (e.Ctx)> <DsStates (e.Ctx)> (e.Callee) (e.In)>;
+    <DsConfForCallL <DsConfs (e.Ctx)>
+                    <DsStateIds <DsStates (e.Ctx)> (e.Callee)> (e.In)>;
+}
+
+* The ids are collected into a bracket. A spread list here would not arrive as
+* one argument: `DsConfForCallL` would see the ids as extra arguments and match
+* no sentence at all.
+DsStateIds {
+  (e.States) (e.Callee) = (<DsStateIdsL (e.States) (<Upper e.Callee>)>);
+}
+
+DsStateIdsL {
+  () (e.U) = ;
+  ((ST s.Id (e.N) s.J t.Sent) e.Rest) (e.U),
+    <SameChars (<Upper e.N>) (e.U)> : '1' =
+      s.Id <DsStateIdsL (e.Rest) (e.U)>;
+  (t.S e.Rest) (e.U) = <DsStateIdsL (e.Rest) (e.U)>;
+}
+
+DsIdIn {
+  s.St () = ;
+  s.St (s.Id e.Rest), <Compare s.St s.Id> : '0' = '1';
+  s.St (t.X e.Rest) = <DsIdIn s.St (e.Rest)>;
 }
 
 DsConfForCallL {
-  () (e.St) (e.Callee) (e.In) = (NONE);
-  ((CF s.Id s.St (e.In)) e.Rest) (e.States) (e.Callee) (e.In),
-    <DsStateFn (e.States) s.St> : (SOME (e.N)),
-    <SameChars (<Upper e.N>) (<Upper e.Callee>)> : '1' = (SOME s.Id);
-  (t.C e.Rest) (e.States) (e.Callee) (e.In) =
-    <DsConfForCallL (e.Rest) (e.States) (e.Callee) (e.In)>;
-}
-
-DsStateFn {
-  (e.States) s.Id = <DsStateFnL (e.States) s.Id>;
-}
-
-DsStateFnL {
-  () s.Id = (NONE);
-  ((ST s.Id (e.N) s.J t.Sent) e.Rest) s.Id = (SOME (e.N));
-  (t.S e.Rest) s.Id = <DsStateFnL (e.Rest) s.Id>;
+  () (e.Ids) (e.In) = (NONE);
+  ((CF s.Id s.St (e.In)) e.Rest) (e.Ids) (e.In),
+    <DsIdIn s.St (e.Ids)> : '1' = (SOME s.Id);
+  (t.C e.Rest) (e.Ids) (e.In) =
+    <DsConfForCallL (e.Rest) (e.Ids) (e.In)>;
 }
 
 * ---- small helpers
