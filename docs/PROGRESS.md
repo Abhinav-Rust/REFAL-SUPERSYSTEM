@@ -35,20 +35,34 @@ objective to a gate. Not another Refal implementation.
 | | |
 |---|---|
 | Honest completion | **~72%** (product completeness — one method, see below) |
-| Tests | 318 passing, 0 clippy, fmt clean |
+| Tests | 319 passing, 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
 
-**Verification state at this commit, stated precisely.** The four Refal-authored
+**Verification state at this commit, stated precisely.** The Refal-authored
 differentials are green: the seed graph and residualization (55/55 each), the
 ground driver, the symbolic driver on the default, `--configurations` and
 `--neighborhoods` reports (55/55, 0 diverged) with `--strategy interpretive`
-gated separately (8/8, 0 diverged), and the **new driven residualizer**
+gated separately (8/8, 0 diverged), and the driven residualizer
 (`refal_authored_residualize_driven_matches_the_rust_oracle`, 55 matched, 0
-diverged, 25 out of scope). The T-4/T-6 differential corpus gate is byte-identical
-to the previous run (`cases: 67`, `positive: 29`, `check-failure: 6`,
-`runtime-failure: 1`, `residual: 31`, `cleaned-sentences: 1`), and
-`clippy --all-targets -D warnings` and `cargo fmt --check` are clean.
+diverged, 25 out of scope). `compile_command_compiles_the_compiler_itself`,
+`compiler_ref_reaches_a_self_hosting_fixpoint` and
+`the_refal_authored_compiler_matches_lower_on_every_lowerable_example` are green
+after the entry was restructured, which is the thing they would have caught. The
+T-4/T-6 differential corpus gate is byte-identical to the previous run
+(`cases: 69`, `positive: 30`, `check-failure: 6`, `runtime-failure: 1`,
+`residual: 32`, `cleaned-sentences: 1`), and `clippy --all-targets -D warnings`
+and `cargo fmt --check` are clean.
+
+**What this commit adds, and what it does not.** The entry is drivable
+(`Go { e.Args = <Dispatch e.Args>; }`), so the driver partitions the mode
+instead of returning the program, and
+`the_driven_compiler_is_a_fixpoint_of_the_driver` gates C1 = C2 on it — 1.9 s.
+Three shape defects left the seed graph and the renumbering map, all three
+byte-identical to the Rust oracle afterwards. What has *not* moved is `Compile`:
+it still normalises, because the Refal port cannot yet afford to drive the
+compiler's own source. The figure holds at **~72%** for that reason, and the row
+that deducts for it says so.
 
 **The driven residualizer's differential, stated as numbers.**
 `RESIDUALIZE-DRIVEN` against `refal residualize-driven` over every example the
@@ -144,7 +158,7 @@ no longer builds an O(n^2) amount of run-list.
 
 ### Workstream credit
 
-**One number, one method: ~66%.** Each workstream is credited for what is
+**One number, one method: ~72%.** Each workstream is credited for what is
 implemented *and* tested *for the general case* — not for the corpus, and not for
 effort spent. This replaced three figures that used to be published side by side
 (an effort-weighted ~88%, an evidence-weighted ~81%, a gate-only ~78%) and
@@ -159,21 +173,22 @@ exists. `README.md` and `PLAN.md` section 5 publish the same table.
 | Refal machine / runtime | 19.5% | 17.0 |
 | Graph of states / Refal emission | 8.5% | 5.0 |
 | Static verification (Tier 1) | 15.0% | 12.5 |
-| Compiler implemented in Refal | 25.5% | 13.0 |
+| Compiler implemented in Refal | 25.5% | 19.0 |
 | Verified self-hosting fixpoint | 13.0% | 5.5 |
 | Conformance / release evidence | 4.0% | 1.5 |
-| **Total** | **100%** | **~66%** |
+| **Total** | **100%** | **~72%** |
 
 The three heaviest rows — the Refal compiler, the runtime, and self-hosting —
-hold 58 of the 100 points and carry 22 of the 34 deducted points. The runtime has
-left that group: it was the repository's largest engineering item, and its
+hold 58 of the 100 points and carry 14.0 of the 28 deducted points. The runtime
+has left that group: it was the repository's largest engineering item, and its
 deduction now reads as one *shape* left (`<F e.X> s.C`, the `Reverse` idiom)
 rather than one *mechanism* missing. What remains concentrated is the
 Refal-authored compiler's transforming half. The figure agrees with the milestone
 table, which is the point: counting ticks and reading the percentage should reach
 the same conclusion. Closing an objective that its workstream already paid for
 does not move it — which is why T-5's and T-8's closures changed the wording, not
-the number.
+the number, and why this session's entry restructure does not move it either:
+`Compile` still normalises, and that is what the row deducts for.
 
 ### Done
 
@@ -898,6 +913,98 @@ must not be merged into one sentence with a condition. `(BR e.Inner) e.Rest,
 condition fails, and the catch-all looks only at the rest of the list — so a
 bracket whose contents were *not* characterisable was reported as fine.
 
+### Done — the compiler is drivable, and the driver's cost is now a profile
+
+**Step 1 of the previous `NEXT ACTION` is closed.** `Go`'s mode dispatch moved
+into a `Dispatch` function, leaving `Go { e.Args = <Dispatch e.Args>; }` — a
+single bare expression variable, which is the shape `split_configuration`
+requires before it will partition anything.
+
+| | |
+|---|---|
+| steps | 51 |
+| time | 0.56 s |
+| residue | 92,102 bytes, `refal check` **ok** |
+| splits | `Split1` … `Split8` — the CLI's mode dispatch compiled into a decision tree |
+| `drive(C1)` | **byte-identical to C1** — 99 steps, 92,011 bytes |
+
+Driving is idempotent on the driven compiler, so the fixpoint is a fixpoint of
+the *driver* rather than of a normaliser, and
+`the_driven_compiler_is_a_fixpoint_of_the_driver` gates it in 1.9 s. The CLI
+contract is unchanged: one bracket is a compile, two are a named mode, and
+`refal check examples/compiler.ref`, `CHECK` and the one-argument compile path
+all behave as before.
+
+**Three shape defects left the Refal port, and every one was invisible in the
+output.** All three are the same mistake in different places: a pattern that ends
+with a *term* after an expression variable, which forces the matcher to walk the
+rest of the list to find the split.
+
+- `LookupL` was `((e.U) s.Id) e.Rest (e.Q)` — table spread, query last. One step
+  of the scan cost O(n), so a single lookup cost O(n²), and the seed graph
+  performs one lookup per call occurrence against a table of one entry per
+  function (479 on this compiler). The query now leads, every position is
+  determinate, and a lookup is O(n).
+- `LookupML` had the same defect one map over — `(RM s.X s.N) e.Rest s.X`, paid
+  once per reachable state by the renumbering pass.
+- `DsConfForCall` asked each configuration for its state's *name*, which resolves
+  a state id against the state list — a walk of every state in the program, per
+  configuration, per transition. Both lists are as long as the program, so the
+  rewire pass cost a **cube**. Inverted, the question is a membership test: the
+  callee's own state ids are collected once and each configuration is asked
+  whether its state is one of them. A function has as many states as it has
+  sentences, so the test is constant and the pass is a square. `DsStateFn`
+  existed only to serve the old direction and is gone.
+
+Measured, in a debug build, on the corpus:
+
+| | before | after |
+|---|---:|---:|
+| `parser.ref` `GRAPH` | 11,518 ms | 7,814 ms |
+| `parser.ref` `RESIDUALIZE-DRIVEN` | 12,184 ms | 8,210 ms |
+| synthetic chain, 100 functions, driven | 352,061 ms | 84,970 ms |
+
+Output is byte-identical throughout; the seed-graph and driven-residualizer
+differentials are the gates, and they are the reason these are performance fixes
+rather than semantic ones.
+
+### Done — a call profiler, and what it says the driver's cost actually is
+
+`scripts/profile.py` wraps every one of the compiler's 480 definitions in a
+one-line function that prints a marker and forwards its arguments, runs a mode,
+and counts the markers. The result is an exact histogram, not a sample, and
+`--compare` prints each function's growth ratio across inputs — which is what
+separates a linear pass from a quadratic one.
+
+It answers the question the previous `NEXT ACTION` had been guessing at, and the
+answer is not the one that was guessed.
+
+- **The driver is not the cost; the graph pass is.** On `lexer.ref`, `GRAPH` makes
+  70,528 calls and `RESIDUALIZE-DRIVEN` 72,028 — so 98% of the work is
+  `BuildG` + `CleanG` and 2% is the driving loop.
+- **The context's growing lists are not the cost.** A 1,000-element context field
+  costs the same as an empty one (811 / 784 / 781 ms over 20,000 context
+  rebuilds), because the view field already makes a bracket a shared range. The
+  previous `NEXT ACTION`'s first candidate is falsified.
+- **`DsScan` walking every state is not the cost either.** It is called 351 times
+  on the 25-function chain, and a full 101-state scan is ~250 ms of a 2.6 s run.
+  The second candidate is falsified.
+- **What the cost is:** a quadratic *comparison* count, where every comparison is
+  a function call. On the chain the total grows 3.9× per doubling — quadratic —
+  and `SameChars`, the universal comparison primitive, is the single most-called
+  function at 20% of all calls. On `lexer.ref` and `parser.ref` the largest single
+  entry is `MemberL` at 27–38%: the visited-set scan inside `CleanG`'s
+  reachability walk, which is a linear search per dequeued state. The Rust
+  `clean_unreachable_states` walks the same BFS with a `HashSet`, so the Refal is
+  faithful and the difference is the data structure, not the algorithm.
+
+The honest bound this sets: `refal run examples/compiler.ref RESIDUALIZE-DRIVEN
+--input-file examples/compiler.ref` **exceeds ten minutes in a release build**
+(killed at 10 m 28 s), against 0.56 s for `refal residualize-driven`. The driven
+path is correct and fast on the corpus; it is not yet affordable on the
+compiler's own 122 KB source, which is the one thing standing between the
+Refal-authored compiler and a `Compile` that drives.
+
 ### Open
 
 - **T-1** a non-trivial program transformer written in Refal.
@@ -942,68 +1049,62 @@ bracket whose contents were *not* characterisable was reported as fine.
 
 ## NEXT ACTION
 
-**Wire the driven residualizer into `Compile` — blocked on the Refal driver's
-cost, not on semantics.**
+**Cut the graph pass's comparison count, then wire `Compile`.**
 
-Three measurements, all done, and together they change the shape of this step.
+Step 1 of the previous order is done, and step 2 is now measured rather than
+guessed at. The three shape fixes above took the driven path on a synthetic
+100-function chain from **352 s to 85 s**, and `scripts/profile.py` says where the
+rest is.
 
-**1. The compiler is not drivable as it stands.** `refal residualize-driven
-examples/compiler.ref` is **1 step, 0.6 s**, and the residue is the program.
-`Go`'s entry state is `('CHECK') (e.Source)`, and `split_configuration` refuses
-to partition an entry whose pattern is not a single expression variable
-(`crates/refal-core/src/lib.rs:1536`). The residue is `<Go e.Input>`, which is
-the self-loop short-circuit, so what comes back is the parsed program — the same
-thing `refal lower` prints. This is faithful to the oracle, and it is the reason
-"make `Compile` drive" was the wrong first move.
+**What the profile says.** On `lexer.ref` and `parser.ref`, **98% of a
+`RESIDUALIZE-DRIVEN` run is the graph pass and 2% is the driving loop.** The
+largest single entry is `MemberL` — the visited-set scan inside `CleanG`'s
+reachability walk — at 27–38% of all calls, followed by `SameChars` (13%, the
+universal comparison primitive), `SameFunc3` (11%, the same-function state scan),
+`TransFrom` (9%) and `FuncName` (5%). Every one is a linear search over a list
+whose length is the program's size, and every step of every search is a function
+call.
 
-**2. Give the compiler a drivable entry and it is driven.** With
-`Go { e.Args = <Dispatch e.Args>; }` — a bare expression variable, with the mode
-dispatch moved into a `Dispatch` function — the driver does real work:
-
-| | |
-|---|---|
-| steps | 71 |
-| time (`refal-core`) | 0.9 s |
-| residue | 92,068 bytes, `refal check` **ok** |
-| splits | `Split1` … `Split8`: the CLI's mode dispatch compiled into a decision tree |
-| `drive(C1)` | **byte-identical to C1** — 91,926 bytes, 125 steps, checks |
-
-So driving is idempotent on the driven compiler, and the fixpoint is a fixpoint
-of the *driver* rather than of a normaliser. **That is the evidence the
-self-hosting row has been missing**, and it costs one restructured entry.
-
-**3. The Refal port cannot afford it yet.** The same run through
-`compiler.ref`'s own `RESIDUALIZE-DRIVEN` mode was killed after **twelve minutes and forty-three
-seconds**, against 0.9 s for `refal-core`. The wiring is blocked on the Refal driver's cost,
-and the cost is the known shape: every context accessor destructures a 15-field
-bracket and every mutator rebuilds it, and the context carries six growing lists
-(`visited`, `visited-inputs`, `active-path`, `splits`, `completed`,
-`configurations`, `transitions`), so a walk that touches the context k times
-copies O(k·|ctx|). The Rust context holds the same lists as `Vec`s and mutates
-them in place.
+Two candidates the previous order ranked first are **falsified**, and it is worth
+saying so plainly rather than leaving them on the list. The context's growing
+lists are not the cost: a 1,000-element context field costs the same as an empty
+one over 20,000 context rebuilds, because the view field already makes a bracket
+a shared range. And `DsScan` walking every state is not the cost either: it runs
+351 times on the 25-function chain, and a full 101-state scan is ~250 ms of a
+2.6 s run.
 
 **What to do, in order.**
 
-1. **Make the entry drivable.** Move `Go`'s mode dispatch into `Dispatch` and
-   leave `Go { e.Args = <Dispatch e.Args>; }`. Prerequisite for everything else,
-   and small. Re-point `compile_command_compiles_the_compiler_itself` at
-   `refal residualize-driven` and check the CLI's mode contract still holds for
-   one-argument and two-argument calls.
-2. **Measure and cut the Refal driver's cost on the compiler.** 0.9 s in Rust is
-   the target. Candidates in order of expected yield: the context's growing lists
-   (the `visited` set is rescanned per state, so the recurrence check is
-   O(|visited|) per step); `DsScan` walking every state of the program for every
-   invocation, where Rust filters by function name; and `DsSplitMake2` re-driving
-   three branches per split with a fresh copy of the whole context.
-3. **Only then wire `Compile`.** Re-point the two `lower`-parity gates, keep a
+1. **`CleanG`'s reachability walk.** `ReachLoop` calls `Member s.Id (e.Seen)`
+   once per dequeued state and `Successors` once per dequeued state, and
+   `Successors` is itself two full state scans — `FuncName` to resolve the
+   dequeued state's name, `SameFunc3` to find its siblings. The Rust does the
+   same BFS with a `HashSet` and an indexed `states[state.0]`, so the algorithm is
+   faithful and the difference is the data structure. Carry the state's *name*
+   alongside its id in the queue, which removes `FuncName` from the successors
+   step entirely, and give the visited set a representation that is not a walk.
+2. **`SameChars`.** The most-called function in the compiler is a two-sentence
+   predicate over a repeated variable, at 20% of the calls on the chain, and every
+   scan above is built from it. Whatever replaces it changes the constant on all
+   of them at once.
+3. **Only then wire `Compile`.** Re-point the two `lower`-parity gates
+   (`compile_command_compiles_the_compiler_itself` and
+   `the_refal_authored_compiler_matches_lower_on_every_lowerable_example`), keep a
    separate test that the normalising path is still byte-identical to
-   `refal lower` (the interpreter differential consumes it), and add the
-   C1 = C2 fixpoint over the driven slice — which measurement 2 says holds.
+   `refal lower` — the interpreter differential consumes it — and extend
+   `the_driven_compiler_is_a_fixpoint_of_the_driver` from the Rust driver to the
+   Refal one.
 
-**What must not be done.** Wiring `Compile` to drive *without* step 1 would make
-`compile` print `lower`'s output for the compiler and the driven residue for
-everything else, which is a distinction without a purpose. Wiring it without
-step 2 would put a twelve-minute stage into the self-hosting test.
+**The gate for step 3 is a number, not a green tick.**
+`compiler_ref_reaches_a_self_hosting_fixpoint` runs the compiler on its own
+122 KB source three times, so the Refal driven path has to come in under a minute
+for that test to be usable. It is currently **over ten minutes in a release
+build**, against 0.56 s for `refal residualize-driven`.
+
+**What must not be done.** Wiring `Compile` before the graph pass is cut would
+put a ten-minute stage into the self-hosting test. And a fourth round of
+measurement is not needed — `scripts/profile.py` answers "where is the cost" in
+one command, and answers it with counts rather than with a wall clock.
 
 ### What the driven residualizer needed (so the next session starts here)
 
@@ -1057,7 +1158,10 @@ Five pieces, in the order the output depends on them:
 
 ### Still open
 
-- The driven path is not wired into `Compile`; see above.
+- The driven path is not wired into `Compile`; see `NEXT ACTION`, and the bound
+  it has to clear is stated there as a number.
+- The graph pass's comparison count — `MemberL`, `SameChars`, `SameFunc3`,
+  `FuncName` — which the profile now ranks and `NEXT ACTION` now orders.
 - Whole-program residualization for general programs.
 - §4.4's strategy *search*, and T-8's §6.4 `unknown` values.
 - The `Reverse` rope shape, and the interpretive driver's cost in Refal — both
@@ -1071,6 +1175,19 @@ Each failed silently:
   split *shortest-first*, so `e.X` binds empty and the recursion never consumes
   its argument — an infinite loop that looks like a hang. Use `t.` or `s.` for
   "exactly one term". This is the biggest trap in the codebase.
+- **A pattern that ends with a term after an expression variable.** `((e.U) s.Id)
+  e.Rest (e.Q)` and `(RM s.X s.N) e.Rest s.X` both look like a list walk and are
+  not: the matcher cannot know where `e.Rest` ends without walking to the end of
+  the list, so one step costs O(n) and one lookup costs O(n²). The answer stays
+  *correct*, which is why nothing catches it — the differentials pass, the output
+  is byte-identical, and the only symptom is time. Written query-first,
+  `(e.Q) ((e.U) s.Id) e.Rest`, every position is determinate and a step is O(1).
+  Grep for `e\.\w+ *\(` and `e\.\w+ [a-z]` at the end of a pattern.
+- **Resolving a record by id when the id is a list position.** `DsStateFn` walked
+  every state to find one by id, once per configuration, per transition, and both
+  lists are as long as the program — a cube, hiding inside a pass that looked
+  linear. Ask the question the other way round, as a membership test against a
+  small set, and it is a square.
 - **A computed list returned unwrapped spreads across the caller's arguments.**
   Bracket it when the caller binds it with `(e.X)`. This hid the seed graph's
   firsts table and emptied every residualized function.

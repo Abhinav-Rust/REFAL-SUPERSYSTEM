@@ -55,7 +55,7 @@ verification harness; it must not contain the production compiler's logic.
 
 ## Quantitative Scorecard
 
-The live accounting is [`PLAN.md`](PLAN.md) section 5 and the README's Project Status, which publish **one** figure — **~60% product completeness** — from one table. This file's workstream table is a **gate checklist**, not a second score: it records which architectural gates are closed, and it is deliberately not turned into a percentage. Publishing a second number here is what produced the contradiction this project spent a day removing.
+The live accounting is [`PLAN.md`](PLAN.md) section 5 and the README's Project Status, which publish **one** figure — **~72% product completeness** — from one table. This file's workstream table is a **gate checklist**, not a second score: it records which architectural gates are closed, and it is deliberately not turned into a percentage. Publishing a second number here is what produced the contradiction this project spent a day removing.
 
 It went *down* from an earlier 38%, deliberately, for two reasons:
 
