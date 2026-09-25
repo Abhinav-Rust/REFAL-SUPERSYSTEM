@@ -1003,13 +1003,18 @@ Renumber2 {
 }
 
 LookupM {
-  (e.Map) s.X = <LookupML e.Map s.X>;
+  (e.Map) s.X = <LookupML s.X e.Map>;
 }
 
+* The query is the first argument and the map the tail, for the same reason
+* Lookup takes its query first: written the other way round the pattern ends
+* `e.Rest s.X`, an expression variable followed by a term, and the matcher has
+* to walk the rest of the map to find where e.Rest stops. Renumbering asks this
+* once per reachable state, so a walk per lookup is a walk per state.
 LookupML {
   s.X = ;
-  (RM s.X s.N) e.Rest s.X = s.N;
-  (e.R) e.Rest s.X = <LookupML e.Rest s.X>;
+  s.X (RM s.X s.N) e.Rest = s.N;
+  s.X (e.R) e.Rest = <LookupML s.X e.Rest>;
 }
 
 RenumT {
