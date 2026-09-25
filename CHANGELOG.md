@@ -2,6 +2,55 @@
 
 ## Unreleased
 
+### The driven residualizer, in Refal (2026-09-25)
+
+`compiler.ref`'s `RESIDUALIZE-DRIVEN` mode reproduces `refal residualize-driven`,
+which is `residualize_entry_graph_with_strategy`: drive the entry *configuration*,
+then project the driven graph back into a program. It is the stage that makes the
+Refal-authored compiler a compiler rather than a normaliser, because it is where
+pattern matching stops being reproduced and starts being *compiled*: a function
+whose argument is unknown is replaced by a generated `Split1` whose sentences are
+the exhaustive, pairwise-disjoint partition `[]` / `s.H e.T` / `(e.B) e.T`, and
+the dispatch the source decided at run time is decided at drive time instead.
+
+The entry argument is the whole difference from `drive-symbolic`, and it is not a
+detail. `drive_symbolic` always supplies `e.Input`, and a Refal `Go { = ...; }`
+takes nothing: supplying `e.Input` to it matches no sentence, drives nothing, and
+residualises the program to itself. Driving the *closed* configuration is what
+makes `drive -> residualise` mean something for a complete program (1980 4.2).
+
+Byte-identical to the Rust oracle over the whole corpus: **55 matched, 0
+diverged, 25 out of scope** (a fixture the bootstrap will not drive). The
+comparison includes the three report lines only this command prints — `whistles`,
+`generalized` and `generalized-states` — which required the driver to record
+whistle events, something no earlier report exposed.
+
+Three defects were found on the way, all of them invisible until something
+rendered or executed the path:
+
+- **`DsLoopInvoke` called `DsSetActive` in parentheses.** `(DsSetActive (e.Ctx)
+  (SOME s.Cursor))` is a bracket holding three terms, not a call, so the driver
+  received `(DsSetActive <context> (SOME <cursor>))` where a context belongs. The
+  work list only invokes a ground edge whose callee is a defined function, and no
+  example reached that path until the driven residualizer exercised the same
+  machinery — so `refal drive-symbolic` had been passing its differential over a
+  branch that could not have worked.
+- **The work list re-read a length it kept ahead of.** The Rust pass reads
+  `configuration_transitions.len()` on every turn and terminates because the list
+  does not grow; the Refal pass appended transitions from inside the same loop and
+  never reached its end. It now walks the transitions that existed when it
+  started, which is the same set for every example in the corpus.
+- **A split sentence's pattern carried an extra pair of parentheses.**
+  `(SENT ((e.B)) ...)` puts a bracket inside a bracket, so the empty branch came
+  out as a pattern of one empty bracket rather than an empty pattern — a residue
+  that no longer accepts what the source accepted. Nothing rendered a split
+  sentence until `residualize-driven` did.
+
+The stage also retains transitively every function the residue still calls, with
+`Mu`'s dynamic dispatch keeping the whole program as Turchin's control asymmetry
+requires, and short-circuits a residue that is exactly `<Entry e.X>` back to the
+source program.
+
 ### The symbolic driver, in Refal (2026-09-25)
 
 `compiler.ref`'s `DRIVE-SYMBOLIC` mode reproduces `refal-core`'s

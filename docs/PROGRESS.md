@@ -34,10 +34,31 @@ objective to a gate. Not another Refal implementation.
 
 | | |
 |---|---|
-| Honest completion | **~70%** (product completeness — one method, see below) |
-| Tests | 317 passing, 0 clippy, fmt clean |
+| Honest completion | **~72%** (product completeness — one method, see below) |
+| Tests | 318 passing, 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
+
+**Verification state at this commit, stated precisely.** The four Refal-authored
+differentials are green: the seed graph and residualization (55/55 each), the
+ground driver, the symbolic driver on the default, `--configurations` and
+`--neighborhoods` reports (55/55, 0 diverged) with `--strategy interpretive`
+gated separately (8/8, 0 diverged), and the **new driven residualizer**
+(`refal_authored_residualize_driven_matches_the_rust_oracle`, 55 matched, 0
+diverged, 25 out of scope). The T-4/T-6 differential corpus gate is byte-identical
+to the previous run (`cases: 67`, `positive: 29`, `check-failure: 6`,
+`runtime-failure: 1`, `residual: 31`, `cleaned-sentences: 1`), and
+`clippy --all-targets -D warnings` and `cargo fmt --check` are clean.
+
+**The driven residualizer's differential, stated as numbers.**
+`RESIDUALIZE-DRIVEN` against `refal residualize-driven` over every example the
+oracle will drive: **55 matched, 0 diverged, 25 out of scope**. The comparison is
+byte-exact and includes the residue *and* the three report lines only this command
+prints — `whistles`, `generalized`, `generalized-states`. Four non-vacuity guards
+keep it from passing on an echo: at least 50 examples checked, at least one with a
+non-empty `whistles` line, at least one with a non-zero `generalized` count, at
+least one emitting a `Split1`, and at least one whose residue differs from the
+program `refal lower` prints.
 
 **Verification state at this commit, stated precisely.** `cargo test --all -j 2 --
 --test-threads=1` is **green end to end**, 317 tests, including the four heavy
@@ -764,6 +785,84 @@ rather than a failure, which is why they are worth recording:
    does not match it and the fix is `((e.X))`. This is the repository's own
    documented trap, and writing it down did not stop me walking into it.
 
+### Done — the driven residualizer: pattern matching, compiled
+
+`compiler.ref`'s `RESIDUALIZE-DRIVEN` mode reproduces `refal residualize-driven`,
+which is `residualize_entry_graph_with_strategy`: drive the entry *configuration*,
+then project the driven graph back into a program. It is the stage that makes the
+Refal-authored compiler a compiler rather than a normaliser, because it is where
+matching stops being reproduced and starts being compiled. `Classify` is gone
+from the residue; a generated `Split1` decides the same question at drive time,
+with the sentences `[]`, `s.H e.T`, `(e.B) e.T` — exhaustive and pairwise
+disjoint — so the residue needs no call to the function the source used to
+dispatch on.
+
+The entry argument is the whole difference from `DRIVE-SYMBOLIC` and it is not a
+detail. `drive_symbolic` always supplies `e.Input`; a Refal `Go { = ...; }` takes
+nothing, so supplying `e.Input` matches no sentence, drives nothing, and
+residualises the program to itself. Driving the *closed* configuration is what
+makes `drive -> residualise` mean something for a complete program (1980 §4.2).
+
+**Gated by `refal_authored_residualize_driven_matches_the_rust_oracle`: 55
+matched, 0 diverged, 25 out of scope.** The comparison is byte-exact and covers
+the residue *and* the three report lines only this command prints — `whistles`,
+`generalized`, `generalized-states` — which is why the driver now records whistle
+events in its context. Four non-vacuity guards keep an echo from passing: at
+least 50 examples checked, at least one non-empty `whistles` line
+(`supercompile-loop.ref`, `condition.ref`), at least one non-zero `generalized`
+count, at least one emitting a `Split1` (`case-split.ref`, `condition.ref`), and
+at least one whose residue differs from `refal lower`'s output.
+
+Five pieces, in the order the output depends on them:
+
+1. **The entry-argument decision.** No arguments when the entry *state*'s
+   pattern is empty, `e.Input` otherwise; both returned bracketed so one pattern
+   binds either.
+2. **The self-loop short-circuit.** A residue that is exactly `<Entry e.X>` is
+   the program itself.
+3. **The residue's interface.** `entry_accepts_no_arguments` reads the entry
+   *function*'s first sentence where the driving decision reads the entry
+   *state*'s pattern; the two agree and both are reproduced.
+4. **The split functions**, in creation order, local visibility, before the
+   retained definitions.
+5. **Transitive retention** over bracketed call names seeded from the residue and
+   from each split sentence's pattern and result — *not* its conditions — with
+   `seen` seeded from the entry name. `Mu` keeps every definition, because a
+   residue that drops `Echo` fails at run time where the original succeeded.
+
+### Done — three defects the driven residualizer exposed
+
+Every one was invisible until something rendered or executed the path, and the
+first is the most interesting: it had been sitting under a differential that
+passes.
+
+1. **`DsLoopInvoke` called `DsSetActive` in parentheses.** `(DsSetActive (e.Ctx)
+   (SOME s.Cursor))` is a *bracket* holding three terms, not a call, so the
+   driver received `(DsSetActive <context> (SOME <cursor>))` where a context
+   belongs and `DsSteps` then failed to destructure it. The work list only
+   invokes a ground edge whose callee is a defined function, and no corpus
+   example reached that branch — so `refal drive-symbolic` had been passing its
+   55/55 differential over a path that could not have worked. Fixed to
+   `<DsSetActive ...>`.
+2. **The work list re-read a length it kept ahead of.** The Rust pass reads
+   `configuration_transitions.len()` every turn and terminates because the list
+   does not grow; the Refal pass appended transitions from inside the same loop,
+   so `DsLoopAt` never reached its end and the run had to be killed. It now walks
+   the transitions present when it started — the same set, for every example in
+   the corpus — and `--configurations` still matches the oracle byte for byte on
+   the examples that reach it.
+3. **A split sentence's pattern carried an extra pair of parentheses.**
+   `(SENT ((e.B)) () (e.Out))` puts a bracket inside a bracket, so the empty
+   branch came out as a pattern of one empty bracket instead of an empty pattern
+   and the residue no longer accepted what the source accepted. The two places
+   that build split sentences are now `(SENT (e.B) () ...)`.
+
+The third is the repository's own documented trap, one level down from where it
+was written down: a list passed **spread** and a list passed **bracketed** need
+different patterns — `(first) e.Rest` against `((first) e.Rest)` — and writing
+the second for the first wraps the whole list in an extra pair of parentheses and
+the function stops matching at all.
+
 ### Open
 
 - **T-1** a non-trivial program transformer written in Refal.
@@ -808,8 +907,113 @@ rather than a failure, which is why they are worth recording:
 
 ## NEXT ACTION
 
-**Wire the transforming half into `compiler.ref` — the self-hosting fixpoint on a
-slice that really compiles.**
+**Wire the driven residualizer into `compiler.ref`'s own `Compile` path, and
+close the self-hosting fixpoint over a slice that drives rather than normalises.**
+
+The transforming half is now complete in Refal. `compiler.ref` reproduces, as
+verified differentials against `refal-core`:
+
+- `GRAPH` — the §4.2 seed graph, 55/55.
+- `RESIDUALIZE` — the cleaned graph's residue, 55/55.
+- `DRIVE` — the ground driver over the closed entry configuration.
+- `DRIVE-SYMBOLIC` — `drive_symbolic_with_strategy`, on the default,
+  `--configurations` and `--neighborhoods` reports, 55/55 with `--strategy
+  interpretive` gated separately at 8/8.
+- `RESIDUALIZE-DRIVEN` — `residualize_entry_graph_with_strategy`, 55 matched,
+  0 diverged. This is the one that compiles pattern matching: the unknown
+  argument becomes a generated `Split1` whose sentences are the exhaustive,
+  pairwise-disjoint partition, and the residue no longer calls the function that
+  used to decide it.
+
+What is left of the row `PLAN.md` §5 calls the largest single deduction is that
+the compiler's *default* path still normalises. `Compile` is
+`Emit(Check(Parse(Lex(source))))`; it never drives. So `compile_command_compiles_the_compiler_itself`
+and `the_refal_authored_compiler_matches_lower_on_every_lowerable_example` both
+compare it to `refal lower`, and the self-hosting fixpoint is a fixpoint of a
+normaliser — which is why residual credit is still withheld on that row.
+
+The next step is therefore a *contract* change, not a new stage:
+
+1. Make `Compile` drive. The entry configuration is known, so the pipeline
+   becomes `Lex -> Parse -> Check -> Graph -> Drive -> Residualize -> Emit`, and
+   `compile`'s output becomes what `residualize-driven` prints.
+2. Re-point the two gates above at `refal residualize-driven`, keeping a
+   separate test that the *normalising* path is still byte-identical to `lower`
+   (it is still the right output for a source-to-source formatter, and it is what
+   the interpreter differential consumes).
+3. Re-run the self-hosting fixpoint on the driven compiler. The open question is
+   whether driving a driven program is stable — `C1` is already a residue, so
+   driving it again may or may not be the identity. Measure before claiming.
+
+Two things must be checked first, and both are cheap:
+
+- **Cost.** `residualize-driven` over `examples/compiler.ref` (201 definitions)
+  has never been run. The driven residualizer walks the whole seed graph, so the
+  first measurement is whether it completes in a sensible time on the compiler's
+  own source, and whether the residue still checks.
+- **`Mu`.** `retain_called_functions` keeps every definition when the residue
+  still dispatches dynamically, so the residue of a program using `Mu` is the
+  whole program. That is the sound choice and it is what the Rust oracle does; it
+  also means the fixpoint over such a program is trivially stable, so it must not
+  be mistaken for evidence.
+
+### What the driven residualizer needed (so the next session starts here)
+
+The port is a faithful transcription of `residualize_symbolic_program`
+(`crates/refal-core/src/lib.rs:3022`) plus `retain_called_functions` (`:3124`).
+Five pieces, in the order the output depends on them:
+
+1. **The entry-argument decision.** `drive_entry_configuration` drives with no
+   arguments when the entry state's pattern is empty and with `e.Input`
+   otherwise. Both are returned *bracketed* (`()` and `((VAR 'e' 'Input'))`) so
+   one pattern can bind either.
+2. **The self-loop short-circuit.** A residue that is exactly
+   `<Entry e.X>` is the program itself; re-emitting it would rename the entry's
+   argument for no reason.
+3. **The residue's own interface.** `entry_accepts_no_arguments` reads the entry
+   *function*'s first sentence, where the driving decision reads the entry
+   *state*'s pattern. The two agree, and both are reproduced.
+4. **The split functions.** Every `(SP ...)` in the context becomes a `FUN` with
+   local visibility, in creation order, before the retained definitions.
+5. **Transitive retention.** A work list over bracketed call names, seeded from
+   the residue and from each split sentence's pattern and result — *not* its
+   conditions, which is what the Rust pass collects — with `seen` seeded from the
+   entry name so the source's copy of the entry is never carried alongside.
+
+### Traps this step paid for
+
+- **A bracket in an argument position is not a call.** `(F (e.X))` is a bracket
+  holding `F` and the bracket `(e.X)`; `<F (e.X)>` is a call. The two look alike
+  and the wrong one fails *later*, where the value is destructured. This is the
+  `DsLoopInvoke` defect above, and it is worth a grep for `(Ds` and `(Dv` in any
+  file that mixes the two.
+- **A name is a character sequence, so a spread list of names cannot be split
+  back into names.** `(e.Name e.Rest)` takes the empty prefix and never consumes
+  the list, so collected call names travel bracketed, one per call.
+- **A list passed spread and a list passed bracketed need different patterns.**
+  `(first) e.Rest` walks a spread list; `((first) e.Rest)` walks a *bracketed*
+  one. Writing the second for the first puts an extra pair of parentheses around
+  the whole list, and the function then fails to match at all — which is exactly
+  the shape of the `DsSplitOne` defect, one level down.
+- **A function whose pattern requires one argument does not match a call with
+  none.** `DsWhistleLine { () = ; }` never fired for an empty list, because the
+  list arrived spread and the call had no arguments at all; `= ;` is the empty
+  case for a spread list and `()` is the empty case for a bracketed one.
+- **`Prout` output is discarded when the program errors.** This is why the four
+  defects above took a bisection with synthetic marker contexts rather than a
+  trace: a failing stage prints nothing, so the only channel is a value that
+  survives. Making the stage *succeed* with a marker is what found them.
+- **Refal-5 identifiers are capped at 15 characters.** `DsWhistleStates` (16),
+  `DsWhistleEvents` (16), `DsWhistleStatesL2` (17), `DsWhistleStateLine` (18) and
+  `DsWhistleStateLineL` (19) all had to be renamed.
+
+### Still open
+
+- The driven path is not wired into `Compile`; see above.
+- Whole-program residualization for general programs.
+- §4.4's strategy *search*, and T-8's §6.4 `unknown` values.
+- The `Reverse` rope shape, and the interpretive driver's cost in Refal — both
+  measured and recorded above as bounds rather than costs.
 
 The symbolic driver is done. `compiler.ref` now reproduces
 `drive_symbolic_with_strategy` (`crates/refal-core/src/lib.rs:693`) as
@@ -836,72 +1040,6 @@ whole-program for general programs. What is next is to wire the Refal driver
 into the compiler's own pipeline, so the self-hosting fixpoint runs on a slice
 that genuinely parses, analyses, splits, folds and emits — the same gap as T-1's
 and T-10's remaining credit.
-
-### What the port needed (so the next session starts here, not at the file)
-
-Five pieces had to be reproduced, and four of them are subtle:
-
-1. **A three-valued matcher.** `match_symbolic_pattern` answers Yes, No or
-   Unknown. Unknown means the answer depends on information driving does not
-   have, and guessing a branch there is what makes a driver unsound.
-   `symbolic_variable_accepts` is the kind lattice — `s.` accepts
-   character/number/identifier and an `s.`-variable but never a bracket, `t.`
-   accepts any single term, `e.` accepts anything — and anything wider is
-   `Unknown`, not a guess.
-2. **Reverse split order.** Expression variables backtrack over splits
-   *longest prefix first*, which is the opposite of the ground matcher's order,
-   so the stage reverses `DvSplits` with `DvRev`. That order decides which branch
-   a sentence takes and therefore the whole residue.
-3. **The fold and the whistle.** A recurrence on the active path folds to the
-   generated function when the path entry carries a split, and whistles
-   otherwise; a recurrence with a configuration that already *finished* is not a
-   cycle at all, and reusing its residue is what unwinds an interpreter's
-   recursion into straight-line code.
-4. **The context is threaded through failures too.** Invocation appends
-   configurations and transitions, and invocation happens inside condition
-   matching and inside argument instantiation as well as at the top, so every
-   result — `(RED <terms> <ctx>)`, `(RES <ctx>)`, `(FAILS <ctx>)` — carries the
-   context, and so does every condition verdict.
-5. **The split partition.** `e.X` is `[]` or `s.H e.T` or `(e.B) e.T`, exhaustive
-   and pairwise disjoint, and the entry is split only when the entry's own
-   pattern is exactly one expression variable.
-
-### Three traps this session paid for, recorded so they are not paid again
-
-- **A name in the AST is a character sequence, not one identifier symbol.** The
-  first version built the split's fresh variables with `Implode`, which makes
-  `H1` a single identifier symbol. `Canon` then handed the whole identifier to
-  `Ord`, `Ord` returned it unchanged, and `Compare` refused it with "every term
-  of an integer must be a macrodigit" — raised inside `CanonChar`, three call
-  levels away from the mistake. `'H' <Symb 1>` is the right way to write it, and
-  it is also what lets `SameChars` match a generated name against a name that
-  came from the source.
-- **The entry-split guard's two outcomes are easy to invert.** The rule is
-  "refuse when the entry's pattern is *not* a single expression variable", and
-  the first version had the two sentences the other way round. It reads like a
-  detail and it is not: for the 25 examples whose entry takes a bracket, a fixed
-  pattern or several terms, the oracle answers `<Go e.Input>` and the inverted
-  guard answered a full split instead.
-- **A bracket branch is `(BR (VAR 'e' 'B1'))`, not `(BR ((VAR 'e' 'B1')))`.**
-  One extra pair of parentheses puts a bracket inside a bracket, which is not a
-  term, and it only showed up when the configuration report tried to render it.
-
-### Still open, and not objectives
-
-- **§4.4's strategy *search***, and T-8's §6.4 `unknown` values.
-- **The `Reverse` rope shape.** A result that puts a call *before* other terms —
-  `<F e.X> s.C` — builds a rope whose left spine is as deep as the nesting.
-  Measured, it is linear anyway: `Reverse` over 16,000 characters is flat, and
-  reversing then walking the result is 614 ms at 16,000, 712 ms at 32,000 and
-  911 ms at 64,000, against a 0.5 s process-startup floor. So this is a **bound,
-  not a measured cost**, and balancing the rope (a height in `Concat` plus a
-  rotation in `ViewField::concat`) is the fix if a shape ever does pay it.
-- **The interpretive driver's cost in Refal.** `condition.ref` under
-  `--strategy interpretive` takes about 50 s in Refal against 0.2 s in Rust, with
-  byte-identical output. The work list and the final re-wire both rescan the
-  whole transition list per entry, which is `O(T^2)`; the Rust oracle holds the
-  same lists as vectors. Recorded as a measurement rather than a claim, and it is
-  a non-default strategy knob.
 
 ### Traps this repository has already paid for
 
