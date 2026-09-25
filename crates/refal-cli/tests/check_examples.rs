@@ -2521,6 +2521,81 @@ fn compiler_ref_reaches_a_self_hosting_fixpoint() {
     }
 }
 
+/// The fixpoint above is a fixpoint of a *normaliser*, and the distinction is
+/// the one T-10 turns on: `Compile` re-prints the program it was given, so
+/// successive generations agree because nothing transformed anything. Driving
+/// asks a different question and has its own answer to prove. The driver
+/// partitions `Go`'s unknown mode, folds the branches into `Split1` .. `Split8`,
+/// and emits a residue that differs from `lower` -- so C1 is not C2 by
+/// construction. It is C1 = C2 by measurement: drive the residue and the residue
+/// comes back byte for byte.
+///
+/// The entry's shape is what this gate is really watching. `Go`'s entry state
+/// has to be a single bare expression variable before the driver will partition
+/// it -- `split_configuration` refuses anything more specific -- and it was
+/// `('CHECK') (e.Source)` until this session, which made the residue
+/// `<Go e.Input>`, the self-loop short-circuit, so what came back was the parsed
+/// program and the driver had done nothing. Narrow the entry again and this test
+/// is the one that notices.
+#[test]
+fn the_driven_compiler_is_a_fixpoint_of_the_driver() {
+    let first = residualize_driven_file("examples/compiler.ref", &[]);
+    assert!(
+        first.status.success(),
+        "driving the compiler failed:\n{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    let c1 = driven_residue(&String::from_utf8_lossy(&first.stdout));
+    assert!(!c1.is_empty(), "the driven compiler is empty");
+
+    // Non-vacuity, stated on the thing that would be wrong. A residue that is
+    // exactly `<Entry e.X>` *is* the source program: the driver learned nothing
+    // and re-emitting it would only rename the entry's argument.
+    let whole = lower_file("examples/compiler.ref");
+    assert!(
+        whole.status.success(),
+        "the compiler must lower for this test to mean anything"
+    );
+    assert_ne!(
+        c1,
+        String::from_utf8_lossy(&whole.stdout),
+        "the driven compiler is just `lower`'s output, so nothing was driven"
+    );
+
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock is after Unix epoch")
+        .as_nanos();
+    let residue_path = std::env::temp_dir().join(format!("refal-driven-c1-{unique}.ref"));
+    fs::write(&residue_path, &c1).expect("write C1");
+
+    let checked = Command::new(refal_bin())
+        .args(["check"])
+        .arg(&residue_path)
+        .output()
+        .expect("check the driven compiler");
+    assert!(
+        checked.status.success(),
+        "the driven compiler does not check:\n{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+
+    let second = Command::new(refal_bin())
+        .args(["residualize-driven"])
+        .arg(&residue_path)
+        .output()
+        .expect("drive the driven compiler");
+    assert!(
+        second.status.success(),
+        "driving the driven compiler failed:\n{}",
+        String::from_utf8_lossy(&second.stderr)
+    );
+    let c2 = driven_residue(&String::from_utf8_lossy(&second.stdout));
+
+    let _ = fs::remove_file(&residue_path);
+    assert_eq!(c1, c2, "C1 and C2 must be byte-identical");
+}
+
 #[test]
 fn executes_refal_authored_parser_end_to_end() {
     let cases = [
