@@ -5027,6 +5027,125 @@ fn refal_authored_residualization_matches_residualize_graph() {
     );
 }
 
+/// Driven residualization, in Refal.
+///
+/// `refal residualize-driven` is the command that makes the compiler a compiler
+/// rather than a normaliser: it drives the entry *configuration* -- the entry
+/// applied to the arguments the program is actually run on -- and emits the
+/// program the driven graph denotes. A `Go { = ...; }` takes no arguments, and
+/// supplying `e.Input` to it matches nothing, so driving the closed
+/// configuration is the whole difference between this and `drive-symbolic`, and
+/// the whole reason `drive -> residualise` means something for a complete
+/// program (Turchin 1980 4.2).
+///
+/// The comparison is byte-exact, over the whole corpus, including the three
+/// report lines only this command prints -- `whistles`, `generalized` and
+/// `generalized-states`. Those come from the driver's whistle-event list, which
+/// `compiler.ref` now threads through its context; without it the residue
+/// matches and the report does not.
+#[test]
+fn refal_authored_residualize_driven_matches_the_rust_oracle() {
+    let mut names: Vec<String> = fs::read_dir(workspace_path("examples"))
+        .expect("read the examples directory")
+        .filter_map(|entry| {
+            let path = entry.ok()?.path();
+            let name = path.file_name()?.to_string_lossy().into_owned();
+            (name.ends_with(".ref") && name != "compiler.ref").then_some(name)
+        })
+        .collect();
+    names.sort();
+
+    let mut checked = 0usize;
+    let mut whistled = 0usize;
+    let mut generalized = 0usize;
+    let mut split = 0usize;
+    let mut dropped_a_function = 0usize;
+    let mut failures = Vec::new();
+    for name in names {
+        let path = format!("examples/{name}");
+        let oracle = residualize_driven_file(&path, &[]);
+        // A fixture the bootstrap refuses to drive is out of scope here exactly
+        // as it is for the other sweeps.
+        if !oracle.status.success() {
+            continue;
+        }
+        let expected = String::from_utf8_lossy(&oracle.stdout).into_owned();
+        if expected.trim().is_empty() {
+            continue;
+        }
+        checked += 1;
+
+        // Non-vacuity, three ways. A port that echoed its input would pass a
+        // byte comparison on the examples whose residue *is* the source, so the
+        // sweep has to prove it saw a whistle, a generalization and a case
+        // split actually appear.
+        if expected
+            .lines()
+            .any(|line| line.starts_with("whistles: ") && line.trim() != "whistles:")
+        {
+            whistled += 1;
+        }
+        if expected
+            .lines()
+            .any(|line| line.starts_with("generalized: ") && line.trim() != "generalized: 0")
+        {
+            generalized += 1;
+        }
+        if expected.contains("\nSplit1 {") {
+            split += 1;
+        }
+        // The same program without the driven rewrite, so a residue that
+        // differs from it proves the pass did something rather than echoing.
+        let whole = lower_file(&path);
+        if whole.status.success() && String::from_utf8_lossy(&whole.stdout) != expected {
+            dropped_a_function += 1;
+        }
+
+        let source = fs::read_to_string(workspace_path(&path)).expect("read example");
+        let actual = run_file("examples/compiler.ref", &["RESIDUALIZE-DRIVEN", &source]);
+        if !actual.status.success() {
+            failures.push(format!(
+                "{name}: compiler.ref RESIDUALIZE-DRIVEN failed\n{}",
+                String::from_utf8_lossy(&actual.stderr)
+            ));
+            continue;
+        }
+        let actual = String::from_utf8_lossy(&actual.stdout).into_owned();
+        if actual != expected {
+            failures.push(format!(
+                "{name}:\n  residualize-driven: {expected:?}\n  refal: {actual:?}"
+            ));
+        }
+    }
+
+    assert!(
+        checked >= 50,
+        "the driven sweep should cover the examples, only checked {checked}"
+    );
+    assert!(
+        whistled >= 1,
+        "no example whistled, so the whistle report is untested"
+    );
+    assert!(
+        generalized >= 1,
+        "no example reported a generalization, so that line is untested"
+    );
+    assert!(
+        split >= 1,
+        "no example emitted a case split, so the partition is untested"
+    );
+    assert!(
+        dropped_a_function >= 1,
+        "the sweep is vacuous: no example's residue differs from its whole program"
+    );
+    assert!(
+        failures.is_empty(),
+        "{} of {checked} examples diverge from the Rust oracle:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+}
+
 /// The ground driver, in Refal.
 ///
 /// `refal drive <file.ref>` is `drive_ground`: it contracts the closed entry

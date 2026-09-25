@@ -65,6 +65,8 @@ $ENTRY Go {
     <Prout <DriveSym (SYMBOTH) e.Source>>;
   ('DRIVE-SYMBOLIC-INTERPRETIVE') (e.Source) =
     <Prout <DriveSym (SYMI) e.Source>>;
+  ('RESIDUALIZE-DRIVEN') (e.Source) =
+    <Prout <DsRdRun e.Source>>;
   (e.Mode) (e.Source) = <Prout 'unknown mode: ' e.Mode>;
   (e.Source) = <Compile <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>;
 }
@@ -1646,7 +1648,7 @@ DsTop {
   (e.Mode) s.Strat (e.States) s.E (NONE) = "symbolic drive error: no entry";
   (e.Mode) s.Strat (e.States) s.E (SOME (e.Fn)) =
     <DsOut (e.Mode) (e.Fn)
-      <DsInvoke (SX s.E s.Strat (e.States) 0 () () () () () () () (NONE) 0)
+      <DsInvoke (SX s.E s.Strat (e.States) 0 () () () () () () () (NONE) 0 ())
                 (e.Fn) ((VAR 'e' 'Input'))>>;
 }
 
@@ -1663,6 +1665,371 @@ DsOut {
 DsOut2 {
   (e.Mode) (e.Residual) (LOOP (e.Ctx)) = <DsReport (e.Mode) (e.Residual) (e.Ctx)>;
   (e.Mode) (e.Residual) (ERR) = "symbolic drive error: step limit";
+}
+
+* ------------------------------------------------ driven residualization
+*
+* `refal residualize-driven` is the command that makes the compiler a compiler
+* rather than a normaliser. It drives the entry CONFIGURATION -- the entry
+* applied to the arguments the program is actually run on -- and emits the
+* program the driven graph denotes. The driving half is the Ds* machinery
+* above, unchanged. What this section adds is the entry-argument decision, the
+* projection of the driven graph back into a program, and the transitive
+* retention of every function the residue still calls.
+*
+* The entry argument is the whole difference between this and
+* `refal drive-symbolic`, and it is not a detail. `drive_symbolic` always
+* supplies `e.Input`, and a Refal `Go` normally takes nothing: supplying
+* `e.Input` to it matches no sentence, drives nothing, and residualises the
+* program to itself. Driving the CLOSED configuration is what makes
+* `drive -> residualise` mean something for a complete program (1980 4.2).
+
+DsRdRun {
+  e.Source =
+    <DsRdRun2 <Parse <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>>;
+}
+
+DsRdRun2 {
+  (PROG e.Items) = <DsRdRun3 (PROG e.Items) <CleanG <BuildG e.Items>>>;
+}
+
+DsRdRun3 {
+  (PROG e.Items) (CG () (e.States) (e.Trans)) =
+    "driven residualization error: no entry";
+  (PROG e.Items) (CG (s.E) (e.States) (e.Trans)) =
+    <DsRdTop (PROG e.Items) (e.States) s.E>;
+}
+
+DsRdTop {
+  (PROG e.Items) (e.States) s.E =
+    <DsRdTop2 (PROG e.Items) (e.States) s.E <DvNameOf s.E (e.States)>>;
+}
+
+DsRdTop2 {
+  (PROG e.Items) (e.States) s.E (NONE) =
+    "driven residualization error: no entry";
+  (PROG e.Items) (e.States) s.E (SOME (e.Fn)) =
+    <DsRdGo (PROG e.Items) (e.Fn) (e.States) s.E <DsRdArgs (e.States) s.E>>;
+}
+
+DsRdGo {
+  (PROG e.Items) (e.Fn) (e.States) s.E (e.Args) =
+    <DsRdOut (PROG e.Items) (e.Fn) (e.Args)
+      <DsInvoke (SX s.E 'C' (e.States) 0 () () () () () () () (NONE) 0 ())
+                (e.Fn) (e.Args)>>;
+}
+
+* The arguments the entry configuration is driven with: none when the entry
+* state's sentence takes no arguments, `e.Input` otherwise. Both are returned
+* bracketed, so `()` and a one-term list are the same shape to the caller.
+DsRdArgs {
+  (e.States) s.E, <DsEntryClosed (e.States) s.E> : '1' = ();
+  (e.States) s.E = ((VAR 'e' 'Input'));
+}
+
+DsEntryClosed {
+  (e.States) s.E = <DsEntryClosedL (e.States) s.E>;
+}
+
+DsEntryClosedL {
+  () s.E = ;
+  ((ST s.E (e.N) s.J (SENT () (e.C) (e.R))) e.Rest) s.E = '1';
+  ((ST s.E (e.N) s.J t.Sent) e.Rest) s.E = ;
+  (t.S e.Rest) s.E = <DsEntryClosedL (e.Rest) s.E>;
+}
+
+DsRdOut {
+  (PROG e.Items) (e.Fn) (e.Args) (RED (e.Out) (e.Ctx)) =
+    <DsRdEmit (PROG e.Items) (e.Fn) (e.Out) <DsRewire <DsLoop (e.Ctx)>>>;
+  (PROG e.Items) (e.Fn) (e.Args) (RES (e.Ctx)) =
+    <DsRdEmit (PROG e.Items) (e.Fn) <DsCallSeq (e.Fn) (e.Args)> <DsRewire <DsLoop (e.Ctx)>>>;
+  (PROG e.Items) (e.Fn) (e.Args) (FAILS (e.Ctx)) =
+    <DsRdEmit (PROG e.Items) (e.Fn) <DsCallSeq (e.Fn) (e.Args)> <DsRewire <DsLoop (e.Ctx)>>>;
+  (PROG e.Items) (e.Fn) (e.Args) (ERR) =
+    "driven residualization error: step limit";
+}
+
+DsRdEmit {
+  (PROG e.Items) (e.Fn) (e.Residual) (LOOP (e.Ctx)) =
+    <DsRdReport (e.Ctx)> <Emit <DsRdBuild (e.Items) (e.Fn) (e.Residual) (e.Ctx)>>;
+  (PROG e.Items) (e.Fn) (e.Residual) (ERR) =
+    "driven residualization error: step limit";
+}
+
+DsRdReport {
+  (e.Ctx) =
+    "steps: " <DsSteps (e.Ctx)> <NL>
+    "visited: " <DsVis (e.Ctx)> <NL>
+    "whistles: " <DsWStateLine (e.Ctx)> <NL>
+    "generalized: " <DsLen <DsWEvents (e.Ctx)>> <NL>
+    "neighborhood-loops: " <DsLoops (e.Ctx)> <NL>
+    "generalized-states: " <DsWStateLine (e.Ctx)> <NL>;
+}
+
+DsWEvents {
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE)) =
+    (e.WE);
+}
+
+* Both the `whistles` line and the `generalized-states` line come from the
+* event list, not from the distinct state set: the Rust command formats both
+* from `whistle_events`, so a state that whistled on two different triples
+* appears twice on both lines, and `generalized` is that list's length.
+DsWStateLine {
+  (e.Ctx) = <DsWStateLineL <DsWEvents (e.Ctx)>>;
+}
+
+DsWStateLineL {
+  () = ;
+  ((WE s.Id t.P t.I)) = "S" s.Id;
+  ((WE s.Id t.P t.I) e.Rest) = "S" s.Id ", " <DsWStateLineL (e.Rest)>;
+}
+* ---- the residue as a program
+
+DsRdBuild {
+  (e.Items) (e.Fn) (e.Residual) (e.Ctx) =
+    <DsRdBuild2 (e.Items) (e.Fn) (e.Residual) (e.Ctx)
+      <DsRdSelfLoop (e.Fn) (e.Residual)>>;
+}
+
+* A residue that is exactly `<Entry e.X>` is the program itself: driving
+* learned nothing, and re-emitting it would rename the entry's argument for no
+* reason. The Rust residualizer short-circuits on the same shape, and it has
+* to: without it every program whose entry takes an expression variable would
+* come back as a different program that happens to mean the same thing.
+DsRdSelfLoop {
+  (e.Fn) ((CALL (ID e.Fn) (VAR 'e' e.N))) = '1';
+  (e.Fn) (e.R) = ;
+}
+
+* The residue has to accept whatever the entry accepts. A `Go { = ...; }`
+* takes no arguments, and giving it an `e.Input` pattern would widen the
+* program's interface -- the residue would then answer calls the original
+* could not, and the two programs would no longer be interchangeable.
+DsRdBuild2 {
+  (e.Items) (e.Fn) (e.Residual) (e.Ctx) '1' = (PROG e.Items);
+  (e.Items) (e.Fn) (e.Residual) (e.Ctx) =
+    (PROG
+      <DsRdDecls e.Items>
+      (FUN (Ident e.Fn) (VIS ENTRY) <DsRdEntry (e.Items) (e.Residual)>)
+      <DsRdSplits (e.Ctx)>
+      <DsRdRetain (e.Items) (e.Fn) <DsRdReach (e.Residual) (e.Ctx)>
+                  <DsRdSplitNames (e.Ctx)>>);
+}
+
+DsRdEntry {
+  (e.Items) (e.Residual), <DsRdClosed (e.Items)> : '1' = (SENT () () (e.Residual));
+  (e.Items) (e.Residual) = (SENT ((VAR 'e' 'Input')) () (e.Residual));
+}
+
+* Whether the entry FUNCTION's first sentence takes no arguments. The driving
+* decision reads the entry STATE's pattern and this reads the entry function's
+* first sentence, which is the state's own sentence; the two agree, and the
+* Rust residualizer reads the function here and the graph there.
+DsRdClosed {
+  (e.Items) = <DsRdClosedL e.Items>;
+}
+
+DsRdClosedL {
+  = ;
+  (FUN (Ident e.N) (VIS ENTRY) (SENT () (e.C) (e.R)) e.More) e.Rest = '1';
+  (FUN (Ident e.N) (VIS ENTRY) t.S e.More) e.Rest = ;
+  t.Item e.Rest = <DsRdClosedL e.Rest>;
+}
+
+DsRdDecls {
+  = ;
+  (EXT e.Names) e.Rest = (EXT e.Names) <DsRdDecls e.Rest>;
+  t.Item e.Rest = <DsRdDecls e.Rest>;
+}
+
+* A case split is part of the residue, not scaffolding around it: the entry
+* calls `Split1`, so `Split1` has to be defined.
+DsRdSplits {
+  (e.Ctx) = <DsRdSplitsL <DsSplits (e.Ctx)>>;
+}
+
+DsRdSplitsL {
+  () = ;
+  ((SP (e.Name) (e.F) (e.Can) (e.Sents)) e.Rest) =
+    (FUN (Ident e.Name) (VIS LOCAL) e.Sents) <DsRdSplitsL (e.Rest)>;
+}
+
+DsRdSplitNames {
+  (e.Ctx) = (<DsRdSplitNamesL <DsSplits (e.Ctx)>>);
+}
+
+DsRdSplitNamesL {
+  () = ;
+  ((SP (e.Name) (e.F) (e.Can) (e.Sents)) e.Rest) =
+    (e.Name) <DsRdSplitNamesL (e.Rest)>;
+}
+
+* Driving stops at a call it cannot decide and leaves it in the residue. The
+* residue is a program, so every user function it still calls has to come with
+* it -- otherwise the residue does not check, and a residualizer that emits a
+* program the compiler rejects has emitted nothing.
+DsRdReach {
+  (e.Residual) (e.Ctx) = (<DsRdCalls (e.Residual)> <DsRdSplitCalls <DsSplits (e.Ctx)>>);
+}
+
+DsRdSplitCalls {
+  () = ;
+  ((SP (e.Name) (e.F) (e.Can) (e.Sents)) e.Rest) =
+    <DsRdSentCalls (e.Sents)> <DsRdSplitCalls (e.Rest)>;
+}
+
+* Split sentences carry no conditions, which is why this is not the same
+* function the retention pass uses: the two collect from the same terms the
+* Rust residualizer collects from, and it collects from the pattern and the
+* result only here.
+DsRdSentCalls {
+  () = ;
+  ((SENT (e.P) (e.C) (e.R)) e.Rest) =
+    <DsRdCalls (e.P)> <DsRdCalls (e.R)> <DsRdSentCalls (e.Rest)>;
+}
+
+* Names come out BRACKETED, one per call. A name is a character sequence, not
+* one symbol, so a spread list of names could not be split back into names --
+* `(e.N e.Rest)` would take the empty prefix and never consume the list. That
+* is the same shape of trap as the two adjacent expression variables in the
+* matcher, one level up.
+DsRdCalls {
+  (e.Terms) = <DsRdCallsL (e.Terms)>;
+}
+
+DsRdCallsL {
+  () = ;
+  ((CALL (ID e.N) e.Args) e.Rest) = (N e.N) <DsRdCallsL (e.Args)> <DsRdCallsL (e.Rest)>;
+  ((BR e.Inner) e.Rest) = <DsRdCallsL (e.Inner)> <DsRdCallsL (e.Rest)>;
+  ((BLK (e.Arg) e.Sents) e.Rest) =
+    <DsRdCallsL (e.Arg)> <DsRdBlkSents (e.Sents)> <DsRdCallsL (e.Rest)>;
+  (t.X e.Rest) = <DsRdCallsL (e.Rest)>;
+}
+
+DsRdBlkSents {
+  () = ;
+  ((SENT (e.P) (e.C) (e.R)) e.Rest) =
+    <DsRdCallsL (e.P)> <DsRdConds (e.C)> <DsRdCallsL (e.R)> <DsRdBlkSents (e.Rest)>;
+}
+
+DsRdConds {
+  () = ;
+  ((COND (e.Expr) (e.CPat)) e.Rest) =
+    <DsRdCallsL (e.Expr)> <DsRdCallsL (e.CPat)> <DsRdConds (e.Rest)>;
+}
+
+DsRdRetain {
+  (e.Items) (e.Fn) (e.Reachable) (e.Generated) =
+    <DsRdDropGen (e.Generated) (<DsRdRetainRaw (e.Items) (e.Fn) (e.Reachable)>)>;
+}
+
+DsRdRetainRaw {
+  (e.Items) (e.Fn) (e.Reachable), <DsRdHasMu (e.Reachable)> : '1' =
+    <DsRdAllBut (e.Items) (e.Fn)>;
+  (e.Items) (e.Fn) (e.Reachable) =
+    <DsRdBfs (e.Items) (e.Reachable) () (<DsRdUpper (e.Fn)>)>;
+}
+
+* `Mu` dispatches on a function name carried as *data*, so walking call terms
+* cannot see what it will call. When the residue still dispatches dynamically
+* the only sound residue keeps every definition the original had -- a residue
+* that drops `Echo` is a program that fails at run time where the original
+* succeeded.
+DsRdBfs {
+  (e.Items) () (e.Acc) (e.Seen) = e.Acc;
+  (e.Items) ((N e.Name) e.Rest) (e.Acc) (e.Seen),
+    <DsRdSeenQ (e.Seen) (e.Name)> : '1' = <DsRdBfs (e.Items) (e.Rest) (e.Acc) (e.Seen)>;
+  (e.Items) ((N e.Name) e.Rest) (e.Acc) (e.Seen),
+    <DsRdFindFun (e.Items) (e.Name)> : (SOME ((FUN (Ident e.N) (e.V) e.Sents))) =
+      <DsRdBfs (e.Items) (e.Rest <DsRdFunCalls (e.Sents)>)
+               (e.Acc (FUN (Ident e.N) (e.V) e.Sents))
+               (e.Seen (<DsRdUpper (e.Name)>))>;
+  (e.Items) ((N e.Name) e.Rest) (e.Acc) (e.Seen) =
+    <DsRdBfs (e.Items) (e.Rest) (e.Acc) (e.Seen)>;
+}
+
+* The order is the Rust pass's order -- pattern, result, then each condition's
+* result and pattern -- because the discovery order of the work list is the
+* emission order of the retained definitions.
+DsRdFunCalls {
+  (e.Sents) = <DsRdFullSents (e.Sents)>;
+}
+
+DsRdFullSents {
+  () = ;
+  ((SENT (e.P) (e.C) (e.R)) e.Rest) =
+    <DsRdCalls (e.P)> <DsRdCalls (e.R)> <DsRdConds (e.C)> <DsRdFullSents (e.Rest)>;
+}
+
+DsRdSeenQ {
+  (e.Seen) (e.Name) = <DsRdSeenL (e.Seen) (<DsRdUpper (e.Name)>)>;
+}
+
+DsRdSeenL {
+  () (e.U) = ;
+  ((e.S) e.Rest) (e.U), <SameChars (e.S) (e.U)> : '1' = '1';
+  (t.X e.Rest) (e.U) = <DsRdSeenL (e.Rest) (e.U)>;
+}
+
+DsRdFindFun {
+  (e.Items) (e.Name) = <DsRdFindFunL (<DsRdUpper (e.Name)>) e.Items>;
+}
+
+DsRdFindFunL {
+  (e.U) = (NONE);
+  (e.U) (FUN (Ident e.N) (e.V) e.Sents) e.Rest,
+    <SameChars (<Upper e.N>) (e.U)> : '1' =
+      (SOME ((FUN (Ident e.N) (e.V) e.Sents)));
+  (e.U) t.Item e.Rest = <DsRdFindFunL (e.U) e.Rest>;
+}
+
+DsRdHasMu {
+  (e.L) = <DsRdHasMuL (e.L)>;
+}
+
+DsRdHasMuL {
+  () = ;
+  ((N e.Name) e.Rest), <SameChars (<Upper e.Name>) ('MU')> : '1' = '1';
+  (t.X e.Rest) = <DsRdHasMuL (e.Rest)>;
+}
+
+DsRdAllBut {
+  (e.Items) (e.Fn) = <DsRdAllButL (<DsRdUpper (e.Fn)>) e.Items>;
+}
+
+DsRdAllButL {
+  (e.U) = ;
+  (e.U) (FUN (Ident e.N) (e.V) e.Sents) e.Rest,
+    <SameChars (<Upper e.N>) (e.U)> : '1' = <DsRdAllButL (e.U) e.Rest>;
+  (e.U) (FUN (Ident e.N) (e.V) e.Sents) e.Rest =
+    (FUN (Ident e.N) (e.V) e.Sents) <DsRdAllButL (e.U) e.Rest>;
+  (e.U) t.Item e.Rest = <DsRdAllButL (e.U) e.Rest>;
+}
+
+* The generated split functions are already emitted; carrying the source's
+* copy of one as well would be a duplicate definition.
+DsRdDropGen {
+  (e.Generated) (e.Funs) = <DsRdDropGenL (e.Funs) (e.Generated)>;
+}
+
+DsRdDropGenL {
+  () (e.G) = ;
+  ((FUN (Ident e.N) (e.V) e.Sents) e.Rest) (e.G),
+    <DsRdNameIn (e.G) (e.N)> : '1' = <DsRdDropGenL (e.Rest) (e.G)>;
+  ((FUN (Ident e.N) (e.V) e.Sents) e.Rest) (e.G) =
+    (FUN (Ident e.N) (e.V) e.Sents) <DsRdDropGenL (e.Rest) (e.G)>;
+  (t.X e.Rest) (e.G) = <DsRdDropGenL (e.Rest) (e.G)>;
+}
+
+DsRdNameIn {
+  () (e.N) = ;
+  ((e.S) e.Rest) (e.N), <SameChars (<Upper e.S>) (<Upper e.N>)> : '1' = '1';
+  (t.X e.Rest) (e.N) = <DsRdNameIn (e.Rest) (e.N)>;
+}
+
+DsRdUpper {
+  (e.N) = <Upper e.N>;
 }
 
 * The CLI prints steps, visited, neighborhood-loops, then whichever optional
@@ -1733,102 +2100,102 @@ DsVisL {
 *
 * (SX <entry> <strategy> <states> <steps> <visited> <visited-inputs>
 *     <active-path> <splits> <completed> <configurations> <transitions>
-*     <active-configuration> <neighborhood-loops>)
+*     <active-configuration> <neighborhood-loops> <whistle-events>)
 DsSteps {
-  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) = s.S;
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE)) = s.S;
 }
 
 DsStates {
-  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) = (e.St);
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE)) = (e.St);
 }
 
 DsVisited {
-  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) = (e.V);
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE)) = (e.V);
 }
 
 DsVisitedIn {
-  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) = (e.VI);
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE)) = (e.VI);
 }
 
 DsActivePath {
-  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) = (e.AP);
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE)) = (e.AP);
 }
 
 DsSplits {
-  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) = (e.SP);
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE)) = (e.SP);
 }
 
 DsCompletedList {
-  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) = (e.CP);
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE)) = (e.CP);
 }
 
 DsConfs {
-  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) = (e.CF);
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE)) = (e.CF);
 }
 
 DsConfsTr {
-  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) = (e.CT);
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE)) = (e.CT);
 }
 
 DsActive {
-  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) = t.A;
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE)) = t.A;
 }
 
 DsLoops {
-  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) = s.N;
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE)) = s.N;
 }
 
 DsEntry {
-  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) = s.E;
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE)) = s.E;
 }
 
 DsInterpretive {
-  (SX s.E 'I' (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) = '1';
-  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) = ;
+  (SX s.E 'I' (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE)) = '1';
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE)) = ;
 }
 
 DsSetActive {
-  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.Old s.N) t.A =
-    (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N);
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.Old s.N (e.WE)) t.A =
+    (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE));
 }
 
 DsBump {
-  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) =
-    (SX s.E s.T (e.St) <Add s.S 1> (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N);
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE)) =
+    (SX s.E s.T (e.St) <Add s.S 1> (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE));
 }
 
 DsBumpLoops {
-  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) =
-    (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A <Add s.N 1>);
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE)) =
+    (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A <Add s.N 1> (e.WE));
 }
 
 DsPushVisited {
-  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) s.Id,
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE)) s.Id,
     <Member s.Id (e.V)> : '1' =
-      (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N);
-  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) s.Id =
-    (SX s.E s.T (e.St) s.S (e.V s.Id) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N);
+      (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE));
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE)) s.Id =
+    (SX s.E s.T (e.St) s.S (e.V s.Id) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE));
 }
 
 DsPushVisitedIn {
-  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N)
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE))
       s.Id (e.In) =
     (SX s.E s.T (e.St) s.S (e.V) (e.VI (VI s.Id (e.In))) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT)
-        t.A s.N);
+        t.A s.N (e.WE));
 }
 
 DsPushPath {
-  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N)
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE))
       (e.Fn) (e.Can) (e.In) t.Split =
     (SX s.E s.T (e.St) s.S (e.V) (e.VI)
         (e.AP (AP (e.Fn) (e.Can) (e.In) <DsNeigh (e.In)> t.Split))
-        (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N);
+        (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE));
 }
 
 DsPop {
-  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) =
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE)) =
     (SX s.E s.T (e.St) s.S (e.V) (e.VI) (<DsDropLast (e.AP)>) (e.SP) (e.CP) (e.CF) (e.CT)
-        t.A s.N);
+        t.A s.N (e.WE));
 }
 
 DsDropLast {
@@ -1838,10 +2205,10 @@ DsDropLast {
 }
 
 DsPushCompleted {
-  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N)
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE))
       s.Id (e.Can) (e.In) (e.Out) =
     (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP)
-        (e.CP (CP s.Id (e.Can) (e.In) (e.Out))) (e.CF) (e.CT) t.A s.N);
+        (e.CP (CP s.Id (e.Can) (e.In) (e.Out))) (e.CF) (e.CT) t.A s.N (e.WE));
 }
 
 * ---- invocation
@@ -2051,26 +2418,26 @@ DsRecConf2 {
 }
 
 DsRecConfNew {
-  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N)
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE))
       s.Id (e.In) s.Next =
     (CID s.Next
       (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP)
-          (e.CF (CF s.Next s.Id (e.In))) (e.CT) t.A s.N));
+          (e.CF (CF s.Next s.Id (e.In))) (e.CT) t.A s.N (e.WE)));
 }
 
 DsRecCall {
-  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) (NONE) s.N)
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) (NONE) s.N (e.WE))
       (e.Callee) (e.In) =
-    (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) (NONE) s.N);
-  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) (SOME s.From) s.N)
+    (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) (NONE) s.N (e.WE));
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) (SOME s.From) s.N (e.WE))
       (e.Callee) (e.In),
     <DsHasTr (e.CT) s.From (e.Callee) (e.In)> : '1' =
       (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT)
-          (SOME s.From) s.N);
-  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) (SOME s.From) s.N)
+          (SOME s.From) s.N (e.WE));
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) (SOME s.From) s.N (e.WE))
       (e.Callee) (e.In) =
     (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF)
-        (e.CT (CFT s.From (e.Callee) (e.In) (NONE))) (SOME s.From) s.N);
+        (e.CT (CFT s.From (e.Callee) (e.In) (NONE))) (SOME s.From) s.N (e.WE));
 }
 
 DsHasTr {
@@ -2573,15 +2940,21 @@ DsSplitLoop {
 * A branch that no sentence matches keeps a call to the original function, so
 * the residue fails exactly where the source fails instead of inventing an
 * answer.
+* The branch is a list of terms, not one bracketed term, so the sentence's
+* pattern bracket holds `e.B` itself. Writing `((e.B))` instead would put a
+* bracket inside a bracket: the empty branch would come out as a pattern of one
+* empty bracket rather than an empty pattern, and the residue would no longer
+* accept what the source accepted. Nothing rendered a split sentence until
+* `residualize-driven` did, which is why the extra pair survived this long.
 DsSplitOne {
   (RED (e.Out) (e.Ctx)) (e.Fn) (e.In) s.Index (e.B) (e.More) (e.Acc) =
-    <DsSplitLoop (e.Ctx) (e.Fn) (e.In) s.Index (e.More) (e.Acc (SENT ((e.B)) () (e.Out)))>;
+    <DsSplitLoop (e.Ctx) (e.Fn) (e.In) s.Index (e.More) (e.Acc (SENT (e.B) () (e.Out)))>;
   (RES (e.Ctx)) (e.Fn) (e.In) s.Index (e.B) (e.More) (e.Acc) =
     <DsSplitLoop (e.Ctx) (e.Fn) (e.In) s.Index (e.More)
-                 (e.Acc (SENT ((e.B)) () <DsCallSeq (e.Fn) (e.B)>))>;
+                 (e.Acc (SENT (e.B) () <DsCallSeq (e.Fn) (e.B)>))>;
   (FAILS (e.Ctx)) (e.Fn) (e.In) s.Index (e.B) (e.More) (e.Acc) =
     <DsSplitLoop (e.Ctx) (e.Fn) (e.In) s.Index (e.More)
-                 (e.Acc (SENT ((e.B)) () <DsCallSeq (e.Fn) (e.B)>))>;
+                 (e.Acc (SENT (e.B) () <DsCallSeq (e.Fn) (e.B)>))>;
   (ERR) (e.Fn) (e.In) s.Index (e.B) (e.More) (e.Acc) = (ERR);
 }
 
@@ -2592,20 +2965,20 @@ DsSplitFinish {
 }
 
 DsAddSplit {
-  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N)
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE))
       (e.Fn) (e.Can) (e.In) s.Index =
     (SX s.E s.T (e.St) s.S (e.V) (e.VI)
         (e.AP (AP (e.Fn) (e.Can) (e.In) <DsNeigh (e.In)> (SOME (<DsSplitName s.Index>))))
         (e.SP (SP (<DsSplitName s.Index>) (e.Fn) (e.Can) ()))
-        (e.CP) (e.CF) (e.CT) t.A s.N);
+        (e.CP) (e.CF) (e.CT) t.A s.N (e.WE));
 }
 
 DsSetSents {
-  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N)
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE))
       s.Index (e.Sents) =
     (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP)
         <DsSetSentsL (e.SP) s.Index (e.Sents) 1 ()>
-        (e.CP) (e.CF) (e.CT) t.A s.N);
+        (e.CP) (e.CF) (e.CT) t.A s.N (e.WE));
 }
 
 DsSetSentsL {
@@ -2854,11 +3227,43 @@ DsActiveNeighL {
   (t.A e.Rest) (e.Fn) (e.N) (e.In) = <DsActiveNeighL (e.Rest) (e.Fn) (e.N) (e.In)>;
 }
 
-* `record_whistle` accumulates the whistle states, inputs and events. The CLI
-* prints none of them, so this is deliberately the identity: writing them here
-* would be a claim the report cannot back.
+* `record_whistle` accumulates whistle states, whistle inputs and whistle
+* events. The symbolic driver's report prints none of them, which is why this
+* was the identity while that was the only consumer. `residualize-driven` does
+* print them -- `whistles`, `generalized` and `generalized-states` -- so the
+* evidence is recorded here now.
+*
+* One list is enough. A state enters the Rust context's `whistle_states`
+* exactly when it enters `whistle_events`, and in the same relative order: the
+* first call for a state always carries a triple no earlier event had, and a
+* repeat of a triple adds to neither. So `whistles` is the distinct states of
+* the event list and `generalized` is its length, and the event list is the
+* only thing that has to be threaded through the context.
 DsWhistle {
-  (e.Ctx) s.Id (e.Prev) (e.In) = (e.Ctx);
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE))
+      s.Id (e.Prev) (e.In) =
+    (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N
+        <DsWhistleAdd (e.WE) s.Id (e.Prev) (e.In)>);
+}
+
+DsWhistleAdd {
+  (e.WE) s.Id (e.Prev) (e.In) =
+    <DsWhistleAdd2 (e.WE) s.Id (e.Prev) (e.In)
+      <DsWhistleHas (e.WE) s.Id (e.Prev) (e.In)>>;
+}
+
+DsWhistleAdd2 {
+  (e.WE) s.Id (e.Prev) (e.In) '1' = (e.WE);
+  (e.WE) s.Id (e.Prev) (e.In) = (e.WE (WE s.Id (e.Prev) (e.In)));
+}
+
+* The three bound variables are repeated between the stored event and the
+* arguments, so Refal's repeated-variable rule makes this an exact structural
+* comparison -- which is what the Rust context does with the triple.
+DsWhistleHas {
+  () s.Id (e.Prev) (e.In) = ;
+  ((WE s.Id (e.Prev) (e.In)) e.Rest) s.Id (e.Prev) (e.In) = '1';
+  (t.E e.Rest) s.Id (e.Prev) (e.In) = <DsWhistleHas (e.Rest) s.Id (e.Prev) (e.In)>;
 }
 
 * ---- neighborhoods (Turchin 1988 section 3)
@@ -2934,23 +3339,28 @@ DsEmbedsAny {
 
 * ---- the work list over unresolved configuration edges
 
+* The work list walks the transitions that existed when it started. That bound
+* is not a shortcut: the Rust pass reads `configuration_transitions.len()` on
+* every turn, and for the corpus the list does not grow, so the two agree. The
+* bound is what makes the Refal pass terminate -- without it the loop re-reads a
+* length the invocations keep ahead of, and `DsLoopAt` never reaches its end.
 DsLoop {
-  (e.Ctx) = <DsLoopAt (e.Ctx) 0>;
+  (e.Ctx) = <DsLoopAt (e.Ctx) 0 <DsTrCount (e.Ctx)>>;
 }
 
 DsLoopAt {
-  (e.Ctx) s.Cursor, <DsTrCount (e.Ctx)> : s.N, <Compare s.Cursor s.N> : '-' =
-    <DsLoopStep (e.Ctx) s.Cursor>;
-  (e.Ctx) s.Cursor = (LOOP (e.Ctx));
+  (e.Ctx) s.Cursor s.Bound, <Compare s.Cursor s.Bound> : '-' =
+    <DsLoopStep (e.Ctx) s.Cursor s.Bound>;
+  (e.Ctx) s.Cursor s.Bound = (LOOP (e.Ctx));
 }
 
 DsLoopStep {
-  (e.Ctx) s.Cursor = <DsLoopStep2 (e.Ctx) s.Cursor <DsLoopOne (e.Ctx) s.Cursor>>;
+  (e.Ctx) s.Cursor s.Bound = <DsLoopStep2 (e.Ctx) s.Cursor s.Bound <DsLoopOne (e.Ctx) s.Cursor>>;
 }
 
 DsLoopStep2 {
-  (e.Ctx) s.Cursor (OK (e.Ctx2)) = <DsLoopAt (e.Ctx2) <Add s.Cursor 1>>;
-  (e.Ctx) s.Cursor (ERR) = (ERR);
+  (e.Ctx) s.Cursor s.Bound (OK (e.Ctx2)) = <DsLoopAt (e.Ctx2) <Add s.Cursor 1> s.Bound>;
+  (e.Ctx) s.Cursor s.Bound (ERR) = (ERR);
 }
 
 DsLoopOne {
@@ -2974,9 +3384,16 @@ DsLoopOneB {
   (e.Ctx) s.Cursor (e.Callee) (e.In) (NONE) = (OK (e.Ctx));
 }
 
+* The active configuration is set to the transition's source, which is what the
+* Rust pass does before the same invocation. The angle brackets are load
+* bearing: `(DsSetActive ...)` is a bracket holding three terms, not a call, so
+* the driver received `(DsSetActive <context> (SOME <cursor>))` where a context
+* belongs -- a defect that stayed invisible because the work list only invokes a
+* ground edge whose callee is a defined function, and no example reached it
+* until the driven residualizer exercised the same machinery.
 DsLoopInvoke {
   (e.Ctx) s.Cursor (e.Callee) (e.In) =
-    <DsLoopInvoke2 <DsInvoke (DsSetActive (e.Ctx) (SOME s.Cursor)) (e.Callee) (e.In)>
+    <DsLoopInvoke2 <DsInvoke <DsSetActive (e.Ctx) (SOME s.Cursor)> (e.Callee) (e.In)>
                    (e.Ctx)>;
 }
 
@@ -3005,10 +3422,10 @@ DsTrCount {
 }
 
 DsSetTr {
-  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N)
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE))
       s.Cursor t.To =
     (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF)
-        <DsSetTrL (e.CT) s.Cursor t.To 0 ()> t.A s.N);
+        <DsSetTrL (e.CT) s.Cursor t.To 0 ()> t.A s.N (e.WE));
 }
 
 DsSetTrL {
@@ -3079,6 +3496,7 @@ DsFlagUnk {
   ('0' s.B) = ('1' s.B);
   (s.U s.B) = (s.U s.B);
 }
+
 
 DsFlagUnkQ {
   ('1' s.B) = '1';
