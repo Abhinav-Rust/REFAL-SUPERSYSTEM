@@ -2,6 +2,59 @@
 
 ## Unreleased
 
+### Driving the compiler: a drivable entry, and the defect it exposed (2026-09-25)
+
+The next step was to wire the driven residualizer into `Compile`. Three
+measurements, all done, and together they changed the shape of the step.
+
+**The compiler is not drivable as it stands.** `refal residualize-driven
+examples/compiler.ref` is **1 step, 0.6 s**, and the residue is the program:
+`Go`'s entry state is `('CHECK') (e.Source)`, and `split_configuration` refuses
+to partition an entry whose pattern is not a single expression variable, so the
+residue is `<Go e.Input>` — the self-loop short-circuit — and what comes back is
+the parsed program, which is what `refal lower` prints.
+
+**Give it a drivable entry and it is driven.** With `Go { e.Args = <Dispatch
+e.Args>; }` — a bare expression variable, the mode dispatch moved into a
+`Dispatch` function — the driver does real work: **71 steps, 0.9 s**, a
+**92,068-byte residue that `refal check` accepts**, and `Split1` … `Split8`
+compiling the CLI's mode dispatch into a decision tree. Driving it again is
+**byte-identical** (91,926 bytes, 125 steps), so the fixpoint is a fixpoint of
+the *driver* rather than of a normaliser — the evidence the self-hosting row has
+been missing.
+
+**The defect that exposed.** Driving at that size put a configuration into the
+driver whose argument still contained an unevaluated call. `Chr` is an extern,
+so `<Chr 10>` cannot be contracted and stays residual; `Dispatch` hands it to
+`StripCR` inside `(<Chr 10>)`, whose expression-variable matching cannot decide,
+so the driver partitioned it — and a split's sentences use the configuration's
+input as their *pattern*, where a call is not a term Refal allows. The residue
+was not Refal: `refal check` reported `function calls are not allowed in
+patterns` three times, over 91,308 bytes.
+
+`split_configuration` now refuses when the input is not characterisable, the
+same test `entering_restrictions` already applies to a call argument and for the
+same reason: a restriction whose text contains an unevaluated call or a block
+does not characterise the value handed to the callee, so nothing about it can be
+concluded, including how to partition it. The call stays residual, which is what
+the source does with it.
+
+**All 56 corpus residues already checked; the compiler's did not, and nothing in
+the suite looked.** The gate now checks every driven residue with `refal check`
+— a residualizer that emits a program the compiler rejects has emitted nothing —
+and pins the refusal by name on the new `examples/driven-call-argument.ref`
+(corpus cases 67 → 69, residues checked 57/57). `compiler.ref` carries the same
+guard as `DsCharisable`/`DsCharisL`/`DsCharisBR` and stays byte-identical to the
+oracle.
+
+**The wiring is blocked on cost, not semantics.** The same run through
+`compiler.ref`'s own `RESIDUALIZE-DRIVEN` mode was killed after twelve minutes and
+forty-three seconds, against 0.9 s for `refal-core`, because every context accessor
+destructures a fifteen-field bracket and every mutator rebuilds it while the
+context carries seven growing lists. The next action, in order, is in
+`docs/PROGRESS.md`: make the entry drivable, cut the Refal driver's cost on the
+compiler, and only then wire `Compile`.
+
 ### The driven residualizer, in Refal (2026-09-25)
 
 `compiler.ref`'s `RESIDUALIZE-DRIVEN` mode reproduces `refal residualize-driven`,

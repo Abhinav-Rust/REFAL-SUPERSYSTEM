@@ -863,6 +863,41 @@ different patterns — `(first) e.Rest` against `((first) e.Rest)` — and writi
 the second for the first wraps the whole list in an extra pair of parentheses and
 the function stops matching at all.
 
+### Done — a configuration whose argument contains a call is not partitioned
+
+Driving the compiler needs the compiler's entry to be drivable, and giving it one
+exposed a fourth defect that the corpus could not reach.
+
+`Chr` is an extern, so `<Chr 10>` cannot be contracted: it stays a residual call,
+and `Dispatch` hands it to `StripCR` inside `(<Chr 10>)`, whose expression
+variable matching cannot decide. The driver partitioned it — and a split's
+sentences use the configuration's input as their **pattern**, where `<Chr 10>` is
+not a term Refal allows. The residue was not Refal at all: `refal check` reported
+`function calls are not allowed in patterns` three times, and the driven residue
+of the compiler was 91,308 bytes of invalid program.
+
+`split_configuration` now refuses when the input is not characterisable — the
+same test `entering_restrictions` already applies to a call argument, for the same
+reason: a restriction whose text contains an unevaluated call or a block does not
+characterise the value handed to the callee, so nothing about it can be
+concluded, including how to partition it. The call stays residual, which is what
+the source does with it.
+
+**The boundary, measured.** All 56 corpus residues already checked; the
+compiler's did not, and nothing in the suite looked. The gate now checks every
+driven residue with `refal check` — a residualizer that emits a program the
+compiler rejects has emitted nothing — and asserts that the refusal fired on
+`examples/driven-call-argument.ref` by name, so the invariant cannot pass merely
+because no example reached the case. Corpus cases 67 → 69, residues checked 57/57.
+
+The Refal port carries the same guard as `DsCharisable`/`DsCharisL`/`DsCharisBR`
+and stays byte-identical to the oracle. One trap inside it is worth recording,
+because it is the same class as the split-sentence defect: a bracket's two cases
+must not be merged into one sentence with a condition. `(BR e.Inner) e.Rest,
+<DsCharisL e.Inner> : '1' = ...` falls through to the catch-all when the
+condition fails, and the catch-all looks only at the rest of the list — so a
+bracket whose contents were *not* characterisable was reported as fine.
+
 ### Open
 
 - **T-1** a non-trivial program transformer written in Refal.
@@ -907,55 +942,68 @@ the function stops matching at all.
 
 ## NEXT ACTION
 
-**Wire the driven residualizer into `compiler.ref`'s own `Compile` path, and
-close the self-hosting fixpoint over a slice that drives rather than normalises.**
+**Wire the driven residualizer into `Compile` — blocked on the Refal driver's
+cost, not on semantics.**
 
-The transforming half is now complete in Refal. `compiler.ref` reproduces, as
-verified differentials against `refal-core`:
+Three measurements, all done, and together they change the shape of this step.
 
-- `GRAPH` — the §4.2 seed graph, 55/55.
-- `RESIDUALIZE` — the cleaned graph's residue, 55/55.
-- `DRIVE` — the ground driver over the closed entry configuration.
-- `DRIVE-SYMBOLIC` — `drive_symbolic_with_strategy`, on the default,
-  `--configurations` and `--neighborhoods` reports, 55/55 with `--strategy
-  interpretive` gated separately at 8/8.
-- `RESIDUALIZE-DRIVEN` — `residualize_entry_graph_with_strategy`, 55 matched,
-  0 diverged. This is the one that compiles pattern matching: the unknown
-  argument becomes a generated `Split1` whose sentences are the exhaustive,
-  pairwise-disjoint partition, and the residue no longer calls the function that
-  used to decide it.
+**1. The compiler is not drivable as it stands.** `refal residualize-driven
+examples/compiler.ref` is **1 step, 0.6 s**, and the residue is the program.
+`Go`'s entry state is `('CHECK') (e.Source)`, and `split_configuration` refuses
+to partition an entry whose pattern is not a single expression variable
+(`crates/refal-core/src/lib.rs:1536`). The residue is `<Go e.Input>`, which is
+the self-loop short-circuit, so what comes back is the parsed program — the same
+thing `refal lower` prints. This is faithful to the oracle, and it is the reason
+"make `Compile` drive" was the wrong first move.
 
-What is left of the row `PLAN.md` §5 calls the largest single deduction is that
-the compiler's *default* path still normalises. `Compile` is
-`Emit(Check(Parse(Lex(source))))`; it never drives. So `compile_command_compiles_the_compiler_itself`
-and `the_refal_authored_compiler_matches_lower_on_every_lowerable_example` both
-compare it to `refal lower`, and the self-hosting fixpoint is a fixpoint of a
-normaliser — which is why residual credit is still withheld on that row.
+**2. Give the compiler a drivable entry and it is driven.** With
+`Go { e.Args = <Dispatch e.Args>; }` — a bare expression variable, with the mode
+dispatch moved into a `Dispatch` function — the driver does real work:
 
-The next step is therefore a *contract* change, not a new stage:
+| | |
+|---|---|
+| steps | 71 |
+| time (`refal-core`) | 0.9 s |
+| residue | 92,068 bytes, `refal check` **ok** |
+| splits | `Split1` … `Split8`: the CLI's mode dispatch compiled into a decision tree |
+| `drive(C1)` | **byte-identical to C1** — 91,926 bytes, 125 steps, checks |
 
-1. Make `Compile` drive. The entry configuration is known, so the pipeline
-   becomes `Lex -> Parse -> Check -> Graph -> Drive -> Residualize -> Emit`, and
-   `compile`'s output becomes what `residualize-driven` prints.
-2. Re-point the two gates above at `refal residualize-driven`, keeping a
-   separate test that the *normalising* path is still byte-identical to `lower`
-   (it is still the right output for a source-to-source formatter, and it is what
-   the interpreter differential consumes).
-3. Re-run the self-hosting fixpoint on the driven compiler. The open question is
-   whether driving a driven program is stable — `C1` is already a residue, so
-   driving it again may or may not be the identity. Measure before claiming.
+So driving is idempotent on the driven compiler, and the fixpoint is a fixpoint
+of the *driver* rather than of a normaliser. **That is the evidence the
+self-hosting row has been missing**, and it costs one restructured entry.
 
-Two things must be checked first, and both are cheap:
+**3. The Refal port cannot afford it yet.** The same run through
+`compiler.ref`'s own `RESIDUALIZE-DRIVEN` mode was killed after **twelve minutes and forty-three
+seconds**, against 0.9 s for `refal-core`. The wiring is blocked on the Refal driver's cost,
+and the cost is the known shape: every context accessor destructures a 15-field
+bracket and every mutator rebuilds it, and the context carries six growing lists
+(`visited`, `visited-inputs`, `active-path`, `splits`, `completed`,
+`configurations`, `transitions`), so a walk that touches the context k times
+copies O(k·|ctx|). The Rust context holds the same lists as `Vec`s and mutates
+them in place.
 
-- **Cost.** `residualize-driven` over `examples/compiler.ref` (201 definitions)
-  has never been run. The driven residualizer walks the whole seed graph, so the
-  first measurement is whether it completes in a sensible time on the compiler's
-  own source, and whether the residue still checks.
-- **`Mu`.** `retain_called_functions` keeps every definition when the residue
-  still dispatches dynamically, so the residue of a program using `Mu` is the
-  whole program. That is the sound choice and it is what the Rust oracle does; it
-  also means the fixpoint over such a program is trivially stable, so it must not
-  be mistaken for evidence.
+**What to do, in order.**
+
+1. **Make the entry drivable.** Move `Go`'s mode dispatch into `Dispatch` and
+   leave `Go { e.Args = <Dispatch e.Args>; }`. Prerequisite for everything else,
+   and small. Re-point `compile_command_compiles_the_compiler_itself` at
+   `refal residualize-driven` and check the CLI's mode contract still holds for
+   one-argument and two-argument calls.
+2. **Measure and cut the Refal driver's cost on the compiler.** 0.9 s in Rust is
+   the target. Candidates in order of expected yield: the context's growing lists
+   (the `visited` set is rescanned per state, so the recurrence check is
+   O(|visited|) per step); `DsScan` walking every state of the program for every
+   invocation, where Rust filters by function name; and `DsSplitMake2` re-driving
+   three branches per split with a fresh copy of the whole context.
+3. **Only then wire `Compile`.** Re-point the two `lower`-parity gates, keep a
+   separate test that the normalising path is still byte-identical to
+   `refal lower` (the interpreter differential consumes it), and add the
+   C1 = C2 fixpoint over the driven slice — which measurement 2 says holds.
+
+**What must not be done.** Wiring `Compile` to drive *without* step 1 would make
+`compile` print `lower`'s output for the compiler and the driven residue for
+everything else, which is a distinction without a purpose. Wiring it without
+step 2 would put a twelve-minute stage into the self-hosting test.
 
 ### What the driven residualizer needed (so the next session starts here)
 
@@ -1014,32 +1062,6 @@ Five pieces, in the order the output depends on them:
 - §4.4's strategy *search*, and T-8's §6.4 `unknown` values.
 - The `Reverse` rope shape, and the interpretive driver's cost in Refal — both
   measured and recorded above as bounds rather than costs.
-
-The symbolic driver is done. `compiler.ref` now reproduces
-`drive_symbolic_with_strategy` (`crates/refal-core/src/lib.rs:693`) as
-`DRIVE-SYMBOLIC`, and it is gated by two differentials against the Rust oracle
-over the corpus:
-
-- `refal_authored_symbolic_driver_matches_refal_drive_symbolic` — the default
-  report, the `--configurations` report and the `--neighborhoods` report, each
-  byte-compared over every example the oracle can drive. **55/55 matched, 0
-  diverged**, with non-vacuity guards on the coverage, on multi-state visits
-  (11), on contractions beyond two (10) and on case splits actually generated
-  (4). A driver that answered `<Go e.Input>` to everything would pass the byte
-  comparison and fail every one of those guards.
-- `refal_authored_interpretive_drive_matches_the_rust_oracle` — the
-  `--strategy interpretive` end, restricted to the 8 examples where the rule
-  changes the report. **8/8 matched, 0 diverged**, 7 of them with a non-zero
-  `neighborhood-loops` count, so the loop-back path is exercised rather than
-  merely present.
-
-That closes the *driver* half of the row `PLAN.md` §5 calls "the largest single
-deduction". It does not close the row: the compiler still normalises rather than
-compiling pattern matching, and residualization is still bounded rather than
-whole-program for general programs. What is next is to wire the Refal driver
-into the compiler's own pipeline, so the self-hosting fixpoint runs on a slice
-that genuinely parses, analyses, splits, folds and emits — the same gap as T-1's
-and T-10's remaining credit.
 
 ### Traps this repository has already paid for
 
