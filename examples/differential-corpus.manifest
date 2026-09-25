@@ -65,6 +65,10 @@ residual|metasystem-unroll.ref|
 residual|metacode-macrodigit.ref|
 positive|case-split.ref|abc
 residual|case-split.ref|abc
+# A configuration whose argument still contains an unevaluated call is not
+# partitioned: the split's sentences would use the call as their pattern.
+positive|driven-call-argument.ref|
+residual|driven-call-argument.ref|
 # The T-6 gate: the cleaned residue must also check and agree with the interpreter.
 positive|clean-graph.ref|k x
 residual|clean-graph.ref|k x

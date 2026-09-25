@@ -75,6 +75,21 @@ fn residualize_driven_file(path: &str, args: &[&str]) -> std::process::Output {
     command.output().expect("run refal binary")
 }
 
+/// The program a `residualize-driven` run printed, with its report stripped.
+///
+/// The command prints `steps`, `visited`, `whistles`, `generalized`,
+/// `neighborhood-loops` and `generalized-states` before the residue, so the
+/// residue starts on the line after the last of them.
+fn driven_residue(output: &str) -> String {
+    match output.split_once("generalized-states: ") {
+        Some((_, rest)) => match rest.split_once('\n') {
+            Some((_, body)) => body.to_string(),
+            None => String::new(),
+        },
+        None => String::new(),
+    }
+}
+
 fn residualize_generalized_file(path: &str, args: &[&str]) -> std::process::Output {
     let mut command = Command::new(refal_bin());
     command.args(["residualize-generalized", &workspace_path(path)]);
@@ -5075,6 +5090,29 @@ fn refal_authored_residualize_driven_matches_the_rust_oracle() {
         }
         checked += 1;
 
+        // The residue must be a program the compiler accepts. A residualizer
+        // that emits a program the compiler rejects has emitted nothing, and a
+        // partition is where that can go wrong: a split's sentences use the
+        // configuration's input as their *pattern*, and a call is not a term a
+        // Refal pattern may contain. `examples/driven-call-argument.ref` is the
+        // witness -- `Chr` is an extern, so `<Chr 10>` stays residual and is
+        // handed to `F`, whose expression-variable matching cannot decide.
+        let residue = driven_residue(&expected);
+        let residue_path = std::env::temp_dir().join(format!("refal-rd-{name}.ref"));
+        fs::write(&residue_path, &residue).expect("write the residue");
+        let residue_checked = Command::new(refal_bin())
+            .args(["check"])
+            .arg(&residue_path)
+            .output()
+            .expect("check the residue");
+        if !residue_checked.status.success() {
+            failures.push(format!(
+                "{name}: the driven residue does not check\n{}",
+                String::from_utf8_lossy(&residue_checked.stderr)
+            ));
+        }
+        let _ = fs::remove_file(&residue_path);
+
         // Non-vacuity, three ways. A port that echoed its input would pass a
         // byte comparison on the examples whose residue *is* the source, so the
         // sweep has to prove it saw a whistle, a generalization and a case
@@ -5143,6 +5181,20 @@ fn refal_authored_residualize_driven_matches_the_rust_oracle() {
         "{} of {checked} examples diverge from the Rust oracle:\n{}",
         failures.len(),
         failures.join("\n")
+    );
+
+    // The characterisability refusal, pinned by name. `Chr` is an extern, so
+    // `<Chr 10>` cannot be contracted and is handed to `F`; partitioning `F`'s
+    // argument would put that call in a pattern, which is not Refal. Without
+    // this the residue checks only because no corpus example reached the case.
+    let witness = fs::read_to_string(workspace_path("examples/driven-call-argument.ref"))
+        .expect("read the witness");
+    let refused = run_file("examples/compiler.ref", &["RESIDUALIZE-DRIVEN", &witness]);
+    let refused = String::from_utf8_lossy(&refused.stdout).into_owned();
+    assert!(
+        refused.contains("<F (<Chr 10>) e.Input>"),
+        "the characterisability refusal did not fire, so the call went into a \
+         partition's pattern:\n{refused}"
     );
 }
 

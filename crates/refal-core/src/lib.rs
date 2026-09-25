@@ -1518,6 +1518,18 @@ impl<'a> DriveContext<'a> {
             return Ok(None);
         };
         let position = *position;
+        // A configuration whose input still contains an unevaluated call or a
+        // block is not a value the callee has been handed: the split's
+        // sentences use the input as their *pattern*, and a call is not a term
+        // a Refal pattern may contain. Splitting there emits a residue the
+        // compiler rejects -- `<F (<Chr 10>) e.Args>` partitions to a sentence
+        // whose pattern is `(<Chr 10>)` -- so the call is left residual
+        // instead, which is what the source does with it. This is the same
+        // characterisability test `entering_restrictions` applies to a call
+        // argument, for the same reason.
+        if !restriction_is_characterisable(input) {
+            return Ok(None);
+        }
         if !self
             .graph
             .states

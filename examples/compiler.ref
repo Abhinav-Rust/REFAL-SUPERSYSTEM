@@ -2833,8 +2833,38 @@ DsBlkSymD {
 
 * ---- case splitting
 
+* A configuration whose input still contains an unevaluated call or a block is
+* not a value the callee has been handed: a split's sentences use the input as
+* their PATTERN, and a call is not a term a Refal pattern may contain, so
+* splitting there emits a residue the compiler rejects -- `<F (<Chr 10>) e.X>`
+* partitions to a sentence whose pattern is `(<Chr 10>)`. The call is left
+* residual instead, which is what the source does with it. This is the same
+* characterisability test the entering restrictions use, for the same reason.
 DsSplit {
-  (e.Ctx) (e.Fn) (e.In) = <DsSplitPos (e.Ctx) (e.Fn) (e.In) <DsExprVarPos (e.In) 0 ()>>;
+  (e.Ctx) (e.Fn) (e.In), <DsCharisable (e.In)> : '1' =
+    <DsSplitPos (e.Ctx) (e.Fn) (e.In) <DsExprVarPos (e.In) 0 ()>>;
+  (e.Ctx) (e.Fn) (e.In) = (NONE (e.Ctx));
+}
+
+DsCharisable {
+  (e.Terms) = <DsCharisL e.Terms>;
+}
+
+DsCharisL {
+  = '1';
+  (CALL e.Args) e.Rest = ;
+  (BLK e.Args) e.Rest = ;
+  (BR e.Inner) e.Rest = <DsCharisBR (<DsCharisL e.Inner>) e.Rest>;
+  t.X e.Rest = <DsCharisL e.Rest>;
+}
+
+* A bracket is characterisable only when its contents are, and the two cases
+* must not be merged into one sentence with a condition: a bracket whose
+* contents are *not* characterisable would then fall through to the catch-all
+* below, which looks only at the rest of the list and answers yes.
+DsCharisBR {
+  ('1') e.Rest = <DsCharisL e.Rest>;
+  (e.Other) e.Rest = ;
 }
 
 DsExprVarPos {
