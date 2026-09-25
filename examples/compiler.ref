@@ -46,7 +46,20 @@ $EXTERN Prout, Chr, Ord, Add, Sub, Compare, Upper, Symb;
 * than reaching the second sentence. So a duplicate of the sentence above it is
 * unreachable, and a stage failure is already loud. What is reachable is the
 * case below: an argument shape no mode claims.
+* Go's own pattern is a single bare expression variable, and that is deliberate:
+* it is the shape the supercompiler will partition. A driver can only branch on
+* an argument it does not yet know, and `split_configuration` refuses to
+* partition a configuration whose pattern is anything more specific. With the
+* dispatch behind `Go` instead of inside it, `refal residualize-driven` can drive
+* the compiler: the mode is an unknown expression, every mode sentence becomes a
+* branch, and the branches are folded back into a generated decision tree. The
+* mode table lives in `Dispatch` and is otherwise unchanged, so the CLI contract
+* -- one bracket for a compile, two for a named mode -- is exactly what it was.
 $ENTRY Go {
+  e.Args = <Dispatch e.Args>;
+}
+
+Dispatch {
   ('CHECK') (e.Source) =
     <Prout <Check <Parse <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>>>;
   ('GRAPH') (e.Source) =
