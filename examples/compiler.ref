@@ -1,4 +1,4 @@
-$EXTERN Prout, Chr, Ord, Add, Compare, Upper;
+$EXTERN Prout, Chr, Ord, Add, Sub, Compare, Upper, Symb;
 
 * Refal-authored lexer + parser + checker + emitter for Classic Refal-5.
 *
@@ -55,6 +55,16 @@ $ENTRY Go {
     <Prout <Residualize <Parse <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>>>;
   ('DRIVE') (e.Source) =
     <Prout <Drive <Parse <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>>>;
+  ('DRIVE-SYMBOLIC') (e.Source) =
+    <Prout <DriveSym (SYM) e.Source>>;
+  ('DRIVE-SYMBOLIC-CONFIGURATIONS') (e.Source) =
+    <Prout <DriveSym (SYMCFG) e.Source>>;
+  ('DRIVE-SYMBOLIC-NEIGHBORHOODS') (e.Source) =
+    <Prout <DriveSym (SYMNEI) e.Source>>;
+  ('DRIVE-SYMBOLIC-BOTH') (e.Source) =
+    <Prout <DriveSym (SYMBOTH) e.Source>>;
+  ('DRIVE-SYMBOLIC-INTERPRETIVE') (e.Source) =
+    <Prout <DriveSym (SYMI) e.Source>>;
   (e.Mode) (e.Source) = <Prout 'unknown mode: ' e.Mode>;
   (e.Source) = <Compile <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>;
 }
@@ -1544,4 +1554,1539 @@ DvLookupL {
   () (e.Key) = (NONE);
   ((VE (e.K) (e.V)) e.Rest) (e.Key), <SameChars (e.K) (e.Key)> : '1' = (SOME (e.V));
   (t.F e.Rest) (e.Key) = <DvLookupL (e.Rest) (e.Key)>;
+}
+
+* ---------------------------------------------------------- symbolic drive
+*
+* Turchin 1980 section 4.2: driving a configuration whose argument is not
+* ground. This reproduces refal-core's `drive_symbolic_with_strategy`
+* (crates/refal-core/src/lib.rs:693) on top of the Graph stage above, exactly as
+* DRIVE reproduced `drive_ground`. It is the stage that makes the driver a
+* *compiler* rather than a reporter: the ground driver can only contract a
+* closed configuration, so it can never compile a function whose input is
+* unknown, while this one partitions an unknown argument into the three
+* exhaustive, pairwise disjoint cases -- `[]`, `s.H e.T`, `(e.B) e.T` -- drives
+* each branch, and emits a generated function whose sentences are those
+* branches.
+*
+* The three pieces the ground driver does not have:
+*
+*  1. A three-valued matcher. `match_symbolic_pattern` answers Yes, No or
+*     Unknown, and Unknown means the answer depends on information driving does
+*     not have. Guessing a branch there is what makes a driver unsound.
+*  2. Folding against the active path. A configuration that recurs while it is
+*     still being expanded is a cycle, and the generated function is what it
+*     folds to.
+*  3. The whistle. A configuration that grows relative to one already seen at
+*     the same state cannot be driven further; the residue keeps a call.
+*
+* Four conventions differ from the ground driver, and each is load bearing.
+*
+*  - Every list-valued field of the context is stored BRACKETED, and every
+*    walker takes its list as one bracketed argument. A walker that takes a list
+*    spread cannot tell "empty" from "absent" once the list is handed on, which
+*    is the trap the seed graph's firsts table already paid for.
+*  - Every multi-symbol string stored inside a structure is bracketed, because
+*    `(e.X)` in a pattern matches a bracket and a bare identifier is not one.
+*  - The context is threaded through *every* result, including the failures,
+*    because invocation is what appends configurations and transitions, and
+*    invocation happens inside condition matching and inside argument
+*    instantiation as well as at the top.
+*  - The verdict of an invocation is `(RED <terms> <ctx>)`, `(RES <ctx>)` or
+*    `(FAILS <ctx>)`; the verdict of a condition is `(MY <bindings> <ctx>)`,
+*    `(MN <ctx>)` or `(MU <ctx>)`. Keeping them distinct from the ground
+*    driver's `(OK ...)`/`(NO)` is deliberate: the symbolic driver threads a
+*    context through both, and overloading one tag for two protocols is how a
+*    stage silently returns the wrong thing.
+*
+* `record_whistle` accumulates whistle states, whistle inputs and whistle
+* events. None of the three is printed by `refal drive-symbolic`, so
+* `DsWhistle` is a no-op here and says so rather than pretending.
+*
+* Blocks are not walked by the configuration transformers below
+* (`DsCanonical`, `DsRename`, `DsVarPairs`, `DsEmbeds`), and that is a
+* consequence rather than an omission: a configuration's argument is either the
+* entry's single `e.`-variable, a branch built by `DsReplace` out of variables
+* and brackets, or the *instantiated* argument of a call -- and
+* `DsInstantiate` evaluates a block rather than leaving it in place. So no
+* configuration, and therefore no `visited_inputs`, `active_path` or
+* `completed` entry, ever holds a block. `DsContainsSym` does walk blocks,
+* because it is applied to source patterns and results, where they do occur.
+
+* ---- the stage entry
+*
+* Modes: SYM is the default report, SYMCFG adds the configuration list and the
+* transitions, SYMNEI adds the neighborhoods, SYMBOTH adds both, and SYMI is
+* the interpretive strategy -- Turchin's own loop-back rule (1988 section 4),
+* off by default because the compilative end is what a metasystem transition
+* needs.
+
+DriveSym {
+  (e.Mode) e.Source =
+    <DsRun (e.Mode) <Parse <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>>;
+}
+
+DsRun {
+  (e.Mode) (PROG e.Items) =
+    <DsRun2 (e.Mode) <DsStrategy (e.Mode)> <CleanG <BuildG e.Items>>>;
+}
+
+DsStrategy {
+  (SYMI) = 'I';
+  (e.Mode) = 'C';
+}
+
+DsRun2 {
+  (e.Mode) s.Strat (CG () (e.States) (e.Trans)) = "symbolic drive error: no entry";
+  (e.Mode) s.Strat (CG (s.E) (e.States) (e.Trans)) =
+    <DsTop (e.Mode) s.Strat (e.States) s.E <DvNameOf s.E (e.States)>>;
+}
+
+DsTop {
+  (e.Mode) s.Strat (e.States) s.E (NONE) = "symbolic drive error: no entry";
+  (e.Mode) s.Strat (e.States) s.E (SOME (e.Fn)) =
+    <DsOut (e.Mode) (e.Fn)
+      <DsInvoke (SX s.E s.Strat (e.States) 0 () () () () () () () (NONE) 0)
+                (e.Fn) ((VAR 'e' 'Input'))>>;
+}
+
+DsOut {
+  (e.Mode) (e.Fn) (RED (e.Out) (e.Ctx)) =
+    <DsOut2 (e.Mode) (e.Out) <DsRewire <DsLoop (e.Ctx)>>>;
+  (e.Mode) (e.Fn) (RES (e.Ctx)) =
+    <DsOut2 (e.Mode) <DsCallSeq (e.Fn) ((VAR 'e' 'Input'))> <DsRewire <DsLoop (e.Ctx)>>>;
+  (e.Mode) (e.Fn) (FAILS (e.Ctx)) =
+    <DsOut2 (e.Mode) <DsCallSeq (e.Fn) ((VAR 'e' 'Input'))> <DsRewire <DsLoop (e.Ctx)>>>;
+  (e.Mode) (e.Fn) (ERR) = "symbolic drive error: step limit";
+}
+
+DsOut2 {
+  (e.Mode) (e.Residual) (LOOP (e.Ctx)) = <DsReport (e.Mode) (e.Residual) (e.Ctx)>;
+  (e.Mode) (e.Residual) (ERR) = "symbolic drive error: step limit";
+}
+
+* The CLI prints steps, visited, neighborhood-loops, then whichever optional
+* sections were asked for, then the residual. The trailing space in
+* `C<id>: S<state> <input>` is not cosmetic -- it is what the Rust formatter
+* emits for an empty argument, and a differential that ignores it is not a
+* differential.
+DsReport {
+  (e.Mode) (e.Residual) (e.Ctx) =
+    "steps: " <DsSteps (e.Ctx)> <NL>
+    "visited: " <DsVis (e.Ctx)> <NL>
+    "neighborhood-loops: " <DsLoops (e.Ctx)> <NL>
+    <DsOptional (e.Mode) (e.Ctx)>
+    "residual: " <EmitTerms e.Residual>;
+}
+
+DsOptional {
+  (SYMNEI) (e.Ctx) = <DsNeighLines (e.Ctx)>;
+  (SYMCFG) (e.Ctx) = <DsCfgLines (e.Ctx)>;
+  (SYMBOTH) (e.Ctx) = <DsNeighLines (e.Ctx)> <DsCfgLines (e.Ctx)>;
+  (e.Mode) (e.Ctx) = ;
+}
+
+DsCfgLines {
+  (e.Ctx) =
+    "configurations: " <DsLen <DsConfs (e.Ctx)>> <NL>
+    <DsCfgLinesL <DsConfs (e.Ctx)>>
+    "configuration-transitions: " <DsLen <DsConfsTr (e.Ctx)>> <NL>
+    <DsTrLinesL <DsConfsTr (e.Ctx)>>;
+}
+
+DsCfgLinesL {
+  () = ;
+  ((CF s.Id s.St (e.In)) e.Rest) =
+    "C" s.Id ": S" s.St " " <EmitTerms e.In> <NL> <DsCfgLinesL (e.Rest)>;
+}
+
+DsTrLinesL {
+  () = ;
+  ((CFT s.From (e.Callee) (e.In) (NONE)) e.Rest) =
+    "C" s.From " -" e.Callee " " <EmitTerms e.In> "-> residual" <NL> <DsTrLinesL (e.Rest)>;
+  ((CFT s.From (e.Callee) (e.In) (SOME s.To)) e.Rest) =
+    "C" s.From " -" e.Callee " " <EmitTerms e.In> "-> C" s.To <NL> <DsTrLinesL (e.Rest)>;
+}
+
+DsNeighLines {
+  (e.Ctx) = <DsNeighLinesL <DsConfs (e.Ctx)>>;
+}
+
+DsNeighLinesL {
+  () = ;
+  ((CF s.Id s.St (e.In)) e.Rest) =
+    "N" s.Id ": " <EmitTerms e.In> " [" <EmitTerms <DsNeighOf (e.In)>> "]" <NL>
+    <DsNeighLinesL (e.Rest)>;
+}
+
+DsVis {
+  (e.Ctx) = <DsVisL <DsVisited (e.Ctx)>>;
+}
+
+DsVisL {
+  () = ;
+  (s.Id) = "S" s.Id;
+  (s.Id e.Rest) = "S" s.Id " -> " <DsVisL (e.Rest)>;
+}
+
+* ---- the context
+*
+* (SX <entry> <strategy> <states> <steps> <visited> <visited-inputs>
+*     <active-path> <splits> <completed> <configurations> <transitions>
+*     <active-configuration> <neighborhood-loops>)
+DsSteps {
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) = s.S;
+}
+
+DsStates {
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) = (e.St);
+}
+
+DsVisited {
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) = (e.V);
+}
+
+DsVisitedIn {
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) = (e.VI);
+}
+
+DsActivePath {
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) = (e.AP);
+}
+
+DsSplits {
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) = (e.SP);
+}
+
+DsCompletedList {
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) = (e.CP);
+}
+
+DsConfs {
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) = (e.CF);
+}
+
+DsConfsTr {
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) = (e.CT);
+}
+
+DsActive {
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) = t.A;
+}
+
+DsLoops {
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) = s.N;
+}
+
+DsEntry {
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) = s.E;
+}
+
+DsInterpretive {
+  (SX s.E 'I' (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) = '1';
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) = ;
+}
+
+DsSetActive {
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.Old s.N) t.A =
+    (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N);
+}
+
+DsBump {
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) =
+    (SX s.E s.T (e.St) <Add s.S 1> (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N);
+}
+
+DsBumpLoops {
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) =
+    (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A <Add s.N 1>);
+}
+
+DsPushVisited {
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) s.Id,
+    <Member s.Id (e.V)> : '1' =
+      (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N);
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) s.Id =
+    (SX s.E s.T (e.St) s.S (e.V s.Id) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N);
+}
+
+DsPushVisitedIn {
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N)
+      s.Id (e.In) =
+    (SX s.E s.T (e.St) s.S (e.V) (e.VI (VI s.Id (e.In))) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT)
+        t.A s.N);
+}
+
+DsPushPath {
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N)
+      (e.Fn) (e.Can) (e.In) t.Split =
+    (SX s.E s.T (e.St) s.S (e.V) (e.VI)
+        (e.AP (AP (e.Fn) (e.Can) (e.In) <DsNeigh (e.In)> t.Split))
+        (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N);
+}
+
+DsPop {
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N) =
+    (SX s.E s.T (e.St) s.S (e.V) (e.VI) (<DsDropLast (e.AP)>) (e.SP) (e.CP) (e.CF) (e.CT)
+        t.A s.N);
+}
+
+DsDropLast {
+  () = ;
+  (t.X) = ;
+  (t.X e.Rest) = t.X <DsDropLast (e.Rest)>;
+}
+
+DsPushCompleted {
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N)
+      s.Id (e.Can) (e.In) (e.Out) =
+    (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP)
+        (e.CP (CP s.Id (e.Can) (e.In) (e.Out))) (e.CF) (e.CT) t.A s.N);
+}
+
+* ---- invocation
+
+DsInvoke {
+  (e.Ctx) (e.Fn) (e.In) = <DsInvoke0 (e.Ctx) (e.Fn) (e.In)>;
+}
+
+DsInvoke0 {
+  (e.Ctx) (e.Fn) (e.In), <DsSteps (e.Ctx)> : s.S, <Compare s.S 10000> : '-' =
+    <DsScan <DsBump <DsRecCall (e.Ctx) (e.Fn) (e.In)>>
+            (e.Fn) (e.In) ('0' '0') <DsStates (e.Ctx)>>;
+  (e.Ctx) (e.Fn) (e.In) = (ERR);
+}
+
+DsScan {
+  (e.Ctx) (e.Fn) (e.In) (e.Flags) () =
+    <DsUndecided (e.Ctx) (e.Fn) (e.In) (e.Flags)>;
+  (e.Ctx) (e.Fn) (e.In) (e.Flags) ((ST s.Id (e.N) s.J t.Sent) e.Rest),
+    <SameChars (<Upper e.N>) (<Upper e.Fn>)> : '1' =
+      <DsTryState (e.Ctx) (e.Fn) (e.In) (e.Flags) s.Id t.Sent (e.Rest)>;
+  (e.Ctx) (e.Fn) (e.In) (e.Flags) (t.S e.Rest) =
+      <DsScan (e.Ctx) (e.Fn) (e.In) (e.Flags) (e.Rest)>;
+}
+
+DsTryState {
+  (e.Ctx) (e.Fn) (e.In) (e.Flags) s.Id (SENT (e.Pat) (e.Conds) (e.Res)) (e.Rest) =
+    <DsTryState2 <DsMatchSym (e.Pat) (e.In) ()>
+                 (e.Ctx) (e.Fn) (e.In) (e.Flags) s.Id (e.Conds) (e.Res) (e.Rest)>;
+}
+
+DsTryState2 {
+  (NO) (e.Ctx) (e.Fn) (e.In) (e.Flags) s.Id (e.Conds) (e.Res) (e.Rest) =
+    <DsScan (e.Ctx) (e.Fn) (e.In) (e.Flags) (e.Rest)>;
+  (UNK) (e.Ctx) (e.Fn) (e.In) (e.Flags) s.Id (e.Conds) (e.Res) (e.Rest) =
+    <DsScan (e.Ctx) (e.Fn) (e.In) <DsFlagUnk (e.Flags)> (e.Rest)>;
+  (YES (e.B)) (e.Ctx) (e.Fn) (e.In) (e.Flags) s.Id (e.Conds) (e.Res) (e.Rest) =
+    <DsYes (e.Ctx) (e.Fn) (e.In) (e.Flags) s.Id (e.B) (e.Conds) (e.Res) (e.Rest)>;
+}
+
+* The state is recorded before its conditions are matched, because a condition's
+* expression is instantiated -- and may invoke -- and the calls it makes belong
+* to this configuration.
+DsYes {
+  (e.Ctx) (e.Fn) (e.In) (e.Flags) s.Id (e.B) (e.Conds) (e.Res) (e.Rest) =
+    <DsYesA (e.Ctx) (e.Fn) (e.In) (e.Flags) s.Id (e.B) (e.Conds) (e.Res) (e.Rest)
+            <DsRecConf (e.Ctx) s.Id (e.In)>>;
+}
+
+DsYesA {
+  (e.Ctx) (e.Fn) (e.In) (e.Flags) s.Id (e.B) (e.Conds) (e.Res) (e.Rest)
+      (CID s.Cid (e.Ctx2)) =
+    <DsYesB <DsSetActive (e.Ctx2) (SOME s.Cid)>
+            (e.Fn) (e.In) (e.Flags) s.Id (e.B) (e.Conds) (e.Res) (e.Rest)
+            s.Cid <DsActive (e.Ctx2)>>;
+}
+
+DsYesB {
+  (e.Ctx) (e.Fn) (e.In) (e.Flags) s.Id (e.B) (e.Conds) (e.Res) (e.Rest) s.Cid t.Prev =
+    <DsYesC <DsMatchConds (e.Ctx) (e.B) (e.Conds)>
+            (e.Fn) (e.In) (e.Flags) s.Id (e.Conds) (e.Res) (e.Rest) s.Cid t.Prev>;
+}
+
+DsYesC {
+  (MN (e.Ctx2)) (e.Fn) (e.In) (e.Flags) s.Id (e.Conds) (e.Res) (e.Rest) s.Cid t.Prev =
+    <DsScan <DsSetActive (e.Ctx2) t.Prev> (e.Fn) (e.In) (e.Flags) (e.Rest)>;
+  (MU (e.Ctx2)) (e.Fn) (e.In) (e.Flags) s.Id (e.Conds) (e.Res) (e.Rest) s.Cid t.Prev =
+    <DsScan <DsSetActive (e.Ctx2) t.Prev> (e.Fn) (e.In) <DsFlagUnk (e.Flags)> (e.Rest)>;
+  (MY (e.B2) (e.Ctx2)) (e.Fn) (e.In) (e.Flags) s.Id (e.Conds) (e.Res) (e.Rest) s.Cid t.Prev =
+    <DsYesD (e.Ctx2) (e.Fn) (e.In) (e.Flags) s.Id (e.B2) (e.Res) (e.Rest) s.Cid t.Prev>;
+  (ERR) (e.Fn) (e.In) (e.Flags) s.Id (e.Conds) (e.Res) (e.Rest) s.Cid t.Prev = (ERR);
+}
+
+* A sentence that matched while an earlier one was undecided is not decided by
+* matching: the argument has to be partitioned. But first the whistle gets its
+* say, because splitting a *growing* argument produces a genuinely new
+* configuration every time and never terminates on its own.
+DsYesD {
+  (e.Ctx) (e.Fn) (e.In) (e.Flags) s.Id (e.B) (e.Res) (e.Rest) s.Cid t.Prev,
+    <DsFlagUnkQ (e.Flags)> : '1' =
+      <DsWhistleBlk (e.Ctx) (e.Fn) (e.In) s.Id t.Prev>;
+  (e.Ctx) (e.Fn) (e.In) (e.Flags) s.Id (e.B) (e.Res) (e.Rest) s.Cid t.Prev =
+    <DsYesE (e.Ctx) (e.Fn) (e.In) (e.Flags) s.Id (e.B) (e.Res) (e.Rest) s.Cid t.Prev>;
+}
+
+DsWhistleBlk {
+  (e.Ctx) (e.Fn) (e.In) s.Id t.Prev =
+    <DsWhistleBlk2 (e.Ctx) (e.Fn) (e.In) s.Id t.Prev
+                       <DsFindEmbedding (e.Ctx) s.Id (e.In)>>;
+}
+
+DsWhistleBlk2 {
+  (e.Ctx) (e.Fn) (e.In) s.Id t.Prev (SOME (e.PrevIn)) =
+    (RES <DsSetActive <DsWhistle (e.Ctx) s.Id (e.PrevIn) (e.In)> t.Prev>);
+  (e.Ctx) (e.Fn) (e.In) s.Id t.Prev (NONE) =
+    <DsBlocked <DsSetActive (e.Ctx) t.Prev> (e.Fn) (e.In)>;
+}
+
+DsYesE {
+  (e.Ctx) (e.Fn) (e.In) (e.Flags) s.Id (e.B) (e.Res) (e.Rest) s.Cid t.Prev =
+    <DsYesE2 (e.Ctx) (e.Fn) (e.In) (e.Flags) s.Id (e.B) (e.Res) (e.Rest) s.Cid t.Prev
+             <DsCanonical (e.In)>>;
+}
+
+DsYesE2 {
+  (e.Ctx) (e.Fn) (e.In) (e.Flags) s.Id (e.B) (e.Res) (e.Rest) s.Cid t.Prev (e.Can) =
+    <DsYesE3 (e.Ctx) (e.Fn) (e.In) (e.Flags) s.Id (e.B) (e.Res) (e.Rest) s.Cid t.Prev
+             (e.Can) <DsActiveSplit (e.Ctx) (e.Fn) (e.Can)>>;
+}
+
+* The fold. A configuration being built by a case split that recurs is a
+* self-call to the generated function, which is what makes the split terminate.
+DsYesE3 {
+  (e.Ctx) (e.Fn) (e.In) (e.Flags) s.Id (e.B) (e.Res) (e.Rest) s.Cid t.Prev
+      (e.Can) (SOME (e.Name)) =
+    (RED <DsCallSeq (e.Name) (e.In)> <DsBump <DsSetActive (e.Ctx) t.Prev>>);
+  (e.Ctx) (e.Fn) (e.In) (e.Flags) s.Id (e.B) (e.Res) (e.Rest) s.Cid t.Prev
+      (e.Can) (NONE) =
+    <DsYesF (e.Ctx) (e.Fn) (e.In) (e.Flags) s.Id (e.B) (e.Res) (e.Rest) s.Cid t.Prev (e.Can)>;
+}
+
+* A recurrence on the active path is a cycle and warrants a whistle; a
+* recurrence with a configuration that already *finished* is not a cycle at all,
+* and reusing its residue is exactly what unwinds an interpreter's recursion
+* into straight-line code.
+DsYesF {
+  (e.Ctx) (e.Fn) (e.In) (e.Flags) s.Id (e.B) (e.Res) (e.Rest) s.Cid t.Prev (e.Can),
+    <DsActiveHas (e.Ctx) (e.Fn) (e.Can)> : '1', <DsAnySymVar (e.In)> : '1' =
+      (RES <DsSetActive <DsWhistle (e.Ctx) s.Id (e.In) (e.In)> t.Prev>);
+  (e.Ctx) (e.Fn) (e.In) (e.Flags) s.Id (e.B) (e.Res) (e.Rest) s.Cid t.Prev (e.Can),
+    <DsCompleted (e.Ctx) s.Id (e.In)> : (SOME (e.Red)) =
+      (RED (e.Red) <DsBump <DsSetActive (e.Ctx) t.Prev>>);
+  (e.Ctx) (e.Fn) (e.In) (e.Flags) s.Id (e.B) (e.Res) (e.Rest) s.Cid t.Prev (e.Can),
+    <DsFindEmbedding (e.Ctx) s.Id (e.In)> : (SOME (e.PrevIn)) =
+      (RES <DsSetActive <DsWhistle (e.Ctx) s.Id (e.PrevIn) (e.In)> t.Prev>);
+  (e.Ctx) (e.Fn) (e.In) (e.Flags) s.Id (e.B) (e.Res) (e.Rest) s.Cid t.Prev (e.Can),
+    <DsInterpretive (e.Ctx)> : '1',
+    <DsActiveNeigh (e.Ctx) (e.Fn) (e.In)> : (SOME (e.PrevIn)) =
+      (RES <DsSetActive <DsBumpLoops <DsWhistle (e.Ctx) s.Id (e.PrevIn) (e.In)>> t.Prev>);
+  (e.Ctx) (e.Fn) (e.In) (e.Flags) s.Id (e.B) (e.Res) (e.Rest) s.Cid t.Prev (e.Can),
+    <DsSeenSame (e.Ctx) s.Id (e.In)> : '1' =
+      (RES <DsSetActive (e.Ctx) t.Prev>);
+  (e.Ctx) (e.Fn) (e.In) (e.Flags) s.Id (e.B) (e.Res) (e.Rest) s.Cid t.Prev (e.Can) =
+    <DsEnter (e.Ctx) (e.Fn) (e.In) s.Id (e.B) (e.Res) t.Prev (e.Can) s.Cid>;
+}
+
+DsEnter {
+  (e.Ctx) (e.Fn) (e.In) s.Id (e.B) (e.Res) t.Prev (e.Can) s.Cid =
+    <DsEnterA
+      <DsPushPath
+        <DsSetActive <DsPushVisited <DsPushVisitedIn (e.Ctx) s.Id (e.In)> s.Id> (SOME s.Cid)>
+        (e.Fn) (e.Can) (e.In) (NONE)>
+      s.Id (e.Can) (e.In) (e.B) (e.Res) t.Prev>;
+}
+
+DsEnterA {
+  (e.Ctx) s.Id (e.Can) (e.In) (e.B) (e.Res) t.Prev =
+    <DsEnterB <DsPopResult <DsInstantiate (e.Ctx) (e.B) (e.Res)>>
+              s.Id (e.Can) (e.In) t.Prev>;
+}
+
+DsPopResult {
+  (RED (e.Out) (e.Ctx)) = (RED (e.Out) <DsPop (e.Ctx)>);
+  (RES (e.Ctx)) = (RES <DsPop (e.Ctx)>);
+  (FAILS (e.Ctx)) = (FAILS <DsPop (e.Ctx)>);
+  (ERR) = (ERR);
+}
+
+DsEnterB {
+  (RED (e.Out) (e.Ctx)) s.Id (e.Can) (e.In) t.Prev =
+    (RED (e.Out) <DsSetActive <DsPushCompleted (e.Ctx) s.Id (e.Can) (e.In) (e.Out)> t.Prev>);
+  (RES (e.Ctx)) s.Id (e.Can) (e.In) t.Prev = (RES <DsSetActive (e.Ctx) t.Prev>);
+  (FAILS (e.Ctx)) s.Id (e.Can) (e.In) t.Prev = (FAILS <DsSetActive (e.Ctx) t.Prev>);
+  (ERR) s.Id (e.Can) (e.In) t.Prev = (ERR);
+}
+
+* Matching cannot decide this configuration, but the argument can be
+* partitioned into cases that it can. A driver that stops at an unknown
+* argument cannot compile anything whose input is not already ground.
+DsUndecided {
+  (e.Ctx) (e.Fn) (e.In) (e.Flags), <DsFlagsAny (e.Flags)> : '1' =
+    <DsBlocked (e.Ctx) (e.Fn) (e.In)>;
+  (e.Ctx) (e.Fn) (e.In) (e.Flags) = (FAILS (e.Ctx));
+}
+
+DsBlocked {
+  (e.Ctx) (e.Fn) (e.In) = <DsBlocked2 <DsSplit (e.Ctx) (e.Fn) (e.In)>>;
+}
+
+DsBlocked2 {
+  (SOME (e.Call) (e.Ctx)) = (RED (e.Call) (e.Ctx));
+  (NONE (e.Ctx)) = (RES (e.Ctx));
+  (ERR) = (ERR);
+}
+
+* ---- the configuration record and the call log
+
+DsRecConf {
+  (e.Ctx) s.Id (e.In) = <DsRecConf2 (e.Ctx) s.Id (e.In) 0 <DsConfs (e.Ctx)>>;
+}
+
+DsRecConf2 {
+  (e.Ctx) s.Id (e.In) s.Next () = <DsRecConfNew (e.Ctx) s.Id (e.In) s.Next>;
+  (e.Ctx) s.Id (e.In) s.Next ((CF s.Cid s.Id (e.In)) e.Rest) = (CID s.Cid (e.Ctx));
+  (e.Ctx) s.Id (e.In) s.Next (t.C e.Rest) =
+    <DsRecConf2 (e.Ctx) s.Id (e.In) <Add s.Next 1> (e.Rest)>;
+}
+
+DsRecConfNew {
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N)
+      s.Id (e.In) s.Next =
+    (CID s.Next
+      (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP)
+          (e.CF (CF s.Next s.Id (e.In))) (e.CT) t.A s.N));
+}
+
+DsRecCall {
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) (NONE) s.N)
+      (e.Callee) (e.In) =
+    (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) (NONE) s.N);
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) (SOME s.From) s.N)
+      (e.Callee) (e.In),
+    <DsHasTr (e.CT) s.From (e.Callee) (e.In)> : '1' =
+      (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT)
+          (SOME s.From) s.N);
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) (SOME s.From) s.N)
+      (e.Callee) (e.In) =
+    (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF)
+        (e.CT (CFT s.From (e.Callee) (e.In) (NONE))) (SOME s.From) s.N);
+}
+
+DsHasTr {
+  (e.CT) s.From (e.Callee) (e.In) = <DsHasTrL (e.CT) s.From (e.Callee) (e.In)>;
+}
+
+DsHasTrL {
+  () s.From (e.Callee) (e.In) = ;
+  ((CFT s.From (e.C) (e.In)) e.Rest) s.From (e.Callee) (e.In),
+    <SameChars (<Upper e.C>) (<Upper e.Callee>)> : '1' = '1';
+  (t.T e.Rest) s.From (e.Callee) (e.In) = <DsHasTrL (e.Rest) s.From (e.Callee) (e.In)>;
+}
+
+* ---- the three-valued matcher
+
+DsMatchSym {
+  ((VAR 'e' e.N)) ((VAR s.K e.M)) (e.B) =
+    (YES (e.B (VE (<Canon e.N>) ((VAR s.K e.M)))));
+  (e.Pat) (e.In) (e.B), <DsAnySymVar (e.In)> : '1' =
+    <DsMatchShape (e.Pat) (e.In) (e.B)>;
+  (e.Pat) (e.In) (e.B) = <DsMatchGround (e.Pat) (e.In) (e.B)>;
+}
+
+DsMatchGround {
+  (e.Pat) (e.In) (e.B), <DvMatch (e.Pat) (e.In) (e.B)> : (OK (e.B2)) = (YES (e.B2));
+  (e.Pat) (e.In) (e.B) = (NO);
+}
+
+DsMatchShape {
+  (e.Pat) (e.In) (e.B) = <DsMSAt (e.Pat) (e.In) (e.B)>;
+}
+
+DsMSAt {
+  () (e.Ir) (e.B) = <DsMSEnd (e.Ir) (e.B)>;
+  ((VAR 'e' e.N) e.Pr) (e.Ir) (e.B) = <DsMSExpr (e.N) (e.Pr) (e.Ir) (e.B)>;
+  ((VAR s.K e.N) e.Pr) (e.Ir) (e.B) = <DsMSVar s.K (e.N) (e.Pr) (e.Ir) (e.B)>;
+  (t.P e.Pr) (e.Ir) (e.B) = <DsMSLit t.P (e.Pr) (e.Ir) (e.B)>;
+}
+
+* An exhausted pattern with input left over is a definite no unless the tail is
+* entirely `e.`-variables, because only they can denote nothing. `[]` against
+* `[e.X]` is undecided; `[]` against `[(e.B)]` is a definite no.
+DsMSEnd {
+  () (e.B) = (YES (e.B));
+  (e.Ir) (e.B), <DsAnyNonExpr (e.Ir)> : '1' = (NO);
+  (e.Ir) (e.B) = (UNK);
+}
+
+DsAnyNonExpr {
+  () = ;
+  ((VAR 'e' e.N) e.Rest) = <DsAnyNonExpr (e.Rest)>;
+  (t.X e.Rest) = '1';
+}
+
+* Expression splits are tried LONGEST prefix first, and that order decides which
+* branch a sentence takes and therefore the whole residue. `DvSplits` builds
+* shortest-first because the ground matcher wants that, so this reverses it.
+DsMSExpr {
+  (e.N) (e.Pr) (e.Ir) (e.B) =
+    <DsMSExprL (e.N) (e.Pr) <DvRev (<DvSplits (e.Ir)>)> (e.B) '0'>;
+}
+
+DsMSExprL {
+  (e.N) (e.Pr) () (e.B) s.U = <DsMSExprDone s.U>;
+  (e.N) (e.Pr) (((e.Slice) (e.Suf)) e.More) (e.B) s.U,
+    <DvLookup (e.B) (<Canon e.N>)> : (SOME (e.Old)), <SameChars (e.Old) (e.Slice)> : '1' =
+      <DsMSExprStep <DsMSAt (e.Pr) (e.Suf) (e.B)>
+                    (e.N) (e.Pr) (e.More) (e.B) s.U>;
+  (e.N) (e.Pr) (((e.Slice) (e.Suf)) e.More) (e.B) s.U,
+    <DvLookup (e.B) (<Canon e.N>)> : (SOME (e.Old)) =
+      <DsMSExprL (e.N) (e.Pr) (e.More) (e.B) s.U>;
+  (e.N) (e.Pr) (((e.Slice) (e.Suf)) e.More) (e.B) s.U =
+      <DsMSExprStep <DsMSAt (e.Pr) (e.Suf) (e.B (VE (<Canon e.N>) (e.Slice)))>
+                    (e.N) (e.Pr) (e.More) (e.B) s.U>;
+}
+
+DsMSExprStep {
+  (YES (e.B2)) (e.N) (e.Pr) (e.More) (e.B) s.U = (YES (e.B2));
+  (UNK) (e.N) (e.Pr) (e.More) (e.B) s.U =
+    <DsMSExprL (e.N) (e.Pr) (e.More) (e.B) '1'>;
+  (NO) (e.N) (e.Pr) (e.More) (e.B) s.U =
+    <DsMSExprL (e.N) (e.Pr) (e.More) (e.B) s.U>;
+}
+
+DsMSExprDone {
+  '1' = (UNK);
+  s.U = (NO);
+}
+
+DsMSVar {
+  s.K (e.N) (e.Pr) () (e.B) = (NO);
+  s.K (e.N) (e.Pr) (t.I e.Ir) (e.B), <DsVarAccepts s.K t.I> : (SOME '1') =
+    <DsMSVarBind s.K (e.N) (e.Pr) (e.Ir) t.I (e.B)>;
+  s.K (e.N) (e.Pr) (t.I e.Ir) (e.B), <DsVarAccepts s.K t.I> : (SOME '0') = (NO);
+  s.K (e.N) (e.Pr) (t.I e.Ir) (e.B) = (UNK);
+}
+
+DsMSVarBind {
+  s.K (e.N) (e.Pr) (e.Ir) t.I (e.B),
+    <DvLookup (e.B) (<Canon e.N>)> : (SOME (e.Old)), <SameChars (e.Old) (t.I)> : '1' =
+      <DsMSAt (e.Pr) (e.Ir) (e.B)>;
+  s.K (e.N) (e.Pr) (e.Ir) t.I (e.B),
+    <DvLookup (e.B) (<Canon e.N>)> : (SOME (e.Old)) = (NO);
+  s.K (e.N) (e.Pr) (e.Ir) t.I (e.B) =
+      <DsMSAt (e.Pr) (e.Ir) (e.B (VE (<Canon e.N>) (t.I)))>;
+}
+
+DsMSLit {
+  t.P (e.Pr) () (e.B) = (NO);
+  t.P (e.Pr) (t.I e.Ir) (e.B), <DsMSTerm t.P t.I (e.B)> : (YES (e.B2)) =
+    <DsMSAt (e.Pr) (e.Ir) (e.B2)>;
+  t.P (e.Pr) (t.I e.Ir) (e.B), <DsMSTerm t.P t.I (e.B)> : (UNK) = (UNK);
+  t.P (e.Pr) (t.I e.Ir) (e.B) = (NO);
+}
+
+DsMSTerm {
+  (BR e.P) (BR e.I) (e.B) = <DsMatchShape (e.P) (e.I) (e.B)>;
+  t.P t.I (e.B), <DsShape t.P> : (BR), <DsShape t.I> : (SYM) = (NO);
+  t.P t.I (e.B), <DsShape t.P> : (SYM), <DsShape t.I> : (BR) = (NO);
+  t.P t.I (e.B), <DsContainsSym t.I> : '1' = (UNK);
+  t.P t.I (e.B), <DvGround t.P t.I> : '1' = (YES (e.B));
+  t.P t.I (e.B) = (NO);
+}
+
+DsShape {
+  (BR e.X) = (BR);
+  (SYM s.C) = (SYM);
+  (NUM e.D) = (SYM);
+  (ID e.N) = (SYM);
+  (VAR 's' e.N) = (SYM);
+  t.X = (UNK);
+}
+
+* The kind lattice. `s.` ranges over symbols -- character, number or identifier
+* -- but never a bracket; `t.` over any single term; `e.` over any expression.
+* Anything wider is None, i.e. Unknown, and guessing there is what makes a
+* driver unsound.
+DsVarAccepts {
+  's' (SYM s.C) = (SOME '1');
+  's' (ID e.N) = (SOME '1');
+  's' (NUM e.D) = (SOME '1');
+  's' (BR e.X) = (SOME '0');
+  's' (VAR 's' e.N) = (SOME '1');
+  's' t.X = (NONE);
+  't' (SYM s.C) = (SOME '1');
+  't' (ID e.N) = (SOME '1');
+  't' (NUM e.D) = (SOME '1');
+  't' (BR e.X) = (SOME '1');
+  't' (VAR 'e' e.N) = (NONE);
+  't' (VAR s.K e.N) = (SOME '1');
+  't' t.X = (NONE);
+}
+
+* Whether the input contains any symbolic variable, which is what decides
+* between the shape matcher and the ground one.
+DsAnySymVar {
+  () = ;
+  (t.X e.Rest), <DsContainsSym t.X> : '1' = '1';
+  (t.X e.Rest) = <DsAnySymVar (e.Rest)>;
+}
+
+DsContainsSym {
+  (VAR s.K e.N) = '1';
+  (BR e.X) = <DsAnySymVar (e.X)>;
+  (CALL (ID e.N) e.Args) = <DsAnySymVar (e.Args)>;
+  (BLK (e.Arg) e.Sents) = <DsSymInBlk (e.Arg) (e.Sents)>;
+  t.X = ;
+}
+
+DsSymInBlk {
+  (e.Arg) (e.Sents), <DsAnySymVar (e.Arg)> : '1' = '1';
+  (e.Arg) () = ;
+  (e.Arg) ((SENT (e.Pat) (e.Conds) (e.Res)) e.More),
+    <DsAnySymVar (e.Pat)> : '1' = '1';
+  (e.Arg) ((SENT (e.Pat) (e.Conds) (e.Res)) e.More),
+    <DsAnySymVar (e.Res)> : '1' = '1';
+  (e.Arg) ((SENT (e.Pat) (e.Conds) (e.Res)) e.More),
+    <DsSymVarConds (e.Conds)> : '1' = '1';
+  (e.Arg) (t.S e.More) = <DsSymInBlk (e.Arg) (e.More)>;
+}
+
+DsSymVarConds {
+  () = ;
+  ((COND (e.Expr) (e.CPat)) e.More), <DsAnySymVar (e.Expr)> : '1' = '1';
+  ((COND (e.Expr) (e.CPat)) e.More), <DsAnySymVar (e.CPat)> : '1' = '1';
+  (t.C e.More) = <DsSymVarConds (e.More)>;
+}
+
+* ---- conditions
+
+DsMatchConds {
+  (e.Ctx) (e.B) () = (MY (e.B) (e.Ctx));
+  (e.Ctx) (e.B) ((COND (e.Expr) ((BLK (e.BArg) e.Sents))) e.More) =
+    <DsCondsBlk (e.Ctx) (e.B) (e.Expr) (e.Sents) (e.More)>;
+  (e.Ctx) (e.B) ((COND (e.Expr) (e.CPat)) e.More) =
+    <DsCondsVal (e.Ctx) (e.B) (e.Expr) (e.CPat) (e.More)>;
+}
+
+DsCondsVal {
+  (e.Ctx) (e.B) (e.Expr) (e.CPat) (e.More) =
+    <DsCondsVal2 <DsInstantiate (e.Ctx) (e.B) (e.Expr)> (e.B) (e.CPat) (e.More)>;
+}
+
+DsCondsVal2 {
+  (RED (e.Val) (e.Ctx)) (e.B) (e.CPat) (e.More) =
+    <DsCondsVal3 <DsMatchSym (e.CPat) (e.Val) (e.B)> (e.Ctx) (e.B) (e.More)>;
+  (RES (e.Ctx)) (e.B) (e.CPat) (e.More) = (MU (e.Ctx));
+  (FAILS (e.Ctx)) (e.B) (e.CPat) (e.More) = (MN (e.Ctx));
+  (ERR) (e.B) (e.CPat) (e.More) = (ERR);
+}
+
+DsCondsVal3 {
+  (YES (e.B2)) (e.Ctx) (e.B) (e.More) = <DsMatchConds (e.Ctx) (e.B2) (e.More)>;
+  (NO) (e.Ctx) (e.B) (e.More) = (MN (e.Ctx));
+  (UNK) (e.Ctx) (e.B) (e.More) = (MU (e.Ctx));
+}
+
+* A block in condition position is an anonymous function applied to the value,
+* so it is called rather than matched. The bindings it makes stay inside it,
+* which is why the block is tested against the enclosing bindings but never
+* writes back to them.
+DsCondsBlk {
+  (e.Ctx) (e.B) (e.Expr) (e.Sents) (e.More) =
+    <DsCondsBlkA <DsInstantiate (e.Ctx) (e.B) (e.Expr)> (e.B) (e.Sents) (e.More)>;
+}
+
+DsCondsBlkA {
+  (RED (e.Val) (e.Ctx)) (e.B) (e.Sents) (e.More) =
+    <DsBlkCond (e.Ctx) (e.B) (e.Val) (e.Sents) (e.More)>;
+  (RES (e.Ctx)) (e.B) (e.Sents) (e.More) = (MU (e.Ctx));
+  (FAILS (e.Ctx)) (e.B) (e.Sents) (e.More) = (MN (e.Ctx));
+  (ERR) (e.B) (e.Sents) (e.More) = (ERR);
+}
+
+DsBlkCond {
+  (e.Ctx) (e.B) (e.Val) (e.Sents) (e.More) =
+    <DsBlkCondL (e.Ctx) (e.B) (e.Val) (e.Sents) (e.More) '0'>;
+}
+
+DsBlkCondL {
+  (e.Ctx) (e.B) (e.Val) () (e.More) s.U = <DsBlkCondDone s.U (e.Ctx)>;
+  (e.Ctx) (e.B) (e.Val) ((SENT (e.Pat) (e.Conds) (e.Res)) e.Rest) (e.More) s.U =
+    <DsBlkCond2 <DsMatchSym (e.Pat) (e.Val) (e.B)>
+                (e.Ctx) (e.B) (e.Val) (e.Conds) (e.Rest) (e.More) s.U>;
+}
+
+DsBlkCond2 {
+  (NO) (e.Ctx) (e.B) (e.Val) (e.Conds) (e.Rest) (e.More) s.U =
+    <DsBlkCondL (e.Ctx) (e.B) (e.Val) (e.Rest) (e.More) s.U>;
+  (UNK) (e.Ctx) (e.B) (e.Val) (e.Conds) (e.Rest) (e.More) s.U =
+    <DsBlkCondL (e.Ctx) (e.B) (e.Val) (e.Rest) (e.More) '1'>;
+  (YES (e.B2)) (e.Ctx) (e.B) (e.Val) (e.Conds) (e.Rest) (e.More) s.U =
+    <DsBlkCond3 <DsMatchConds (e.Ctx) (e.B2) (e.Conds)> (e.B) (e.Val) (e.Rest) (e.More) s.U>;
+}
+
+DsBlkCond3 {
+  (MY (e.B3) (e.Ctx)) (e.B) (e.Val) (e.Rest) (e.More) s.U = (MY (e.B) (e.Ctx));
+  (MN (e.Ctx)) (e.B) (e.Val) (e.Rest) (e.More) s.U =
+    <DsBlkCondL (e.Ctx) (e.B) (e.Val) (e.Rest) (e.More) s.U>;
+  (MU (e.Ctx)) (e.B) (e.Val) (e.Rest) (e.More) s.U =
+    <DsBlkCondL (e.Ctx) (e.B) (e.Val) (e.Rest) (e.More) '1'>;
+  (ERR) (e.B) (e.Val) (e.Rest) (e.More) s.U = (ERR);
+}
+
+DsBlkCondDone {
+  '1' (e.Ctx) = (MU (e.Ctx));
+  s.U (e.Ctx) = (MN (e.Ctx));
+}
+
+* ---- instantiation
+
+DsInstantiate {
+  (e.Ctx) (e.B) (e.Terms) = <DsInstL (e.Ctx) (e.B) (e.Terms) ()>;
+}
+
+DsInstL {
+  (e.Ctx) (e.B) () (e.Acc) = (RED (e.Acc) (e.Ctx));
+  (e.Ctx) (e.B) (t.T e.Rest) (e.Acc) = <DsInstOne (e.Ctx) (e.B) t.T (e.Rest) (e.Acc)>;
+}
+
+DsInstOne {
+  (e.Ctx) (e.B) (VAR s.K e.N) (e.Rest) (e.Acc),
+    <DvLookup (e.B) (<Canon e.N>)> : (SOME (e.V)) =
+      <DsInstL (e.Ctx) (e.B) (e.Rest) (e.Acc e.V)>;
+  (e.Ctx) (e.B) (VAR s.K e.N) (e.Rest) (e.Acc) = (ERR);
+  (e.Ctx) (e.B) (BR e.Inner) (e.Rest) (e.Acc) =
+    <DsInstBr (e.Ctx) (e.B) (e.Inner) (e.Rest) (e.Acc)>;
+  (e.Ctx) (e.B) (CALL (ID e.N) e.Args) (e.Rest) (e.Acc) =
+    <DsInstCall (e.Ctx) (e.B) (e.N) (e.Args) (e.Rest) (e.Acc)>;
+  (e.Ctx) (e.B) (BLK (e.Arg) e.Sents) (e.Rest) (e.Acc) =
+    <DsInstBlk (e.Ctx) (e.B) (e.Arg) (e.Sents) (e.Rest) (e.Acc)>;
+  (e.Ctx) (e.B) t.T (e.Rest) (e.Acc) = <DsInstL (e.Ctx) (e.B) (e.Rest) (e.Acc t.T)>;
+}
+
+DsInstBr {
+  (e.Ctx) (e.B) (e.Inner) (e.Rest) (e.Acc) =
+    <DsInstBr2 <DsInstantiate (e.Ctx) (e.B) (e.Inner)> (e.B) (e.Rest) (e.Acc)>;
+}
+
+DsInstBr2 {
+  (RED (e.In) (e.Ctx)) (e.B) (e.Rest) (e.Acc) =
+    <DsInstL (e.Ctx) (e.B) (e.Rest) (e.Acc (BR e.In))>;
+  (RES (e.Ctx)) (e.B) (e.Rest) (e.Acc) = (RES (e.Ctx));
+  (FAILS (e.Ctx)) (e.B) (e.Rest) (e.Acc) = (RES (e.Ctx));
+  (ERR) (e.B) (e.Rest) (e.Acc) = (ERR);
+}
+
+DsInstCall {
+  (e.Ctx) (e.B) (e.N) (e.Args) (e.Rest) (e.Acc) =
+    <DsInstCall2 <DsInstantiate (e.Ctx) (e.B) (e.Args)> (e.B) (e.N) (e.Rest) (e.Acc)>;
+}
+
+DsInstCall2 {
+  (RED (e.ArgsOut) (e.Ctx)) (e.B) (e.N) (e.Rest) (e.Acc) =
+    <DsInstCall3 <DsInvoke (e.Ctx) (e.N) (e.ArgsOut)> (e.B) (e.N) (e.ArgsOut) (e.Rest) (e.Acc)>;
+  (RES (e.Ctx)) (e.B) (e.N) (e.Rest) (e.Acc) = (RES (e.Ctx));
+  (FAILS (e.Ctx)) (e.B) (e.N) (e.Rest) (e.Acc) = (RES (e.Ctx));
+  (ERR) (e.B) (e.N) (e.Rest) (e.Acc) = (ERR);
+}
+
+* A call that cannot succeed is still part of the residue: dropping it would
+* turn a program that fails at run time into one that quietly returns something
+* else.
+DsInstCall3 {
+  (RED (e.Out) (e.Ctx)) (e.B) (e.N) (e.ArgsOut) (e.Rest) (e.Acc) =
+    <DsInstL (e.Ctx) (e.B) (e.Rest) (e.Acc e.Out)>;
+  (RES (e.Ctx)) (e.B) (e.N) (e.ArgsOut) (e.Rest) (e.Acc) =
+    <DsInstL (e.Ctx) (e.B) (e.Rest) (e.Acc (CALL (ID e.N) e.ArgsOut))>;
+  (FAILS (e.Ctx)) (e.B) (e.N) (e.ArgsOut) (e.Rest) (e.Acc) =
+    <DsInstL (e.Ctx) (e.B) (e.Rest) (e.Acc (CALL (ID e.N) e.ArgsOut))>;
+  (ERR) (e.B) (e.N) (e.ArgsOut) (e.Rest) (e.Acc) = (ERR);
+}
+
+DsInstBlk {
+  (e.Ctx) (e.B) (e.Arg) (e.Sents) (e.Rest) (e.Acc) =
+    <DsInstBlk2 <DsInstantiate (e.Ctx) (e.B) (e.Arg)> (e.B) (e.Sents) (e.Rest) (e.Acc)>;
+}
+
+DsInstBlk2 {
+  (RED (e.Val) (e.Ctx)) (e.B) (e.Sents) (e.Rest) (e.Acc) =
+    <DsInstBlk3 <DsBlkSym (e.Ctx) (e.B) (e.Val) (e.Sents)> (e.B) (e.Rest) (e.Acc)>;
+  (RES (e.Ctx)) (e.B) (e.Sents) (e.Rest) (e.Acc) = (RES (e.Ctx));
+  (FAILS (e.Ctx)) (e.B) (e.Sents) (e.Rest) (e.Acc) = (RES (e.Ctx));
+  (ERR) (e.B) (e.Sents) (e.Rest) (e.Acc) = (ERR);
+}
+
+DsInstBlk3 {
+  (RED (e.Out) (e.Ctx)) (e.B) (e.Rest) (e.Acc) =
+    <DsInstL (e.Ctx) (e.B) (e.Rest) (e.Acc e.Out)>;
+  (RES (e.Ctx)) (e.B) (e.Rest) (e.Acc) = (RES (e.Ctx));
+  (FAILS (e.Ctx)) (e.B) (e.Rest) (e.Acc) = (RES (e.Ctx));
+  (ERR) (e.B) (e.Rest) (e.Acc) = (ERR);
+}
+
+DsBlkSym {
+  (e.Ctx) (e.B) (e.Arg) (e.Sents) =
+    <DsBlkSymA <DsInstantiate (e.Ctx) (e.B) (e.Arg)> (e.B) (e.Sents)>;
+}
+
+DsBlkSymA {
+  (RED (e.Val) (e.Ctx)) (e.B) (e.Sents) = <DsBlkSymB (e.Ctx) (e.B) (e.Val) (e.Sents) '0'>;
+  (RES (e.Ctx)) (e.B) (e.Sents) = (RES (e.Ctx));
+  (FAILS (e.Ctx)) (e.B) (e.Sents) = (RES (e.Ctx));
+  (ERR) (e.B) (e.Sents) = (ERR);
+}
+
+DsBlkSymB {
+  (e.Ctx) (e.B) (e.Val) () s.U = (RES (e.Ctx));
+  (e.Ctx) (e.B) (e.Val) ((SENT (e.Pat) (e.Conds) (e.Res)) e.More) s.U =
+    <DsBlkSymC <DsMatchSym (e.Pat) (e.Val) (e.B)>
+               (e.Ctx) (e.B) (e.Val) (e.Conds) (e.Res) (e.More) s.U>;
+}
+
+DsBlkSymC {
+  (NO) (e.Ctx) (e.B) (e.Val) (e.Conds) (e.Res) (e.More) s.U =
+    <DsBlkSymB (e.Ctx) (e.B) (e.Val) (e.More) s.U>;
+  (UNK) (e.Ctx) (e.B) (e.Val) (e.Conds) (e.Res) (e.More) s.U =
+    <DsBlkSymB (e.Ctx) (e.B) (e.Val) (e.More) '1'>;
+  (YES (e.B2)) (e.Ctx) (e.B) (e.Val) (e.Conds) (e.Res) (e.More) s.U =
+    <DsBlkSymD <DsMatchConds (e.Ctx) (e.B2) (e.Conds)> (e.B) (e.Val) (e.Res) (e.More) s.U>;
+}
+
+DsBlkSymD {
+  (MN (e.Ctx)) (e.B) (e.Val) (e.Res) (e.More) s.U =
+    <DsBlkSymB (e.Ctx) (e.B) (e.Val) (e.More) s.U>;
+  (MU (e.Ctx)) (e.B) (e.Val) (e.Res) (e.More) s.U =
+    <DsBlkSymB (e.Ctx) (e.B) (e.Val) (e.More) '1'>;
+  (MY (e.B2) (e.Ctx)) (e.B) (e.Val) (e.Res) (e.More) '1' = (RES (e.Ctx));
+  (MY (e.B2) (e.Ctx)) (e.B) (e.Val) (e.Res) (e.More) s.U =
+    <DsInstantiate (e.Ctx) (e.B2) (e.Res)>;
+  (ERR) (e.B) (e.Val) (e.Res) (e.More) s.U = (ERR);
+}
+
+* ---- case splitting
+
+DsSplit {
+  (e.Ctx) (e.Fn) (e.In) = <DsSplitPos (e.Ctx) (e.Fn) (e.In) <DsExprVarPos (e.In) 0 ()>>;
+}
+
+DsExprVarPos {
+  () s.I (e.Acc) = (e.Acc);
+  ((VAR 'e' e.N) e.Rest) s.I (e.Acc) = <DsExprVarPos (e.Rest) <Add s.I 1> (e.Acc s.I)>;
+  (t.T e.Rest) s.I (e.Acc) = <DsExprVarPos (e.Rest) <Add s.I 1> (e.Acc)>;
+}
+
+* Only a single top-level expression variable is partitioned. Splitting one of
+* several would leave the others undecided and grow the residue without making
+* progress.
+DsSplitPos {
+  (e.Ctx) (e.Fn) (e.In) (s.P) = <DsSplitGo (e.Ctx) (e.Fn) (e.In) s.P>;
+  (e.Ctx) (e.Fn) (e.In) (e.Other) = (NONE (e.Ctx));
+}
+
+DsSplitGo {
+  (e.Ctx) (e.Fn) (e.In) s.P, <DsHasFunc (e.Ctx) (e.Fn)> : '1' =
+    <DsSplitEntry (e.Ctx) (e.Fn) (e.In) s.P>;
+  (e.Ctx) (e.Fn) (e.In) s.P = (NONE (e.Ctx));
+}
+
+* The entry is only split when it accepts an arbitrary expression. For a
+* narrower entry the residue would have to reuse that pattern, which a partition
+* of the variable does not fit -- and splitting anyway would produce a residue
+* that accepts more than the source did, turning a failing program into a
+* looping one. So a matching entry state whose pattern is NOT a single
+* expression variable is the refusal, and it is the only refusal.
+DsSplitEntry {
+  (e.Ctx) (e.Fn) (e.In) s.P, <DsEntryIsVar (e.Ctx) (e.Fn)> : '1' =
+    <DsSplitFind (e.Ctx) (e.Fn) (e.In) s.P>;
+  (e.Ctx) (e.Fn) (e.In) s.P = (NONE (e.Ctx));
+}
+
+DsEntryIsVar {
+  (e.Ctx) (e.Fn) = <DsEntryIsVar2 <DsStates (e.Ctx)> <DsEntry (e.Ctx)> (e.Fn)>;
+}
+
+DsEntryIsVar2 {
+  () s.E (e.Fn) = '1';
+  ((ST s.E (e.N) s.J (SENT ((VAR 'e' e.M)) (e.C) (e.R))) e.Rest) s.E (e.Fn),
+    <SameChars (<Upper e.N>) (<Upper e.Fn>)> : '1' = '1';
+  ((ST s.E (e.N) s.J t.Sent) e.Rest) s.E (e.Fn),
+    <SameChars (<Upper e.N>) (<Upper e.Fn>)> : '1' = ;
+  (t.S e.Rest) s.E (e.Fn) = <DsEntryIsVar2 (e.Rest) s.E (e.Fn)>;
+}
+
+DsSplitFind {
+  (e.Ctx) (e.Fn) (e.In) s.P = <DsSplitFind2 (e.Ctx) (e.Fn) (e.In) s.P <DsCanonical (e.In)>>;
+}
+
+DsSplitFind2 {
+  (e.Ctx) (e.Fn) (e.In) s.P (e.Can),
+    <DsFindSplit (e.Ctx) (e.Fn) (e.Can)> : (SOME (e.Name)) =
+      (SOME <DsCallSeq (e.Name) (e.In)> (e.Ctx));
+  (e.Ctx) (e.Fn) (e.In) s.P (e.Can),
+    <DsSplitCount (e.Ctx)> : s.N, <Compare s.N 16> : '-' =
+      <DsSplitMake (e.Ctx) (e.Fn) (e.In) s.P (e.Can) <Add s.N 1>>;
+  (e.Ctx) (e.Fn) (e.In) s.P (e.Can) = (NONE (e.Ctx));
+}
+
+DsSplitCount {
+  (e.Ctx) = <DsLen <DsSplits (e.Ctx)>>;
+}
+
+DsFindSplit {
+  (e.Ctx) (e.Fn) (e.Can) = <DsFindSplitL <DsSplits (e.Ctx)> (e.Fn) (e.Can)>;
+}
+
+DsFindSplitL {
+  () (e.Fn) (e.Can) = (NONE);
+  ((SP (e.Name) (e.F) (e.Can) (e.Sents)) e.Rest) (e.Fn) (e.Can),
+    <SameChars (<Upper e.F>) (<Upper e.Fn>)> : '1' = (SOME (e.Name));
+  (t.S e.Rest) (e.Fn) (e.Can) = <DsFindSplitL (e.Rest) (e.Fn) (e.Can)>;
+}
+
+DsSplitMake {
+  (e.Ctx) (e.Fn) (e.In) s.P (e.Can) s.Index =
+    <DsSplitMake2 <DsAddSplit (e.Ctx) (e.Fn) (e.Can) (e.In) s.Index>
+                  (e.Fn) (e.In) s.P s.Index>;
+}
+
+DsSplitMake2 {
+  (e.Ctx) (e.Fn) (e.In) s.P s.Index =
+    <DsSplitDrive (e.Ctx) (e.Fn) (e.In) s.Index
+      <DsReplace (e.In) s.P ()>
+      <DsReplace (e.In) s.P ((VAR 's' <DsHName s.Index>) (VAR 'e' <DsTName s.Index>))>
+      <DsReplace (e.In) s.P ((BR (VAR 'e' <DsBName s.Index>)) (VAR 'e' <DsTName s.Index>))>>;
+}
+
+DsSplitDrive {
+  (e.Ctx) (e.Fn) (e.In) s.Index (e.B1) (e.B2) (e.B3) =
+    <DsSplitLoop (e.Ctx) (e.Fn) (e.In) s.Index ((e.B1) (e.B2) (e.B3)) ()>;
+}
+
+DsSplitLoop {
+  (e.Ctx) (e.Fn) (e.In) s.Index () (e.Acc) =
+    <DsSplitFinish (e.Ctx) s.Index (e.Acc) (e.In)>;
+  (e.Ctx) (e.Fn) (e.In) s.Index ((e.B) e.More) (e.Acc) =
+    <DsSplitOne <DsInvoke (e.Ctx) (e.Fn) (e.B)> (e.Fn) (e.In) s.Index (e.B) (e.More) (e.Acc)>;
+}
+
+* A branch that no sentence matches keeps a call to the original function, so
+* the residue fails exactly where the source fails instead of inventing an
+* answer.
+DsSplitOne {
+  (RED (e.Out) (e.Ctx)) (e.Fn) (e.In) s.Index (e.B) (e.More) (e.Acc) =
+    <DsSplitLoop (e.Ctx) (e.Fn) (e.In) s.Index (e.More) (e.Acc (SENT ((e.B)) () (e.Out)))>;
+  (RES (e.Ctx)) (e.Fn) (e.In) s.Index (e.B) (e.More) (e.Acc) =
+    <DsSplitLoop (e.Ctx) (e.Fn) (e.In) s.Index (e.More)
+                 (e.Acc (SENT ((e.B)) () <DsCallSeq (e.Fn) (e.B)>))>;
+  (FAILS (e.Ctx)) (e.Fn) (e.In) s.Index (e.B) (e.More) (e.Acc) =
+    <DsSplitLoop (e.Ctx) (e.Fn) (e.In) s.Index (e.More)
+                 (e.Acc (SENT ((e.B)) () <DsCallSeq (e.Fn) (e.B)>))>;
+  (ERR) (e.Fn) (e.In) s.Index (e.B) (e.More) (e.Acc) = (ERR);
+}
+
+DsSplitFinish {
+  (e.Ctx) s.Index (e.Sents) (e.In) =
+    (SOME <DsCallSeq (<DsSplitName s.Index>) (e.In)>
+          <DsSetSents <DsPop (e.Ctx)> s.Index (e.Sents)>);
+}
+
+DsAddSplit {
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N)
+      (e.Fn) (e.Can) (e.In) s.Index =
+    (SX s.E s.T (e.St) s.S (e.V) (e.VI)
+        (e.AP (AP (e.Fn) (e.Can) (e.In) <DsNeigh (e.In)> (SOME (<DsSplitName s.Index>))))
+        (e.SP (SP (<DsSplitName s.Index>) (e.Fn) (e.Can) ()))
+        (e.CP) (e.CF) (e.CT) t.A s.N);
+}
+
+DsSetSents {
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N)
+      s.Index (e.Sents) =
+    (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP)
+        <DsSetSentsL (e.SP) s.Index (e.Sents) 1 ()>
+        (e.CP) (e.CF) (e.CT) t.A s.N);
+}
+
+DsSetSentsL {
+  () s.Index (e.Sents) s.I (e.Acc) = (e.Acc);
+  ((SP (e.Name) (e.Fn) (e.Can) (e.Old)) e.Rest) s.Index (e.Sents) s.I (e.Acc),
+    <Compare s.I s.Index> : '0' = (e.Acc (SP (e.Name) (e.Fn) (e.Can) (e.Sents)) e.Rest);
+  ((SP (e.Name) (e.Fn) (e.Can) (e.Old)) e.Rest) s.Index (e.Sents) s.I (e.Acc) =
+    <DsSetSentsL (e.Rest) s.Index (e.Sents) <Add s.I 1>
+                       (e.Acc (SP (e.Name) (e.Fn) (e.Can) (e.Old)))>;
+}
+
+* A name in the AST is a CHARACTER SEQUENCE, not one identifier symbol: `Parse`
+* builds `(VAR s.K e.I)` and `(ID e.N)` from the lexer's word characters, and the
+* ground driver's binding keys are `<Canon e.I>` over those characters. Building
+* a name with `Implode` would make it a single identifier symbol instead, which
+* `Canon` would hand to `Ord` whole and `Compare` would reject -- and it would
+* stop `SameChars` from matching it against a name that came from the source.
+DsSplitName {
+  s.I = 'S' 'p' 'l' 'i' 't' <Symb s.I>;
+}
+
+DsHName {
+  s.I = 'H' <Symb s.I>;
+}
+
+DsTName {
+  s.I = 'T' <Symb s.I>;
+}
+
+DsBName {
+  s.I = 'B' <Symb s.I>;
+}
+
+DsReplace {
+  (e.In) s.P (e.Repl) = <DsReplaceL (e.In) s.P (e.Repl) ()>;
+}
+
+DsReplaceL {
+  () s.P (e.Repl) (e.Acc) = (e.Acc);
+  (t.X e.Rest) 0 (e.Repl) (e.Acc) = (e.Acc e.Repl e.Rest);
+  (t.X e.Rest) s.P (e.Repl) (e.Acc) =
+    <DsReplaceL (e.Rest) <Sub s.P 1> (e.Repl) (e.Acc t.X)>;
+}
+
+DsHasFunc {
+  (e.Ctx) (e.Callee) = <DsHasFuncL <DsStates (e.Ctx)> (e.Callee)>;
+}
+
+DsHasFuncL {
+  () (e.Callee) = ;
+  ((ST s.Id (e.N) s.J t.Sent) e.Rest) (e.Callee),
+    <SameChars (<Upper e.N>) (<Upper e.Callee>)> : '1' = '1';
+  (t.S e.Rest) (e.Callee) = <DsHasFuncL (e.Rest) (e.Callee)>;
+}
+
+* ---- canonical form, residue reuse, and the embedding test
+
+DsCanonical {
+  (e.In) = <DsCanonOut <DsCanonL (e.In) () ()>>;
+}
+
+DsCanonOut {
+  (CAN (e.Acc) (e.Seen)) = (e.Acc);
+}
+
+* Variable names are erased in order of first appearance, so a configuration
+* that renamed its variables on the way round is recognised as the same piece of
+* work. The seen list is threaded back out of nested brackets, because a
+* variable first met inside one continues the numbering outside it.
+DsCanonL {
+  () (e.Seen) (e.Acc) = (CAN (e.Acc) (e.Seen));
+  ((VAR s.K e.N) e.Rest) (e.Seen) (e.Acc),
+    <DsFindName (e.Seen) (<Canon e.N>)> : (SOME s.I) =
+      <DsCanonL (e.Rest) (e.Seen) (e.Acc (VAR s.K <DsVName s.I>))>;
+  ((VAR s.K e.N) e.Rest) (e.Seen) (e.Acc) =
+      <DsCanonL (e.Rest) (e.Seen (<Canon e.N>))
+                (e.Acc (VAR s.K <DsVName <DsLen (e.Seen)>>))>;
+  ((BR e.X) e.Rest) (e.Seen) (e.Acc) =
+      <DsCanonBr (e.Rest) (e.Acc) <DsCanonL (e.X) (e.Seen) ()>>;
+  ((CALL (ID e.N) e.Args) e.Rest) (e.Seen) (e.Acc) =
+      <DsCanonCall (e.Rest) (e.Acc) (e.N) <DsCanonL (e.Args) (e.Seen) ()>>;
+  (t.T e.Rest) (e.Seen) (e.Acc) = <DsCanonL (e.Rest) (e.Seen) (e.Acc t.T)>;
+}
+
+DsCanonBr {
+  (e.Rest) (e.Acc) (CAN (e.In) (e.Seen2)) =
+    <DsCanonL (e.Rest) (e.Seen2) (e.Acc (BR e.In))>;
+}
+
+DsCanonCall {
+  (e.Rest) (e.Acc) (e.N) (CAN (e.In) (e.Seen2)) =
+    <DsCanonL (e.Rest) (e.Seen2) (e.Acc (CALL (ID e.N) e.In))>;
+}
+
+DsFindName {
+  (e.Seen) (e.Name) = <DsFindNameL (e.Seen) (e.Name) 0>;
+}
+
+DsFindNameL {
+  () (e.Name) s.I = (NONE);
+  ((e.Name) e.Rest) (e.Name) s.I = (SOME s.I);
+  (t.X e.Rest) (e.Name) s.I = <DsFindNameL (e.Rest) (e.Name) <Add s.I 1>>;
+}
+
+DsLen {
+  (e.L) = <DsLenL (e.L) 0>;
+}
+
+DsLenL {
+  () s.N = s.N;
+  (t.X e.Rest) s.N = <DsLenL (e.Rest) <Add s.N 1>>;
+}
+
+DsVName {
+  s.I = 'V' <Symb s.I>;
+}
+
+DsSameConf {
+  (e.A) (e.B) = <SameChars <DsCanonical (e.A)> <DsCanonical (e.B)>>;
+}
+
+* Reuse the residual already computed for an alpha-equivalent configuration.
+* Because both arguments are canonical they are structurally identical, so their
+* variables pair up positionally and the stored residue can be renamed to speak
+* the current argument's names -- which is what makes the reuse exact.
+DsCompleted {
+  (e.Ctx) s.Id (e.In) =
+    <DsCompletedL <DsCompletedList (e.Ctx)> s.Id (e.In) <DsCanonical (e.In)>>;
+}
+
+DsCompletedL {
+  (e.CP) s.Id (e.In) (e.Can) = <DsCompletedL2 (e.CP) s.Id (e.In) (e.Can)>;
+}
+
+DsCompletedL2 {
+  () s.Id (e.In) (e.Can) = (NONE);
+  ((CP s.Id (e.Can) (e.Stored) (e.Res)) e.Rest) s.Id (e.In) (e.Can),
+    <SameChars (e.Stored) (e.In)> : '1' = (SOME (e.Res));
+  ((CP s.Id (e.Can) (e.Stored) (e.Res)) e.Rest) s.Id (e.In) (e.Can) =
+    (SOME <DsRename (e.Res) <DsVarPairs (e.Stored) (e.In) ()>>);
+  (t.C e.Rest) s.Id (e.In) (e.Can) = <DsCompletedL2 (e.Rest) s.Id (e.In) (e.Can)>;
+}
+
+DsVarPairs {
+  (e.Stored) (e.Current) (e.Acc) = <DsVarPairsL (e.Stored) (e.Current) (e.Acc)>;
+}
+
+DsVarPairsL {
+  () (e.C) (e.Acc) = (e.Acc);
+  ((VAR s.K e.L) e.SRest) ((VAR s.K2 e.R) e.CRest) (e.Acc) =
+    <DsVarPairsL (e.SRest) (e.CRest) (e.Acc (VP (<Canon e.L>) (<Canon e.R>)))>;
+  ((BR e.L) e.SRest) ((BR e.R) e.CRest) (e.Acc) =
+    <DsVarPairsL (e.SRest) (e.CRest) <DsVarPairs (e.L) (e.R) (e.Acc)>>;
+  ((CALL (ID e.N) e.L) e.SRest) ((CALL (ID e.N2) e.R) e.CRest) (e.Acc) =
+    <DsVarPairsL (e.SRest) (e.CRest) <DsVarPairs (e.L) (e.R) (e.Acc)>>;
+  (t.L e.SRest) (t.R e.CRest) (e.Acc) = <DsVarPairsL (e.SRest) (e.CRest) (e.Acc)>;
+}
+
+DsRename {
+  (e.Terms) (e.Pairs) = <DsRenameL (e.Terms) (e.Pairs) ()>;
+}
+
+DsRenameL {
+  () (e.Pairs) (e.Acc) = (e.Acc);
+  ((VAR s.K e.N) e.Rest) (e.Pairs) (e.Acc),
+    <DsPairTo (e.Pairs) (<Canon e.N>)> : (SOME (e.To)) =
+      <DsRenameL (e.Rest) (e.Pairs) (e.Acc (VAR s.K e.To))>;
+  ((VAR s.K e.N) e.Rest) (e.Pairs) (e.Acc) =
+      <DsRenameL (e.Rest) (e.Pairs) (e.Acc (VAR s.K e.N))>;
+  ((BR e.X) e.Rest) (e.Pairs) (e.Acc) =
+      <DsRenameL (e.Rest) (e.Pairs) (e.Acc (BR <DsRename (e.X) (e.Pairs)>))>;
+  ((CALL (ID e.N) e.Args) e.Rest) (e.Pairs) (e.Acc) =
+      <DsRenameL (e.Rest) (e.Pairs) (e.Acc (CALL (ID e.N) <DsRename (e.Args) (e.Pairs)>))>;
+  (t.T e.Rest) (e.Pairs) (e.Acc) = <DsRenameL (e.Rest) (e.Pairs) (e.Acc t.T)>;
+}
+
+DsPairTo {
+  (e.Pairs) (e.Key) = <DsPairToL (e.Pairs) (e.Key)>;
+}
+
+DsPairToL {
+  () (e.Key) = (NONE);
+  ((VP (e.Key) (e.To)) e.Rest) (e.Key) = (SOME (e.To));
+  (t.P e.Rest) (e.Key) = <DsPairToL (e.Rest) (e.Key)>;
+}
+
+DsSeenSame {
+  (e.Ctx) s.Id (e.In) = <DsSeenSameL <DsVisitedIn (e.Ctx)> s.Id (e.In)>;
+}
+
+DsSeenSameL {
+  () s.Id (e.In) = ;
+  ((VI s.Id (e.Prev)) e.Rest) s.Id (e.In), <DsSameConf (e.Prev) (e.In)> : '1' = '1';
+  (t.V e.Rest) s.Id (e.In) = <DsSeenSameL (e.Rest) s.Id (e.In)>;
+}
+
+* The first configuration at this state that is *not* the same one and into
+* which the current argument embeds homeomorphically.
+DsFindEmbedding {
+  (e.Ctx) s.Id (e.In) = <DsEmbedFindL <DsVisitedIn (e.Ctx)> s.Id (e.In)>;
+}
+
+DsEmbedFindL {
+  () s.Id (e.In) = (NONE);
+  ((VI s.Id (e.Prev)) e.Rest) s.Id (e.In), <DsSameConf (e.Prev) (e.In)> : '1' =
+    <DsEmbedFindL (e.Rest) s.Id (e.In)>;
+  ((VI s.Id (e.Prev)) e.Rest) s.Id (e.In), <DsEmbeds (e.Prev) (e.In)> : '1' =
+    (SOME (e.Prev));
+  (t.V e.Rest) s.Id (e.In) = <DsEmbedFindL (e.Rest) s.Id (e.In)>;
+}
+
+DsActiveHas {
+  (e.Ctx) (e.Fn) (e.Can) = <DsActiveHasL <DsActivePath (e.Ctx)> (e.Fn) (e.Can)>;
+}
+
+DsActiveHasL {
+  () (e.Fn) (e.Can) = ;
+  ((AP (e.F) (e.Can) (e.I) (e.N) t.S) e.Rest) (e.Fn) (e.Can),
+    <SameChars (<Upper e.F>) (<Upper e.Fn>)> : '1' = '1';
+  (t.A e.Rest) (e.Fn) (e.Can) = <DsActiveHasL (e.Rest) (e.Fn) (e.Can)>;
+}
+
+DsActiveSplit {
+  (e.Ctx) (e.Fn) (e.Can) = <DsActiveSplitL <DsActivePath (e.Ctx)> (e.Fn) (e.Can)>;
+}
+
+DsActiveSplitL {
+  () (e.Fn) (e.Can) = (NONE);
+  ((AP (e.F) (e.Can) (e.I) (e.N) (SOME (e.Name))) e.Rest) (e.Fn) (e.Can),
+    <SameChars (<Upper e.F>) (<Upper e.Fn>)> : '1' = (SOME (e.Name));
+  (t.A e.Rest) (e.Fn) (e.Can) = <DsActiveSplitL (e.Rest) (e.Fn) (e.Can)>;
+}
+
+* Turchin's own loop-back rule (1988 section 4): loop back when a first-order
+* neighborhood recurs, not merely when a configuration does.
+DsActiveNeigh {
+  (e.Ctx) (e.Fn) (e.In) =
+    <DsActiveNeighL <DsActivePath (e.Ctx)> (e.Fn) <DsNeigh (e.In)> (e.In)>;
+}
+
+DsActiveNeighL {
+  () (e.Fn) (e.N) (e.In) = (NONE);
+  ((AP (e.F) (e.C) (e.I) (e.N) t.S) e.Rest) (e.Fn) (e.N) (e.In),
+    <SameChars (<Upper e.F>) (<Upper e.Fn>)> : '1',
+    <DsSameConf (e.I) (e.In)> : = (SOME (e.I));
+  (t.A e.Rest) (e.Fn) (e.N) (e.In) = <DsActiveNeighL (e.Rest) (e.Fn) (e.N) (e.In)>;
+}
+
+* `record_whistle` accumulates the whistle states, inputs and events. The CLI
+* prints none of them, so this is deliberately the identity: writing them here
+* would be a claim the report cannot back.
+DsWhistle {
+  (e.Ctx) s.Id (e.Prev) (e.In) = (e.Ctx);
+}
+
+* ---- neighborhoods (Turchin 1988 section 3)
+
+DsNeigh {
+  (e.In) = <DsCanonical (<DsNeighOf (e.In)>)>;
+}
+
+DsNeighOf {
+  () = (VAR 'e' 'N');
+  (t.X e.Rest) = <DsNeighOf2 <DsContract t.X>>;
+}
+
+DsNeighOf2 {
+  (NONE) = (VAR 'e' 'N');
+  (SOME t.S) = t.S (VAR 'e' 'N');
+}
+
+* The contraction carries no information for an `e.`-variable, a call or a
+* block -- they already stand for an unbounded part of the expression -- so the
+* neighborhood then says only that everything from here on is unknown.
+DsContract {
+  (SYM s.C) = (SOME (VAR 's' 'N'));
+  (NUM e.D) = (SOME (VAR 's' 'N'));
+  (ID e.N) = (SOME (VAR 's' 'N'));
+  (VAR 's' e.N) = (SOME (VAR 's' 'N'));
+  (VAR 't' e.N) = (SOME (VAR 't' 'N'));
+  (BR e.X) = (SOME (BR (VAR 'e' 'N')));
+  t.X = (NONE);
+}
+
+* ---- homeomorphic embedding
+
+DsEmbeds {
+  (e.Prev) (e.Cur) = <DsEmbedsL (e.Prev) (e.Cur)>;
+}
+
+DsEmbedsL {
+  () (e.Cur) = '1';
+  (t.P e.Rest) (e.Cur) = <DsEmbedsL2 (e.Rest) <DsEmbedsFind (e.Cur) t.P>>;
+}
+
+DsEmbedsL2 {
+  (e.Rest) (NONE) = ;
+  (e.Rest) (SOME (e.Cur2)) = <DsEmbedsL (e.Rest) (e.Cur2)>;
+}
+
+DsEmbedsFind {
+  () t.P = (NONE);
+  (t.C e.Rest) t.P, <DsTermEmbeds t.P t.C> : '1' = (SOME (e.Rest));
+  (t.C e.Rest) t.P = <DsEmbedsFind (e.Rest) t.P>;
+}
+
+DsTermEmbeds {
+  (VAR s.K e.N) t.C = '1';
+  (SYM s.A) (SYM s.B), <SameChars (s.A) (s.B)> : '1' = '1';
+  (ID e.A) (ID e.B), <SameChars (<Upper e.A>) (<Upper e.B>)> : '1' = '1';
+  (NUM e.A) (NUM e.B), <SameChars (e.A) (e.B)> : '1' = '1';
+  (BR e.A) (BR e.B), <DsEmbeds (e.A) (e.B)> : '1' = '1';
+  (CALL (ID e.NA) e.AA) (CALL (ID e.NB) e.AB),
+    <SameChars (<Upper e.NA>) (<Upper e.NB>)> : '1', <DsEmbeds (e.AA) (e.AB)> : '1' = '1';
+  (BLK (e.AA) e.SA) (BLK (e.AB) e.SB), <DsEmbeds (e.AA) (e.AB)> : '1' = '1';
+  t.P (BR e.Inner) = <DsEmbedsAny (e.Inner) t.P>;
+  t.P (CALL (ID e.N) e.Args) = <DsEmbedsAny (e.Args) t.P>;
+  t.P t.C = ;
+}
+
+DsEmbedsAny {
+  () t.P = ;
+  (t.C e.Rest) t.P, <DsTermEmbeds t.P t.C> : '1' = '1';
+  (t.C e.Rest) t.P = <DsEmbedsAny (e.Rest) t.P>;
+}
+
+* ---- the work list over unresolved configuration edges
+
+DsLoop {
+  (e.Ctx) = <DsLoopAt (e.Ctx) 0>;
+}
+
+DsLoopAt {
+  (e.Ctx) s.Cursor, <DsTrCount (e.Ctx)> : s.N, <Compare s.Cursor s.N> : '-' =
+    <DsLoopStep (e.Ctx) s.Cursor>;
+  (e.Ctx) s.Cursor = (LOOP (e.Ctx));
+}
+
+DsLoopStep {
+  (e.Ctx) s.Cursor = <DsLoopStep2 (e.Ctx) s.Cursor <DsLoopOne (e.Ctx) s.Cursor>>;
+}
+
+DsLoopStep2 {
+  (e.Ctx) s.Cursor (OK (e.Ctx2)) = <DsLoopAt (e.Ctx2) <Add s.Cursor 1>>;
+  (e.Ctx) s.Cursor (ERR) = (ERR);
+}
+
+DsLoopOne {
+  (e.Ctx) s.Cursor = <DsLoopOneA (e.Ctx) s.Cursor <DsTrAt (e.Ctx) s.Cursor>>;
+}
+
+DsLoopOneA {
+  (e.Ctx) s.Cursor (CFT s.From (e.Callee) (e.In) (SOME s.To)) = (OK (e.Ctx));
+  (e.Ctx) s.Cursor (CFT s.From (e.Callee) (e.In) (NONE)) =
+    <DsLoopOneB (e.Ctx) s.Cursor (e.Callee) (e.In)
+                <DsConfForCall (e.Ctx) (e.Callee) (e.In)>>;
+}
+
+DsLoopOneB {
+  (e.Ctx) s.Cursor (e.Callee) (e.In) (SOME s.Target) =
+    (OK <DsSetTr (e.Ctx) s.Cursor (SOME s.Target)>);
+  (e.Ctx) s.Cursor (e.Callee) (e.In) (NONE), <DsAnySymVar (e.In)> : '1' =
+    (OK (e.Ctx));
+  (e.Ctx) s.Cursor (e.Callee) (e.In) (NONE), <DsHasFunc (e.Ctx) (e.Callee)> : '1' =
+    <DsLoopInvoke (e.Ctx) s.Cursor (e.Callee) (e.In)>;
+  (e.Ctx) s.Cursor (e.Callee) (e.In) (NONE) = (OK (e.Ctx));
+}
+
+DsLoopInvoke {
+  (e.Ctx) s.Cursor (e.Callee) (e.In) =
+    <DsLoopInvoke2 <DsInvoke (DsSetActive (e.Ctx) (SOME s.Cursor)) (e.Callee) (e.In)>
+                   (e.Ctx)>;
+}
+
+DsLoopInvoke2 {
+  (RED (e.Out) (e.Ctx2)) (e.Ctx) = (OK <DsSetActive (e.Ctx2) <DsActive (e.Ctx)>>);
+  (RES (e.Ctx2)) (e.Ctx) = (OK <DsSetActive (e.Ctx2) <DsActive (e.Ctx)>>);
+  (FAILS (e.Ctx2)) (e.Ctx) = (OK <DsSetActive (e.Ctx2) <DsActive (e.Ctx)>>);
+  (ERR) (e.Ctx) = (ERR);
+}
+
+DsTrAt {
+  (e.Ctx) s.Cursor = <DsNth <DsConfsTr (e.Ctx)> s.Cursor>;
+}
+
+DsNth {
+  (e.List) s.I = <DsNthL (e.List) s.I>;
+}
+
+DsNthL {
+  (t.X e.Rest) 0 = t.X;
+  (t.X e.Rest) s.I = <DsNthL (e.Rest) <Sub s.I 1>>;
+}
+
+DsTrCount {
+  (e.Ctx) = <DsLen <DsConfsTr (e.Ctx)>>;
+}
+
+DsSetTr {
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N)
+      s.Cursor t.To =
+    (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF)
+        <DsSetTrL (e.CT) s.Cursor t.To 0 ()> t.A s.N);
+}
+
+DsSetTrL {
+  () s.Cursor t.To s.I (e.Acc) = (e.Acc);
+  ((CFT s.From (e.Callee) (e.In) t.Old) e.Rest) s.Cursor t.To s.I (e.Acc),
+    <Compare s.I s.Cursor> : '0' =
+      (e.Acc (CFT s.From (e.Callee) (e.In) t.To) e.Rest);
+  ((CFT s.From (e.Callee) (e.In) t.Old) e.Rest) s.Cursor t.To s.I (e.Acc) =
+    <DsSetTrL (e.Rest) s.Cursor t.To <Add s.I 1>
+              (e.Acc (CFT s.From (e.Callee) (e.In) t.Old))>;
+}
+
+DsRewire {
+  (LOOP (e.Ctx)) = (LOOP <DsRewireL (e.Ctx) 0 <DsTrCount (e.Ctx)>>);
+  (ERR) = (ERR);
+}
+
+DsRewireL {
+  (e.Ctx) s.I s.N, <Compare s.I s.N> : '-' =
+    <DsRewireL <DsRewireOne (e.Ctx) s.I> <Add s.I 1> s.N>;
+  (e.Ctx) s.I s.N = (e.Ctx);
+}
+
+DsRewireOne {
+  (e.Ctx) s.I = <DsSetTr (e.Ctx) s.I <DsToOf (e.Ctx) s.I>>;
+}
+
+DsToOf {
+  (e.Ctx) s.I = <DsToOfL (e.Ctx) <DsTrAt (e.Ctx) s.I>>;
+}
+
+DsToOfL {
+  (e.Ctx) (CFT s.From (e.Callee) (e.In) t.Old) =
+    <DsConfForCall (e.Ctx) (e.Callee) (e.In)>;
+}
+
+DsConfForCall {
+  (e.Ctx) (e.Callee) (e.In) =
+    <DsConfForCallL <DsConfs (e.Ctx)> <DsStates (e.Ctx)> (e.Callee) (e.In)>;
+}
+
+DsConfForCallL {
+  () (e.St) (e.Callee) (e.In) = (NONE);
+  ((CF s.Id s.St (e.In)) e.Rest) (e.States) (e.Callee) (e.In),
+    <DsStateFn (e.States) s.St> : (SOME (e.N)),
+    <SameChars (<Upper e.N>) (<Upper e.Callee>)> : '1' = (SOME s.Id);
+  (t.C e.Rest) (e.States) (e.Callee) (e.In) =
+    <DsConfForCallL (e.Rest) (e.States) (e.Callee) (e.In)>;
+}
+
+DsStateFn {
+  (e.States) s.Id = <DsStateFnL (e.States) s.Id>;
+}
+
+DsStateFnL {
+  () s.Id = (NONE);
+  ((ST s.Id (e.N) s.J t.Sent) e.Rest) s.Id = (SOME (e.N));
+  (t.S e.Rest) s.Id = <DsStateFnL (e.Rest) s.Id>;
+}
+
+* ---- small helpers
+
+DsCallSeq {
+  (e.Name) (e.In) = ((CALL (ID e.Name) e.In));
+}
+
+DsFlagUnk {
+  ('0' s.B) = ('1' s.B);
+  (s.U s.B) = (s.U s.B);
+}
+
+DsFlagUnkQ {
+  ('1' s.B) = '1';
+  (s.U s.B) = ;
+}
+
+DsFlagsAny {
+  ('1' s.B) = '1';
+  (s.U '1') = '1';
+  (s.U s.B) = ;
 }

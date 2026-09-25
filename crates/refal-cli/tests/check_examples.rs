@@ -5118,3 +5118,237 @@ fn refal_authored_driver_matches_refal_drive() {
         failures.join("\n")
     );
 }
+
+/// The symbolic driver, in Refal, against the Rust oracle.
+///
+/// `compiler.ref`'s DRIVE-SYMBOLIC reproduces `drive_symbolic_with_strategy`
+/// over the same seed graph the GRAPH stage builds. Three things make this a
+/// differential rather than a smoke test:
+///
+/// 1. The comparison is byte for byte, over every example the oracle can drive.
+/// 2. The *full* report is compared -- steps, visited, neighborhood-loops and
+///    the residual -- and then the configuration list and its transitions on
+///    top, because a wrong split, a wrong fold or a wrong transition target
+///    shows up there even when the residual happens to come out the same.
+/// 3. The sweep has to be non-vacuous: it must cover enough examples, visit
+///    more than one state in some, run more than two contractions in some, and
+///    actually generate a case split in some. A driver that answered
+///    `<Go e.Input>` to everything would pass the byte comparison and fail
+///    every one of those guards.
+///
+/// An example whose entry does not accept an arbitrary expression is *not*
+/// skipped: the oracle answers `<Go e.Input>` for it, and so must this one.
+#[test]
+fn refal_authored_symbolic_driver_matches_refal_drive_symbolic() {
+    let mut names: Vec<String> = fs::read_dir(workspace_path("examples"))
+        .expect("read the examples directory")
+        .filter_map(|entry| {
+            let path = entry.ok()?.path();
+            let name = path.file_name()?.to_string_lossy().into_owned();
+            (name.ends_with(".ref") && name != "compiler.ref").then_some(name)
+        })
+        .collect();
+    names.sort();
+
+    let mut checked = 0usize;
+    let mut multi_state = 0usize;
+    let mut non_trivial_steps = 0usize;
+    let mut case_splits = 0usize;
+    let mut failures = Vec::new();
+    for name in names {
+        let path = format!("examples/{name}");
+        let oracle = symbolic_drive_file(&path, &[]);
+        // An example with no entry at all is out of scope, exactly as a
+        // negative fixture is for the emitter sweep.
+        if !oracle.status.success() {
+            continue;
+        }
+        checked += 1;
+        let expected = String::from_utf8_lossy(&oracle.stdout).into_owned();
+        if expected.contains(" -> ") {
+            multi_state += 1;
+        }
+        if expected.contains("<Split") {
+            case_splits += 1;
+        }
+        if let Some(steps) = expected
+            .lines()
+            .find_map(|line| line.strip_prefix("steps: "))
+            .and_then(|value| value.trim().parse::<usize>().ok())
+            && steps > 2
+        {
+            non_trivial_steps += 1;
+        }
+
+        let source = fs::read_to_string(workspace_path(&path)).expect("read example");
+        let actual = run_file("examples/compiler.ref", &["DRIVE-SYMBOLIC", &source]);
+        if !actual.status.success() {
+            failures.push(format!(
+                "{name}: compiler.ref DRIVE-SYMBOLIC failed\n{}",
+                String::from_utf8_lossy(&actual.stderr)
+            ));
+            continue;
+        }
+        let actual = String::from_utf8_lossy(&actual.stdout).into_owned();
+        if actual != expected {
+            failures.push(format!(
+                "{name}:\n  drive-symbolic: {expected:?}\n  refal: {actual:?}"
+            ));
+            continue;
+        }
+
+        let oracle_configurations = symbolic_drive_file(&path, &["--configurations"]);
+        if !oracle_configurations.status.success() {
+            continue;
+        }
+        let expected = String::from_utf8_lossy(&oracle_configurations.stdout).into_owned();
+        let actual = run_file(
+            "examples/compiler.ref",
+            &["DRIVE-SYMBOLIC-CONFIGURATIONS", &source],
+        );
+        if !actual.status.success() {
+            failures.push(format!(
+                "{name}: compiler.ref DRIVE-SYMBOLIC-CONFIGURATIONS failed\n{}",
+                String::from_utf8_lossy(&actual.stderr)
+            ));
+            continue;
+        }
+        let actual = String::from_utf8_lossy(&actual.stdout).into_owned();
+        if actual != expected {
+            failures.push(format!(
+                "{name} (--configurations):\n  drive-symbolic: {expected:?}\n  refal: {actual:?}"
+            ));
+            continue;
+        }
+
+        let oracle_neighborhoods = symbolic_drive_file(&path, &["--neighborhoods"]);
+        if !oracle_neighborhoods.status.success() {
+            continue;
+        }
+        let expected = String::from_utf8_lossy(&oracle_neighborhoods.stdout).into_owned();
+        let actual = run_file(
+            "examples/compiler.ref",
+            &["DRIVE-SYMBOLIC-NEIGHBORHOODS", &source],
+        );
+        if !actual.status.success() {
+            failures.push(format!(
+                "{name}: compiler.ref DRIVE-SYMBOLIC-NEIGHBORHOODS failed\n{}",
+                String::from_utf8_lossy(&actual.stderr)
+            ));
+            continue;
+        }
+        let actual = String::from_utf8_lossy(&actual.stdout).into_owned();
+        if actual != expected {
+            failures.push(format!(
+                "{name} (--neighborhoods):\n  drive-symbolic: {expected:?}\n  refal: {actual:?}"
+            ));
+        }
+    }
+
+    assert!(
+        checked >= 30,
+        "the symbolic drive sweep should cover the driveable examples, only checked {checked}"
+    );
+    assert!(
+        multi_state >= 8,
+        "the symbolic drive sweep is vacuous: only {multi_state} examples visited more than one state"
+    );
+    assert!(
+        non_trivial_steps >= 6,
+        "the symbolic drive sweep is vacuous: only {non_trivial_steps} examples did more than two contractions"
+    );
+    assert!(
+        case_splits >= 3,
+        "the symbolic drive sweep never case-split: only {case_splits} examples generated one"
+    );
+    assert!(
+        failures.is_empty(),
+        "{} of {checked} examples diverge from the Rust bootstrap:/n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+}
+
+/// The interpretive strategy, in Refal, against the Rust oracle.
+///
+/// `--strategy interpretive` is Turchin's own loop-back rule (1988 §4): loop
+/// back whenever a *first-order neighborhood* recurs, not merely when a
+/// configuration does. It is a different point on the compilation-
+/// interpretation axis, so it is a different residue, and it is gated
+/// separately from the default sweep for one measured reason: on
+/// `examples/condition.ref` the Refal driver takes about fifty seconds where
+/// the Rust one takes a fifth of one, because the work list and the final
+/// re-wire both scan the whole transition list per entry. The output is
+/// identical; only the cost differs, and a test that spends a minute on one
+/// example should say so.
+///
+/// The sweep is restricted to the examples where the strategy actually changes
+/// the report. Comparing everywhere would be vacuous on the majority, where the
+/// interpretive rule never fires.
+#[test]
+fn refal_authored_interpretive_drive_matches_the_rust_oracle() {
+    let mut names: Vec<String> = fs::read_dir(workspace_path("examples"))
+        .expect("read the examples directory")
+        .filter_map(|entry| {
+            let path = entry.ok()?.path();
+            let name = path.file_name()?.to_string_lossy().into_owned();
+            (name.ends_with(".ref") && name != "compiler.ref").then_some(name)
+        })
+        .collect();
+    names.sort();
+
+    let mut checked = 0usize;
+    let mut loops = 0usize;
+    let mut failures = Vec::new();
+    for name in names {
+        let path = format!("examples/{name}");
+        let default = symbolic_drive_file(&path, &[]);
+        let oracle = symbolic_drive_file(&path, &["--strategy", "interpretive"]);
+        if !default.status.success() || !oracle.status.success() {
+            continue;
+        }
+        let expected = String::from_utf8_lossy(&oracle.stdout).into_owned();
+        if expected == String::from_utf8_lossy(&default.stdout) {
+            // The rule never fired here, so there is nothing to distinguish.
+            continue;
+        }
+        checked += 1;
+        if !expected.contains("neighborhood-loops: 0") {
+            loops += 1;
+        }
+
+        let source = fs::read_to_string(workspace_path(&path)).expect("read example");
+        let actual = run_file(
+            "examples/compiler.ref",
+            &["DRIVE-SYMBOLIC-INTERPRETIVE", &source],
+        );
+        if !actual.status.success() {
+            failures.push(format!(
+                "{name}: compiler.ref DRIVE-SYMBOLIC-INTERPRETIVE failed\n{}",
+                String::from_utf8_lossy(&actual.stderr)
+            ));
+            continue;
+        }
+        let actual = String::from_utf8_lossy(&actual.stdout).into_owned();
+        if actual != expected {
+            failures.push(format!(
+                "{name} (interpretive):\n  drive-symbolic: {expected:?}\n  refal: {actual:?}"
+            ));
+        }
+    }
+
+    assert!(
+        checked >= 6,
+        "the interpretive sweep should cover the examples the rule changes, only checked {checked}"
+    );
+    assert!(
+        loops >= 5,
+        "the interpretive sweep is vacuous: only {loops} examples looped back on a neighborhood"
+    );
+    assert!(
+        failures.is_empty(),
+        "{} of {checked} interpretive examples diverge from the Rust bootstrap:/n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+}

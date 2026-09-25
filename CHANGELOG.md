@@ -2,6 +2,73 @@
 
 ## Unreleased
 
+### The symbolic driver, in Refal (2026-09-25)
+
+`compiler.ref`'s `DRIVE-SYMBOLIC` mode reproduces `refal-core`'s
+`drive_symbolic_with_strategy` (`crates/refal-core/src/lib.rs:693`) over the same
+seed graph the `GRAPH` stage builds. This is the stage that makes the driver a
+*compiler* rather than a reporter: the ground driver can only contract a closed
+configuration, so it can never compile a function whose input is unknown, while
+this one partitions an unknown argument into `[]`, `s.H e.T` and `(e.B) e.T` --
+exhaustive and pairwise disjoint -- drives each branch, and emits a generated
+function whose sentences are those branches.
+
+Four pieces make it a driver rather than an approximation:
+
+- **A three-valued matcher.** `match_symbolic_pattern` answers Yes, No or
+  Unknown, and Unknown means the answer depends on information driving does not
+  have. `symbolic_variable_accepts` is the kind lattice: `s.` accepts character,
+  number or identifier and an `s.`-variable but never a bracket, `t.` accepts any
+  single term, `e.` accepts anything, and anything wider is Unknown rather than a
+  guess.
+- **Longest-prefix-first expression splits**, which is the opposite of the ground
+  matcher's order, so the stage reverses `DvSplits` with `DvRev`. The order
+  decides which branch a sentence takes and therefore the whole residue.
+- **The fold and the whistle.** A recurrence on the active path folds to the
+  generated function when the path entry carries a split and whistles otherwise;
+  a recurrence with a configuration that already *finished* is not a cycle at
+  all, and reusing its residue is what unwinds an interpreter's recursion into
+  straight-line code.
+- **The context threaded through failures too**, because invocation appends
+  configurations and transitions and invocation happens inside condition
+  matching and inside argument instantiation as well as at the top.
+
+`--strategy interpretive` is ported as well, so both ends of the
+compilation-interpretation axis (1988 p. 538) exist in Refal.
+
+**The gate is a differential, not a smoke test.**
+`refal_authored_symbolic_driver_matches_refal_drive_symbolic` byte-compares the
+default report, the `--configurations` report and the `--neighborhoods` report
+against `refal drive-symbolic` over every example the oracle can drive:
+**55/55 matched, 0 diverged**, with non-vacuity guards on coverage, on
+multi-state visits (11), on contractions beyond two (10) and on case splits
+actually generated (4). `refal_authored_interpretive_drive_matches_the_rust_oracle`
+covers the interpretive end on the 8 examples the rule changes: **8/8 matched, 0
+diverged**, 7 of them with a non-zero `neighborhood-loops` count.
+
+Three bugs were found on the way and all three had failed silently:
+
+- Fresh variable names built with `Implode` become one identifier symbol where
+  the AST wants a character sequence, so `Canon` handed a whole identifier to
+  `Ord` and `Compare` refused it -- raised inside `CanonChar`, three call levels
+  away from the mistake. `'H' <Symb 1>` is the right way to write it.
+- The entry-split guard's two outcomes were inverted. Invisible on an example
+  whose entry is `e.Input`; wrong on the 25 whose entry takes a bracket, a fixed
+  pattern or several terms, where the oracle answers `<Go e.Input>`.
+- A bracket branch was written `(BR ((VAR 'e' 'B1')))` instead of
+  `(BR (VAR 'e' 'B1'))`, which puts a bracket inside a bracket. It only showed up
+  when the configuration report tried to render it.
+
+`Prout` output is discarded when a Refal program errors, which is recorded in
+`docs/PROGRESS.md` as a debugging trap: the first version of this port printed
+its progress and showed nothing, so the failures were located by substituting
+return values instead.
+
+Completion ~66% -> **~70%**, on the Compiler-in-Refal row alone, which goes from
+13.0 to 17.0 of its 25.5. The row's remaining deduction is the *compilation* of
+pattern matching and whole-program residualization; the self-hosting row waits on
+those. Tests 315 -> 317.
+
 ### Bracket contents in the format lattice — Tier 1 complete (2026-09-12)
 
 A format that stops at "it is a bracket" cannot say anything about a bracket

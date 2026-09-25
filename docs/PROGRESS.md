@@ -34,25 +34,40 @@ objective to a gate. Not another Refal implementation.
 
 | | |
 |---|---|
-| Honest completion | **~66%** (product completeness — one method, see below) |
-| Tests | 315 passing, 0 clippy, fmt clean |
+| Honest completion | **~70%** (product completeness — one method, see below) |
+| Tests | 317 passing, 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
 
-**Verification state at this commit, stated precisely.** The second half of the
-view field is a *representation* change, so it is verified the way the first half
-was and more: `cargo test --all -j 2 -- --test-threads=1` is **green end to end**,
-315 tests, including the four heavy self-hosting tests —
+**Verification state at this commit, stated precisely.** `cargo test --all -j 2 --
+--test-threads=1` is **green end to end**, 317 tests, including the four heavy
+self-hosting tests —
 `compile_command_compiles_the_compiler_itself`,
 `compiler_ref_reaches_a_self_hosting_fixpoint`,
 `the_refal_authored_compiler_matches_lower_on_every_lowerable_example` and
-`refal_authored_residualization_matches_residualize_graph` — which is the check
-the previous session left open. The T-4/T-6 differential corpus gate is
-byte-identical to the previous run (`cases: 67`, `positive: 29`,
-`check-failure: 6`, `runtime-failure: 1`, `residual: 31`,
+`refal_authored_residualization_matches_residualize_graph` — and the two new
+symbolic-driver differentials,
+`refal_authored_symbolic_driver_matches_refal_drive_symbolic` (162 s) and
+`refal_authored_interpretive_drive_matches_the_rust_oracle` (89 s). The T-4/T-6
+differential corpus gate is byte-identical to the previous run (`cases: 67`,
+`positive: 29`, `check-failure: 6`, `runtime-failure: 1`, `residual: 31`,
 `cleaned-sentences: 1`), `refal run` over the compiler's own source produces the
 same 30,825 bytes, and `clippy --all-targets -D warnings` and `cargo fmt --check`
 are clean.
+
+**The symbolic driver's differential, stated as numbers.** `DRIVE-SYMBOLIC`
+against `refal drive-symbolic` over every example the oracle can drive: **55
+matched, 0 diverged, 25 out of scope** (an example with no entry at all), on the
+default report; **55 matched, 0 diverged** on `--configurations`; **55 matched, 0
+diverged** on `--neighborhoods`. `DRIVE-SYMBOLIC-INTERPRETIVE` against
+`drive-symbolic --strategy interpretive`: **54 matched, 0 diverged** over the
+whole corpus, and **8/8** on the subset where the rule actually changes the
+report — 7 of those with a non-zero `neighborhood-loops` count, so the loop-back
+path is exercised rather than merely present. The one measurement that belongs
+beside those: `condition.ref` under the interpretive strategy takes **52.8 s** in
+Refal against **0.2 s** in Rust, with byte-identical output, because the work list
+and the final re-wire both rescan the whole transition list per entry. That is a
+non-default strategy knob, and it is recorded as a cost rather than hidden.
 
 **The measurement, because a speedup that is not measured is a claim.**
 `./target/debug/refal run examples/compiler.ref --input-file examples/compiler.ref`
@@ -793,116 +808,100 @@ rather than a failure, which is why they are worth recording:
 
 ## NEXT ACTION
 
-**The symbolic driver, in Refal.**
+**Wire the transforming half into `compiler.ref` — the self-hosting fixpoint on a
+slice that really compiles.**
 
-The view field is done, and that changes what is on the critical path. The
-runtime is now linear in its input's length — the compiler's own 47.5 KB source
-goes through its own pipeline in 26 s, from 587 s — so a differential that drives
-`compiler.ref` over its own source no longer costs ten minutes a run. That was
-the stated reason the symbolic driver went second:
+The symbolic driver is done. `compiler.ref` now reproduces
+`drive_symbolic_with_strategy` (`crates/refal-core/src/lib.rs:693`) as
+`DRIVE-SYMBOLIC`, and it is gated by two differentials against the Rust oracle
+over the corpus:
 
-> It goes second because writing it against a runtime that cannot carry its own
-> input is writing it against a wall: the differential would take ten minutes a
-> run.
+- `refal_authored_symbolic_driver_matches_refal_drive_symbolic` — the default
+  report, the `--configurations` report and the `--neighborhoods` report, each
+  byte-compared over every example the oracle can drive. **55/55 matched, 0
+  diverged**, with non-vacuity guards on the coverage, on multi-state visits
+  (11), on contractions beyond two (10) and on case splits actually generated
+  (4). A driver that answered `<Go e.Input>` to everything would pass the byte
+  comparison and fail every one of those guards.
+- `refal_authored_interpretive_drive_matches_the_rust_oracle` — the
+  `--strategy interpretive` end, restricted to the 8 examples where the rule
+  changes the report. **8/8 matched, 0 diverged**, 7 of them with a non-zero
+  `neighborhood-loops` count, so the loop-back path is exercised rather than
+  merely present.
 
-The wall is down. `refal-core`'s `drive_symbolic_with_strategy`
-(`crates/refal-core/src/lib.rs:693`) is the behaviour to reproduce, exactly as
-`compiler.ref` had to reproduce `lower`, `graph` and `drive`. The ground driver
-already holds the whole of its machinery — the matcher, sentence selection with
-conditions, blocks in condition position, call instantiation and the visited
-trace — so the symbolic stage adds:
+That closes the *driver* half of the row `PLAN.md` §5 calls "the largest single
+deduction". It does not close the row: the compiler still normalises rather than
+compiling pattern matching, and residualization is still bounded rather than
+whole-program for general programs. What is next is to wire the Refal driver
+into the compiler's own pipeline, so the self-hosting fixpoint runs on a slice
+that genuinely parses, analyses, splits, folds and emits — the same gap as T-1's
+and T-10's remaining credit.
 
-1. **Case splitting** (§4.2): a wholly unknown argument partitioned into `[]`,
-   `s.H e.T`, and `(e.B) e.T` — exhaustive and pairwise disjoint — with each
-   branch driven, and a branch the driver cannot decide kept as a call.
-2. **Folding against the active path**: a configuration that repeats a state
-   already on the current path folds to it instead of being driven again.
-3. **Generalisation** (§4.4, T-5): the whistle fires on a homeomorphic embedding,
-   and the generalized configuration becomes a generated residual function.
+### What the port needed (so the next session starts here, not at the file)
 
-It is the same `$ENTRY Go` mode pattern as `GRAPH`, `RESIDUALIZE` and `DRIVE` —
-one more sentence in the dispatch, reusing `Lex` and `Parse` with no
-duplication — and the gate is the same shape: a differential against the Rust
-driver over the corpus, with a non-vacuity guard.
+Five pieces had to be reproduced, and four of them are subtle:
 
-**Then wire the transforming half into `compiler.ref`.** With the symbolic driver
-present in Refal, the compiler's own `driver.ref` exists, and the self-hosting
-fixpoint can be closed on a slice that genuinely parses, analyses and emits
-rather than on the source-preserving artefacts `PLAN.md` section 4's caveat calls
-out. That is the largest single deduction in the completion table and it is now
-reachable in one step.
+1. **A three-valued matcher.** `match_symbolic_pattern` answers Yes, No or
+   Unknown. Unknown means the answer depends on information driving does not
+   have, and guessing a branch there is what makes a driver unsound.
+   `symbolic_variable_accepts` is the kind lattice — `s.` accepts
+   character/number/identifier and an `s.`-variable but never a bracket, `t.`
+   accepts any single term, `e.` accepts anything — and anything wider is
+   `Unknown`, not a guess.
+2. **Reverse split order.** Expression variables backtrack over splits
+   *longest prefix first*, which is the opposite of the ground matcher's order,
+   so the stage reverses `DvSplits` with `DvRev`. That order decides which branch
+   a sentence takes and therefore the whole residue.
+3. **The fold and the whistle.** A recurrence on the active path folds to the
+   generated function when the path entry carries a split, and whistles
+   otherwise; a recurrence with a configuration that already *finished* is not a
+   cycle at all, and reusing its residue is what unwinds an interpreter's
+   recursion into straight-line code.
+4. **The context is threaded through failures too.** Invocation appends
+   configurations and transitions, and invocation happens inside condition
+   matching and inside argument instantiation as well as at the top, so every
+   result — `(RED <terms> <ctx>)`, `(RES <ctx>)`, `(FAILS <ctx>)` — carries the
+   context, and so does every condition verdict.
+5. **The split partition.** `e.X` is `[]` or `s.H e.T` or `(e.B) e.T`, exhaustive
+   and pairwise disjoint, and the entry is split only when the entry's own
+   pattern is exactly one expression variable.
 
-### The recipe, read out of `refal-core` (so the next session starts here, not at the file)
+### Three traps this session paid for, recorded so they are not paid again
 
-`drive_symbolic_with_strategy` (`crates/refal-core/src/lib.rs:693`) is a loop over
-`invoke_symbolic` (`:1254`) with a work list over the configuration transitions it
-records. Five pieces have to be reproduced, and the fourth is the one that makes
-it a compiler rather than a reporter.
+- **A name in the AST is a character sequence, not one identifier symbol.** The
+  first version built the split's fresh variables with `Implode`, which makes
+  `H1` a single identifier symbol. `Canon` then handed the whole identifier to
+  `Ord`, `Ord` returned it unchanged, and `Compare` refused it with "every term
+  of an integer must be a macrodigit" — raised inside `CanonChar`, three call
+  levels away from the mistake. `'H' <Symb 1>` is the right way to write it, and
+  it is also what lets `SameChars` match a generated name against a name that
+  came from the source.
+- **The entry-split guard's two outcomes are easy to invert.** The rule is
+  "refuse when the entry's pattern is *not* a single expression variable", and
+  the first version had the two sentences the other way round. It reads like a
+  detail and it is not: for the 25 examples whose entry takes a bracket, a fixed
+  pattern or several terms, the oracle answers `<Go e.Input>` and the inverted
+  guard answered a full split instead.
+- **A bracket branch is `(BR (VAR 'e' 'B1'))`, not `(BR ((VAR 'e' 'B1')))`.**
+  One extra pair of parentheses puts a bracket inside a bracket, which is not a
+  term, and it only showed up when the configuration report tried to render it.
 
-**1. `match_symbolic_pattern` (`:1889`) returns `Yes | No | Unknown`**, and it is
-three cases, not one:
+### Still open, and not objectives
 
-- A single `e.`-variable pattern against a single symbolic-variable input binds
-  directly and answers `Yes`. This is what makes `<Identity e.Input>` drive.
-- If the *input* contains any symbolic variable, `match_shape_pattern` (`:1915`).
-- Otherwise the ordinary ground matcher, whose answer is definite.
-
-**2. `match_shape_pattern` backtracks over expression splits in *reverse* order** —
-`for end in (input_index..=input.len()).rev()`, longest first. That is not a
-detail: the split order decides which branch a sentence takes, and therefore the
-whole residue. `Yes` short-circuits; `Unknown` is remembered and returned only if
-no `Yes` was found; an exhausted pattern with input left over is `No` unless the
-tail is entirely `e.`-variables, in which case it is `Unknown` (they can denote
-nothing).
-
-**3. `symbolic_variable_accepts` (`:2049`)** is the kind lattice: `s.` accepts
-`Char`/`Number`/`Identifier` (and an `s.`-variable) but not a `Bracket`; `t.`
-accepts any single term; `e.` accepts anything. Anything else — a wider variable,
-an unevaluated call — is `None`, i.e. `Unknown`. Guessing there is what makes an
-unsound driver.
-
-**4. `split_configuration` (`:1503`)** is Turchin's driving step (§4.2) and it has
-exactly one legal partition, because it must be exhaustive *and* pairwise
-disjoint:
-
-```text
-e.X   is   []   or   s.H e.T   or   (e.B) e.T
-```
-
-The guards matter and each is there for a reason: only a *single* top-level
-expression variable is split (splitting one of several grows the residue without
-deciding anything); a function with no states is not split; and **the entry is
-split only when its own pattern is exactly one expression variable** — otherwise
-the residue would accept more than the source did and turn a failing program into
-a looping one. The split function is named `Split{index}` with
-`index = splits.len() + 1`, **registered before its branches are driven** so that
-a recurrence inside a branch finds it, and a branch that comes back `Residual` or
-`Fails` keeps a call to the *original* function so the residue fails exactly where
-the source fails.
-
-**5. The fold.** A configuration that recurs on the active path is a cycle, and
-the whistle is what stops it: if the matching active-path entry has a `split`, the
-configuration is being built by that split, so the recurrence folds to
-`<Split{index} input>` and the split terminates. A recurrence with an
-*already-completed* configuration is not a cycle at all — reusing the residual
-already computed is what unwinds the interpreter's recursion into straight-line
-code — and a recurrence with a configuration that embeds homeomorphically in the
-current one is a whistle (`sequence_homeomorphic_embeds`).
-
-**The gate is the same shape as `GRAPH` and `DRIVE`'s**: byte-compare against
-`refal drive-symbolic` over the corpus, with a non-vacuity guard. Start from
-`examples/symbolic-identity.ref` (trivial: the `e.`-variable case, `residual:
-e.Input`) and `examples/symbolic-branch.ref` (`residual: <Split1 e.Input>`, three
-configurations, four transitions, `steps: 5`), then widen.
-
-### One smaller item, recorded so it is not lost
-
-- **The `Reverse` shape.** A result that puts a call *before* other terms —
-  `<F e.X> s.C` — builds a rope whose left spine is as deep as the nesting, so
-  the rope is right-nested rather than balanced. Measured, it does not: `Reverse` over 16,000 characters is flat, and reversing then walking the result — the case where the field is matched term by term — is 614 ms at 16,000, 712 ms at 32,000 and 911 ms at 64,000, against a 0.5 s process-startup floor. So this is a **bound, not a measured cost**: a rope that is right-nested rather than balanced *could* be made to pay the spine depth per term, and balancing it (a height in `Concat` plus a rotation in `ViewField::concat`) is the fix if a shape ever does. Recorded rather than claimed, and the measurement is what says so.
-  The place to fix it is `ViewField::concat`, with a height in the `Concat` node
-  and a rotation when the left subtree is more than one level deeper than the
-  right.
+- **§4.4's strategy *search***, and T-8's §6.4 `unknown` values.
+- **The `Reverse` rope shape.** A result that puts a call *before* other terms —
+  `<F e.X> s.C` — builds a rope whose left spine is as deep as the nesting.
+  Measured, it is linear anyway: `Reverse` over 16,000 characters is flat, and
+  reversing then walking the result is 614 ms at 16,000, 712 ms at 32,000 and
+  911 ms at 64,000, against a 0.5 s process-startup floor. So this is a **bound,
+  not a measured cost**, and balancing the rope (a height in `Concat` plus a
+  rotation in `ViewField::concat`) is the fix if a shape ever does pay it.
+- **The interpretive driver's cost in Refal.** `condition.ref` under
+  `--strategy interpretive` takes about 50 s in Refal against 0.2 s in Rust, with
+  byte-identical output. The work list and the final re-wire both rescan the
+  whole transition list per entry, which is `O(T^2)`; the Rust oracle holds the
+  same lists as vectors. Recorded as a measurement rather than a claim, and it is
+  a non-default strategy knob.
 
 ### Traps this repository has already paid for
 
@@ -925,8 +924,8 @@ Each failed silently:
   bracket; an exhausted list needs a bare `()`.
 - **`'NONE'` is a four-character string**, not one symbol. Distinguish cases by
   *shape*, never by a sentinel symbol.
-- **Miscounted call nesting** is reported at the block's closing brace, not at the
-  mistake. Count one `>` per open `<`.
+- **Miscounted call nesting** is reported at the block's closing brace, not at
+  the mistake. Count one `>` per open `<`.
 - **A rope node's operand may be a *range*, not the whole node.** A binding such
   as `s.Head` over `'abc'` is a clamped view of a three-term arena, so reading a
   rope has to carry each node's own limit down with it or the extra terms leak
@@ -934,9 +933,11 @@ Each failed silently:
 - **A structure built by a recursion of depth n is n nodes deep, and its
   destructor is recursive too.** A 47,000-level rope overflows the host stack on
   *drop*, which reads as a crash rather than as a bug. Unwind it explicitly.
-
-Also open, and not objectives: §4.4's strategy *search*, and T-8's §6.4
-`unknown` values.
+- **`Prout` output is discarded when the program errors.** Buffered stdout is
+  lost on the abnormal exit, so a `Prout` trace is not a debugging channel for a
+  stage that dies: the first version of this port printed its progress and showed
+  nothing. Substitute a value instead, or make the failure impossible, and read
+  the shape of what comes back.
 
 The soundness gate is unchanged and non-negotiable:
 `strict_mode_has_no_false_positives_on_the_corpus` must stay green. If a new

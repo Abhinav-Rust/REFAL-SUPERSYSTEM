@@ -204,7 +204,7 @@ not claim Turchin's semantic graph cleaning.
 
 ## Refal-authored Compiler Slice
 
-Status: **Partial implementation; updated 2026-08-18**. `examples/compiler-refal-subset.ref` is a
+Status: **Partial implementation; updated 2026-09-25**. `examples/compiler-refal-subset.ref` is a
 Refal program that accepts a restricted character-string function name,
 `examples/compiler-refal-parser-subset.ref` recognizes `Name = Name;`, and
 `examples/compiler-refal-checker-subset.ref` validates two repeated-name definitions while rejecting
@@ -256,7 +256,7 @@ direct Rust-bootstrap → C1 → C2 → C3 trial: each artifact checks successfu
 byte-identical at 4,780 bytes. General source lexing/parsing, complete Turchin configuration driving
 and semantic cleaning, complete generalized driven Core Refal emission, complete differential
 compilation of all positive and negative corpus programs, and general-corpus Rust-to-Refal
-self-hosting remain open.
+self-hosting remain open. The *Refal* side has since taken over four stages of the transforming half. `examples/compiler.ref`'s `GRAPH` mode builds the section 4.2 seed graph and prints it byte-identically to `refal graph` (55/55); its `RESIDUALIZE` mode emits the residual program the cleaned graph denotes (55/55); its `DRIVE` mode contracts the closed entry configuration and reproduces `refal drive`'s step count, visited-state trace and output; and its `DRIVE-SYMBOLIC` mode reproduces `drive_symbolic_with_strategy` — the three-valued matcher, longest-prefix-first expression splits, the case split into `[]` / `s.H e.T` / `(e.B) e.T`, folding against the active path, the whistle, and both ends of the compilation-interpretation axis. That last differential byte-compares the default report, the `--configurations` report and the `--neighborhoods` report against `refal drive-symbolic` over every drivable example (55/55, 0 diverged), with `--strategy interpretive` gated separately on the 8 examples the rule changes (8/8, 0 diverged). What remains open is unchanged and now narrower: general source *compilation* — the compiler normalises rather than compiling pattern matching — and whole-program residualization for general programs.
 
 ## Milestone 6: Production Backend
 
