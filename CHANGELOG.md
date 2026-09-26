@@ -2,6 +2,48 @@
 
 ## Unreleased
 
+### Residualization is total: the compiler always emits a program (2026-09-26)
+
+The driven path had a budget of 10000 steps, and when it ran out it **refused**:
+`residualize_entry_graph_with_strategy` returned `Err(DriveError::StepLimit)` and
+`compiler.ref`'s `DsRdEmit` printed `driven residualization error: step limit`.
+That made the compiler's ability to compile a property of the budget rather than
+of the program — a program that merely needed more driving than the budget
+allowed was not compiled at all.
+
+Now a call reached with the budget spent is **left residual**. The driver answers
+`SymbolicInvoke::Residual` (Rust) / `(RES (e.Ctx))` (Refal) — the same verdict it
+gives a call it cannot decide — so the residue keeps the call and the transitive
+retention walk carries its definition. The budget bounds the number of *driven*
+states; it no longer bounds whether a program comes out.
+
+Both sides changed, and they are held together by a differential at the budget:
+
+| budget | `refal residualize-driven --steps N` and `compiler.ref`'s `RESIDUALIZE-DRIVEN N` |
+|---:|---|
+| 1 | the source program itself — nothing was driven, and that is a correct answer |
+| 3 | `Go { = <Prout <Reverse 'c'> 'b' 'a'>; }` — partially driven, and equivalent |
+| 8 | `Go { = <Prout 'c' 'b' 'a'>; }` — fully driven |
+
+Byte-identical between the two implementations at budgets 1, 2, 5 and 12, over
+five fixtures. `residualization_is_total_when_the_budget_runs_out` runs the
+residue at budgets 1, 2 and 5 and requires the source's output, so "total" is
+established by execution rather than by inspection.
+
+**The Refal side needed a budget to be reachable at all.** `RESIDUALIZE-DRIVEN`
+now accepts a second argument, the step budget, and applies it by *seeding the
+step counter* rather than by carrying a limit: the counter starts at
+`10000 - N`, so the check `DsInvoke0` already made is the only place the budget
+exists and the 52 sites that rebuild the driver's context are untouched. The
+report subtracts the seed back, so a run that took three steps says `steps: 3`.
+Without this the budget-exhausted arm would be written, unexercised and wrong the
+first time it mattered: the default budget of 10000 is never reached on the
+corpus, so no existing differential could have covered it.
+
+The `(ERR)` arms in `DsRdOut`/`DsRdEmit` no longer mean "step limit" — they
+cannot, since the step limit is no longer an error — and now say
+`driven residualization error: undecided call`.
+
 ### The compiler's default path drives (2026-09-26)
 
 `refal compile` no longer normalises. It **drives**: the entry configuration is

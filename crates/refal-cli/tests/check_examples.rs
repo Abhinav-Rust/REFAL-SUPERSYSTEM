@@ -4003,6 +4003,116 @@ fn compiled_programs_are_deployable_and_output_equivalent_across_the_corpus() {
     }
 }
 
+/// The step budget bounds how much the driver *drives*, not whether it can
+/// produce a program at all.
+///
+/// A call reached with the budget spent is left residual, so the residue keeps
+/// it as a call and the retention walk carries its definition. The emitted
+/// program is therefore equivalent to the source at *every* budget, including
+/// one too small to drive anything -- and a residualizer that refuses instead
+/// is a compiler that fails on a program merely because the budget was tight,
+/// which is a property of the budget rather than of the program.
+#[test]
+fn residualization_is_total_when_the_budget_runs_out() {
+    for (path, input) in [
+        ("examples/runtime-recursion.ref", &[] as &[&str]),
+        ("examples/hello.ref", &[] as &[&str]),
+        ("examples/identity.ref", &["Hello Refal"] as &[&str]),
+        ("examples/runtime-condition.ref", &[] as &[&str]),
+        ("examples/runtime-arithmetic.ref", &[] as &[&str]),
+    ] {
+        let source_output = Command::new(refal_bin())
+            .args(["run", &workspace_path(path)])
+            .args(input)
+            .output()
+            .expect("run the source");
+        assert!(
+            source_output.status.success(),
+            "{path} should run:\n{}",
+            String::from_utf8_lossy(&source_output.stderr)
+        );
+
+        for budget in ["1", "2", "5"] {
+            let driven = residualize_driven_file(path, &["--steps", budget]);
+            assert!(
+                driven.status.success(),
+                "{path} at --steps {budget} should still emit a program:\n{}",
+                String::from_utf8_lossy(&driven.stderr)
+            );
+            let residue = driven_residue(&String::from_utf8_lossy(&driven.stdout));
+            assert!(
+                !residue.trim().is_empty(),
+                "{path} at --steps {budget} emitted nothing"
+            );
+            let scratch = scratch_source("refal-budget", &residue);
+            let checked = Command::new(refal_bin())
+                .args(["check"])
+                .arg(&scratch)
+                .output()
+                .expect("check the residue");
+            assert!(
+                checked.status.success(),
+                "{path} at --steps {budget} emitted a residue that does not check:\n{}",
+                String::from_utf8_lossy(&checked.stderr)
+            );
+            let residue_output = Command::new(refal_bin())
+                .args(["run"])
+                .arg(&scratch)
+                .args(input)
+                .output()
+                .expect("run the residue");
+            assert_eq!(
+                String::from_utf8_lossy(&residue_output.stdout),
+                String::from_utf8_lossy(&source_output.stdout),
+                "{path} at --steps {budget}: the residue does not answer what its source answers"
+            );
+            let _ = fs::remove_file(&scratch);
+        }
+    }
+}
+
+/// The same claim on the Refal side, held to the Rust oracle at the same budget.
+///
+/// `RESIDUALIZE-DRIVEN` alone uses the driver's own budget; given a second
+/// argument it uses that many steps. Without this the Refal driver's
+/// budget-exhausted arm is unreachable in any test the repository runs -- the
+/// default budget of 10000 is never reached on the corpus -- so the arm would be
+/// written, unexercised, and wrong the first time it mattered.
+#[test]
+fn the_refal_authored_driven_residualizer_is_total_when_the_budget_runs_out() {
+    for name in [
+        "runtime-recursion",
+        "hello",
+        "identity",
+        "runtime-condition",
+        "runtime-arithmetic",
+    ] {
+        let path = format!("examples/{name}.ref");
+        let source = fs::read_to_string(workspace_path(&path)).expect("read example");
+        for budget in ["1", "2", "5", "12"] {
+            let oracle = residualize_driven_file(&path, &["--steps", budget]);
+            assert!(
+                oracle.status.success(),
+                "the Rust driver failed on {name} at --steps {budget}"
+            );
+            let actual = run_file(
+                "examples/compiler.ref",
+                &["RESIDUALIZE-DRIVEN", budget, &source],
+            );
+            assert!(
+                actual.status.success(),
+                "the Refal driver failed on {name} at budget {budget}:\n{}",
+                String::from_utf8_lossy(&actual.stderr)
+            );
+            assert_eq!(
+                String::from_utf8_lossy(&actual.stdout),
+                String::from_utf8_lossy(&oracle.stdout),
+                "{name} at budget {budget}: the Refal driver diverged from the Rust oracle"
+            );
+        }
+    }
+}
+
 /// Driving has to be observable, or the gate above proves nothing.
 ///
 /// The compiled path is a different program from the lowered one on at least

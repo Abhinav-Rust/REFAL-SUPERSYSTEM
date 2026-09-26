@@ -1,4 +1,4 @@
-$EXTERN Prout, Chr, Ord, Add, Sub, Compare, Upper, Symb;
+$EXTERN Prout, Chr, Ord, Add, Sub, Compare, Upper, Symb, Numb;
 
 * Refal-authored lexer + parser + checker + emitter for Classic Refal-5.
 *
@@ -80,6 +80,8 @@ Dispatch {
     <Prout <DriveSym (SYMI) e.Source>>;
   ('RESIDUALIZE-DRIVEN') (e.Source) =
     <Prout <DsRdRun e.Source>>;
+  ('RESIDUALIZE-DRIVEN') (e.N) (e.Source) =
+    <Prout <DsRdBudget <Numb e.N> e.Source>>;
   ('NORMALIZE') (e.Source) =
     <Normalize <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>;
   (e.Mode) (e.Source) = <Prout 'unknown mode: ' e.Mode>;
@@ -1984,6 +1986,23 @@ DsRdProgram {
   (PROG e.Items) = <DsRdSelect (PLAIN) (PROG e.Items) <CleanG <BuildG e.Items>>>;
 }
 
+* Compile with a driving budget of `e.N` steps. `RESIDUALIZE-DRIVEN` alone uses
+* the driver's own budget, which is 10000 -- the same number `refal-core`
+* defaults to. This mode exists so the budget can be made to run out on a small
+* program, which is the only way to exercise what the driver emits when it does.
+* The budget is applied by *seeding the step counter*, not by carrying a limit:
+* `DsSeed` starts the counter at `10000 - e.N`, so the check `DsInvoke0` already
+* makes is the only place the budget exists, and nothing else has to know.
+DsRdBudget {
+  s.N e.Source =
+    <DsRdBudget2 s.N <Parse <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>>;
+}
+
+DsRdBudget2 {
+  s.N (PROG e.Items) =
+    <DsRdSelect (SEED s.N) (PROG e.Items) <CleanG <BuildG e.Items>>>;
+}
+
 DsRdSelect {
   (e.M) (PROG e.Items) (CG () (e.States) (e.Trans)) =
     "driven residualization error: no entry";
@@ -2006,8 +2025,16 @@ DsRdTop2 {
 DsRdGo {
   (e.M) (PROG e.Items) (e.Fn) (e.States) s.E (e.Args) =
     <DsRdOut (e.M) (PROG e.Items) (e.Fn) (e.Args)
-      <DsInvoke (SX s.E 'C' (e.States) 0 () () () () () () () (NONE) 0 ())
+      <DsInvoke (SX s.E 'C' (e.States) <DsSeed (e.M)> () () () () () () () (NONE) 0 ())
                 (e.Fn) (e.Args)>>;
+}
+
+* The step counter a run starts from. The driver's budget is 10000, the number
+* `refal-core` defaults to, so `(SEED s.N)` starts the counter at `10000 - s.N`
+* and the budget runs out after `s.N` steps. Every other mode starts at zero.
+DsSeed {
+  (SEED s.N) = <Sub 10000 s.N>;
+  (e.M) = 0;
 }
 
 * The arguments the entry configuration is driven with: none when the entry
@@ -2037,7 +2064,7 @@ DsRdOut {
   (e.M) (PROG e.Items) (e.Fn) (e.Args) (FAILS (e.Ctx)) =
     <DsRdEmit (e.M) (PROG e.Items) (e.Fn) <DsCallSeq (e.Fn) (e.Args)> <DsRewire <DsLoop (e.Ctx)>>>;
   (e.M) (PROG e.Items) (e.Fn) (e.Args) (ERR) =
-    "driven residualization error: step limit";
+    "driven residualization error: undecided call";
 }
 
 DsRdEmit {
@@ -2045,13 +2072,30 @@ DsRdEmit {
     <DsRdReport (e.Ctx)> <Emit <DsRdBuild (e.Items) (e.Fn) (e.Residual) (e.Ctx)>>;
   (PLAIN) (PROG e.Items) (e.Fn) (e.Residual) (LOOP (e.Ctx)) =
     <Emit <DsRdBuild (e.Items) (e.Fn) (e.Residual) (e.Ctx)>>;
+  (SEED s.N) (PROG e.Items) (e.Fn) (e.Residual) (LOOP (e.Ctx)) =
+    <DsRdReportFrom <DsSeed (SEED s.N)> (e.Ctx)>
+    <Emit <DsRdBuild (e.Items) (e.Fn) (e.Residual) (e.Ctx)>>;
   (e.M) (PROG e.Items) (e.Fn) (e.Residual) (ERR) =
-    "driven residualization error: step limit";
+    "driven residualization error: undecided call";
 }
 
 DsRdReport {
   (e.Ctx) =
     "steps: " <DsSteps (e.Ctx)> <NL>
+    "visited: " <DsVis (e.Ctx)> <NL>
+    "whistles: " <DsWStateLine (e.Ctx)> <NL>
+    "generalized: " <DsLen <DsWEvents (e.Ctx)>> <NL>
+    "neighborhood-loops: " <DsLoops (e.Ctx)> <NL>
+    "generalized-states: " <DsWStateLine (e.Ctx)> <NL>;
+}
+
+* The same report, with the step counter offset by the seed the run started
+* from. A budgeted run starts its counter at `10000 - s.N`, so the steps it
+* actually took are the counter minus that seed; printing the counter would
+* report 10000 for a run that took three.
+DsRdReportFrom {
+  s.Seed (e.Ctx) =
+    "steps: " <Sub <DsSteps (e.Ctx)> s.Seed> <NL>
     "visited: " <DsVis (e.Ctx)> <NL>
     "whistles: " <DsWStateLine (e.Ctx)> <NL>
     "generalized: " <DsLen <DsWEvents (e.Ctx)>> <NL>
@@ -2512,11 +2556,19 @@ DsInvoke {
   (e.Ctx) (e.Fn) (e.In) = <DsInvoke0 (e.Ctx) (e.Fn) (e.In)>;
 }
 
+* The step budget bounds how much the driver *drives*, not whether it can
+* produce a program at all. A call reached with the budget spent is left
+* residual -- `(RES (e.Ctx))`, the same verdict a call the driver cannot decide
+* gets -- so the residue keeps it as a call and the transitive retention carries
+* its definition. The emitted program is equivalent to the source either way,
+* and residualization is total. Erroring instead makes the compiler fail on a
+* program that merely needs more driving than the budget allows, which is a
+* property of the budget rather than of the program.
 DsInvoke0 {
   (e.Ctx) (e.Fn) (e.In), <DsSteps (e.Ctx)> : s.S, <Compare s.S 10000> : '-' =
     <DsScan <DsBump <DsRecCall (e.Ctx) (e.Fn) (e.In)>>
             (e.Fn) (e.In) ('0' '0') <DsStates (e.Ctx)>>;
-  (e.Ctx) (e.Fn) (e.In) = (ERR);
+  (e.Ctx) (e.Fn) (e.In) = (RES (e.Ctx));
 }
 
 DsScan {

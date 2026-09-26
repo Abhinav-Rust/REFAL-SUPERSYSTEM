@@ -34,8 +34,8 @@ objective to a gate. Not another Refal implementation.
 
 | | |
 |---|---|
-| Honest completion | **~83%** (product completeness — one method, see below) |
-| Tests | 324 passing, 0 clippy, fmt clean |
+| Honest completion | **~85%** (product completeness — one method, see below) |
+| Tests | 326 passing, 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
 
@@ -49,11 +49,52 @@ diverged, 25 out of scope). `compile_command_compiles_the_compiler_itself`
 now requires the compiler's own output to equal the Rust driver's residue, and
 it is green; so are `the_refal_authored_compiler_matches_the_driven_residue_on_every_lowerable_example`
 and `the_refal_authored_normaliser_matches_lower_on_every_lowerable_example`,
-which are the two sides of the default/normalise split. The T-4/T-6 differential
+which are the two sides of the default/normalise split.
+`residualization_is_total_when_the_budget_runs_out` and
+`the_refal_authored_driven_residualizer_is_total_when_the_budget_runs_out` cover
+the budget-exhausted arm on both sides, the second by byte-comparing against the
+Rust oracle at budgets 1, 2, 5 and 12. The T-4/T-6 differential
 corpus gate is byte-identical to the previous run (`cases: 69`, `positive: 30`,
 `check-failure: 6`, `runtime-failure: 1`, `residual: 32`,
 `cleaned-sentences: 1`), and `clippy --all-targets -D warnings` and
 `cargo fmt --check` are clean.
+
+### Done — residualization is total
+
+The driven path had a budget of 10000 steps and **refused** when it ran out:
+`Err(DriveError::StepLimit)` in `refal-core`, `driven residualization error: step
+limit` in `compiler.ref`. That made the compiler's ability to compile a property
+of the budget rather than of the program.
+
+A call reached with the budget spent is now **left residual** — the verdict the
+driver already gives a call it cannot decide (`SymbolicInvoke::Residual` in Rust,
+`(RES (e.Ctx))` in Refal) — so the residue keeps the call and the transitive
+retention walk carries its definition. The budget bounds the number of *driven*
+states; it no longer bounds whether a program comes out.
+
+| budget | `residualize-driven --steps N`, and `compiler.ref`'s `RESIDUALIZE-DRIVEN N` |
+|---:|---|
+| 1 | the source program — nothing was driven, and that is a correct answer |
+| 3 | `Go { = <Prout <Reverse 'c'> 'b' 'a'>; }` — partially driven, and equivalent |
+| 8 | `Go { = <Prout 'c' 'b' 'a'>; }` — fully driven |
+
+Byte-identical between the two implementations at budgets 1, 2, 5 and 12 over
+five fixtures, and `residualization_is_total_when_the_budget_runs_out` runs the
+residue at budgets 1, 2 and 5 and requires the source's output, so totality is
+established by execution rather than by inspection.
+
+**The Refal side needed the budget to be reachable.** `RESIDUALIZE-DRIVEN` now
+takes it as a second argument and applies it by *seeding the step counter* at
+`10000 - N`: the check `DsInvoke0` already made is the only place the budget
+exists, and the 52 sites that rebuild the driver's context are untouched. The
+report subtracts the seed back, so a run that took three steps says `steps: 3`.
+Without that, the budget-exhausted arm would be written, unexercised and wrong the
+first time it mattered — the default budget of 10000 is never reached on the
+corpus, so no existing differential could have covered it.
+
+The `(ERR)` arms in `DsRdOut`/`DsRdEmit` no longer mean "step limit" — they
+cannot, since it is no longer an error — and now say
+`driven residualization error: undecided call`.
 
 ### Done — the compiler's default path drives
 
@@ -1219,44 +1260,33 @@ Refal-authored compiler and a `Compile` that drives.
 
 ## NEXT ACTION
 
-**Make residualization total, then search the compilation strategy.**
+**Search the compilation strategy (§4.4), then T-8's §6.4 `unknown` values.**
 
-`Compile` drives. The order this file carried for three sessions — point `Compile`
-at the driven path, keep the normalising path as its own mode and its own test —
-is done, and its gate is met: `compile_command_compiles_the_compiler_itself`
-requires the compiler's own output to equal the Rust driver's residue, and
-`the_refal_authored_normaliser_matches_lower_on_every_lowerable_example` holds the
-other side of the split. The deployability gate that landed with it found a real
-defect on its first run (`Up` activates a carried name, so the residue must keep
-every definition), which is the argument for having built it before needing it.
+The order this file carried for four sessions is done: `Compile` drives, the
+normalising path is its own mode with its own test, and residualization is total,
+so the compiler emits a program for every program rather than for the ones its
+budget happens to fit. Two of the three gates that landed found or would have
+found real defects, which is the argument for building them before needing them.
 
 **What to do, in order.**
 
-1. **Make residualization total.** Today `residualize_entry_graph_with_strategy`
-   returns `Err(DriveError::StepLimit)` when the budget runs out, so the CLI
-   refuses rather than emitting anything, and `compiler.ref`'s `DsRdEmit` prints
-   `driven residualization error: step limit` for the same case. A residualizer
-   that is *total* emits, for a configuration it could not finish, the call
-   `<Fn e.Args>` itself — with `Fn` retained by the existing transitive walk. The
-   residue is then always a program equivalent to the source, the number of
-   *driven* states is what the budget bounds, and a general program is compiled
-   rather than refused. This is the item the accounting calls "whole-program
-   residualization for general programs", and it is the same change on both
-   sides: `drive_symbolic_with_strategy` in `refal-core` and the `DsRdOut`/`DsRdEmit`
-   `ERR` arm in `compiler.ref`, with the existing differential holding them
-   together.
-2. **§4.4's strategy *search*.** `DriveStrategy` is `Compilative | Interpretive`
-   and the choice is selectable, but Turchin's §4.4 makes the point on p. 538 that
-   the variants place the resulting program at different points on the
-   compilation-interpretation axis, and that the choice is a *strategy* one. Search
-   it: run both ends, measure the residue (steps to a fixpoint, size, and whether
-   the interpreter is eliminated), and keep the better — with a gate asserting the
-   chosen end is no worse than either fixed end over the corpus. The measurement
-   that justifies it already exists: `--strategy interpretive` regresses T-9 by
-   16% instead of 98% on `metasystem-unroll.ref`.
-3. **§6.4's `unknown` metacode values** — the smallest of the three. Every runtime
-   `Value` is ground, so the manual's `unknown(t,n,i)` rules have nothing to act on
-   until a non-ground value exists.
+1. **§4.4's strategy *search*.** `DriveStrategy` is `Compilative | Interpretive`
+   and the choice is selectable, but Turchin's point on p. 538 is that the
+   variants place the resulting program at different points on the
+   compilation-interpretation axis and that choosing between them is a *strategy*
+   decision. Search it: drive both ends, measure the residue — steps to a
+   fixpoint, size, and whether the interpreter is eliminated — and keep the
+   better, with a gate asserting the chosen end is no worse than either fixed end
+   over the corpus. The measurement that justifies the search already exists:
+   `--strategy interpretive` regresses T-9 to 16% instead of 98% on
+   `metasystem-unroll.ref`, and the compilative end is the default *because* of
+   that measurement rather than because of a rule.
+2. **T-8's §6.4 `unknown` values** — the smallest of the three. Every runtime
+   `Value` is ground, so the manual's `unknown(t,n,i)` rules have nothing to act
+   on until a non-ground value exists.
+3. **The front end's clause-by-clause conformance corpus and release packaging** —
+   the 4-point row that is still at 1.5, and the only row whose gap is
+   bookkeeping rather than engineering.
 
 **A fourth round of measurement is still not needed.** `scripts/profile.py`
 answers "where is the cost" in one command and answers it with call counts. What
@@ -1367,19 +1397,22 @@ Five pieces, in the order the output depends on them:
 
 ### Still open
 
-- Residualization is bounded, not total: past the step budget the driven path
-  refuses instead of falling back to a call the residue retains. `NEXT ACTION`
-  orders it first.
-- §4.4's strategy *search*, and T-8's §6.4 `unknown` values.
-- The graph pass's comparison count — `MemberL`, `SameChars`, `SameFunc3`,
-  `FuncName` — which the profile ranks; the pass is linear in the compiler's own
-  source now, so this is a bound rather than a cost.
+- §4.4's strategy *search*, and T-8's §6.4 `unknown` values. `NEXT ACTION` orders
+  the first.
+- The front end's clause-by-clause conformance corpus, and release packaging —
+  the 4-point row still at 1.5.
+- The compiler's speed on very large inputs; the graph pass's comparison count —
+  `MemberL`, `SameChars`, `SameFunc3`, `FuncName` — which the profile ranks. The
+  pass is linear in the compiler's own source, so this is a bound rather than a
+  cost.
 - The `Reverse` rope shape, and the interpretive driver's cost in Refal — both
   measured and recorded above as bounds rather than costs.
 
-*(Closed on 2026-09-26: the driven path **is** wired into `Compile`. `refal
+*(Closed on 2026-09-26: the driven path **is** wired into `Compile`; `refal
 compile` drives, `refal normalize` is the normalising path with its own
-differential, and `refal differential --compiled` runs the residue.)*
+differential, `refal differential --compiled` runs the residue, and
+residualization is **total** — a call reached with the budget spent is left
+residual rather than aborting the compiler.)*
 
 ### Traps this repository has already paid for
 

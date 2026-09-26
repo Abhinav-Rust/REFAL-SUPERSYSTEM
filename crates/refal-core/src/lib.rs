@@ -1256,10 +1256,16 @@ impl<'a> DriveContext<'a> {
         function: &str,
         input: &[CoreTerm],
     ) -> Result<SymbolicInvoke, DriveError> {
+        // The step budget bounds how much the driver *drives*, not whether it
+        // can produce a program at all. A call reached with the budget spent is
+        // left residual, so the residue keeps it as a call and
+        // `retain_called_functions` carries its definition: the emitted program
+        // is equivalent to the source either way, and residualization is total.
+        // Refusing instead makes the compiler fail on a program that merely
+        // needs more driving than the budget allows, which is a property of the
+        // budget rather than of the program.
         if self.steps >= self.max_steps {
-            return Err(DriveError::StepLimit {
-                limit: self.max_steps,
-            });
+            return Ok(SymbolicInvoke::Residual);
         }
         self.record_call(function, input);
         // `Prout` is deliberately *not* folded away here. It is a side effect:
