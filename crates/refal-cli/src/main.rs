@@ -109,6 +109,7 @@ fn main() {
         "dump-ast" => println!("{program:#?}"),
         "lower" => lower_program(&program, &input_args),
         "compile" => compile_program(&source, &input_args),
+        "normalize" => normalize_program(&source, &input_args),
         "graph" => graph_program(&program, &input_args),
         "analyze" => analyze_program(&program, &input_args),
         "formats" => formats_program(&program, &input_args),
@@ -124,7 +125,7 @@ fn main() {
         "supercompile" => supercompile_program(&program, &input_args),
         "metasystem" => metasystem_program(&program, &input_args, &path),
         "fixpoint" => fixpoint_program(&program, &input_args),
-        "differential" => differential_program(&program, &input_args),
+        "differential" => differential_program(&program, &source, &input_args),
         "run" => run_program(&program, &input_args),
         other => {
             eprintln!("unknown command `{other}`");
@@ -249,7 +250,10 @@ fn print_usage() {
     eprintln!("             A lint flag moves diagnostics only; a spec violation always fails.");
     eprintln!("  dump-ast   Print the parsed AST");
     eprintln!("  lower      Lower checked Refal source to normalized Core Refal");
-    eprintln!("  compile    Compile Refal source with the Refal-authored compiler");
+    eprintln!(
+        "  compile    Compile Refal source with the Refal-authored compiler (drives, 1980 §4.2)"
+    );
+    eprintln!("  normalize  Re-print Refal source with the Refal-authored compiler (no driving)");
     eprintln!("  graph      Print the deterministic seed graph of sentence states and calls");
     eprintln!("  analyze    Report bounded Tier 1 reachability, terminals, and SCCs");
     eprintln!("  overlap    Report conservative sentence-pattern compatibility pairs");
@@ -276,6 +280,7 @@ fn print_usage() {
     );
     eprintln!("  fixpoint   Apply a source-to-source compiler twice and check byte stability");
     eprintln!("  differential  Compare original and lowered-source runtime outputs [--corpus]");
+    eprintln!("                [--compiled]  compare against the Refal compiler's driven residue");
     eprintln!("  run        Run a Refal source file with the bootstrap interpreter");
     eprintln!("             [--input-file <path>]  pass a file's contents as one argument,");
     eprintln!("                                    which is how inputs too large for a");
@@ -299,10 +304,12 @@ fn lower_program(program: &refal_ast::Program, args: &[String]) {
     }
 }
 
-/// Compiles Refal source with the Refal-authored compiler rather than with the
-/// Rust `lower`. The output is re-parsed and checked before it is emitted, so
-/// `compile` never hands back a program the compiler itself would reject.
-fn compile_program(source: &str, args: &[String]) {
+/// The embedded Refal compiler, lexed and parsed once per invocation.
+///
+/// `examples/compiler.ref` is the compiler, and it is embedded rather than read
+/// from disk so the binary is self-contained: `refal compile` works from any
+/// directory, on any machine, without the source tree.
+fn embedded_refal_compiler() -> refal_ast::Program {
     let tokens = match Lexer::new(REFAL_COMPILER).tokenize() {
         Ok(tokens) => tokens,
         Err(error) => {
@@ -313,7 +320,7 @@ fn compile_program(source: &str, args: &[String]) {
             process::exit(1);
         }
     };
-    let compiler = match Parser::new(tokens).parse_program() {
+    match Parser::new(tokens).parse_program() {
         Ok(compiler) => compiler,
         Err(error) => {
             eprintln!(
@@ -322,12 +329,27 @@ fn compile_program(source: &str, args: &[String]) {
             );
             process::exit(1);
         }
-    };
+    }
+}
 
-    let output = match apply_source_compiler(&compiler, source) {
+/// Run the embedded Refal compiler over `source` and return the program it
+/// emits. `mode` selects one of the compiler's own paths: `None` is its default
+/// path, which drives (Turchin 1980 §4.2); `Some("NORMALIZE")` is its
+/// normalising path, which re-prints what it parsed.
+///
+/// The emitted program is re-lexed, re-parsed and re-checked before it is
+/// returned, so a caller that receives `Ok` has been handed checked Refal.
+fn refal_authored_source(source: &str, mode: Option<&str>, label: &str) -> String {
+    let compiler = embedded_refal_compiler();
+
+    let applied = match mode {
+        Some(mode) => apply_source_compiler_mode(&compiler, mode, source),
+        None => apply_source_compiler(&compiler, source),
+    };
+    let output = match applied {
         Ok(output) => output,
         Err(error) => {
-            eprintln!("compile error: {error}");
+            eprintln!("{label} error: {error}");
             process::exit(1);
         }
     };
@@ -337,7 +359,7 @@ fn compile_program(source: &str, args: &[String]) {
             Ok(program) => program,
             Err(error) => {
                 eprintln!(
-                    "compile produced a program that does not parse: {}",
+                    "{label} produced a program that does not parse: {}",
                     error.message
                 );
                 process::exit(1);
@@ -345,7 +367,7 @@ fn compile_program(source: &str, args: &[String]) {
         },
         Err(error) => {
             eprintln!(
-                "compile produced a program that does not lex: {}",
+                "{label} produced a program that does not lex: {}",
                 error.message
             );
             process::exit(1);
@@ -355,13 +377,19 @@ fn compile_program(source: &str, args: &[String]) {
         for diagnostic in &diagnostics {
             eprintln!("{}", diagnostic.message);
         }
-        eprintln!("compile produced a program that does not check");
+        eprintln!("{label} produced a program that does not check");
         process::exit(1);
     }
 
     // `Prout` terminates its line, and `lower` ends the same way, so the two
     // commands agree byte for byte and `differential` can compare them.
-    let emitted = format!("{output}\n");
+    format!("{output}\n")
+}
+
+/// Run the embedded Refal compiler over `source` and print the program it
+/// emits, either to standard output or to the file `--output` names.
+fn refal_authored_emit(source: &str, args: &[String], mode: Option<&str>, label: &str) {
+    let emitted = refal_authored_source(source, mode, label);
     match args {
         [] => print!("{emitted}"),
         [flag, path] if flag == "--output" || flag == "-o" => {
@@ -371,10 +399,27 @@ fn compile_program(source: &str, args: &[String]) {
             }
         }
         _ => {
-            eprintln!("Usage: refal compile <file.ref> [--output <file.ref>]");
+            eprintln!("Usage: refal {label} <file.ref> [--output <file.ref>]");
             process::exit(2);
         }
     }
+}
+
+/// The compiler's default path: drive the program's entry configuration and
+/// emit the program the driven graph denotes. This is what makes the compiler a
+/// compiler rather than a reformatter -- driving decides the dispatch at
+/// compile time, so the residue carries no call to the function that chose
+/// between sentences.
+fn compile_program(source: &str, args: &[String]) {
+    refal_authored_emit(source, args, None, "compile")
+}
+
+/// The compiler's normalising path: `Emit(Check(Parse(tokens)))`, with no
+/// driving. It is byte-identical to the Rust bootstrap's `lower`, and the
+/// differential that says so is the one that keeps the two implementations
+/// honest about what each is for.
+fn normalize_program(source: &str, args: &[String]) {
+    refal_authored_emit(source, args, Some("NORMALIZE"), "normalize")
 }
 
 /// Prints inferred function formats (Turchin 1980 §2.3): what each function can
@@ -897,8 +942,29 @@ fn fixpoint_program(program: &refal_ast::Program, args: &[String]) {
     println!("bytes: {}", first.len());
 }
 
+/// A Refal character string, as the entry expects it.
+fn bracket_of(text: &str) -> Value {
+    Value::bracket(text.chars().map(Value::Char).collect())
+}
+
 fn apply_source_compiler(program: &refal_ast::Program, source: &str) -> Result<String, String> {
-    let input = vec![Value::bracket(source.chars().map(Value::Char).collect())];
+    apply_source_compiler_input(program, vec![bracket_of(source)])
+}
+
+/// The embedded Refal compiler, invoked in one of its named modes. A mode is a
+/// leading bracket, which is the CLI contract `Dispatch` already implements.
+fn apply_source_compiler_mode(
+    program: &refal_ast::Program,
+    mode: &str,
+    source: &str,
+) -> Result<String, String> {
+    apply_source_compiler_input(program, vec![bracket_of(mode), bracket_of(source)])
+}
+
+fn apply_source_compiler_input(
+    program: &refal_ast::Program,
+    input: Vec<Value>,
+) -> Result<String, String> {
     let evaluator = Evaluator::new(program);
     let result = evaluator
         .evaluate_entry(&input)
@@ -920,33 +986,57 @@ fn apply_source_compiler(program: &refal_ast::Program, source: &str) -> Result<S
     Ok(outputs.pop().expect("output length checked"))
 }
 
-fn differential_program(program: &refal_ast::Program, input_args: &[String]) {
-    let lowered_source = refal_core::format_program(&refal_core::lower_program(program));
-    let lowered_program = match parse_checked_source(&lowered_source) {
+/// Compares a program's runtime behaviour against a transformation of it, by
+/// running both and requiring the same output.
+///
+/// The transformation is `lower` by default: the Rust bootstrap's normaliser,
+/// which the Refal-authored compiler's `NORMALIZE` mode is a second
+/// implementation of. `--compiled` compares against the Refal-authored
+/// compiler's *default* path instead -- the driven residue, which is what
+/// `refal compile` emits.
+///
+/// The distinction matters for what the gate proves. `lower` preserves the
+/// program's structure, so agreeing with it says the compiler is a correct
+/// printer. Driving rewrites the dispatch, so agreeing with the *source* says
+/// the compiled program is a deployable one: it is checked Refal, and it
+/// answers what the original answered.
+fn differential_program(program: &refal_ast::Program, source: &str, input_args: &[String]) {
+    let compiled = input_args.iter().any(|flag| flag == "--compiled");
+    let input_args = input_args
+        .iter()
+        .filter(|argument| !argument.starts_with("--"))
+        .cloned()
+        .collect::<Vec<_>>();
+    let transformed_source = if compiled {
+        refal_authored_source(source, None, "compile")
+    } else {
+        refal_core::format_program(&refal_core::lower_program(program))
+    };
+    let transformed_program = match parse_checked_source(&transformed_source) {
         Ok(program) => program,
         Err(error) => {
-            eprintln!("differential lowering error: {error}");
+            eprintln!("differential transformation error: {error}");
             process::exit(1);
         }
     };
-    let original = match execute_program(program, input_args) {
+    let original = match execute_program(program, &input_args) {
         Ok(output) => output,
         Err(error) => {
             eprintln!("differential original execution error: {error}");
             process::exit(1);
         }
     };
-    let lowered = match execute_program(&lowered_program, input_args) {
+    let transformed = match execute_program(&transformed_program, &input_args) {
         Ok(output) => output,
         Err(error) => {
-            eprintln!("differential lowered execution error: {error}");
+            eprintln!("differential transformed execution error: {error}");
             process::exit(1);
         }
     };
-    if original != lowered {
+    if original != transformed {
         eprintln!("differential mismatch");
-        eprintln!("original: {:?}", original);
-        eprintln!("lowered:  {:?}", lowered);
+        eprintln!("original:    {:?}", original);
+        eprintln!("transformed: {:?}", transformed);
         process::exit(1);
     }
     println!("differential: equal");

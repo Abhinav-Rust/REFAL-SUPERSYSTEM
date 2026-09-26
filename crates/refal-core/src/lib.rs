@@ -3130,6 +3130,20 @@ pub fn residualize_symbolic_program(
     }
 }
 
+/// The builtins that can apply a function whose *name* arrives as data.
+///
+/// `Mu` is the metafunction: `<Mu (F) e.Args>` is `<F e.Args>`, with `F` read
+/// out of the argument. `Up` is the metacode lifter of §1.3 and Chapter 6: it
+/// restores a metacoded expression and *activates* the calls it recovers, so
+/// `<Up '*'((Echo) 'Z')>` is `<Echo 'Z'>`.
+///
+/// In both cases the callee is not a call term in the program text. No walk
+/// over call terms can see it, so a residue that drops a definition the program
+/// can still reach this way fails at run time where the original succeeded.
+fn activates_a_carried_call(name: &str) -> bool {
+    name.eq_ignore_ascii_case("Mu") || name.eq_ignore_ascii_case("Up")
+}
+
 /// The definitions of every user function the residue still calls, transitively.
 ///
 /// Externs need no definition: they are carried by the program's declarations.
@@ -3139,12 +3153,9 @@ fn retain_called_functions(
     entry_name: &str,
 ) -> Vec<CoreFunction> {
     let mut pending = seed_names;
-    // `Mu` dispatches on a function name carried as *data*, so walking call
-    // terms cannot see what it will call. When the residue still dispatches
-    // dynamically the only sound residue keeps every definition the original
-    // had -- a residue that drops `Echo` is a program that fails at run time
-    // where the original succeeded.
-    if pending.iter().any(|name| name.eq_ignore_ascii_case("Mu")) {
+    // When the residue can still apply a function named in its own data, the
+    // only sound residue keeps every definition the original had.
+    if pending.iter().any(|name| activates_a_carried_call(name)) {
         return program
             .functions
             .iter()
@@ -3252,13 +3263,15 @@ pub fn entering_restrictions(program: &CoreProgram) -> Vec<EnteringRestrictions>
 /// Whether the residue still applies a function chosen at run time.
 ///
 /// `Mu` takes a function *name* as data, so no walk over call terms can see
-/// what it will call. A function reachable that way has entering restrictions
-/// the residue does not spell out, and §4.3's refutation has nothing to stand
-/// on.
+/// what it will call. `Up` is the same hazard one level down: it activates the
+/// calls a metacoded expression denotes, and a name inside metacode is a symbol
+/// in a bracket rather than a call term. A function reachable either way has
+/// entering restrictions the residue does not spell out, and §4.3's refutation
+/// has nothing to stand on.
 fn residual_dispatches_dynamically(program: &CoreProgram) -> bool {
     fn mentions(terms: &[CoreTerm]) -> bool {
         terms.iter().any(|term| match &term.kind {
-            CoreTermKind::Call { name, args } => name.eq_ignore_ascii_case("Mu") || mentions(args),
+            CoreTermKind::Call { name, args } => activates_a_carried_call(name) || mentions(args),
             CoreTermKind::Bracket(inner) => mentions(inner),
             CoreTermKind::Block {
                 argument,

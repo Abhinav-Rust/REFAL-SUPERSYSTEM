@@ -1718,7 +1718,10 @@ fn refal_authored_checker_rejects_negative_fixtures() {
 #[test]
 fn refal_authored_compiler_handles_blocks() {
     // Blocks, both as sentence endings and in condition position, were the
-    // largest gap in the Refal compiler's grammar coverage.
+    // largest gap in the Refal compiler's grammar coverage. Two questions are
+    // separate here and are asked separately: the *normaliser* has to print a
+    // block the way `lower` does, and the *default* path has to resolve one
+    // where it can, because that is what driving is for.
     for name in ["block-ending", "condition-block"] {
         let path = workspace_path(&format!("examples/{name}.ref"));
         let expected = Command::new(refal_bin())
@@ -1726,23 +1729,93 @@ fn refal_authored_compiler_handles_blocks() {
             .output()
             .expect("run the Rust lowerer");
         let source = fs::read_to_string(&path).expect("read example");
-        let actual = run_file("examples/compiler.ref", &[&source]);
+        let actual = run_file("examples/compiler.ref", &["NORMALIZE", &source]);
         assert!(
             actual.status.success(),
-            "the Refal compiler failed on {name}:
-{}",
+            "the Refal compiler's normaliser failed on {name}:\n{}",
             String::from_utf8_lossy(&actual.stderr)
         );
         assert_eq!(
             String::from_utf8_lossy(&actual.stdout),
             String::from_utf8_lossy(&expected.stdout),
-            "{name}: Refal emitter differs from the Rust bootstrap"
+            "{name}: Refal normaliser differs from the Rust bootstrap"
         );
     }
 }
 
+/// Driving is not a reformatting step: it decides at compile time what the
+/// source decided at run time.
+///
+/// `examples/block-ending.ref` ends its sentence with a block whose subject is
+/// the literal `'A'`, so exactly one of the block's sentences can ever be
+/// selected. A normaliser has to print the block; a compiler has to *remove*
+/// it. This asserts the removal, which is the observable difference between the
+/// two paths and the reason the default path drives.
+#[test]
+fn the_driven_compiler_resolves_a_block_at_compile_time() {
+    let path = workspace_path("examples/block-ending.ref");
+    let compiled = Command::new(refal_bin())
+        .args(["compile", &path])
+        .output()
+        .expect("run compile");
+    assert!(
+        compiled.status.success(),
+        "compile failed on block-ending.ref:\n{}",
+        String::from_utf8_lossy(&compiled.stderr)
+    );
+    let residue = String::from_utf8_lossy(&compiled.stdout).into_owned();
+
+    // Non-vacuity, both ways round. The source has a block; the residue has
+    // none, and it has the sentence the block could only ever have selected.
+    let source = fs::read_to_string(&path).expect("read example");
+    assert!(
+        source.contains(": {"),
+        "the fixture no longer contains a block, so this test proves nothing"
+    );
+    assert!(
+        !residue.contains(": {"),
+        "the driven residue still carries the block it should have resolved:\n{residue}"
+    );
+    assert!(
+        residue.contains("<Prout 'y' 'e' 's'>"),
+        "the driven residue lost the branch driving selected:\n{residue}"
+    );
+
+    // And the residue is a deployable program: it checks, and it answers what
+    // the source answers.
+    let scratch = scratch_source("refal-driven-block", &residue);
+    let checked = Command::new(refal_bin())
+        .args(["check"])
+        .arg(&scratch)
+        .output()
+        .expect("run check on the residue");
+    assert!(
+        checked.status.success(),
+        "the driven residue is not checked Refal:\n{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+    let from_source = Command::new(refal_bin())
+        .args(["run", &path])
+        .output()
+        .expect("run the source");
+    let from_residue = Command::new(refal_bin())
+        .args(["run"])
+        .arg(&scratch)
+        .output()
+        .expect("run the residue");
+    assert_eq!(
+        String::from_utf8_lossy(&from_residue.stdout),
+        String::from_utf8_lossy(&from_source.stdout),
+        "the driven residue does not answer what its source answers"
+    );
+    let _ = fs::remove_file(&scratch);
+}
+
 #[test]
 fn refal_authored_emitter_matches_rust_lower_byte_for_byte() {
+    // The *printer*, on the path `lower` is a second implementation of. The
+    // default path drives, and its differential is
+    // `the_refal_authored_compiler_matches_the_driven_residue_on_every_lowerable_example`.
     for name in [
         "hello",
         "identity",
@@ -1758,17 +1831,17 @@ fn refal_authored_emitter_matches_rust_lower_byte_for_byte() {
             .output()
             .expect("run the Rust lowerer");
         let source = fs::read_to_string(&path).expect("read example");
-        let actual = run_file("examples/compiler.ref", &[&source]);
+        let actual = run_file("examples/compiler.ref", &["NORMALIZE", &source]);
         assert!(
             actual.status.success(),
-            "the Refal compiler failed on {name}:
+            "the Refal compiler's normaliser failed on {name}:
 {}",
             String::from_utf8_lossy(&actual.stderr)
         );
         assert_eq!(
             String::from_utf8_lossy(&actual.stdout),
             String::from_utf8_lossy(&expected.stdout),
-            "{name}: Refal emitter differs from the Rust bootstrap"
+            "{name}: Refal normaliser differs from the Rust bootstrap"
         );
     }
 }
@@ -1802,7 +1875,7 @@ $ENTRY Go { = <Prout>; }
             .arg(&dir)
             .output()
             .expect("run the Rust lowerer");
-        let actual = run_file("examples/compiler.ref", &[source]);
+        let actual = run_file("examples/compiler.ref", &["NORMALIZE", source]);
         assert!(
             actual.status.success(),
             "failed on {source:?}:
@@ -1812,7 +1885,7 @@ $ENTRY Go { = <Prout>; }
         assert_eq!(
             String::from_utf8_lossy(&actual.stdout),
             String::from_utf8_lossy(&expected.stdout),
-            "emitter differs from the Rust bootstrap on {source:?}"
+            "normaliser differs from the Rust bootstrap on {source:?}"
         );
         let _ = fs::remove_file(&dir);
     }
@@ -1854,7 +1927,7 @@ fn refal_authored_compiler_handles_shorthand_block_comments_and_reals() {
             "the Rust lowerer rejected {source:?}:\n{}",
             String::from_utf8_lossy(&expected.stderr)
         );
-        let actual = run_file("examples/compiler.ref", &[source]);
+        let actual = run_file("examples/compiler.ref", &["NORMALIZE", source]);
         assert!(
             actual.status.success(),
             "failed on {source:?}:\n{}",
@@ -1876,6 +1949,14 @@ fn refal_authored_emitter_matches_lower_across_the_whole_corpus() {
     // byte-identical from compiler.ref. `compiler.ref` is excluded because it
     // is the compiler, and negative fixtures are excluded because `lower`
     // rejects them by construction.
+    //
+    // This is the *normalising* path -- `NORMALIZE`, which is
+    // `Emit(Check(Parse(tokens)))` with no driving -- because that is the path
+    // `lower` is a second implementation of. The default path drives, and its
+    // own differential is `refal_authored_residualize_driven_matches_the_rust_oracle`
+    // at the mode level and
+    // `the_refal_authored_compiler_matches_the_driven_residue_on_every_lowerable_example`
+    // at the CLI level.
     let mut names: Vec<String> = fs::read_dir(workspace_path("examples"))
         .expect("read the examples directory")
         .filter_map(|entry| {
@@ -1900,10 +1981,10 @@ fn refal_authored_emitter_matches_lower_across_the_whole_corpus() {
         checked += 1;
         let expected = String::from_utf8_lossy(&oracle.stdout).into_owned();
         let source = fs::read_to_string(workspace_path(&path)).expect("read example");
-        let actual = run_file("examples/compiler.ref", &[&source]);
+        let actual = run_file("examples/compiler.ref", &["NORMALIZE", &source]);
         if !actual.status.success() {
             failures.push(format!(
-                "{name}: compiler.ref failed\n{}",
+                "{name}: compiler.ref NORMALIZE failed\n{}",
                 String::from_utf8_lossy(&actual.stderr)
             ));
             continue;
@@ -2382,8 +2463,11 @@ fn formats_reaches_a_fixpoint_on_mutual_recursion() {
 #[test]
 fn compile_command_uses_the_refal_authored_compiler() {
     // `refal compile` runs the compiler written in Refal, not the Rust
-    // `lower`. They must agree byte for byte, because the Rust bootstrap is
-    // the oracle and the Refal compiler is meant to replace it.
+    // `lower`. Its default path *drives* (Turchin 1980 §4.2), so what it emits
+    // is the residue the driven graph denotes -- byte-identical to the Rust
+    // `residualize-driven` oracle. `refal normalize` is the same compiler on
+    // its normalising path, and that is what `lower` is a second
+    // implementation of. Both are checked here, on both sides of the split.
     for name in [
         "hello",
         "identity",
@@ -2395,10 +2479,15 @@ fn compile_command_uses_the_refal_authored_compiler() {
         "shorthand-variables",
     ] {
         let path = workspace_path(&format!("examples/{name}.ref"));
-        let expected = Command::new(refal_bin())
-            .args(["lower", &path])
-            .output()
-            .expect("run the Rust lowerer");
+
+        // The driven path: `compile` against the Rust driver's residue.
+        let driven = residualize_driven_file(&format!("examples/{name}.ref"), &[]);
+        assert!(
+            driven.status.success(),
+            "residualize-driven failed on {name}:\n{}",
+            String::from_utf8_lossy(&driven.stderr)
+        );
+        let expected = driven_residue(&String::from_utf8_lossy(&driven.stdout));
         let actual = Command::new(refal_bin())
             .args(["compile", &path])
             .output()
@@ -2409,9 +2498,29 @@ fn compile_command_uses_the_refal_authored_compiler() {
             String::from_utf8_lossy(&actual.stderr)
         );
         assert_eq!(
-            String::from_utf8_lossy(&actual.stdout),
-            String::from_utf8_lossy(&expected.stdout),
-            "{name}: `compile` differs from `lower`"
+            String::from_utf8_lossy(&actual.stdout).trim_end(),
+            expected.trim_end(),
+            "{name}: `compile` differs from the driven residue"
+        );
+
+        // The normalising path: `normalize` against the Rust lowerer.
+        let lowered = Command::new(refal_bin())
+            .args(["lower", &path])
+            .output()
+            .expect("run the Rust lowerer");
+        let normalised = Command::new(refal_bin())
+            .args(["normalize", &path])
+            .output()
+            .expect("run the Refal normaliser");
+        assert!(
+            normalised.status.success(),
+            "normalize failed on {name}:\n{}",
+            String::from_utf8_lossy(&normalised.stderr)
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&normalised.stdout),
+            String::from_utf8_lossy(&lowered.stdout),
+            "{name}: `normalize` differs from `lower`"
         );
     }
 }
@@ -2419,7 +2528,10 @@ fn compile_command_uses_the_refal_authored_compiler() {
 #[test]
 fn compile_command_compiles_the_compiler_itself() {
     // The point of the whole project, through the CLI: the Refal compiler
-    // compiles its own source, and what comes back still checks.
+    // compiles its own source, what comes back still checks, and it is the
+    // residue the Rust driver denotes -- the compiler's default path is the
+    // driven path, so this is the compiler compiling itself rather than
+    // re-printing itself.
     let path = workspace_path("examples/compiler.ref");
     let output = Command::new(refal_bin())
         .args(["compile", &path])
@@ -2440,15 +2552,24 @@ fn compile_command_compiles_the_compiler_itself() {
         compiled.contains("$ENTRY Go"),
         "the compiled compiler lost its entry point"
     );
+    // Non-vacuity. Driving the compiler's own dispatch is what makes this a
+    // compiler rather than a re-printer, and a driven residue carries the
+    // generated partition of the entry's argument.
+    assert!(
+        compiled.contains("\nSplit1 {"),
+        "the compiled compiler was not driven -- no generated partition"
+    );
 
-    let expected = Command::new(refal_bin())
-        .args(["lower", &path])
-        .output()
-        .expect("run the Rust lowerer");
+    let expected = residualize_driven_file("examples/compiler.ref", &[]);
+    assert!(
+        expected.status.success(),
+        "the Rust driver refused the compiler:\n{}",
+        String::from_utf8_lossy(&expected.stderr)
+    );
     assert_eq!(
         compiled,
-        String::from_utf8_lossy(&expected.stdout),
-        "the Refal compiler's output differs from the Rust bootstrap's"
+        driven_residue(&String::from_utf8_lossy(&expected.stdout)),
+        "the Refal compiler's output differs from the Rust driver's residue"
     );
 }
 
@@ -3814,6 +3935,117 @@ fn compares_original_and_lowered_runtime_outputs_across_the_supported_corpus() {
     }
 }
 
+/// The compiled program is a *deployable* program, and this is the gate that
+/// says so by running it.
+///
+/// `differential` proves the compiler is a correct printer by comparing against
+/// `lower`, which preserves the source's structure. This proves the compiler is
+/// a compiler: it takes the residue the *driven* path emits -- a program whose
+/// dispatch has been decided at compile time -- runs it, and requires the same
+/// output as the source. A residue that is merely well-formed passes every
+/// other gate in this file and fails this one.
+#[test]
+fn compiled_programs_are_deployable_and_output_equivalent_across_the_corpus() {
+    for (path, args) in [
+        ("examples/hello.ref", &[] as &[&str]),
+        ("examples/identity.ref", &["Hello Refal"] as &[&str]),
+        ("examples/extern-equivalence.ref", &[] as &[&str]),
+        ("examples/runtime-condition.ref", &[] as &[&str]),
+        ("examples/runtime-recursion.ref", &[] as &[&str]),
+        ("examples/runtime-bracket.ref", &["Bracket"] as &[&str]),
+        (
+            "examples/runtime-condition-backtracking.ref",
+            &[] as &[&str],
+        ),
+        ("examples/runtime-symbol-builtins.ref", &[] as &[&str]),
+        ("examples/runtime-character-codes.ref", &[] as &[&str]),
+        ("examples/runtime-number-builtins.ref", &[] as &[&str]),
+        ("examples/runtime-arithmetic.ref", &[] as &[&str]),
+        ("examples/runtime-numeric-conversion.ref", &[] as &[&str]),
+        ("examples/runtime-type.ref", &[] as &[&str]),
+        (
+            "examples/runtime-structural.ref",
+            &["cli-argument"] as &[&str],
+        ),
+        ("examples/runtime-mu.ref", &[] as &[&str]),
+        ("examples/runtime-metacode.ref", &[] as &[&str]),
+        ("examples/metacode-chapter6.ref", &[] as &[&str]),
+        ("examples/transformer-rename.ref", &[] as &[&str]),
+        ("examples/block-ending.ref", &[] as &[&str]),
+        ("examples/condition-block.ref", &[] as &[&str]),
+        (
+            "examples/compiler-refal-body-subset.ref",
+            &["Echo { ('a') = 'A'; e.Input = e.Input; } Identity { e.Input = e.Input; }"]
+                as &[&str],
+        ),
+    ] {
+        let mut flags = vec!["--compiled"];
+        flags.extend_from_slice(args);
+        let output = differential_file(path, &flags);
+        assert!(
+            output.status.success(),
+            "{path} should be compiled-differential-stable\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.starts_with("differential: equal\noutputs: "),
+            "unexpected compiled differential output for {path}: {stdout}"
+        );
+        let output_count = stdout
+            .lines()
+            .nth(1)
+            .and_then(|line| line.strip_prefix("outputs: "))
+            .and_then(|count| count.parse::<usize>().ok())
+            .expect("compiled differential output count");
+        assert!(output_count > 0, "{path} should produce output");
+    }
+}
+
+/// Driving has to be observable, or the gate above proves nothing.
+///
+/// The compiled path is a different program from the lowered one on at least
+/// some of the corpus -- otherwise "compiled" is a synonym for "lowered" and
+/// the differential above is the differential below with a new name. This
+/// asserts the difference exists, and names where.
+#[test]
+fn the_compiled_path_is_not_the_lowered_path() {
+    let mut differing = Vec::new();
+    for name in [
+        "hello",
+        "identity",
+        "runtime-recursion",
+        "runtime-condition",
+        "block-ending",
+        "condition-block",
+    ] {
+        let path = workspace_path(&format!("examples/{name}.ref"));
+        let source = fs::read_to_string(&path).expect("read example");
+        let lowered = run_file("examples/compiler.ref", &["NORMALIZE", &source]);
+        let compiled = run_file("examples/compiler.ref", &[&source]);
+        assert!(
+            lowered.status.success() && compiled.status.success(),
+            "both paths must succeed on {name}"
+        );
+        if lowered.stdout != compiled.stdout {
+            differing.push(name);
+        }
+    }
+    assert!(
+        !differing.is_empty(),
+        "the compiled path and the normalising path agree everywhere, so the \
+         default path is not driving"
+    );
+    // The block fixtures are the ones driving provably rewrites: the block's
+    // subject is a literal, so exactly one branch can be selected and the block
+    // is gone from the residue.
+    assert!(
+        differing.contains(&"block-ending"),
+        "driving no longer resolves block-ending.ref; differing: {differing:?}"
+    );
+}
+
 #[test]
 fn reports_time_as_a_numeric_macrodigit() {
     let output = run_file("examples/runtime-time.ref", &[]);
@@ -4332,15 +4564,17 @@ fn a_residue_keeps_every_definition_when_it_still_dispatches_dynamically() {
     );
 }
 
-/// The claim this repository makes about its Refal-authored compiler is that it
-/// emits what the Rust bootstrap's `lower` emits, byte for byte, on every
-/// example the bootstrap will lower.
+/// The claim this repository makes about its Refal-authored compiler is that
+/// its default path is the driven path: `refal compile` emits the residue the
+/// driven graph denotes, byte for byte, on every example the bootstrap will
+/// lower. The oracle is the Rust driver, which is the independent
+/// implementation of the same §4.2 driving.
 ///
 /// That claim was published without a test behind it, and it had already
 /// drifted: the README said 47 examples while the corpus had grown to 51. The
 /// list is derived from the directory here, so it cannot drift again.
 #[test]
-fn the_refal_authored_compiler_matches_lower_on_every_lowerable_example() {
+fn the_refal_authored_compiler_matches_the_driven_residue_on_every_lowerable_example() {
     let directory = workspace_path("examples");
     let mut examples = fs::read_dir(&directory)
         .expect("read the examples directory")
@@ -4369,13 +4603,75 @@ fn the_refal_authored_compiler_matches_lower_on_every_lowerable_example() {
             .expect("run compile");
         assert!(
             compiled.status.success(),
-            "{rendered} compiles with `lower` but not with the Refal-authored compiler:/n{}",
+            "{rendered} compiles with `lower` but not with the Refal-authored compiler:\n{}",
             String::from_utf8_lossy(&compiled.stderr)
         );
+
+        let driven = Command::new(refal_bin())
+            .args(["residualize-driven", &rendered])
+            .output()
+            .expect("run residualize-driven");
+        assert!(
+            driven.status.success(),
+            "{rendered} drives with the Rust driver but not with the Refal-authored compiler"
+        );
         assert_eq!(
-            String::from_utf8_lossy(&lowered.stdout),
             String::from_utf8_lossy(&compiled.stdout),
-            "{rendered}: the Refal-authored compiler diverged from `lower`"
+            driven_residue(&String::from_utf8_lossy(&driven.stdout)),
+            "{rendered}: the Refal-authored compiler diverged from the driven residue"
+        );
+        compared += 1;
+    }
+    assert!(
+        compared >= 51,
+        "only {compared} examples were lowerable; the corpus has shrunk"
+    );
+}
+
+/// The normalising path, on its own terms: `refal normalize` is
+/// `Emit(Check(Parse(tokens)))` with no driving, and it must be byte-identical
+/// to the Rust bootstrap's `lower` on every example the bootstrap will lower.
+///
+/// This is kept as its own gate rather than folded into the one above because
+/// the two paths answer different questions and a failure in either must name
+/// which one broke. The driven path is where the compilation happens; this is
+/// where the two implementations of the *printer* are held together, and it is
+/// what keeps the Refal compiler's grammar coverage honest.
+#[test]
+fn the_refal_authored_normaliser_matches_lower_on_every_lowerable_example() {
+    let directory = workspace_path("examples");
+    let mut examples = fs::read_dir(&directory)
+        .expect("read the examples directory")
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().is_some_and(|extension| extension == "ref"))
+        .collect::<Vec<_>>();
+    examples.sort();
+    assert!(!examples.is_empty(), "no examples found in {directory}");
+
+    let mut compared = 0usize;
+    for path in examples {
+        let rendered = path.to_string_lossy().into_owned();
+        let lowered = Command::new(refal_bin())
+            .args(["lower", &rendered])
+            .output()
+            .expect("run lower");
+        if !lowered.status.success() {
+            continue;
+        }
+        let normalised = Command::new(refal_bin())
+            .args(["normalize", &rendered])
+            .output()
+            .expect("run normalize");
+        assert!(
+            normalised.status.success(),
+            "{rendered} lowers with the bootstrap but does not normalize with the Refal-authored compiler:\n{}",
+            String::from_utf8_lossy(&normalised.stderr)
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&normalised.stdout),
+            String::from_utf8_lossy(&lowered.stdout),
+            "{rendered}: the Refal-authored normaliser diverged from `lower`"
         );
         compared += 1;
     }

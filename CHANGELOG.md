@@ -2,6 +2,62 @@
 
 ## Unreleased
 
+### The compiler's default path drives (2026-09-26)
+
+`refal compile` no longer normalises. It **drives**: the entry configuration is
+contracted into a graph of states and the program that graph denotes is emitted —
+Turchin's §4.2, and the last thing standing between the driven residualizer and
+the compiler that contains it. The compiler written in Refal now does the work it
+was written to do, on every example, including its own source.
+
+What changes is observable rather than declared. Three fixtures, source on the
+left and `refal compile` on the right:
+
+| source | `refal compile` |
+|---|---|
+| `Go { = <Prout <Reverse 'abc'>>; }` | `Go { = <Prout 'c' 'b' 'a'>; }` |
+| `Go { = , 'A' : { 'A' = <Prout 'yes'>; e.Rest = <Prout 'no'>; }; }` | `Go { = <Prout 'y' 'e' 's'>; }` |
+| `Go { e.X, e.X : e.A, e.A : e.B = e.B; e.X = 0; }` | `Go { e.Input = e.Input; }` |
+
+A recursion is unrolled, a block is resolved, and a pair of conditions is
+discharged — at compile time, in Refal, by a compiler written in Refal. That is
+the metasystem transition applied to the compiler itself, and it is now the
+default path rather than a mode a reader has to ask for.
+
+**The normalising path survives as its own mode.** `Emit(Check(Parse(tokens)))`
+is still what the Rust bootstrap's `lower` is a second implementation of, and it
+is now `refal normalize`, with its own CLI differential,
+`the_refal_authored_normaliser_matches_lower_on_every_lowerable_example`. Four
+older tests compared the compiler's *default* output against `lower`; they were
+re-pointed at `NORMALIZE` rather than deleted, because the path `lower` mirrors is
+a real path and dropping its gate would leave the grammar coverage unheld.
+
+**A deployability gate — and the defect it found on its first run.**
+`refal differential --compiled` compares a program's runtime output against the
+*driven residue* rather than the lowered one. The distinction is what the gate
+proves: agreeing with `lower` says the compiler is a correct printer; agreeing
+with the source says the compiled program is deployable — it is checked Refal and
+it answers what the original answered. It runs over 21 examples covering
+literals, calls, recursion, conditions, backtracking, brackets, blocks, builtins,
+metacode and the Refal-body subset.
+
+It found a bug immediately. `examples/metacode-chapter6.ref` compiled to a
+residue that called `Echo` without defining it, and failed at run time with
+`function Echo was not found`. The retention walk keeps every function the
+residue still calls, and it already knew that `Mu` makes that walk unsound — `Mu`
+applies a function whose *name* arrives as data. **`Up` is the same hazard one
+level down**: it activates the calls a metacoded expression denotes, and
+`((Echo) 'Z')` is a symbol inside a bracket, not a call term. Both are now one
+predicate, `activates_a_carried_call`, on both sides — `retain_called_functions`
+in `refal-core` and `DsRdActivates`/`DsRdActivatesL` in `compiler.ref` — so a
+residue that can still apply a carried name keeps every definition the original
+had.
+
+Three new gates land with it: `compiled_programs_are_deployable_and_output_equivalent_across_the_corpus`,
+`the_compiled_path_is_not_the_lowered_path` (driving has to be observable, or
+"compiled" is "lowered" wearing a new name), and
+`the_driven_compiler_resolves_a_block_at_compile_time`.
+
 ### Driving the compiler: a drivable entry, and the defect it exposed (2026-09-25)
 
 The next step was to wire the driven residualizer into `Compile`. Three

@@ -34,8 +34,8 @@ objective to a gate. Not another Refal implementation.
 
 | | |
 |---|---|
-| Honest completion | **~76%** (product completeness — one method, see below) |
-| Tests | 320 passing, 0 clippy, fmt clean |
+| Honest completion | **~83%** (product completeness — one method, see below) |
+| Tests | 324 passing, 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
 
@@ -45,24 +45,63 @@ ground driver, the symbolic driver on the default, `--configurations` and
 `--neighborhoods` reports (55/55, 0 diverged) with `--strategy interpretive`
 gated separately (8/8, 0 diverged), and the driven residualizer
 (`refal_authored_residualize_driven_matches_the_rust_oracle`, 55 matched, 0
-diverged, 25 out of scope). `compile_command_compiles_the_compiler_itself`,
-`compiler_ref_reaches_a_self_hosting_fixpoint` and
-`the_refal_authored_compiler_matches_lower_on_every_lowerable_example` are green
-after the entry was restructured, which is the thing they would have caught. The
-T-4/T-6 differential corpus gate is byte-identical to the previous run
-(`cases: 69`, `positive: 30`, `check-failure: 6`, `runtime-failure: 1`,
-`residual: 32`, `cleaned-sentences: 1`), and `clippy --all-targets -D warnings`
-and `cargo fmt --check` are clean.
+diverged, 25 out of scope). `compile_command_compiles_the_compiler_itself`
+now requires the compiler's own output to equal the Rust driver's residue, and
+it is green; so are `the_refal_authored_compiler_matches_the_driven_residue_on_every_lowerable_example`
+and `the_refal_authored_normaliser_matches_lower_on_every_lowerable_example`,
+which are the two sides of the default/normalise split. The T-4/T-6 differential
+corpus gate is byte-identical to the previous run (`cases: 69`, `positive: 30`,
+`check-failure: 6`, `runtime-failure: 1`, `residual: 32`,
+`cleaned-sentences: 1`), and `clippy --all-targets -D warnings` and
+`cargo fmt --check` are clean.
 
-**The graph pass is linear, and it is the runtime that was in the way.** This
-commit rewrites `CleanG`, fixes two defects in the view field, and takes the
-compiler's own 132 KB source from *not finishing* to **24.0 s for `GRAPH`** and
-**36.5 s for `RESIDUALIZE-DRIVEN`** — both byte-identical to the Rust oracle. The
-previous `NEXT ACTION` set a number for wiring `Compile`: the driven path had to
-come in under a minute. It is 36.5 s, so that gate is met. See the section below
-for the measurements and for what is still open.
+### Done — the compiler's default path drives
 
-### Done — the graph pass is linear, and the view field reaches inside brackets
+`Compile` was `Emit(Check(Parse(Lex(source))))`. It never touched the driver,
+and that single sentence was the largest deduction in the accounting: three
+workstream rows named it, and the self-hosting row withheld credit for it in as
+many words. It is now `OnDriven(Check(Parse(tokens)), Parse(tokens))` — the
+default path drives (Turchin 1980 §4.2), and the normalising path is kept as
+`refal normalize` with its own CLI differential, because that is the path the
+Rust bootstrap's `lower` is a second implementation of.
+
+The change is observable rather than declared. Three fixtures:
+
+| source | `refal compile` |
+|---|---|
+| `Go { = <Prout <Reverse 'abc'>>; }` | `Go { = <Prout 'c' 'b' 'a'>; }` |
+| `Go { = , 'A' : { 'A' = <Prout 'yes'>; e.Rest = <Prout 'no'>; }; }` | `Go { = <Prout 'y' 'e' 's'>; }` |
+| `Go { e.X, e.X : e.A, e.A : e.B = e.B; e.X = 0; }` | `Go { e.Input = e.Input; }` |
+
+A recursion is unrolled, a block is resolved, and a pair of conditions is
+discharged — at compile time, in Refal, by a compiler written in Refal.
+
+**A deployability gate, and the bug it found on its first run.**
+`refal differential --compiled` compares a program's runtime output against the
+*driven residue* rather than the lowered one. The distinction is the whole point
+of the gate: agreeing with `lower` says the compiler is a correct printer,
+agreeing with the source says the compiled program is deployable. Over 21
+examples covering literals, calls, recursion, conditions, backtracking, brackets,
+blocks, builtins, metacode and the Refal-body subset, all equal — and on the
+first run `examples/metacode-chapter6.ref` failed with `function Echo was not
+found`. The residue called `Echo` without defining it.
+
+The retention walk keeps every function the residue still calls, and it already
+knew that `Mu` makes that walk unsound: `Mu` applies a function whose *name*
+arrives as data. `Up` is the same hazard one level down — it activates the calls
+a metacoded expression denotes, and `((Echo) 'Z')` is a symbol inside a bracket,
+not a call term. Both are now one predicate, `activates_a_carried_call` in
+`refal-core` and `DsRdActivates`/`DsRdActivatesL` in `compiler.ref`, so a residue
+that can still apply a carried name keeps every definition the original had.
+
+Three gates land with it: `compiled_programs_are_deployable_and_output_equivalent_across_the_corpus`,
+`the_compiled_path_is_not_the_lowered_path` (driving has to be observable, or
+"compiled" is "lowered" wearing a new name), and
+`the_driven_compiler_resolves_a_block_at_compile_time`. Four older tests compared
+the *default* output against `lower`; they were re-pointed at `NORMALIZE` rather
+than deleted.
+
+### Previously — the graph pass is linear, and the view field reaches inside brackets
 
 Three changes, and the order they were made in is the finding. The graph pass was
 rewritten first because the profile said it was the cost. The rewrite did not fix
@@ -1180,48 +1219,58 @@ Refal-authored compiler and a `Compile` that drives.
 
 ## NEXT ACTION
 
-**Wire `Compile` to the driven path, and make the fixpoint a fixpoint of the
-Refal driver.**
+**Make residualization total, then search the compilation strategy.**
 
-The number the previous order set has been met, and so has the fixpoint claim that
-went with it. The Refal driven path had to come in under a minute, because
-`compiler_ref_reaches_a_self_hosting_fixpoint` runs the compiler on its own 132 KB
-source three times; it is **36.5 s**, against 0.56 s for `refal residualize-driven`
-and >628 s before this session. And
-`the_refal_driver_reaches_a_fixpoint_on_the_compiler_itself` now gates the driven
-fixpoint on the Refal driver rather than the Rust one — 215 s, the repository's
-slowest test.
+`Compile` drives. The order this file carried for three sessions — point `Compile`
+at the driven path, keep the normalising path as its own mode and its own test —
+is done, and its gate is met: `compile_command_compiles_the_compiler_itself`
+requires the compiler's own output to equal the Rust driver's residue, and
+`the_refal_authored_normaliser_matches_lower_on_every_lowerable_example` holds the
+other side of the split. The deployability gate that landed with it found a real
+defect on its first run (`Up` activates a carried name, so the residue must keep
+every definition), which is the argument for having built it before needing it.
 
 **What to do, in order.**
 
-1. **Point `Compile` at the driven path.** Today it is
-   `Emit(Check(Parse(Lex(source))))` and never touches the driver, which is the
-   whole of the "Compiler implemented in Refal" deduction: the driven
-   residualizer *compiles pattern matching* — it replaces the function that
-   decided the dispatch with a generated `Split1` whose sentences are the
-   exhaustive, pairwise-disjoint partition — and `Compile` does not call it. The
-   modes already exist (`RESIDUALIZE-DRIVEN`, `DRIVE`), so this is a wiring
-   change, not new machinery.
-2. **Keep a separate test that the normalising path is still byte-identical to
-   `refal lower`**, because the interpreter differential consumes it, and re-point
-   `compile_command_compiles_the_compiler_itself` and
-   `the_refal_authored_compiler_matches_lower_on_every_lowerable_example` at the
-   driven path.
-3. **Whole-program residualization for general programs**, and §4.4's strategy
-   *search* — the two items that are left once `Compile` drives. T-8's §6.4
-   `unknown` metacode values are the third, and the smallest.
+1. **Make residualization total.** Today `residualize_entry_graph_with_strategy`
+   returns `Err(DriveError::StepLimit)` when the budget runs out, so the CLI
+   refuses rather than emitting anything, and `compiler.ref`'s `DsRdEmit` prints
+   `driven residualization error: step limit` for the same case. A residualizer
+   that is *total* emits, for a configuration it could not finish, the call
+   `<Fn e.Args>` itself — with `Fn` retained by the existing transitive walk. The
+   residue is then always a program equivalent to the source, the number of
+   *driven* states is what the budget bounds, and a general program is compiled
+   rather than refused. This is the item the accounting calls "whole-program
+   residualization for general programs", and it is the same change on both
+   sides: `drive_symbolic_with_strategy` in `refal-core` and the `DsRdOut`/`DsRdEmit`
+   `ERR` arm in `compiler.ref`, with the existing differential holding them
+   together.
+2. **§4.4's strategy *search*.** `DriveStrategy` is `Compilative | Interpretive`
+   and the choice is selectable, but Turchin's §4.4 makes the point on p. 538 that
+   the variants place the resulting program at different points on the
+   compilation-interpretation axis, and that the choice is a *strategy* one. Search
+   it: run both ends, measure the residue (steps to a fixpoint, size, and whether
+   the interpreter is eliminated), and keep the better — with a gate asserting the
+   chosen end is no worse than either fixed end over the corpus. The measurement
+   that justifies it already exists: `--strategy interpretive` regresses T-9 by
+   16% instead of 98% on `metasystem-unroll.ref`.
+3. **§6.4's `unknown` metacode values** — the smallest of the three. Every runtime
+   `Value` is ground, so the manual's `unknown(t,n,i)` rules have nothing to act on
+   until a non-ground value exists.
 
 **A fourth round of measurement is still not needed.** `scripts/profile.py`
 answers "where is the cost" in one command and answers it with call counts. What
-this session added is that a call count is not enough on its own: `CleanG`'s
-counts were already as low as the algorithm allowed when the pass was still
-quadratic, because the cost was *inside* each call — a bracket pattern
+the graph-pass session added is that a call count is not enough on its own:
+`CleanG`'s counts were already as low as the algorithm allowed when the pass was
+still quadratic, because the cost was *inside* each call — a bracket pattern
 deep-copying its contents. Measure the shape, not only the count.
 
-**What must not be done.** Do not put the driven path into the fixpoint test
-before `Compile` is wired and the normalising path is kept as a separate gate: a
-red fixpoint that is red for a wiring reason is indistinguishable from a
-compiler that does not self-host.
+**What must not be done.** Do not narrow `Go`'s entry back to a mode table inside
+the entry: `refal residualize-driven` refuses to partition an entry whose pattern
+is anything more specific than one bare `e.` variable, so putting the dispatch
+back inside `Go` silently turns the driven path back into a normaliser.
+`the_driven_compiler_is_a_fixpoint_of_the_driver` is the gate that notices, and it
+compares the residue against `lower` for exactly that reason.
 
 ### What the graph pass needed (so the next session starts here)
 
@@ -1318,14 +1367,19 @@ Five pieces, in the order the output depends on them:
 
 ### Still open
 
-- The driven path is not wired into `Compile`; see `NEXT ACTION`, and the bound
-  it has to clear is stated there as a number.
-- The graph pass's comparison count — `MemberL`, `SameChars`, `SameFunc3`,
-  `FuncName` — which the profile now ranks and `NEXT ACTION` now orders.
-- Whole-program residualization for general programs.
+- Residualization is bounded, not total: past the step budget the driven path
+  refuses instead of falling back to a call the residue retains. `NEXT ACTION`
+  orders it first.
 - §4.4's strategy *search*, and T-8's §6.4 `unknown` values.
+- The graph pass's comparison count — `MemberL`, `SameChars`, `SameFunc3`,
+  `FuncName` — which the profile ranks; the pass is linear in the compiler's own
+  source now, so this is a bound rather than a cost.
 - The `Reverse` rope shape, and the interpretive driver's cost in Refal — both
   measured and recorded above as bounds rather than costs.
+
+*(Closed on 2026-09-26: the driven path **is** wired into `Compile`. `refal
+compile` drives, `refal normalize` is the normalising path with its own
+differential, and `refal differential --compiled` runs the residue.)*
 
 ### Traps this repository has already paid for
 

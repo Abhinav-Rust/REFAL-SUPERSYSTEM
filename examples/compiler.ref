@@ -80,12 +80,34 @@ Dispatch {
     <Prout <DriveSym (SYMI) e.Source>>;
   ('RESIDUALIZE-DRIVEN') (e.Source) =
     <Prout <DsRdRun e.Source>>;
+  ('NORMALIZE') (e.Source) =
+    <Normalize <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>;
   (e.Mode) (e.Source) = <Prout 'unknown mode: ' e.Mode>;
   (e.Source) = <Compile <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>;
 }
 
-* Check first, and emit only what checks.
+* Compilation *is* driving a configuration into a graph of states (1980 4.2),
+* so the default path drives. Driving is what decides the dispatch at compile
+* time: the function that chose between sentences at run time is replaced by a
+* generated `Split` whose sentences are the exhaustive, pairwise-disjoint
+* partition, and the residue never calls the original.
+*
+* `Emit(Check(Parse(tokens)))` -- the normalising path -- is kept as the
+* `NORMALIZE` mode. It is not vestigial: it is what the Rust bootstrap's
+* `lower` is compared against byte for byte, and it is the shape a reader
+* compares the driven residue against. The two paths answer different
+* questions, and the differentials below gate them separately.
 Compile {
+  e.Tokens = <OnDriven <Check <Parse e.Tokens>> <Parse e.Tokens>>;
+}
+
+OnDriven {
+  "OK" (PROG e.Items) = <Prout <DsRdProgram (PROG e.Items)>>;
+  e.Msg (PROG e.Items) = <Prout e.Msg>;
+}
+
+* Check first, and emit only what checks.
+Normalize {
   e.Tokens = <OnChecked <Check <Parse e.Tokens>> <Parse e.Tokens>>;
 }
 
@@ -1950,31 +1972,40 @@ DsRdRun {
 }
 
 DsRdRun2 {
-  (PROG e.Items) = <DsRdRun3 (PROG e.Items) <CleanG <BuildG e.Items>>>;
+  (PROG e.Items) = <DsRdSelect (REPORT) (PROG e.Items) <CleanG <BuildG e.Items>>>;
 }
 
-DsRdRun3 {
-  (PROG e.Items) (CG () (e.States) (e.Trans)) =
+* The program a driven graph denotes, with no report. `Compile` uses this, and
+* the separation is the point: the report is the driver's accounting of how the
+* residue was reached and the program is what it denotes. `RESIDUALIZE-DRIVEN`
+* prints both, because a reader wants to know which states were visited;
+* `Compile` emits only the program, because a report is not a program.
+DsRdProgram {
+  (PROG e.Items) = <DsRdSelect (PLAIN) (PROG e.Items) <CleanG <BuildG e.Items>>>;
+}
+
+DsRdSelect {
+  (e.M) (PROG e.Items) (CG () (e.States) (e.Trans)) =
     "driven residualization error: no entry";
-  (PROG e.Items) (CG (s.E) (e.States) (e.Trans)) =
-    <DsRdTop (PROG e.Items) (e.States) s.E>;
+  (e.M) (PROG e.Items) (CG (s.E) (e.States) (e.Trans)) =
+    <DsRdTop (e.M) (PROG e.Items) (e.States) s.E>;
 }
 
 DsRdTop {
-  (PROG e.Items) (e.States) s.E =
-    <DsRdTop2 (PROG e.Items) (e.States) s.E <DvNameOf s.E (e.States)>>;
+  (e.M) (PROG e.Items) (e.States) s.E =
+    <DsRdTop2 (e.M) (PROG e.Items) (e.States) s.E <DvNameOf s.E (e.States)>>;
 }
 
 DsRdTop2 {
-  (PROG e.Items) (e.States) s.E (NONE) =
+  (e.M) (PROG e.Items) (e.States) s.E (NONE) =
     "driven residualization error: no entry";
-  (PROG e.Items) (e.States) s.E (SOME (e.Fn)) =
-    <DsRdGo (PROG e.Items) (e.Fn) (e.States) s.E <DsRdArgs (e.States) s.E>>;
+  (e.M) (PROG e.Items) (e.States) s.E (SOME (e.Fn)) =
+    <DsRdGo (e.M) (PROG e.Items) (e.Fn) (e.States) s.E <DsRdArgs (e.States) s.E>>;
 }
 
 DsRdGo {
-  (PROG e.Items) (e.Fn) (e.States) s.E (e.Args) =
-    <DsRdOut (PROG e.Items) (e.Fn) (e.Args)
+  (e.M) (PROG e.Items) (e.Fn) (e.States) s.E (e.Args) =
+    <DsRdOut (e.M) (PROG e.Items) (e.Fn) (e.Args)
       <DsInvoke (SX s.E 'C' (e.States) 0 () () () () () () () (NONE) 0 ())
                 (e.Fn) (e.Args)>>;
 }
@@ -1999,20 +2030,22 @@ DsEntryClosedL {
 }
 
 DsRdOut {
-  (PROG e.Items) (e.Fn) (e.Args) (RED (e.Out) (e.Ctx)) =
-    <DsRdEmit (PROG e.Items) (e.Fn) (e.Out) <DsRewire <DsLoop (e.Ctx)>>>;
-  (PROG e.Items) (e.Fn) (e.Args) (RES (e.Ctx)) =
-    <DsRdEmit (PROG e.Items) (e.Fn) <DsCallSeq (e.Fn) (e.Args)> <DsRewire <DsLoop (e.Ctx)>>>;
-  (PROG e.Items) (e.Fn) (e.Args) (FAILS (e.Ctx)) =
-    <DsRdEmit (PROG e.Items) (e.Fn) <DsCallSeq (e.Fn) (e.Args)> <DsRewire <DsLoop (e.Ctx)>>>;
-  (PROG e.Items) (e.Fn) (e.Args) (ERR) =
+  (e.M) (PROG e.Items) (e.Fn) (e.Args) (RED (e.Out) (e.Ctx)) =
+    <DsRdEmit (e.M) (PROG e.Items) (e.Fn) (e.Out) <DsRewire <DsLoop (e.Ctx)>>>;
+  (e.M) (PROG e.Items) (e.Fn) (e.Args) (RES (e.Ctx)) =
+    <DsRdEmit (e.M) (PROG e.Items) (e.Fn) <DsCallSeq (e.Fn) (e.Args)> <DsRewire <DsLoop (e.Ctx)>>>;
+  (e.M) (PROG e.Items) (e.Fn) (e.Args) (FAILS (e.Ctx)) =
+    <DsRdEmit (e.M) (PROG e.Items) (e.Fn) <DsCallSeq (e.Fn) (e.Args)> <DsRewire <DsLoop (e.Ctx)>>>;
+  (e.M) (PROG e.Items) (e.Fn) (e.Args) (ERR) =
     "driven residualization error: step limit";
 }
 
 DsRdEmit {
-  (PROG e.Items) (e.Fn) (e.Residual) (LOOP (e.Ctx)) =
+  (REPORT) (PROG e.Items) (e.Fn) (e.Residual) (LOOP (e.Ctx)) =
     <DsRdReport (e.Ctx)> <Emit <DsRdBuild (e.Items) (e.Fn) (e.Residual) (e.Ctx)>>;
-  (PROG e.Items) (e.Fn) (e.Residual) (ERR) =
+  (PLAIN) (PROG e.Items) (e.Fn) (e.Residual) (LOOP (e.Ctx)) =
+    <Emit <DsRdBuild (e.Items) (e.Fn) (e.Residual) (e.Ctx)>>;
+  (e.M) (PROG e.Items) (e.Fn) (e.Residual) (ERR) =
     "driven residualization error: step limit";
 }
 
@@ -2185,17 +2218,18 @@ DsRdRetain {
 }
 
 DsRdRetainRaw {
-  (e.Items) (e.Fn) (e.Reachable), <DsRdHasMu (e.Reachable)> : '1' =
+  (e.Items) (e.Fn) (e.Reachable), <DsRdActivates (e.Reachable)> : '1' =
     <DsRdAllBut (e.Items) (e.Fn)>;
   (e.Items) (e.Fn) (e.Reachable) =
     <DsRdBfs (e.Items) (e.Reachable) () (<DsRdUpper (e.Fn)>)>;
 }
 
-* `Mu` dispatches on a function name carried as *data*, so walking call terms
-* cannot see what it will call. When the residue still dispatches dynamically
-* the only sound residue keeps every definition the original had -- a residue
-* that drops `Echo` is a program that fails at run time where the original
-* succeeded.
+* `Mu` and `Up` can apply a function whose *name* arrives as data: `Mu` reads
+* it out of its argument, and `Up` activates the calls a metacoded expression
+* denotes. Walking call terms cannot see either callee, so when the residue
+* still does this the only sound residue keeps every definition the original
+* had -- a residue that drops `Echo` is a program that fails at run time where
+* the original succeeded.
 DsRdBfs {
   (e.Items) () (e.Acc) (e.Seen) = e.Acc;
   (e.Items) ((N e.Name) e.Rest) (e.Acc) (e.Seen),
@@ -2244,14 +2278,15 @@ DsRdFindFunL {
   (e.U) t.Item e.Rest = <DsRdFindFunL (e.U) e.Rest>;
 }
 
-DsRdHasMu {
-  (e.L) = <DsRdHasMuL (e.L)>;
+DsRdActivates {
+  (e.L) = <DsRdActivatesL (e.L)>;
 }
 
-DsRdHasMuL {
+DsRdActivatesL {
   () = ;
   ((N e.Name) e.Rest), <SameChars (<Upper e.Name>) ('MU')> : '1' = '1';
-  (t.X e.Rest) = <DsRdHasMuL (e.Rest)>;
+  ((N e.Name) e.Rest), <SameChars (<Upper e.Name>) ('UP')> : '1' = '1';
+  (t.X e.Rest) = <DsRdActivatesL (e.Rest)>;
 }
 
 DsRdAllBut {

@@ -32,19 +32,18 @@ verification harness; it must not contain the production compiler's logic.
 - Lower checked source into deterministic Refal output with source mapping.
 - Prove round-trip and semantic-preservation behavior with tests.
 
-### 5. Refal-Written Compiler Subset — Partial
+### 5. Refal-Written Compiler Subset — Substantially complete
 
-- Implement a useful compiler subset in Refal source. Restricted identity-function emitter, parser, and repeated-name checker fixtures now exist in `examples/`.
-- Execute that subset through the bootstrap runtime. The generated multi-function source is checked and executed end to end, and mismatched restricted definitions are rejected.
-- Use it to compile real Refal programs to Core Refal/Refal output. A restricted Core emitter now matches Rust `lower` for identity/literal/call programs; a lexer subset tokenizes the same grammar; a token-consuming parser subset builds EmitCore IR from that stream and matches `lower`. General source parsing and complete Core Refal emission remain open.
+- A real Refal-authored lexer, parser, checker and emitter over the full Classic grammar, plus five stages of the transforming half — `GRAPH`, `RESIDUALIZE`, `DRIVE`, `DRIVE-SYMBOLIC`, `RESIDUALIZE-DRIVEN` — each byte-identical to its `refal-core` counterpart over the corpus.
+- **`Compile` is the driven path**: `refal compile` contracts the entry configuration and emits the program the driven graph denotes, so the compiler compiles rather than re-prints. `refal normalize` is the normalising path, byte-identical to the bootstrap's `lower`.
+- `refal differential --compiled` proves the emitted program is deployable by running it and requiring the source's output. Remaining: whole-program residualization for general programs.
 
-### 6. Self-Hosting Bootstrap — Partial bounded evidence
+### 6. Self-Hosting Bootstrap — Complete for the corpus and the compiler's own source
 
-- A bounded canonical-output subset now applies three compiler stages and verifies byte-identical
-  successive output, including `C2 ≡ C3`.
-- Compile the complete Refal compiler sources through the Refal compiler.
-- Verify the generated compiler produces equivalent output across the full corpus.
-- Retain Rust only as a reproducible verification harness, not as the compiler implementation.
+- C1 = C2 = C3 byte-identical over the full grammar, every generation checked, at 12,599 bytes.
+- The driven fixpoint gates the Refal driver: the compiler's own 132 KB source is driven, the residue is checked, driven again, and required to be byte-identical to the Rust oracle's residue.
+- `refal compile examples/compiler.ref` emits the Rust driver's residue, so the self-application is a supercompilation rather than a re-print.
+- Remaining: a fixpoint over an *arbitrary* program, which is the residualization bound above.
 
 ### 7. Release and Compatibility Evidence — Partial
 
@@ -55,7 +54,7 @@ verification harness; it must not contain the production compiler's logic.
 
 ## Quantitative Scorecard
 
-The live accounting is [`PLAN.md`](PLAN.md) section 5 and the README's Project Status, which publish **one** figure — **~72% product completeness** — from one table. This file's workstream table is a **gate checklist**, not a second score: it records which architectural gates are closed, and it is deliberately not turned into a percentage. Publishing a second number here is what produced the contradiction this project spent a day removing.
+The live accounting is [`PLAN.md`](PLAN.md) section 5 and the README's Project Status, which publish **one** figure — **~83% product completeness** — from one table. This file's workstream table is a **gate checklist**, not a second score: it records which architectural gates are closed, and it is deliberately not turned into a percentage. Publishing a second number here is what produced the contradiction this project spent a day removing.
 
 It went *down* from an earlier 38%, deliberately, for two reasons:
 
@@ -71,11 +70,11 @@ It went *down* from an earlier 38%, deliberately, for two reasons:
 | --- | ---: | --- | ---: |
 | Bootstrap frontend | 8.5% | Lexer and parser cover the documented Classic scope and diagnose the negative corpus | 7.5% |
 | Bootstrap semantics | 6% | Entry points, declarations, calls, bindings, variable kinds, condition legality | 5.0% |
-| Refal machine | 19.5% | No fixed depth cap; projecting matcher (§2.2); broad covered builtin suite. **Open:** heap-allocated view field, Chapter 6 metacode | 15.0% |
-| Graph of states and Refal emission | 8.5% | **T-4** `drive → clean → residualise` agrees with the interpreter over 29 corpus programs; **T-9** metasystem transition; **T-5** neighborhoods and generalization by common history; **T-6** `clean` (§4.3) and the `perfect` verdict (§4.5), with the cleaned residue re-checked and re-run by the corpus gate; case splitting. **Open:** §4.4's strategy is selectable but not yet searched | 7.0% |
+| Refal machine | 19.5% | No fixed depth cap; projecting matcher (§2.2); broad covered builtin suite; the view field in all three of its shapes — a binding is a range of a shared arena, a frame's result is a rope of runs of shared arenas, and a bracket's contents are a run of that arena too. **Open:** block sentences carrying conditions take the recursive path; §6.4's `unknown` values | 19.0% |
+| Graph of states and Refal emission | 8.5% | **T-4** `drive → clean → residualise` agrees with the interpreter over the corpus; **T-9** metasystem transition; **T-5** neighborhoods and generalization by common history; **T-6** `clean` (§4.3) and the `perfect` verdict (§4.5), with the cleaned residue re-checked and re-run by the corpus gate; case splitting; and **the compiler's default path drives**, so the stage that compiles pattern matching is the stage the compiler is. **Open:** residualization is bounded rather than total; §4.4's strategy is selectable but not yet searched | 7.5% |
 | Static verification | 15% | Tier 1 for its published guarantee, with zero false positives on the corpus, including bracket contents in the format lattice. **Open:** the guarantee is deliberately narrow — no termination analysis | 13.0% |
-| Compiler implemented in Refal | 25.5% | Real lexer, parser, checker and emitter over the full Classic grammar; the **§4.2 seed graph** (`GRAPH`, byte-identical to `refal graph` on 55/55) and **residualization** (`RESIDUALIZE`, byte-identical to `refal residualize-graph` on 55/55) have moved into `compiler.ref`. **Open:** `driver.ref` — the driver is still `refal-core`'s; it normalises rather than compiling pattern matching | 18.0% |
-| Verified self-hosting bootstrap | 13% | C1 = C2 = C3 at 12,599 bytes, every generation checked | 10.0% |
+| Compiler implemented in Refal | 25.5% | Real lexer, parser, checker and emitter over the full Classic grammar; **five** stages of the transforming half in `compiler.ref`, each byte-identical to its `refal-core` counterpart over the corpus — the **§4.2 seed graph** (`GRAPH`), **residualization** (`RESIDUALIZE`), the **ground driver** (`DRIVE`), the **symbolic driver** (`DRIVE-SYMBOLIC`) and the **driven residualizer** (`RESIDUALIZE-DRIVEN`). **`Compile` now drives**, so the compiler compiles rather than re-prints; `refal normalize` is the normalising path with its own differential, and `refal differential --compiled` proves the residue is deployable by running it. **Open:** whole-program residualization for general programs | 22.5% |
+| Verified self-hosting bootstrap | 13% | C1 = C2 = C3 at 12,599 bytes, every generation checked; the driven fixpoint gates the Refal driver; and `refal compile examples/compiler.ref` emits the Rust driver's residue, so the self-application is a supercompilation rather than a re-print. **Open:** a fixpoint over an arbitrary program | 11.0% |
 | Conformance, release and compatibility evidence | 4% | Automated differential and residual corpora. **Open:** full Classic conformance claim, packaging | 2.0% |
 | **Total** | **100%** | | **A gate checklist, not a score. The project's completion figure is the single product-completeness one in [`PLAN.md`](PLAN.md) section 5** |
 
