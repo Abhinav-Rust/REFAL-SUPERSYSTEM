@@ -34,7 +34,7 @@ objective to a gate. Not another Refal implementation.
 
 | | |
 |---|---|
-| Honest completion | **~72%** (product completeness — one method, see below) |
+| Honest completion | **~74%** (product completeness — one method, see below) |
 | Tests | 319 passing, 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
@@ -53,6 +53,114 @@ T-4/T-6 differential corpus gate is byte-identical to the previous run
 (`cases: 69`, `positive: 30`, `check-failure: 6`, `runtime-failure: 1`,
 `residual: 32`, `cleaned-sentences: 1`), and `clippy --all-targets -D warnings`
 and `cargo fmt --check` are clean.
+
+**The graph pass is linear, and it is the runtime that was in the way.** This
+commit rewrites `CleanG`, fixes two defects in the view field, and takes the
+compiler's own 132 KB source from *not finishing* to **24.0 s for `GRAPH`** and
+**36.5 s for `RESIDUALIZE-DRIVEN`** — both byte-identical to the Rust oracle. The
+previous `NEXT ACTION` set a number for wiring `Compile`: the driven path had to
+come in under a minute. It is 36.5 s, so that gate is met. See the section below
+for the measurements and for what is still open.
+
+### Done — the graph pass is linear, and the view field reaches inside brackets
+
+Three changes, and the order they were made in is the finding. The graph pass was
+rewritten first because the profile said it was the cost. The rewrite did not fix
+it. What fixed it was looking at what the runtime does when a pattern opens a
+bracket.
+
+**The graph pass was O(n·(n+m)) with a function call per step.** `CleanG` on the
+compiler's own 1,160-state graph was **462 s of the 480 s graph pass**, against
+0.56 s for `refal residualize-driven` on the same program. The list transcription
+of `clean_unreachable_states` scanned the whole state list and the whole
+transition list for every dequeued state, and the visited set for every pop.
+
+The rewrite rests on two properties of the walk. From a state it reaches *every*
+state of the same function, so the reachable set is a union of whole functions;
+and `BuildG` emits a transition's target as `first_states[Upper callee]`, while
+`first_states` maps a name to the function's *first* state id — so a transition's
+target id **is** the callee's canonical id. Reachability is therefore
+reachability on the call graph, whose nodes are canonical ids: 480 small integers
+compared by symbol equality rather than 1,160 nested records compared by string.
+And every list the pass joins is already ordered by the key it is joined on —
+states by id, transitions by source id — so each join became a **merge join**.
+The one list that is out of order, name to canonical id, is restored with a merge
+sort; `SortName`/`MergeName`/`LePair` and `SortN`/`MergeN`/`LeNum` were added for
+it. `RenumS` and `RenumT` followed the same treatment: the source remap is a
+merge join against the id-ordered map, and the target remap needs only the group
+heads, so it is one entry per function rather than one per state.
+
+**But the rewrite alone was not enough, and the reason was in the runtime.**
+`Value::Bracket` held an owned `Vec<Value>`, so *opening a bracket deep-copied
+everything inside it*, nested records included. Every pattern that passed a list
+in a bracket paid that once per call — `(e.States)` with 1,160 nested records,
+`((TR ...) e.Rest)` with 1,178 — and a `Refal` list walk is written `(e.Rest)`,
+so this was not an edge case, it was the language's dominant shape. The graph
+pass copied millions of records merely to look at them.
+
+A bracket's contents are now a `Slice`: a run of a shared arena with an offset.
+Opening a bracket is a reference count, and rebuilding one from a binding —
+`(e.Rest)` — is one too, because a `Slice` carries an offset rather than
+demanding a whole arena. `Value::Bracket` still reads as `&[Value]` through a
+`Deref`, so `.iter()`, indexing and `.len()` mean what they meant, and
+`PartialEq` still compares contents, with a pointer-and-offset fast path.
+
+**And the rope had a left spine.** `Concat` carried no height, so appending built
+`((a ++ b) ++ c) ++ d` and reaching its head cost the spine's depth: a list built
+by appending and then walked was quadratic. This was the shape the runtime row
+had been deducting for since 2026-09-24. `Concat` now carries a height and
+`ViewField::concat` rotates when the left operand is more than one level taller
+than the right. Only a left-heavy join rotates, and that is deliberate: a
+right-heavy one is `s.C <Recurse ...>`, the shape the view-field invariants are
+stated in and the one whose head is reached in a single step, so it is preserved
+rather than rewritten. The rotation is taken only when the split is exact —
+`unclamp` descends to where a clamped field's extent is visible first, because
+`take` clamps the length rather than rebuilding the node, and a node's own split
+is then not the field's — and every other shape falls back to a plain
+concatenation, which is always correct and only ever taller.
+
+That `unclamp` was not in the first version, and the first version panicked:
+`attempt to subtract with overflow` in twelve tests, all of them running
+`compiler.ref`. A clamped field reports its node's height, so the rotation
+subtracted a left-child length the field never reaches. The tests found it
+because they execute the paths rather than inspecting them.
+
+**A sentence with no conditions now takes its first match directly.**
+`evaluate_sentences` used the candidate-enumerating matcher for every sentence,
+materialising every split of every expression variable — each one a cloned
+binding map — when it only ever consumed the first. `match_pattern_first` exists
+for exactly this case and its doc comment says so; the enumerating path remains
+for condition backtracking.
+
+### Measured, on the compiler's own 132 KB source, release build
+
+| | before | after |
+|---|---:|---:|
+| `CleanG` | **462 s** | part of the 24 s below |
+| `GRAPH` (Refal-authored) | did not finish (killed at 480 s) | **24.0 s** |
+| `RESIDUALIZE` | — | 34.6 s |
+| `DRIVE` | — | 23.4 s |
+| `RESIDUALIZE-DRIVEN` | **> 628 s** (killed at 10 m 28 s) | **36.5 s**, 95,824-byte residue |
+
+All four are byte-identical to their Rust counterparts: `GRAPH` on the compiler's
+own source is the same 2,323 lines as `refal graph`, and `RESIDUALIZE-DRIVEN`
+prints `steps: 51`, the same 51 steps the Rust oracle takes. `GRAPH` on
+`lexer.ref` and `parser.ref` is byte-identical too, and the T-4/T-6 differential
+corpus is unchanged.
+
+The micro-benchmark that isolated the rope agrees with the diagnosis: building a
+list of 4,000 / 8,000 / 16,000 terms and then walking it was 7.4 s / 26.2 s /
+218.7 s before these changes and is 3.0 s / 6.9 s / 26.7 s after. It is not yet
+linear, and the reason is visible in the benchmark rather than in the rope: the
+program rebuilds its bracket every step, and `into_slice` has to materialise a
+field that is not one run. A program that accumulates into an expression variable
+and brackets once does not pay that.
+
+**What the runtime row was deducting for is now closed** — the left spine is
+balanced and measured — so the row takes 17.0 of its 19.5 points. What remains
+there is that block sentences carrying conditions still take the recursive path,
+and that §6.4's `unknown` metacode values are still open. The figure moves
+**~72% -> ~74%**.
 
 **What this commit adds, and what it does not.** The entry is drivable
 (`Go { e.Args = <Dispatch e.Args>; }`), so the driver partitions the mode
@@ -1049,62 +1157,88 @@ Refal-authored compiler and a `Compile` that drives.
 
 ## NEXT ACTION
 
-**Cut the graph pass's comparison count, then wire `Compile`.**
+**Wire `Compile` to the driven path, and make the fixpoint a fixpoint of the
+Refal driver.**
 
-Step 1 of the previous order is done, and step 2 is now measured rather than
-guessed at. The three shape fixes above took the driven path on a synthetic
-100-function chain from **352 s to 85 s**, and `scripts/profile.py` says where the
-rest is.
-
-**What the profile says.** On `lexer.ref` and `parser.ref`, **98% of a
-`RESIDUALIZE-DRIVEN` run is the graph pass and 2% is the driving loop.** The
-largest single entry is `MemberL` — the visited-set scan inside `CleanG`'s
-reachability walk — at 27–38% of all calls, followed by `SameChars` (13%, the
-universal comparison primitive), `SameFunc3` (11%, the same-function state scan),
-`TransFrom` (9%) and `FuncName` (5%). Every one is a linear search over a list
-whose length is the program's size, and every step of every search is a function
-call.
-
-Two candidates the previous order ranked first are **falsified**, and it is worth
-saying so plainly rather than leaving them on the list. The context's growing
-lists are not the cost: a 1,000-element context field costs the same as an empty
-one over 20,000 context rebuilds, because the view field already makes a bracket
-a shared range. And `DsScan` walking every state is not the cost either: it runs
-351 times on the 25-function chain, and a full 101-state scan is ~250 ms of a
-2.6 s run.
+The number the previous order set has been met. It required the Refal driven path
+to come in under a minute, because `compiler_ref_reaches_a_self_hosting_fixpoint`
+runs the compiler on its own 132 KB source three times; it is **36.5 s**, against
+0.56 s for `refal residualize-driven` and >628 s before this session.
 
 **What to do, in order.**
 
-1. **`CleanG`'s reachability walk.** `ReachLoop` calls `Member s.Id (e.Seen)`
-   once per dequeued state and `Successors` once per dequeued state, and
-   `Successors` is itself two full state scans — `FuncName` to resolve the
-   dequeued state's name, `SameFunc3` to find its siblings. The Rust does the
-   same BFS with a `HashSet` and an indexed `states[state.0]`, so the algorithm is
-   faithful and the difference is the data structure. Carry the state's *name*
-   alongside its id in the queue, which removes `FuncName` from the successors
-   step entirely, and give the visited set a representation that is not a walk.
-2. **`SameChars`.** The most-called function in the compiler is a two-sentence
-   predicate over a repeated variable, at 20% of the calls on the chain, and every
-   scan above is built from it. Whatever replaces it changes the constant on all
-   of them at once.
-3. **Only then wire `Compile`.** Re-point the two `lower`-parity gates
-   (`compile_command_compiles_the_compiler_itself` and
-   `the_refal_authored_compiler_matches_lower_on_every_lowerable_example`), keep a
-   separate test that the normalising path is still byte-identical to
-   `refal lower` — the interpreter differential consumes it — and extend
-   `the_driven_compiler_is_a_fixpoint_of_the_driver` from the Rust driver to the
-   Refal one.
+1. **Point `Compile` at the driven path.** Today it is
+   `Emit(Check(Parse(Lex(source))))` and never touches the driver, which is the
+   whole of the "Compiler implemented in Refal" deduction: the driven
+   residualizer *compiles pattern matching* — it replaces the function that
+   decided the dispatch with a generated `Split1` whose sentences are the
+   exhaustive, pairwise-disjoint partition — and `Compile` does not call it. The
+   modes already exist (`RESIDUALIZE-DRIVEN`, `DRIVE`), so this is a wiring
+   change, not new machinery.
+2. **Keep a separate test that the normalising path is still byte-identical to
+   `refal lower`**, because the interpreter differential consumes it, and re-point
+   `compile_command_compiles_the_compiler_itself` and
+   `the_refal_authored_compiler_matches_lower_on_every_lowerable_example` at the
+   driven path.
+3. **Extend `the_driven_compiler_is_a_fixpoint_of_the_driver` from the Rust
+   driver to the Refal one.** That test is 1.9 s today because it drives with the
+   Rust driver; the Refal driver on the compiler's own source is 36.5 s, so it
+   belongs in the same gated set as the other heavy differentials.
 
-**The gate for step 3 is a number, not a green tick.**
-`compiler_ref_reaches_a_self_hosting_fixpoint` runs the compiler on its own
-122 KB source three times, so the Refal driven path has to come in under a minute
-for that test to be usable. It is currently **over ten minutes in a release
-build**, against 0.56 s for `refal residualize-driven`.
+**A fourth round of measurement is still not needed.** `scripts/profile.py`
+answers "where is the cost" in one command and answers it with call counts. What
+this session added is that a call count is not enough on its own: `CleanG`'s
+counts were already as low as the algorithm allowed when the pass was still
+quadratic, because the cost was *inside* each call — a bracket pattern
+deep-copying its contents. Measure the shape, not only the count.
 
-**What must not be done.** Wiring `Compile` before the graph pass is cut would
-put a ten-minute stage into the self-hosting test. And a fourth round of
-measurement is not needed — `scripts/profile.py` answers "where is the cost" in
-one command, and answers it with counts rather than with a wall clock.
+**What must not be done.** Do not put the driven path into the fixpoint test
+before `Compile` is wired and the normalising path is kept as a separate gate: a
+red fixpoint that is red for a wiring reason is indistinguishable from a
+compiler that does not self-host.
+
+### What the graph pass needed (so the next session starts here)
+
+`CleanG` is now a pipeline of merge joins. In order, with what each one is for:
+
+1. **`GidOf`** — one canonical id per state, equal to the id of the function's
+   first state, which is what `first_states` records. The name sort is by name
+   only, so the ids inside a run are *not* ordered; the run's minimum is found
+   first (`GidOfMin`) and then stamped on every member (`GidOfStamp`). A running
+   minimum cannot work, because it would have to be revised after members had
+   already been emitted.
+2. **`GAdj`** — the call graph. `GEdges` is a merge join of the id-ordered map
+   against the transition list (both ascend by id), and the target group is the
+   transition's own `s.To`, so **no lookup happens at all**.
+3. **`GReach`** — breadth-first over groups, 480 nodes rather than 1,160 states.
+4. **`ReachIds`** — the group map sorted by group, merge-joined against the
+   reachable groups, then sorted back into id order.
+5. **`RenumS` / `HeadMap` / `RenumT`** — renumbering, with the source remap a
+   merge join and the target remap against a head map of one entry per function.
+
+### Traps this step paid for
+
+- **A merge join that advances a cursor must drop its head.** Three separate
+  copies of this bug — `RenumT`, `ReachIds2`, `HeadMap2` — each an infinite loop,
+  each written as `<Recurse (e.Map2) ... (s.H e.RG)>` instead of
+  `<Recurse (e.Map2) ... (e.RG)>`. Two more were worse than a loop: `GEdges` and
+  `RenumT` rebuilt the list they had just matched, so the recursion passed its own
+  argument back. **Grep any new merge join for a head that is rebuilt rather than
+  dropped.**
+- **A helper that emits a spread list must be bracketed at the call site.** A
+  `SortN`/`GidOf`/`GReach` result spliced into a call that binds `(e.X)` gives
+  the callee N arguments where it wanted one, and the failure surfaces as "no
+  sentence matched" one function later.
+- **`((e.Rest))` is a bracket containing an empty bracket, not an empty
+  bracket.** Twelve recursion sites had it. An exhausted list needs a bare `()`.
+- **A terminator sentence must have the arity the call has.** `GidOfRun`'s
+  `(e.U) s.Min = ;` never fired because every call passed a third argument.
+- **A list element's shape is part of the contract.** `GAdj3` emits
+  `(GE from to)` and `GTargets2` matched `(s.G s.To)`; the mismatch is silent
+  until something walks the list.
+- **A `Slice` is a run of an arena, and a field may be a *prefix* of its node.**
+  `ViewField::take` clamps the length rather than rebuilding, so the node's own
+  split is not the field's, and any arithmetic that assumes it is will underflow.
 
 ### What the driven residualizer needed (so the next session starts here)
 

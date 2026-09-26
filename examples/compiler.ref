@@ -914,6 +914,26 @@ SentCalls {
 }
 
 * ---- clean: keep only what the entry can reach (clean_unreachable_states)
+*
+* The Rust walks a BFS with a HashSet and reads `states[state.0]` by index. The
+* list transcription of that walk -- a visited-list scan, plus a full scan of
+* the state list and of the transition list for every dequeued state -- costs
+* O(n * (n + m)) steps with a function call at each one, and on the compiler's
+* own 1,094-state graph it was 462 s of the 480 s graph pass.
+*
+* Two properties of the walk remove the scans. From a state it reaches *every*
+* state of the same function, so the reachable set is a union of whole
+* functions. And BuildG emits a transition's target as
+* `first_states[Upper callee]`, while `first_states` maps a name to the
+* function's *first* state id -- so a transition's target id *is* the function's
+* canonical id. Reachability is therefore reachability on the call graph, whose
+* nodes are canonical ids: 480 of them rather than 1,094 states, compared by
+* symbol equality rather than by string comparison.
+*
+* Every list this pass joins is already ordered by the key it is joined on --
+* states by id, transitions by source id -- so each join below is a merge join.
+* The one list that is out of order is the name -> canonical-id map, and a merge
+* sort restores it.
 
 CleanG {
   (GR (e.Entry) (e.States) (e.Trans)) = <CleanG2 (e.Entry) (e.States) (e.Trans)>;
@@ -921,22 +941,145 @@ CleanG {
 
 CleanG2 {
   () (e.States) (e.Trans) = (CG () () ());
-  (s.E) (e.States) (e.Trans) =
-    <Renumber2 (e.Trans) s.E <RenumS 0 () () (<Reach s.E (e.States) (e.Trans)>) e.States>>;
+  (s.E) (e.States) (e.Trans) = <CleanG3 (e.States) (e.Trans) s.E (<GidOf (e.States)>)>;
 }
 
-* Breadth-first from the entry. From a state the walk reaches every state of
-* the same function, by case-insensitive name, and every transition target.
-Reach {
-  s.E (e.States) (e.Trans) = <ReachLoop (s.E) () (e.States) (e.Trans)>;
+CleanG3 {
+  (e.States) (e.Trans) s.E (e.GI) =
+    <CleanG4 (e.States) (e.Trans) s.E (e.GI)
+      (<GReach <GAdj (e.GI) (e.Trans)> <GidAt s.E e.GI>>)>;
 }
 
-ReachLoop {
-  () (e.Seen) (e.States) (e.Trans) = e.Seen;
-  (s.Id e.Q) (e.Seen) (e.States) (e.Trans), <Member s.Id (e.Seen)> : '1' =
-    <ReachLoop (e.Q) (e.Seen) (e.States) (e.Trans)>;
-  (s.Id e.Q) (e.Seen) (e.States) (e.Trans) =
-    <ReachLoop <Enqueue (e.Q) <Successors s.Id (e.States) (e.Trans)>> (s.Id e.Seen) (e.States) (e.Trans)>;
+CleanG4 {
+  (e.States) (e.Trans) s.E (e.GI) (e.RG) =
+    <Renumber2 (e.Trans) s.E (e.RG) <RenumS 0 () () (<ReachIds (e.GI) (e.RG)>) e.States>>;
+}
+
+* ---- the canonical id of a function
+
+* One pair per state, key first so the merge sort can use the name comparator.
+GidOf {
+  (e.States) = <GidOf3 (<GidOf2 (<SortName (<GidOf1 e.States>)>)>)>;
+}
+
+GidOf1 {
+  = ;
+  (ST s.Id (e.N) s.J t.Sent) e.Rest = ((<Upper e.N>) s.Id) <GidOf1 e.Rest>;
+}
+
+* Equal names are adjacent after the sort, so one run is one function and its
+* canonical id is the smallest id in the run -- which is what first_states
+* records, the state list being in program order.
+*
+* The sort keys on the name alone, so the ids inside a run are not ordered; the
+* run's minimum is therefore found first and then stamped on every member. A
+* running minimum would have to be revised after members had already been
+* emitted, which is the one thing a single pass cannot do.
+GidOf2 {
+  () = ;
+  (((e.U) s.Id) e.Rest) =
+    <GidOfStamp (e.U) (((e.U) s.Id) e.Rest) <GidOfMin (e.U) (((e.U) s.Id) e.Rest) s.Id>>;
+}
+
+* The run's smallest id, stopping at the first name that differs.
+GidOfMin {
+  (e.U) () s.Min = s.Min;
+  (e.U) (((e.U) s.Id) e.Rest) s.Min, <Compare s.Id s.Min> : '-' =
+    <GidOfMin (e.U) (e.Rest) s.Id>;
+  (e.U) (((e.U) s.Id) e.Rest) s.Min = <GidOfMin (e.U) (e.Rest) s.Min>;
+  (e.U) (((e.V) s.Id) e.Rest) s.Min = s.Min;
+}
+
+* One pair per member of the run, then the next run.
+GidOfStamp {
+  (e.U) () s.Min = ;
+  (e.U) (((e.U) s.Id) e.Rest) s.Min =
+    ((s.Id) s.Min) <GidOfStamp (e.U) (e.Rest) s.Min>;
+  (e.U) (((e.V) s.Id) e.Rest) s.Min = <GidOf2 (((e.V) s.Id) e.Rest)>;
+}
+
+* Back into id order: the id leads the pair, so the numeric sort is the key.
+GidOf3 {
+  (e.Pairs) = <GidOf4 (<SortN (e.Pairs)>)>;
+}
+
+GidOf4 {
+  () = ;
+  (((s.Id) s.G) e.Rest) = (GI s.Id s.G) <GidOf4 (e.Rest)>;
+}
+
+* The entry's canonical id. The query leads and the map follows it spread, so
+* every position in the pattern is determinate; the map is in id order, so this
+* walks once.
+GidAt {
+  s.E (GI s.E s.G) e.Rest = (s.G);
+  s.E (GI s.Id s.G) e.Rest = <GidAt s.E e.Rest>;
+  s.E = ();
+}
+
+* ---- the call graph
+
+* One edge per transition. The source group comes from the id-ordered map by a
+* merge join -- both lists ascend by id -- and the target group is the
+* transition's own `s.To`, which is a canonical id by construction, so no
+* lookup is performed at all.
+GAdj {
+  (e.GI) (e.Trans) = <GAdj2 (<GEdges (e.GI) (e.Trans)>)>;
+}
+
+GEdges {
+  (e.GI) () = ;
+  ((GI s.Id s.G) e.GI2) ((TR s.Id (e.Callee) s.To) e.Rest) =
+    (GE s.G s.To) <GEdges ((GI s.Id s.G) e.GI2) (e.Rest)>;
+  ((GI s.Id s.G) e.GI2) ((TR s.F (e.Callee) s.To) e.Rest), <Compare s.F s.Id> : '+' =
+    <GEdges (e.GI2) ((TR s.F (e.Callee) s.To) e.Rest)>;
+}
+
+* Sorted by source group, so a group's targets are one contiguous run.
+GAdj2 {
+  (e.Edges) = (<GAdj3 (<SortN (<GAdj4 e.Edges>)>)>);
+}
+
+GAdj4 {
+  = ;
+  (GE s.From s.To) e.Rest = ((s.From) s.To) <GAdj4 e.Rest>;
+}
+
+GAdj3 {
+  () = ;
+  (((s.From) s.To) e.Rest) = (GE s.From s.To) <GAdj3 (e.Rest)>;
+}
+
+* ---- reachability on the call graph
+
+GReach {
+  (e.Adj) () = ();
+  (e.Adj) (s.E) = <GReachSort <GReachLoop (e.Adj) (s.E) ()>>;
+}
+
+* The visited set comes out in discovery order, and the join that consumes it in
+* ReachIds needs it ascending, so it is sorted once here rather than walked once
+* per state there.
+GReachSort {
+  (e.Seen) = <GReachSort2 (<SortN (<GReachSort1 e.Seen>)>)>;
+}
+
+GReachSort1 {
+  = ;
+  s.G e.Rest = ((s.G)) <GReachSort1 e.Rest>;
+}
+
+GReachSort2 {
+  () = ;
+  (((s.G)) e.Rest) = s.G <GReachSort2 (e.Rest)>;
+}
+
+GReachLoop {
+  (e.Adj) () (e.Seen) = (e.Seen);
+  (e.Adj) (s.G e.More) (e.Seen), <Member s.G (e.Seen)> : '1' =
+    <GReachLoop (e.Adj) (e.More) (e.Seen)>;
+  (e.Adj) (s.G e.More) (e.Seen) =
+    <GReachLoop (e.Adj) <Enqueue (e.More) <GTargets (e.Adj) s.G>> (s.G e.Seen)>;
 }
 
 Enqueue {
@@ -944,35 +1087,93 @@ Enqueue {
   (e.Q) s.X e.Rest = <Enqueue (e.Q s.X) e.Rest>;
 }
 
-Successors {
-  s.Id (e.States) (e.Trans) = <SameFunc s.Id (e.States)> <TransFrom s.Id e.Trans>;
+GTargets {
+  (e.Adj) s.G = <GTargets2 s.G (e.Adj)>;
 }
 
-SameFunc {
-  s.Id (e.States) = <SameFunc2 <FuncName s.Id e.States> (e.States)>;
+* The adjacency list is sorted by source group, so this stops as soon as it has
+* passed the group's run and never walks the whole list for a late group.
+GTargets2 {
+  s.G () = ;
+  s.G ((GE s.G s.To) e.Rest) = s.To <GTargets2 s.G (e.Rest)>;
+  s.G ((GE s.H s.To) e.Rest), <Compare s.G s.H> : '-' = ;
+  s.G ((GE s.H s.To) e.Rest) = <GTargets2 s.G (e.Rest)>;
 }
 
-FuncName {
-  s.Id = ;
-  s.Id (ST s.Id (e.N) s.J t.Sent) e.Rest = (e.N);
-  s.Id (e.S) e.Rest = <FuncName s.Id e.Rest>;
+* ---- the reachable states
+
+* Sorting the group map by group makes the membership test a merge join against
+* the reachable groups, instead of a walk of the reachable set per state.
+ReachIds {
+  (e.GI) (e.RG) = <ReachIds3 (<ReachIds2 (<SortN (<ReachIds1 e.GI>)>) (e.RG)>)>;
 }
 
-SameFunc2 {
-  (e.N) (e.States) = <SameFunc3 (<Upper e.N>) e.States>;
+ReachIds1 {
+  = ;
+  (GI s.Id s.G) e.Rest = ((s.G) s.Id) <ReachIds1 e.Rest>;
 }
 
-SameFunc3 {
-  (e.U) = ;
-  (e.U) (ST s.Id (e.M) s.J t.Sent) e.Rest, <SameChars (<Upper e.M>) (e.U)> : '1' =
-    s.Id <SameFunc3 (e.U) e.Rest>;
-  (e.U) (e.S) e.Rest = <SameFunc3 (e.U) e.Rest>;
+ReachIds2 {
+  () (e.RG) = ;
+  (e.Pairs) () = ;
+  (((s.G) s.Id) e.Rest) (s.G e.RG) = ((s.Id)) <ReachIds2 (e.Rest) (s.G e.RG)>;
+  (((s.G) s.Id) e.Rest) (s.H e.RG), <Compare s.G s.H> : '+' =
+    <ReachIds2 (((s.G) s.Id) e.Rest) (e.RG)>;
+  (((s.G) s.Id) e.Rest) (e.RG) = <ReachIds2 (e.Rest) (e.RG)>;
 }
 
-TransFrom {
-  s.Id = ;
-  s.Id (TR s.Id (e.Callee) s.To) e.Rest = s.To <TransFrom s.Id e.Rest>;
-  s.Id (e.T) e.Rest = <TransFrom s.Id e.Rest>;
+ReachIds3 {
+  (e.Ids) = <ReachIds4 (<SortN (e.Ids)>)>;
+}
+
+ReachIds4 {
+  () = ;
+  (((s.Id)) e.Rest) = s.Id <ReachIds4 (e.Rest)>;
+}
+
+* ---- merge sorts
+
+* `Sort` and `Merge` key on the whole element, so a pair needs its own
+* comparator. The shape is otherwise the same, including the convention that a
+* merge returns its elements unwrapped and its callers bracket each half.
+
+SortName {
+  () = ;
+  ((e.X)) = (e.X);
+  (e.L) = <MergeName (<SortName <Fst <Split (e.L)>>>) (<SortName <Snd <Split (e.L)>>>)>;
+}
+
+MergeName {
+  (e.A) () = e.A;
+  () (e.B) = e.B;
+  ((e.K) e.A) ((e.K2) e.B), <LePair (e.K) (e.K2)> : '1' =
+    (e.K) <MergeName (e.A) ((e.K2) e.B)>;
+  ((e.K) e.A) ((e.K2) e.B) = (e.K2) <MergeName ((e.K) e.A) (e.B)>;
+}
+
+* An element is ((name) id): the name is the key and the id travels with it.
+LePair {
+  ((e.A) s.Id) ((e.B) s.J) = <LeName (e.A) (e.B)>;
+}
+
+SortN {
+  () = ;
+  ((e.X)) = (e.X);
+  (e.L) = <MergeN (<SortN <Fst <Split (e.L)>>>) (<SortN <Snd <Split (e.L)>>>)>;
+}
+
+MergeN {
+  (e.A) () = e.A;
+  () (e.B) = e.B;
+  ((e.K) e.A) ((e.K2) e.B), <LeNum (e.K) (e.K2)> : '1' =
+    (e.K) <MergeN (e.A) ((e.K2) e.B)>;
+  ((e.K) e.A) ((e.K2) e.B) = (e.K2) <MergeN ((e.K) e.A) (e.B)>;
+}
+
+* The key is the number that leads the element; whatever follows it is payload.
+LeNum {
+  ((s.A) e.T) ((s.B) e.U), <Compare s.A s.B> : '-' = '1';
+  ((s.A) e.T) ((s.B) e.U) = ;
 }
 
 Member {
@@ -988,18 +1189,23 @@ MemberL {
 * Renumber the reachable states 0,1,2... in program order and carry the
 * remapping into the transitions; an edge with an unmapped endpoint is the one
 * that led to a state which was removed.
+*
+* `Reach` is sorted ascending and the states are in id order, so the two move
+* together: the membership test that used to walk the reachable set once per
+* state is now one step per state.
 RenumS {
-  s.Next (e.Map) (e.New) (e.Reach) = (RS (e.Map) (e.New));
-  s.Next (e.Map) (e.New) (e.Reach) (ST s.Id (e.N) s.J t.Sent) e.Rest,
-    <Member s.Id (e.Reach)> : '1' =
-      <RenumS <Add s.Next 1> (e.Map (RM s.Id s.Next)) (e.New (ST s.Next (e.N) s.J t.Sent)) (e.Reach) e.Rest>;
+  s.Next (e.Map) (e.New) () = (RS (e.Map) (e.New));
+  s.Next (e.Map) (e.New) (s.Id e.Reach) (ST s.Id (e.N) s.J t.Sent) e.Rest =
+    <RenumS <Add s.Next 1> (e.Map (RM s.Id s.Next)) (e.New (ST s.Next (e.N) s.J t.Sent))
+      (e.Reach) e.Rest>;
   s.Next (e.Map) (e.New) (e.Reach) (ST s.Id (e.N) s.J t.Sent) e.Rest =
-      <RenumS s.Next (e.Map) (e.New) (e.Reach) e.Rest>;
+    <RenumS s.Next (e.Map) (e.New) (e.Reach) e.Rest>;
 }
 
 Renumber2 {
-  (e.Trans) s.E (RS (e.Map) (e.New)) =
-    (CG (<LookupM (e.Map) s.E>) (e.New) (<RenumT (e.Map) e.Trans>));
+  (e.Trans) s.E (e.RG) (RS (e.Map) (e.New)) =
+    (CG (<LookupM (e.Map) s.E>) (e.New)
+        (<RenumT (e.Map) (<HeadMap (e.Map) (e.RG)>) (e.Trans)>));
 }
 
 LookupM {
@@ -1009,21 +1215,46 @@ LookupM {
 * The query is the first argument and the map the tail, for the same reason
 * Lookup takes its query first: written the other way round the pattern ends
 * `e.Rest s.X`, an expression variable followed by a term, and the matcher has
-* to walk the rest of the map to find where e.Rest stops. Renumbering asks this
-* once per reachable state, so a walk per lookup is a walk per state.
+* to walk the rest of the map to find where e.Rest stops.
 LookupML {
   s.X = ;
   s.X (RM s.X s.N) e.Rest = s.N;
   s.X (e.R) e.Rest = <LookupML s.X e.Rest>;
 }
 
+* A transition's target is a canonical id -- a group head -- so the target remap
+* needs one entry per function rather than one per state. Both lists ascend by
+* old id, so this is a merge join.
+HeadMap {
+  (e.Map) (e.RG) = <HeadMap2 (e.Map) (e.RG)>;
+}
+
+HeadMap2 {
+  (e.Map) () = ;
+  () (e.RG) = ;
+  ((RM s.Id s.N) e.Rest) (s.Id e.RG) = (HM s.Id s.N) <HeadMap2 (e.Rest) (s.Id e.RG)>;
+  ((RM s.Id s.N) e.Rest) (s.H e.RG), <Compare s.Id s.H> : '+' =
+    <HeadMap2 ((RM s.Id s.N) e.Rest) (e.RG)>;
+  ((RM s.Id s.N) e.Rest) (e.RG) = <HeadMap2 (e.Rest) (e.RG)>;
+}
+
+* The transitions are in source-id order and the map is in old-id order, so the
+* source remap is a merge join; the target remap is a lookup in the head map,
+* which has one entry per function rather than one per state.
 RenumT {
-  (e.Map) = ;
-  (e.Map) (TR s.F (e.Callee) s.T) e.Rest,
-    <LookupM (e.Map) s.F> : s.NF,
-    <LookupM (e.Map) s.T> : s.NT =
-      (TR s.NF (e.Callee) s.NT) <RenumT (e.Map) e.Rest>;
-  (e.Map) (e.T) e.Rest = <RenumT (e.Map) e.Rest>;
+  (e.Map) (e.HM) () = ;
+  ((RM s.F s.NF) e.Map2) (e.HM) ((TR s.F (e.Callee) s.T) e.Rest),
+    <MapTo s.T e.HM> : s.NT =
+      (TR s.NF (e.Callee) s.NT) <RenumT ((RM s.F s.NF) e.Map2) (e.HM) (e.Rest)>;
+  ((RM s.F s.NF) e.Map2) (e.HM) ((TR s.G (e.Callee) s.T) e.Rest), <Compare s.G s.F> : '+' =
+    <RenumT (e.Map2) (e.HM) ((TR s.G (e.Callee) s.T) e.Rest)>;
+  (e.Map) (e.HM) ((e.T) e.Rest) = <RenumT (e.Map) (e.HM) (e.Rest)>;
+}
+
+MapTo {
+  s.E (HM s.E s.N) e.Rest = s.N;
+  s.E (HM s.Id s.N) e.Rest = <MapTo s.E e.Rest>;
+  s.E = ;
 }
 
 * ---- print: `format_seed_graph`, with the final newline left to Prout

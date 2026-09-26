@@ -898,7 +898,7 @@ fn fixpoint_program(program: &refal_ast::Program, args: &[String]) {
 }
 
 fn apply_source_compiler(program: &refal_ast::Program, source: &str) -> Result<String, String> {
-    let input = vec![Value::Bracket(source.chars().map(Value::Char).collect())];
+    let input = vec![Value::bracket(source.chars().map(Value::Char).collect())];
     let evaluator = Evaluator::new(program);
     let result = evaluator
         .evaluate_entry(&input)
@@ -1430,7 +1430,7 @@ fn run_program(program: &refal_ast::Program, input_args: &[String]) {
 
 fn args_to_values(args: &[String]) -> Vec<Value> {
     args.iter()
-        .map(|arg| Value::Bracket(arg.chars().map(Value::Char).collect()))
+        .map(|arg| Value::bracket(arg.chars().map(Value::Char).collect()))
         .collect()
 }
 

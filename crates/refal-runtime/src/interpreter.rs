@@ -471,7 +471,7 @@ impl<'a> Evaluator<'a> {
                 match task {
                     WorkTask::Terms(mut frame) => match frame.pending.take() {
                         Some(PendingTerm::Bracket) => {
-                            frame.literals.push(Value::Bracket(values.to_values()));
+                            frame.literals.push(Value::Bracket(values.into_slice()));
                             tasks.push(WorkTask::Terms(frame));
                         }
                         Some(PendingTerm::CallArguments(call_name)) => {
@@ -912,6 +912,20 @@ impl<'a> Evaluator<'a> {
         call_depth: usize,
     ) -> Result<Vec<Value>, EvalError> {
         for sentence in sentences {
+            // A sentence with no conditions never needs an alternative set of
+            // bindings, so it takes the first match directly. The enumerating
+            // path materialises every split of every expression variable --
+            // each one a cloned binding map -- and on the compiler's own graph
+            // pass that was most of the cost of a call.
+            if sentence.conditions.is_empty() {
+                match match_pattern_first(&sentence.pattern, args) {
+                    Ok(bindings) => {
+                        return self.eval_terms(&sentence.result, &bindings, call_depth);
+                    }
+                    Err(MatchError::NoMatch) => continue,
+                    Err(error) => return Err(EvalError::Match(error)),
+                }
+            }
             match match_pattern_candidates(&sentence.pattern, args) {
                 Ok(pattern_candidates) => {
                     for bindings in pattern_candidates {
@@ -1039,7 +1053,7 @@ impl<'a> Evaluator<'a> {
         // so `<Dgall>` returns the newest term first and the oldest last. The
         // internal vector stores burial order, hence the reversal.
         for (name, value) in stack.into_iter().rev() {
-            result.push(Value::Bracket({
+            result.push(Value::bracket({
                 let mut entry = name;
                 entry.push(Value::Char('='));
                 entry.extend(value);
@@ -1161,7 +1175,7 @@ impl<'a> Evaluator<'a> {
                     output.extend(resolve_variable(variable, bindings)?.to_values());
                 }
                 TermKind::Bracket(inner) => {
-                    output.push(Value::Bracket(
+                    output.push(Value::bracket(
                         self.eval_terms(inner, bindings, call_depth)?,
                     ));
                 }
@@ -1226,7 +1240,7 @@ fn split_count<'a>(args: &'a [Value], name: &str) -> Result<(usize, &'a [Value])
 fn split_first(args: &[Value]) -> Result<Vec<Value>, EvalError> {
     let (count, expression) = split_count(args, "First")?;
     let split = count.min(expression.len());
-    let mut result = vec![Value::Bracket(expression[..split].to_vec())];
+    let mut result = vec![Value::bracket(expression[..split].to_vec())];
     result.extend_from_slice(&expression[split..]);
     Ok(result)
 }
@@ -1235,7 +1249,7 @@ fn split_last(args: &[Value]) -> Result<Vec<Value>, EvalError> {
     let (count, expression) = split_count(args, "Last")?;
     let split = expression.len().saturating_sub(count);
     let mut result = expression[..split].to_vec();
-    result.push(Value::Bracket(expression[split..].to_vec()));
+    result.push(Value::bracket(expression[split..].to_vec()));
     Ok(result)
 }
 
@@ -1266,7 +1280,7 @@ fn change_case(args: &[Value], upper: bool) -> Result<Vec<Value>, EvalError> {
             }),
             Value::Number(number) => Value::Number(number.clone()),
             Value::Bracket(inner) => {
-                Value::Bracket(inner.iter().map(|value| transform(value, upper)).collect())
+                Value::bracket(inner.iter().map(|value| transform(value, upper)).collect())
             }
         }
     }
@@ -1407,7 +1421,7 @@ fn metacode_sequence(values: &[Value]) -> Vec<Value> {
             encoded.push(Value::Char(META_MARKER));
             encoded.push(Value::Char(META_ASTERISK));
         } else if let Value::Bracket(inner) = value {
-            encoded.push(Value::Bracket(metacode_sequence(inner)));
+            encoded.push(Value::bracket(metacode_sequence(inner)));
         } else {
             encoded.push(value.clone());
         }
@@ -1468,7 +1482,7 @@ impl<'a> Evaluator<'a> {
             if is_marker(value, META_MARKER) {
                 index += self.lift_marker(values, index, call_depth, &mut lifted)?;
             } else if let Value::Bracket(inner) = value {
-                lifted.push(Value::Bracket(self.lift_sequence(inner, call_depth)?));
+                lifted.push(Value::bracket(self.lift_sequence(inner, call_depth)?));
                 index += 1;
             } else {
                 lifted.push(value.clone());
@@ -1551,7 +1565,7 @@ impl<'a> Evaluator<'a> {
                 "a metacoded call must name exactly one function symbol",
             ));
         };
-        let arguments = self.lift_sequence(arguments, call_depth)?;
+        let arguments = self.lift_sequence(&arguments, call_depth)?;
         let result = self.evaluate_function_at_depth(
             &function,
             &ViewField::owned(arguments),
@@ -2222,7 +2236,7 @@ fn divide(args: &[Value], return_remainder: bool) -> Result<Vec<Value>, EvalErro
         };
         // `Divmod` "returns (e.Quotient) e.Remainder" (§C.2): the quotient is
         // bracketed, the remainder follows it.
-        let mut result = vec![Value::Bracket(quotient.terms())];
+        let mut result = vec![Value::bracket(quotient.terms())];
         result.extend(remainder.terms());
         return Ok(result);
     }
@@ -2705,7 +2719,7 @@ mod tests {
     /// A `Realfun` argument list: the bracketed function name and its numeric
     /// arguments (§C.2).
     fn realfun_args(name: &str, operands: &[&str]) -> Vec<Value> {
-        let mut args = vec![Value::Bracket(name.chars().map(Value::Char).collect())];
+        let mut args = vec![Value::bracket(name.chars().map(Value::Char).collect())];
         args.extend(
             operands
                 .iter()
@@ -3154,8 +3168,8 @@ mod tests {
             vec![Value::Char('R'), Value::Number("2.5".to_string())]
         );
         assert_eq!(
-            type_of(&[Value::Bracket(vec![Value::Char('x')])]),
-            vec![Value::Char('B'), Value::Bracket(vec![Value::Char('x')])]
+            type_of(&[Value::bracket(vec![Value::Char('x')])]),
+            vec![Value::Char('B'), Value::bracket(vec![Value::Char('x')])]
         );
     }
 
@@ -3185,7 +3199,7 @@ mod tests {
         assert_eq!(
             divide(&numbers, true).unwrap(),
             vec![
-                Value::Bracket(vec![Value::Number("2".to_string())]),
+                Value::bracket(vec![Value::Number("2".to_string())]),
                 Value::Number("2".to_string()),
             ]
         );
@@ -3276,7 +3290,7 @@ mod tests {
         // same precision §C.2 accepts by giving a real number one 32-bit word.
         let mixed = |first: &[&str], second: &str| {
             vec![
-                Value::Bracket(numbers(first)),
+                Value::bracket(numbers(first)),
                 Value::Number(second.to_string()),
             ]
         };
@@ -3319,7 +3333,7 @@ mod tests {
             builtin(
                 "Add",
                 &[
-                    Value::Bracket(numbers(&["1.5"])),
+                    Value::bracket(numbers(&["1.5"])),
                     Value::Number("2".to_string()),
                 ],
             )
@@ -3419,7 +3433,7 @@ mod tests {
 
         // An integer too large for a real number has no real counterpart, so a
         // mixed operation refuses it rather than rounding it to infinity.
-        let huge = Value::Bracket(numbers(&["4294967295"; 40]));
+        let huge = Value::bracket(numbers(&["4294967295"; 40]));
         let error = builtin("Add", &[huge.clone(), Value::Number("1.5".to_string())]).unwrap_err();
         assert!(error.to_string().contains("too large"), "{error}");
         // Two integers are unaffected: macrodigit arithmetic is exact at any
@@ -3455,7 +3469,7 @@ mod tests {
         let error = builtin(
             "Div",
             &[
-                Value::Bracket(numbers(&["1", "0"])),
+                Value::bracket(numbers(&["1", "0"])),
                 numbers(&["0"])[0].clone(),
             ],
         )
@@ -3487,7 +3501,7 @@ mod tests {
             builtin(
                 "Add",
                 &[
-                    Value::Bracket(numbers(&["4294967295", "4294967295"])),
+                    Value::bracket(numbers(&["4294967295", "4294967295"])),
                     Value::Number("1".to_string()),
                 ],
             )
@@ -3500,7 +3514,7 @@ mod tests {
 
         // Borrowing across the macrodigit boundary: 2^32 divided by 3, with the
         // quotient one macrodigit and the remainder 1.
-        let two_to_the_thirty_two = Value::Bracket(numbers(&["1", "0"]));
+        let two_to_the_thirty_two = Value::bracket(numbers(&["1", "0"]));
         assert_eq!(
             builtin(
                 "Div",
@@ -3531,7 +3545,7 @@ mod tests {
         );
         // `Trunc` takes the whole sequence and rejects a bracketed argument:
         // an integer is a macrodigit sequence, and a bracket is not one.
-        let error = builtin("Trunc", &[Value::Bracket(numbers(&["1", "0"]))]).unwrap_err();
+        let error = builtin("Trunc", &[Value::bracket(numbers(&["1", "0"]))]).unwrap_err();
         assert!(error.to_string().contains("macrodigit"), "{error}");
         assert_eq!(
             builtin("Real", &numbers(&["1", "0"])).unwrap(),
@@ -3572,7 +3586,7 @@ mod tests {
         assert_eq!(
             builtin("Divmod", &integer_terms(&["-", "5", "2"])).unwrap(),
             vec![
-                Value::Bracket(vec![Value::Char('-'), Value::Number("2".to_string())]),
+                Value::bracket(vec![Value::Char('-'), Value::Number("2".to_string())]),
                 Value::Char('-'),
                 Value::Number("1".to_string()),
             ]
@@ -3580,7 +3594,7 @@ mod tests {
         assert_eq!(
             builtin("Divmod", &integer_terms(&["-", "5", "-", "2"])).unwrap(),
             vec![
-                Value::Bracket(numbers(&["2"])),
+                Value::bracket(numbers(&["2"])),
                 Value::Char('-'),
                 Value::Number("1".to_string()),
             ]
@@ -3602,7 +3616,7 @@ mod tests {
         // not there is an error and not the integer 0.
         for args in [
             numbers(&["1"]),
-            vec![Value::Bracket(numbers(&["1"]))],
+            vec![Value::bracket(numbers(&["1"]))],
             integer_terms(&["-"]),
             Vec::new(),
         ] {
@@ -3698,7 +3712,7 @@ mod tests {
                 native(left % right),
                 "{left} % {right}"
             );
-            let mut expected = vec![Value::Bracket(native(left / right))];
+            let mut expected = vec![Value::bracket(native(left / right))];
             expected.extend(native(left % right));
             assert_eq!(
                 builtin("Divmod", &binary_operands(left, right)).unwrap(),
@@ -3759,7 +3773,7 @@ mod tests {
     /// The bracketed operand form `<ar-function (e.N1) e.N2>` (§C.2), which is
     /// the only spelling that can pass a first operand of several macrodigits.
     fn binary_operands(left: u128, right: u128) -> Vec<Value> {
-        let mut args = vec![Value::Bracket(native(left))];
+        let mut args = vec![Value::bracket(native(left))];
         args.extend(native(right));
         args
     }
@@ -3779,9 +3793,9 @@ mod tests {
         assert_eq!(
             evaluator.dgall().unwrap(),
             vec![
-                Value::Bracket(stack_entry("Newest", "3")),
-                Value::Bracket(stack_entry("Middle", "2")),
-                Value::Bracket(stack_entry("Oldest", "1")),
+                Value::bracket(stack_entry("Newest", "3")),
+                Value::bracket(stack_entry("Middle", "2")),
+                Value::bracket(stack_entry("Oldest", "1")),
             ]
         );
         // Dgall buries the whole stack away.
@@ -3868,10 +3882,10 @@ mod tests {
                 Value::Number("2.0".to_string()),
             ],
             vec![
-                Value::Bracket(vec![Value::Identifier("Log".to_string())]),
+                Value::bracket(vec![Value::Identifier("Log".to_string())]),
                 Value::Number("2.0".to_string()),
             ],
-            vec![Value::Bracket(vec![]), Value::Number("2.0".to_string())],
+            vec![Value::bracket(vec![]), Value::Number("2.0".to_string())],
             vec![],
         ];
         for args in cases {
@@ -4058,7 +4072,7 @@ mod tests {
             Value::Char('a'),
             Value::Char('*'),
             Value::Number("42".to_string()),
-            Value::Bracket(vec![
+            Value::bracket(vec![
                 Value::Char('*'),
                 Value::Identifier("Inner".to_string()),
             ]),
@@ -4071,7 +4085,7 @@ mod tests {
                 Value::Char('*'),
                 Value::Char('V'),
                 Value::Number("42".to_string()),
-                Value::Bracket(vec![
+                Value::bracket(vec![
                     Value::Char('*'),
                     Value::Char('V'),
                     Value::Identifier("Inner".to_string()),
@@ -4087,7 +4101,7 @@ mod tests {
             Value::Identifier("Foo-Bar".to_string()),
             Value::Number("42".to_string()),
             Value::Char('*'),
-            Value::Bracket(vec![
+            Value::bracket(vec![
                 Value::Char('x'),
                 Value::Char('*'),
                 Value::Identifier("Inner".to_string()),
@@ -4122,8 +4136,8 @@ mod tests {
 
         let metacoded_call = vec![
             Value::Char('*'),
-            Value::Bracket(vec![
-                Value::Bracket(vec![Value::Identifier("Echo".to_string())]),
+            Value::bracket(vec![
+                Value::bracket(vec![Value::Identifier("Echo".to_string())]),
                 Value::Char('Z'),
             ]),
         ];
@@ -4170,7 +4184,7 @@ mod tests {
                     &[
                         Value::Char('*'),
                         Value::Char('!'),
-                        Value::Bracket(vec![Value::Char('*'), Value::Char('E')]),
+                        Value::bracket(vec![Value::Char('*'), Value::Char('E')]),
                     ],
                 )
                 .unwrap(),
@@ -4196,7 +4210,7 @@ mod tests {
             ])
             .unwrap(),
             vec![
-                Value::Bracket(vec![Value::Char('a'), Value::Char('b')]),
+                Value::bracket(vec![Value::Char('a'), Value::Char('b')]),
                 Value::Char('c'),
                 Value::Char('d'),
             ]
@@ -4213,7 +4227,7 @@ mod tests {
             vec![
                 Value::Char('a'),
                 Value::Char('b'),
-                Value::Bracket(vec![Value::Char('c'), Value::Char('d')]),
+                Value::bracket(vec![Value::Char('c'), Value::Char('d')]),
             ]
         );
         assert_eq!(
@@ -4293,7 +4307,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             evaluator.dgall().unwrap(),
-            vec![Value::Bracket(vec![
+            vec![Value::bracket(vec![
                 Value::Identifier("Other".to_string()),
                 Value::Char('='),
                 Value::Char('y'),

@@ -94,7 +94,7 @@ fn match_first_from(
             };
             for inner_bindings in match_all_from(
                 inner_pattern,
-                &ViewField::copied(inner_input),
+                &ViewField::from_slice(inner_input.clone()),
                 bindings.clone(),
             )? {
                 if let Some(result) = match_first_from(rest_pattern, &rest_input, inner_bindings)? {
@@ -194,9 +194,11 @@ fn match_all_from(
                 return Ok(Vec::new());
             };
             let mut candidates = Vec::new();
-            for inner_bindings in
-                match_all_from(inner_pattern, &ViewField::copied(inner_input), bindings)?
-            {
+            for inner_bindings in match_all_from(
+                inner_pattern,
+                &ViewField::from_slice(inner_input.clone()),
+                bindings,
+            )? {
                 candidates.extend(match_all_from(rest_pattern, &rest_input, inner_bindings)?);
             }
             Ok(candidates)
@@ -504,7 +506,7 @@ mod tests {
         assert_eq!(
             match_pattern(
                 &[var(VariableKind::Symbol, "X")],
-                &field(vec![Value::Bracket(vec![Value::Char('A')])])
+                &field(vec![Value::bracket(vec![Value::Char('A')])])
             ),
             Err(MatchError::NoMatch)
         );
@@ -512,7 +514,7 @@ mod tests {
 
     #[test]
     fn t_variable_matches_single_bracket_term() {
-        let input = Value::Bracket(vec![Value::Char('A')]);
+        let input = Value::bracket(vec![Value::Char('A')]);
         let bindings =
             match_pattern(&[var(VariableKind::Term, "X")], &field(vec![input.clone()])).unwrap();
         assert_eq!(bound(&bindings, VariableKind::Term, "X"), vec![input]);
@@ -617,7 +619,7 @@ mod tests {
             kind: TermKind::Bracket(vec![char_term('A')]),
             span: span(),
         }];
-        let input = field(vec![Value::Bracket(vec![Value::Char('A')])]);
+        let input = field(vec![Value::bracket(vec![Value::Char('A')])]);
 
         assert!(match_pattern(&pattern, &input).is_ok());
     }
@@ -634,14 +636,14 @@ mod tests {
             },
         ];
         let input = field(vec![
-            Value::Bracket(vec![Value::Char('A')]),
-            Value::Bracket(vec![Value::Char('A')]),
+            Value::bracket(vec![Value::Char('A')]),
+            Value::bracket(vec![Value::Char('A')]),
         ]);
 
         let bindings = match_pattern(&pattern, &input).unwrap();
         assert_eq!(
             bound(&bindings, VariableKind::Expression, "X"),
-            vec![Value::Bracket(vec![Value::Char('A')])]
+            vec![Value::bracket(vec![Value::Char('A')])]
         );
     }
 

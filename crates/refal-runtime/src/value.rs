@@ -9,7 +9,35 @@ pub enum Value {
     Char(char),
     Identifier(String),
     Number(String),
-    Bracket(Vec<Value>),
+    /// A bracket's contents are a *run of a shared arena*, not an owned `Vec`,
+    /// so opening a bracket is a reference count rather than a copy of
+    /// everything inside it. That matters more than it sounds: a Refal program
+    /// passes its lists in brackets, and with an owned `Vec` every pattern that
+    /// opened one -- `(e.States)`, `((TR ...) e.Rest)` -- deep-copied the whole
+    /// list, nested records included, once per call. A graph pass over the
+    /// compiler's own 1,094-state graph therefore copied millions of records
+    /// merely to look at them. A `Slice` also carries an offset, so rebuilding
+    /// a bracket from a binding -- `<Walk (e.Rest)>`, the shape every list walk
+    /// is written in -- is a reference count too.
+    Bracket(Slice),
+}
+
+impl Value {
+    /// A bracket over freshly built contents. One allocation, no copy: the
+    /// arena is handed over rather than duplicated.
+    pub fn bracket(values: Vec<Value>) -> Self {
+        Self::Bracket(Slice::owned(values))
+    }
+}
+
+/// A run reads as the terms it covers, so `.iter()`, indexing and `.len()` mean
+/// what they meant when a bracket held a `Vec`.
+impl std::ops::Deref for Slice {
+    type Target = [Value];
+
+    fn deref(&self) -> &[Value] {
+        self.terms()
+    }
 }
 
 /// Identifier symbols compare under Classic Refal-5 name equivalence: case
@@ -213,14 +241,22 @@ enum Node {
     Nil,
     /// A run, then the rest.
     Cons(Slice, Rc<Node>),
-    /// One node, then another. The `usize` is the left operand's length.
+    /// One node, then another. The `usize` is the left operand's length and
+    /// the `u32` is the node's height in concatenations -- a run is a leaf.
     ///
     /// This is what makes appending a result to a prefix cost nothing: the
     /// child's whole rope is spliced in as one node rather than walked. A
     /// `Concat` is only ever built with two non-empty operands, so the leftmost
     /// leaf is found by descending the left spine and never by skipping an
     /// empty branch.
-    Concat(Rc<Node>, usize, Rc<Node>),
+    ///
+    /// The height is what keeps that spine short. Appending builds a *left*
+    /// spine -- `((a ++ b) ++ c) ++ d` -- and reaching the head of a left spine
+    /// costs its depth, so a list built by appending and then walked term by
+    /// term is quadratic. `ViewField::concat` rotates when the left operand is
+    /// more than one level taller than the right, which bounds the height at
+    /// O(log n) and makes both operations logarithmic.
+    Concat(Rc<Node>, usize, Rc<Node>, u32),
 }
 
 fn is_nil(node: &Rc<Node>) -> bool {
@@ -240,7 +276,7 @@ impl Drop for Node {
         match self {
             Node::Nil => {}
             Node::Cons(_, tail) => stack.push(std::mem::replace(tail, Rc::new(Node::Nil))),
-            Node::Concat(left, _, right) => {
+            Node::Concat(left, _, right, _) => {
                 stack.push(std::mem::replace(left, Rc::new(Node::Nil)));
                 stack.push(std::mem::replace(right, Rc::new(Node::Nil)));
             }
@@ -254,7 +290,7 @@ impl Drop for Node {
             match &mut node {
                 Node::Nil => {}
                 Node::Cons(_, tail) => stack.push(std::mem::replace(tail, Rc::new(Node::Nil))),
-                Node::Concat(left, _, right) => {
+                Node::Concat(left, _, right, _) => {
                     stack.push(std::mem::replace(left, Rc::new(Node::Nil)));
                     stack.push(std::mem::replace(right, Rc::new(Node::Nil)));
                 }
@@ -263,12 +299,96 @@ impl Drop for Node {
     }
 }
 
+/// A node's height in concatenations. A run is a leaf however long it is: the
+/// matcher walks a chain of runs one run per step, so a chain costs nothing.
+/// Only a concatenation can build a spine that a walk has to pay for.
+fn node_height(node: &Rc<Node>) -> u32 {
+    match &**node {
+        Node::Nil => 0,
+        Node::Cons(..) => 1,
+        Node::Concat(_, _, _, height) => *height,
+    }
+}
+
+fn make_concat(left: Rc<Node>, left_len: usize, right: Rc<Node>) -> Rc<Node> {
+    let height = 1 + node_height(&left).max(node_height(&right));
+    Rc::new(Node::Concat(left, left_len, right, height))
+}
+
+/// Descends a concatenation until the field's own extent is visible in the
+/// structure.
+///
+/// A field may be a *prefix* of its node -- `take` clamps the length rather than
+/// rebuilding the node -- so a node's own split is not necessarily the field's,
+/// and the rotation below would subtract a left-child length the field never
+/// reaches. While the field fits inside the left child it *is* a field of that
+/// child, so descending is exact and terminates, because the height drops.
+fn unclamp(node: Rc<Node>, len: usize) -> Rc<Node> {
+    let mut node = node;
+    while let Node::Concat(left, left_len, _, _) = &*node {
+        if len > *left_len {
+            break;
+        }
+        node = Rc::clone(left);
+    }
+    node
+}
+
+/// `left ++ right`, with the rope kept balanced.
+///
+/// Only a *left*-heavy join rotates. A right-heavy one is left alone on
+/// purpose: `s.C <Recurse ...>` prepends one run to a child's rope, and that
+/// shape is both the one the view-field invariants are stated in and the one
+/// whose head is reached in a single step, so it is preserved rather than
+/// rewritten.
+///
+/// The rotation is the standard AVL one, single or double, and it is taken only
+/// when the split is exact; any other shape falls back to a plain
+/// concatenation, which is always correct and only ever taller. Writing `a = al
+/// ++ ar`, a single rotation gives `al ++ (ar ++ right)`, whose children are
+/// within one level of each other when `h(al) >= h(ar)`; when the split is the
+/// other way, two rotations give `(al ++ arl) ++ (arr ++ right)`, which is.
+fn join(left: Rc<Node>, left_len: usize, right: Rc<Node>, right_len: usize) -> Rc<Node> {
+    if left_len == 0 {
+        return right;
+    }
+    if right_len == 0 {
+        return left;
+    }
+    let left = unclamp(left, left_len);
+    let right = unclamp(right, right_len);
+    if node_height(&left) > node_height(&right) + 1
+        && let Node::Concat(inner_left, inner_left_len, inner_right, _) = &*left
+        && left_len > *inner_left_len
+    {
+        let (inner_left, inner_left_len) = (Rc::clone(inner_left), *inner_left_len);
+        let (inner_right, inner_right_len) = (Rc::clone(inner_right), left_len - inner_left_len);
+        if node_height(&inner_left) >= node_height(&inner_right) {
+            let tail = join(inner_right, inner_right_len, right, right_len);
+            return make_concat(inner_left, inner_left_len, tail);
+        }
+        let inner_right = unclamp(inner_right, inner_right_len);
+        if let Node::Concat(lower_left, lower_left_len, lower_right, _) = &*inner_right
+            && inner_right_len > *lower_left_len
+        {
+            let (lower_left, lower_left_len) = (Rc::clone(lower_left), *lower_left_len);
+            let (lower_right, lower_right_len) =
+                (Rc::clone(lower_right), inner_right_len - lower_left_len);
+            let head = make_concat(inner_left, inner_left_len, lower_left);
+            let head_len = inner_left_len + lower_left_len;
+            let tail = join(lower_right, lower_right_len, right, right_len);
+            return make_concat(head, head_len, tail);
+        }
+    }
+    make_concat(left, left_len, right)
+}
+
 /// The leftmost run of a rope, descending concatenations.
 fn head_run(node: &Rc<Node>) -> Option<&Slice> {
     match &**node {
         Node::Nil => None,
         Node::Cons(run, _) => Some(run),
-        Node::Concat(left, _, right) => head_run(left).or_else(|| head_run(right)),
+        Node::Concat(left, _, right, _) => head_run(left).or_else(|| head_run(right)),
     }
 }
 
@@ -295,7 +415,7 @@ fn drop_front(node: &Rc<Node>, count: usize) -> (Rc<Node>, usize) {
                     node = Rc::clone(tail);
                 }
             }
-            Node::Concat(left_node, left_len, right) => {
+            Node::Concat(left_node, left_len, right, _) => {
                 if left < *left_len {
                     let (rest, inner) = drop_front(left_node, left);
                     dropped += inner;
@@ -303,7 +423,7 @@ fn drop_front(node: &Rc<Node>, count: usize) -> (Rc<Node>, usize) {
                     node = if is_nil(&rest) {
                         Rc::clone(right)
                     } else {
-                        Rc::new(Node::Concat(rest, *left_len - inner, Rc::clone(right)))
+                        make_concat(rest, *left_len - inner, Rc::clone(right))
                     };
                 } else {
                     dropped += *left_len;
@@ -403,6 +523,20 @@ impl ViewField {
         Self { node, len }
     }
 
+    /// This field as a run, sharing the arena it came from when the field is
+    /// one run, and materialising it otherwise. This is how a bracket is built
+    /// from a binding without a second copy: `(e.Rest)` over a binding that is
+    /// a range of its input is a reference count.
+    pub fn into_slice(self) -> Slice {
+        if let Node::Cons(run, tail) = &*self.node
+            && is_nil(tail)
+            && run.len() == self.len
+        {
+            return run.clone();
+        }
+        Slice::owned(self.to_values())
+    }
+
     /// A field from a frame's pieces, folded right to left.
     ///
     /// The fold is what keeps the rope right-nested, and the last piece
@@ -421,16 +555,10 @@ impl ViewField {
     }
 
     /// This field followed by `other`. Appending a whole field splices its rope
-    /// in as one node; it does not walk it.
+    /// in as one node; it does not walk it, and the result stays balanced.
     pub fn concat(self, other: Self) -> Self {
-        if self.len == 0 {
-            return other;
-        }
-        if other.len == 0 {
-            return self;
-        }
         Self {
-            node: Rc::new(Node::Concat(self.node, self.len, other.node)),
+            node: join(self.node, self.len, other.node, other.len),
             len: self.len + other.len,
         }
     }
@@ -508,7 +636,7 @@ impl ViewField {
                     index -= run.len();
                     node = tail;
                 }
-                Node::Concat(left, left_len, right) => {
+                Node::Concat(left, left_len, right, _) => {
                     if index < *left_len {
                         node = left;
                     } else {
@@ -574,7 +702,7 @@ impl ViewField {
                     out.extend_from_slice(&run.terms()[..taken]);
                     stack.push((Rc::clone(tail), left - taken));
                 }
-                Node::Concat(first, first_len, second) => {
+                Node::Concat(first, first_len, second, _) => {
                     let from_second = left.saturating_sub(*first_len);
                     stack.push((Rc::clone(second), from_second));
                     stack.push((Rc::clone(first), left - from_second));
@@ -606,7 +734,7 @@ impl ViewField {
                     out.push(run.sub(0, taken));
                     stack.push((Rc::clone(tail), left - taken));
                 }
-                Node::Concat(first, first_len, second) => {
+                Node::Concat(first, first_len, second, _) => {
                     let from_second = left.saturating_sub(*first_len);
                     stack.push((Rc::clone(second), from_second));
                     stack.push((Rc::clone(first), left - from_second));
