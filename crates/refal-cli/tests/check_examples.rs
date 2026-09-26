@@ -2596,6 +2596,94 @@ fn the_driven_compiler_is_a_fixpoint_of_the_driver() {
     assert_eq!(c1, c2, "C1 and C2 must be byte-identical");
 }
 
+/// The Refal-authored driver, on the compiler's own source.
+///
+/// `the_driven_compiler_is_a_fixpoint_of_the_driver` states this claim for the
+/// *Rust* driver. This states it for the driver the compiler actually contains,
+/// which is the claim the self-hosting row has been missing: `compiler.ref`'s
+/// `RESIDUALIZE-DRIVEN` produces the oracle's residue byte for byte on the
+/// compiler's own 132 KB source, that residue is checked Refal, and driving it
+/// again is byte-identical. It is the repository's slowest test and it is the
+/// point of the exercise — the compiler drives itself, not the bootstrap.
+#[test]
+fn the_refal_driver_reaches_a_fixpoint_on_the_compiler_itself() {
+    let source_path = workspace_path("examples/compiler.ref");
+    let compiler_path = workspace_path("examples/compiler.ref");
+
+    let drive = |path: &str| -> String {
+        let output = Command::new(refal_bin())
+            .args(["run"])
+            .arg(&compiler_path)
+            .args(["RESIDUALIZE-DRIVEN", "--input-file"])
+            .arg(path)
+            .output()
+            .expect("drive with the Refal driver");
+        assert!(
+            output.status.success(),
+            "the Refal driver failed on {path}:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let residue = driven_residue(&String::from_utf8_lossy(&output.stdout));
+        assert!(
+            !residue.is_empty(),
+            "the Refal driver emitted no residue for {path}"
+        );
+        residue
+    };
+
+    let c1 = drive(&source_path);
+
+    // Non-vacuity, stated on the thing that would be wrong: a residue that is
+    // just `lower`'s output is the program unchanged, so nothing was driven.
+    let whole = lower_file("examples/compiler.ref");
+    assert!(
+        whole.status.success(),
+        "the compiler must lower for this test to mean anything"
+    );
+    assert_ne!(
+        c1,
+        String::from_utf8_lossy(&whole.stdout),
+        "the Refal driver's residue is just `lower`'s output, so nothing was driven"
+    );
+
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock is after Unix epoch")
+        .as_nanos();
+    let residue_path = std::env::temp_dir().join(format!("refal-refal-driven-c1-{unique}.ref"));
+    fs::write(&residue_path, &c1).expect("write C1");
+
+    let checked = Command::new(refal_bin())
+        .args(["check"])
+        .arg(&residue_path)
+        .output()
+        .expect("check the Refal driver's residue");
+    assert!(
+        checked.status.success(),
+        "the Refal driver's residue does not check://n{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+
+    let c2 = drive(residue_path.to_str().expect("a temporary path is UTF-8"));
+    let _ = fs::remove_file(&residue_path);
+
+    // The oracle's own residue, on the compiler's own source, byte for byte.
+    let oracle = residualize_driven_file("examples/compiler.ref", &[]);
+    assert!(
+        oracle.status.success(),
+        "the Rust driver must drive the compiler for this to mean anything"
+    );
+    assert_eq!(
+        c1,
+        driven_residue(&String::from_utf8_lossy(&oracle.stdout)),
+        "the Refal driver's residue must be the oracle's"
+    );
+    assert_eq!(
+        c1, c2,
+        "the Refal driver must be a fixpoint on the compiler's own source"
+    );
+}
+
 #[test]
 fn executes_refal_authored_parser_end_to_end() {
     let cases = [

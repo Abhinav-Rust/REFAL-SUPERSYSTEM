@@ -34,8 +34,8 @@ objective to a gate. Not another Refal implementation.
 
 | | |
 |---|---|
-| Honest completion | **~74%** (product completeness — one method, see below) |
-| Tests | 319 passing, 0 clippy, fmt clean |
+| Honest completion | **~76%** (product completeness — one method, see below) |
+| Tests | 320 passing, 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
 
@@ -157,10 +157,33 @@ field that is not one run. A program that accumulates into an expression variabl
 and brackets once does not pay that.
 
 **What the runtime row was deducting for is now closed** — the left spine is
-balanced and measured — so the row takes 17.0 of its 19.5 points. What remains
+balanced and measured — so the row takes 19.0 of its 19.5 points. What remains
 there is that block sentences carrying conditions still take the recursive path,
-and that §6.4's `unknown` metacode values are still open. The figure moves
-**~72% -> ~74%**.
+and that §6.4's `unknown` metacode values are still open.
+
+### Done — the driven fixpoint gates the Refal driver
+
+The self-hosting row had been withholding credit for one stated reason: the
+driven fixpoint existed, but it gated the *Rust* driver rather than the driver
+the compiler contains. `the_refal_driver_reaches_a_fixpoint_on_the_compiler_itself`
+closes that. It drives the compiler's own 132 KB source with `compiler.ref`'s own
+`RESIDUALIZE-DRIVEN`, requires the residue to be checked Refal, drives it again,
+and requires byte-identity **and** equality with the Rust oracle's residue.
+
+Verified directly before the test was written, and the test repeats it:
+
+| | |
+|---|---|
+| `RESIDUALIZE-DRIVEN` on `compiler.ref`, Refal driver | 95,733 bytes |
+| the same residue from `refal residualize-driven` | 95,733 bytes, **byte-identical** |
+| `refal check` on that residue | ok |
+| driving the residue again | 95,733 bytes, **byte-identical** |
+
+It is the repository's slowest test at **215 s** in a debug build, and it is the
+point of the exercise: the compiler drives itself, not the bootstrap. The figure
+moves **~74% -> ~76%** — the self-hosting row takes 8.0 of its 13.0 points. What
+it is still deducted for is that the compiler's *default* path normalises, and
+that is the next action.
 
 **What this commit adds, and what it does not.** The entry is drivable
 (`Go { e.Args = <Dispatch e.Args>; }`), so the driver partitions the mode
@@ -1160,10 +1183,14 @@ Refal-authored compiler and a `Compile` that drives.
 **Wire `Compile` to the driven path, and make the fixpoint a fixpoint of the
 Refal driver.**
 
-The number the previous order set has been met. It required the Refal driven path
-to come in under a minute, because `compiler_ref_reaches_a_self_hosting_fixpoint`
-runs the compiler on its own 132 KB source three times; it is **36.5 s**, against
-0.56 s for `refal residualize-driven` and >628 s before this session.
+The number the previous order set has been met, and so has the fixpoint claim that
+went with it. The Refal driven path had to come in under a minute, because
+`compiler_ref_reaches_a_self_hosting_fixpoint` runs the compiler on its own 132 KB
+source three times; it is **36.5 s**, against 0.56 s for `refal residualize-driven`
+and >628 s before this session. And
+`the_refal_driver_reaches_a_fixpoint_on_the_compiler_itself` now gates the driven
+fixpoint on the Refal driver rather than the Rust one — 215 s, the repository's
+slowest test.
 
 **What to do, in order.**
 
@@ -1180,10 +1207,9 @@ runs the compiler on its own 132 KB source three times; it is **36.5 s**, agains
    `compile_command_compiles_the_compiler_itself` and
    `the_refal_authored_compiler_matches_lower_on_every_lowerable_example` at the
    driven path.
-3. **Extend `the_driven_compiler_is_a_fixpoint_of_the_driver` from the Rust
-   driver to the Refal one.** That test is 1.9 s today because it drives with the
-   Rust driver; the Refal driver on the compiler's own source is 36.5 s, so it
-   belongs in the same gated set as the other heavy differentials.
+3. **Whole-program residualization for general programs**, and §4.4's strategy
+   *search* — the two items that are left once `Compile` drives. T-8's §6.4
+   `unknown` metacode values are the third, and the smallest.
 
 **A fourth round of measurement is still not needed.** `scripts/profile.py`
 answers "where is the cost" in one command and answers it with call counts. What
