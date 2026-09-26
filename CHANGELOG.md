@@ -44,6 +44,13 @@ The `(ERR)` arms in `DsRdOut`/`DsRdEmit` no longer mean "step limit" — they
 cannot, since the step limit is no longer an error — and now say
 `driven residualization error: undecided call`.
 
+The corpus count in the README and `docs/PROGRESS.md` said 51 lowerable examples;
+it is **57**. Both tests that walk `examples/` derive their list from the directory,
+so the *code* could not drift — but the prose could, and did, which is exactly the
+failure this repository has already paid for twice. The shrink guards in those two
+tests were tightened from 51 to 57 so the number now lives in one place and a
+shrinking corpus fails rather than passing quietly.
+
 ### The compiler's default path drives (2026-09-26)
 
 `refal compile` no longer normalises. It **drives**: the entry configuration is

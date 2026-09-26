@@ -4733,7 +4733,7 @@ fn the_refal_authored_compiler_matches_the_driven_residue_on_every_lowerable_exa
         compared += 1;
     }
     assert!(
-        compared >= 51,
+        compared >= 57,
         "only {compared} examples were lowerable; the corpus has shrunk"
     );
 }
@@ -4786,7 +4786,7 @@ fn the_refal_authored_normaliser_matches_lower_on_every_lowerable_example() {
         compared += 1;
     }
     assert!(
-        compared >= 51,
+        compared >= 57,
         "only {compared} examples were lowerable; the corpus has shrunk"
     );
 }

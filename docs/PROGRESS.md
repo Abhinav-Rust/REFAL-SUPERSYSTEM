@@ -419,7 +419,7 @@ the number, and why this session's entry restructure does not move it either:
 - Refal-authored checker in `examples/compiler.ref`, the integrated pipeline
   (`b3588ad`).
 - Refal-authored emitter: `compiler.ref` emits Core Refal byte-identical to the
-  Rust bootstrap's `lower` across the **whole corpus** — 51 examples, zero
+  Rust bootstrap's `lower` across the **whole corpus** — 57 examples, zero
   divergences — including `sX` shorthand, `/* */` block comments and reals. Now
   enforced by a test that derives its list from `examples/`.
 - **T-10 closed at full credit**: C1 = C2 = C3 at 12,599 bytes over the full
