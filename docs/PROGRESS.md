@@ -1742,8 +1742,41 @@ Refal-authored compiler and a `Compile` that drives.
 
 ## NEXT ACTION
 
-**§4.4's other half, then the compiler's speed, then the self-hosting fixpoint's
-generality.**
+**The meta-prover, then the projections as artifacts, then §4.4's other half.**
+
+**The order changed on 2026-09-27, and why it changed is the finding.** A complete
+read of Turchin's 80 primary works (all four of his domains, via the the maintainer's local collection) produced
+[`TURCHIN-ECOSYSTEM-CONFORMANCE.md`](TURCHIN-ECOSYSTEM-CONFORMANCE.md) — the
+ecosystem matrix `E-1 … E-26` — and it found **two named components this file's
+ordering could not see**, because it orders work by *product completeness* and a
+working compiler is layers 0, 2 and 4 of the supersystem:
+
+- **The meta-prover (E-12, E-13).** Layer 3 of the 1991 CCNY report *A Supersystem
+  of Language Refal*, which states the four layers explicitly: "Accepts formal
+  specifications expressed as assertions or relational Refal functions, verifying
+  program equivalence and proving algorithmic invariants via complete tree
+  reduction." The same mechanism is Turchin's test of a proof in 1986 §6 — the
+  configuration graph reduces to the single terminal node `'True'` — and in 1983
+  and 1987 he founds mathematics on it: "proof is supercompilation". What exists
+  here is adjacent and is not it: `refal metasystem` proves *its own* transition
+  sound and cheaper, and the corpus gate re-checks residues by execution.
+- **Function inversion (E-15).** Glück and Turchin, ISSAC '90: drive the *forward*
+  definition with an unknown input and constrain it by the known structure of the
+  output, so `f⁻¹` is synthesised from `f`. Named by three sources and by nothing
+  in this file.
+
+The read also reordered §4.4's transformation half and the self-hosting
+generality below two items they used to be above, and it named three behaviours of
+components that already exist but do not have their gates: negative information
+propagation and stack configurations (E-11, SCP4 1999), the reflection engine as a
+service rather than an internal stage (E-4, 1991), and metavariable stratification
+in the transformer (E-17, 1995).
+
+**One row is marked and must be confirmed against the primary before it becomes a
+test.** E-12's `'True'` criterion is quoted from the archival edition's exposition
+of 1986 §6 rather than from a verbatim passage; the collection is a derived
+archival edition, not the scanned text, and `docs/turchin/pdf/` is where the
+primaries live.
 
 The order this file carried for four sessions is done, and the conformance row is
 closed: `Compile` drives, the normalising path is its own mode with its own test,
@@ -1753,28 +1786,46 @@ library is clause-complete against the builtin reference, and **T-8 is closed** 
 §6.4's `unknown` values are a runtime object. Every one of those gates found a
 real defect: the search found the compiler refused a legal program on a growing
 accumulator, the syntax corpus found two clauses with no negative fixture, the
-§6.4 fixture found the driver folding a match against an unevaluated call, and the
-builtin corpus found `Implode` was not a scanner. That is four defects from four
-gates, which is the argument for building them before needing them.
+§6.4 fixture found the driver folding a match against an unevaluated call, the
+builtin corpus found `Implode` was not a scanner, and the `--configurations`
+projection found a dead dedup test and a cursor where a source belongs.
 
 **What to do, in order.**
 
-0. **The `--configurations` transition list, in both drivers.** The one known
-   divergence between `refal-core` and `compiler.ref` — see *And it exposed a
-   pre-existing divergence in a report* above. It is small, it is fully
-   diagnosed, and the exclusion that records it is deliberately narrow so that
-   closing it means deleting one element from a list.
-1. **§4.4's other half — perfection by transformation.** The search closed the
-   part of §4.4 that is engineering: both ends of the compilation-interpretation
-   axis are driven and the smaller residue is kept. What is left is Turchin's own
-   two examples on p. 115: rewriting a walk so that it becomes *feasible*, rather
-   than removing the ones that provably are not. This is the last named gap in
-   the graph-of-states row.
-2. **The compiler's speed on very large inputs.** The last named gap in the
+0. **The meta-prover (E-12, E-13).** Confirm the `'True'` criterion against the
+   primary of 1986 §6, then build the command: a predicate or an equivalence
+   claim, driven, reporting whether the graph reduced to `'True'`. The corpus's
+   theorem-shaped examples — associativity of `Append`, a sorting-equality, a tree
+   reversal — are its first gate.
+1. **The 2nd and 3rd projections as artifacts (E-14).** The 1st is `refal
+   metasystem`. The 2nd and 3rd are reachable — the compiler is self-applicable
+   and the fixpoint is gated — but neither emits a standalone compiler or a
+   compiler generator, and neither has its own gate.
+2. **Function inversion (E-15).** Drive an inverse configuration with the output
+   pinned and the input free. `refal residualize-driven` is the mechanism; what is
+   missing is the entry decision that pins the output.
+3. **§4.4's other half — perfection by transformation (E-7).** Turchin's own two
+   examples on p. 115. The last named gap in the graph-of-states row.
+4. **Negative information and stack configurations (E-11).** SCP4's propagation
+   engines, which no example currently reaches.
+5. **The compiler's speed on very large inputs.** The last named gap in the
    compiler-in-Refal row. `scripts/perf.sh` measures it; `CleanG` and the checker
    are linear now, and what is left is the constant.
-3. **The self-hosting fixpoint over an arbitrary program**, rather than over the
+6. **The self-hosting fixpoint over an arbitrary program**, rather than over the
    corpus and the compiler's own source.
+7. **The reflection engine as a service (E-4)** and **metavariable stratification
+   in the transformer (E-17).** The cheapest open rows, and the least likely to be
+   attempted, because nothing in the product's own acceptance criteria asks for
+   them.
+
+**The order this paragraph used to carry is closed, including its item 0.** The
+`--configurations` transition-list divergence is gone: `DsHasTrL` tested a
+four-term pattern against a five-term transition, so the dedup always answered no
+and the work list appended a duplicate of every edge it resolved, and
+`DsLoopInvoke` set the active configuration to the transition's *cursor* where the
+Rust pass sets it to the transition's *from*. Both fixed, the two reports
+byte-identical over the whole symbolic-drive corpus, and
+`KNOWN_DIVERGENT_CONFIGURATION_REPORTS` deleted rather than narrowed.
 
 **§4.4's other half is deliberately not on this list.** Perfection by
 *transformation* — rewriting a walk so that it becomes feasible, rather than
