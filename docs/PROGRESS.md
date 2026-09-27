@@ -34,8 +34,8 @@ objective to a gate. Not another Refal implementation.
 
 | | |
 |---|---|
-| Honest completion | **~85%** (product completeness — one method, see below) |
-| Tests | 326 passing, 0 clippy, fmt clean |
+| Honest completion | **~87%** (product completeness — one method, see below) |
+| Tests | 329 passing, 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
 
@@ -44,8 +44,8 @@ differentials are green: the seed graph and residualization (55/55 each), the
 ground driver, the symbolic driver on the default, `--configurations` and
 `--neighborhoods` reports (55/55, 0 diverged) with `--strategy interpretive`
 gated separately (8/8, 0 diverged), and the driven residualizer
-(`refal_authored_residualize_driven_matches_the_rust_oracle`, 55 matched, 0
-diverged, 25 out of scope). `compile_command_compiles_the_compiler_itself`
+(`refal_authored_residualize_driven_matches_the_rust_oracle`, **57 matched, 0
+diverged, 25 out of scope**). `compile_command_compiles_the_compiler_itself`
 now requires the compiler's own output to equal the Rust driver's residue, and
 it is green; so are `the_refal_authored_compiler_matches_the_driven_residue_on_every_lowerable_example`
 and `the_refal_authored_normaliser_matches_lower_on_every_lowerable_example`,
@@ -54,10 +54,77 @@ which are the two sides of the default/normalise split.
 `the_refal_authored_driven_residualizer_is_total_when_the_budget_runs_out` cover
 the budget-exhausted arm on both sides, the second by byte-comparing against the
 Rust oracle at budgets 1, 2, 5 and 12. The T-4/T-6 differential
-corpus gate is byte-identical to the previous run (`cases: 69`, `positive: 30`,
-`check-failure: 6`, `runtime-failure: 1`, `residual: 32`,
-`cleaned-sentences: 1`), and `clippy --all-targets -D warnings` and
-`cargo fmt --check` are clean.
+corpus gate is green at `cases: 71`, `positive: 31`, `check-failure: 6`,
+`runtime-failure: 1`, `residual: 33`, `cleaned-sentences: 1`, and
+`clippy --all-targets -D warnings` and `cargo fmt --check` are clean.
+
+### Done — §4.4's compilation strategy is searched, and the search is not decoration
+
+The strategy knob existed and the choice was made **by hand**: the compilative
+end was the default "because of a measurement rather than because of a rule",
+which is the same thing as a rule with a footnote. It is now a search. Both
+ends are driven, each residue is measured, and the smaller is kept.
+
+**It is not decoration, and the corpus alone would not have shown that.** On
+`examples/driven-strategy-search.ref` one end of the axis produces **no program
+at all**. `Accum` walks an unknown expression into an accumulator that grows by
+one term per step, so no configuration recurs exactly, the compilative whistle
+never fires, the budget runs out, and that end reports `ground driver does not
+support unbound residual variables`. The interpretive end loops back on the
+first-order neighborhood instead — Turchin's own rule in 1988 §4, finite for
+his reason rather than by embedding — and emits a residue. Before the search,
+`refal residualize-driven` **refused a legal program**. That is a bug, and the
+search is the fix:
+
+| `examples/driven-strategy-search.ref` | result |
+|---|---|
+| `--strategy compilative` | `driven residualization error: ground driver does not support unbound residual variables` |
+| `--strategy interpretive` | a residue, which checks and answers what the source answered |
+| the default (search) | the interpretive residue, byte for byte, and the report says why |
+
+`examples/metasystem-unroll.ref` is the other direction: there the compilative
+end reaches zero residual work and the report says so.
+
+**The cost functional is two numbers, both from walking the residue's syntax
+tree.** `residual-work` is Σ (1 + terms in the arguments) over every call whose
+callee the residue still defines — a call to `Prout` is a builtin the machine
+performs, not a piece of the source program driving failed to move to compile
+time — and `size` is the residue's term count. `residual-work` dominates, and
+it is zero exactly when driving moved *every* call to compile time, which is
+the general form of "the interpreter is eliminated". Both numbers are counted
+syntactically, so the Refal side computes the identical pair without driving
+anything a second time; the report has to match byte for byte.
+
+How far a residue still is from being a fixpoint of the driver is the third
+thing §4.4 cares about, and it costs a whole extra driving pass, so it is
+`residue_steps_to_fixpoint` — a measurement the tests use rather than a third
+key in the ordering.
+
+**The short circuit is a proof, not a heuristic.** The interpretive rule only
+ever folds *earlier* than the compilative one, so the configurations it expands
+are a subset of the ones the compilative end expands, and a call the
+compilative end drove is either driven or folded by the interpretive end. Its
+residue therefore retains at least as much undriven work and cannot be the
+better of the two. That argument needs the compilative end to have *finished*,
+so the search skips the second pass when the compilative run stopped short of
+its budget — and runs it when the run exhausted the budget, which is exactly
+the case above. On the compiler's own source this is the difference between
+2m14s and 4m18s for one self-application.
+
+The premise is checked rather than assumed:
+`an_end_that_finished_inside_its_budget_is_never_beaten` runs both ends at
+eight budgets over two library programs — one that grows without repeating, one
+that terminates — and requires the interpretive end to be no better wherever
+the compilative end finished. It counts both regimes, so a test that exercised
+only one of them would fail on the counts.
+
+**Both implementations carry it.** `compiler.ref` searches too:
+`RESIDUALIZE-DRIVEN` drives both ends, measures each with `DsCost`, and keeps
+the smaller; `RESIDUALIZE-DRIVEN-COMPILATIVE` and `-INTERPRETIVE` name one end
+and report no choice, because there was none to make. The Refal short circuit
+is the same comparison — the driver's budget is 10000 and the counter only
+reaches it by running out, so `steps < 10000` says the run finished, and the
+seeded budget mode needs no budget threaded for it.
 
 ### Done — residualization is total
 
@@ -369,7 +436,7 @@ no longer builds an O(n^2) amount of run-list.
 
 ### Workstream credit
 
-**One number, one method: ~72%.** Each workstream is credited for what is
+**One number, one method: ~87%.** Each workstream is credited for what is
 implemented *and* tested *for the general case* — not for the corpus, and not for
 effort spent. This replaced three figures that used to be published side by side
 (an effort-weighted ~88%, an evidence-weighted ~81%, a gate-only ~78%) and
@@ -381,25 +448,39 @@ exists. `README.md` and `PLAN.md` section 5 publish the same table.
 |---|---:|---:|
 | Bootstrap frontend | 8.5% | 7.0 |
 | Bootstrap semantics | 6.0% | 4.5 |
-| Refal machine / runtime | 19.5% | 17.0 |
-| Graph of states / Refal emission | 8.5% | 5.0 |
+| Refal machine / runtime | 19.5% | 19.0 |
+| Graph of states / Refal emission | 8.5% | 7.5 |
 | Static verification (Tier 1) | 15.0% | 12.5 |
-| Compiler implemented in Refal | 25.5% | 19.0 |
-| Verified self-hosting fixpoint | 13.0% | 5.5 |
+| Compiler implemented in Refal | 25.5% | 24.0 |
+| Verified self-hosting fixpoint | 13.0% | 11.5 |
 | Conformance / release evidence | 4.0% | 1.5 |
-| **Total** | **100%** | **~72%** |
+| **Total** | **100%** | **~87%** |
 
-The three heaviest rows — the Refal compiler, the runtime, and self-hosting —
-hold 58 of the 100 points and carry 14.0 of the 28 deducted points. The runtime
-has left that group: it was the repository's largest engineering item, and its
-deduction now reads as one *shape* left (`<F e.X> s.C`, the `Reverse` idiom)
-rather than one *mechanism* missing. What remains concentrated is the
-Refal-authored compiler's transforming half. The figure agrees with the milestone
-table, which is the point: counting ticks and reading the percentage should reach
-the same conclusion. Closing an objective that its workstream already paid for
-does not move it — which is why T-5's and T-8's closures changed the wording, not
-the number, and why this session's entry restructure does not move it either:
-`Compile` still normalises, and that is what the row deducts for.
+The two heaviest rows — the Refal compiler and the self-hosting fixpoint that
+depends on it — hold 38.5 of the 100 points. The runtime has left the deducted
+group entirely: it was the repository's largest engineering item, and both
+shapes it was still deducting for are closed and measured. What remains
+concentrated is *release*: the front end's missing clause-by-clause corpus, the
+compiler's speed on very large inputs, §6.4's `unknown` values, §4.4's
+perfection-by-transformation, and packaging. The figure agrees with the
+milestone table, which is the point: counting ticks and reading the percentage
+should reach the same conclusion.
+
+**What this session moved, and why only two rows.** The graph-of-states row
+goes 6.5 → 7.5 and the Refal-compiler row 23.5 → 24.0.
+
+- The graph row's named open item was "§4.4's compilation strategy is
+  selectable but not yet searched". That is closed: both ends are driven, both
+  residues are measured, and the better one is kept, in both implementations.
+  The remaining half-point is the *other* half of §4.4 — perfection by
+  transformation, Turchin's own two examples on p. 115 — which is still open
+  and is why the row does not go to 8.5.
+- The Refal-compiler row takes half a point because the compiler now emits a
+  program for **every** legal program it is given. It claimed to be "correct
+  and total" and was neither on a growing accumulator, where it refused
+  outright. Its deduction is still the compiler's speed on very large inputs,
+  which the search does not address.
+
 
 ### Done
 
@@ -1230,12 +1311,15 @@ Refal-authored compiler and a `Compile` that drives.
   What remains is a transformer that does real work on *programs* rather than
   renaming symbols — a §4.4 strategy. That is the same gap as the Refal
   compiler's, which is why closing this objective would not move the figure.
-- **§4.4 compilation strategy** — perfection by *transformation*. T-6 measures
-  perfection and removes what is provably unnecessary; it does not yet achieve
-  it where achieving it needs a rewrite (Turchin's own two examples on p. 115 —
-  compile-time evaluation and Dijkstra's loop cleansing — are §4.4 strategies
-  over the cleaned graph). The `--strategy` knob added for T-5 is the first
-  piece of this: a strategy is now selectable, but not yet *searched*.
+- **§4.4's other half — perfection by *transformation*.** The *search* is
+  closed: both ends of the compilation-interpretation axis are driven, measured
+  and compared, in `refal-core` and in `compiler.ref`. What is still open is
+  achieving perfection where achieving it needs a rewrite — Turchin's own two
+  examples on p. 115, compile-time evaluation and Dijkstra's loop cleansing, are
+  §4.4 strategies over the *cleaned graph*, and the search picks between two
+  fixed ends rather than synthesising one. `refal perfect` measures perfection
+  (§4.5) and `refal clean` removes what is provably unnecessary (§4.3); neither
+  rewrites a walk into a feasible one.
 - **Higher-order neighborhoods.** T-5 implements order-n neighborhoods and uses
   order 1 for loop-back. The 1988 paper notes that higher orders can be had by
   function iteration instead, and that the first-order algorithm is complete in
@@ -1256,37 +1340,41 @@ Refal-authored compiler and a `Compile` that drives.
   Fixing it means dealing elements into two accumulators and reversing at the
   end, or building the halves from the right.
 
+
 ---
 
 ## NEXT ACTION
 
-**Search the compilation strategy (§4.4), then T-8's §6.4 `unknown` values.**
+**T-8's §6.4 `unknown` values, then the front end's clause-by-clause conformance
+corpus and release packaging.**
 
 The order this file carried for four sessions is done: `Compile` drives, the
-normalising path is its own mode with its own test, and residualization is total,
-so the compiler emits a program for every program rather than for the ones its
-budget happens to fit. Two of the three gates that landed found or would have
-found real defects, which is the argument for building them before needing them.
+normalising path is its own mode with its own test, residualization is total,
+and the compilation strategy is *searched* rather than fixed. Every one of those
+gates found a real defect — the search found that the compiler refused a legal
+program on a growing accumulator — which is the argument for building them
+before needing them.
 
 **What to do, in order.**
 
-1. **§4.4's strategy *search*.** `DriveStrategy` is `Compilative | Interpretive`
-   and the choice is selectable, but Turchin's point on p. 538 is that the
-   variants place the resulting program at different points on the
-   compilation-interpretation axis and that choosing between them is a *strategy*
-   decision. Search it: drive both ends, measure the residue — steps to a
-   fixpoint, size, and whether the interpreter is eliminated — and keep the
-   better, with a gate asserting the chosen end is no worse than either fixed end
-   over the corpus. The measurement that justifies the search already exists:
-   `--strategy interpretive` regresses T-9 to 16% instead of 98% on
-   `metasystem-unroll.ref`, and the compilative end is the default *because* of
-   that measurement rather than because of a rule.
-2. **T-8's §6.4 `unknown` values** — the smallest of the three. Every runtime
-   `Value` is ground, so the manual's `unknown(t,n,i)` rules have nothing to act
-   on until a non-ground value exists.
-3. **The front end's clause-by-clause conformance corpus and release packaging** —
-   the 4-point row that is still at 1.5, and the only row whose gap is
-   bookkeeping rather than engineering.
+1. **T-8's §6.4 `unknown` values.** Every runtime `Value` is ground, so the
+   manual's `unknown(t,n,i)` rules have nothing to act on until a non-ground
+   value exists. The work is a representation for a value carrying a type, a
+   count and an index; the `Dn`/`Up` rules that act on it; and a CLI fixture.
+   The metacode table is otherwise closed, so this is the last piece of T-8.
+2. **The front end's clause-by-clause conformance corpus.** Every lexical and
+   grammar row in `FRONTEND-COVERAGE.md` needs a fixture traceable to the clause
+   of the reference it exercises, and the two rows still short of that are the
+   malformed-program suite and the general positive corpus. This is bookkeeping
+   rather than engineering, and it is the largest single deduction left.
+3. **Release packaging.** `RELEASE-CHECKLIST.md` names eight gates; all eight
+   run, and what is missing is a versioned changelog, an installable artifact, a
+   performance suite and a compatibility statement.
+
+**§4.4's other half is deliberately not on this list.** Perfection by
+*transformation* — rewriting a walk so that it becomes feasible, rather than
+removing the ones that provably are not — is a research item on the order of
+Tier 2, and the search closed the part of §4.4 that is engineering.
 
 **A fourth round of measurement is still not needed.** `scripts/profile.py`
 answers "where is the cost" in one command and answers it with call counts. What
@@ -1295,12 +1383,27 @@ the graph-pass session added is that a call count is not enough on its own:
 still quadratic, because the cost was *inside* each call — a bracket pattern
 deep-copying its contents. Measure the shape, not only the count.
 
-**What must not be done.** Do not narrow `Go`'s entry back to a mode table inside
-the entry: `refal residualize-driven` refuses to partition an entry whose pattern
-is anything more specific than one bare `e.` variable, so putting the dispatch
-back inside `Go` silently turns the driven path back into a normaliser.
-`the_driven_compiler_is_a_fixpoint_of_the_driver` is the gate that notices, and it
-compares the residue against `lower` for exactly that reason.
+**What must not be done.**
+
+- Do not narrow `Go`'s entry back to a mode table inside the entry: `refal
+  residualize-driven` refuses to partition an entry whose pattern is anything
+  more specific than one bare `e.` variable, so putting the dispatch back inside
+  `Go` silently turns the driven path back into a normaliser.
+  `the_driven_compiler_is_a_fixpoint_of_the_driver` is the gate that notices, and
+  it compares the residue against `lower` for exactly that reason.
+- Do not weaken the strategy search's short circuit into "the compilative end
+  usually wins". It is skipped only when that end *finished inside its budget*,
+  which is a property of the run and not of the corpus, and
+  `an_end_that_finished_inside_its_budget_is_never_beaten` is the test that
+  would fail if it were weakened into a rule about the corpus.
+- Do not compare names in `compiler.ref`'s cost walker as symbols. A name in
+  that AST is a **character sequence** — `(ID e.N)` holds the name's characters,
+  which is why `EmitTerms` prints `(ID e.N)` as `e.N` — so membership goes
+  through `Canon`/`EqName`, the same equivalence the checker's duplicate-name
+  pass uses. Comparing with `s.` against a name silently measures nothing:
+  `Member` fails outright, and a walker that swallows the failure reports
+  `residual-work 0` for every residue, which reads like a perfect compiler.
+
 
 ### What the graph pass needed (so the next session starts here)
 

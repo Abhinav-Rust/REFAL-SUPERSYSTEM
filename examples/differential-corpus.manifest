@@ -72,3 +72,9 @@ residual|driven-call-argument.ref|
 # The T-6 gate: the cleaned residue must also check and agree with the interpreter.
 positive|clean-graph.ref|k x
 residual|clean-graph.ref|k x
+# The strategy search (Turchin 1988 p. 538). The compilative end produces no
+# residue at all here -- a growing accumulator never recurs exactly, so its
+# whistle cannot fire -- and the interpretive end does. The residue must still
+# check and still answer what the source answered.
+positive|driven-strategy-search.ref|a b c
+residual|driven-strategy-search.ref|a b c

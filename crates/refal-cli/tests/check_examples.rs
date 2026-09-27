@@ -78,15 +78,17 @@ fn residualize_driven_file(path: &str, args: &[&str]) -> std::process::Output {
 /// The program a `residualize-driven` run printed, with its report stripped.
 ///
 /// The command prints `steps`, `visited`, `whistles`, `generalized`,
-/// `neighborhood-loops` and `generalized-states` before the residue, so the
-/// residue starts on the line after the last of them.
+/// `neighborhood-loops` and `generalized-states` before the residue, and a
+/// searched run adds the two `strategy` lines after them. The residue itself
+/// always opens with `$EXTERN` or `$ENTRY`, so anchoring on those is robust to
+/// the report growing another line.
 fn driven_residue(output: &str) -> String {
-    match output.split_once("generalized-states: ") {
-        Some((_, rest)) => match rest.split_once('\n') {
-            Some((_, body)) => body.to_string(),
+    match output.find("$EXTERN") {
+        Some(index) => output[index..].to_string(),
+        None => match output.find("$ENTRY") {
+            Some(index) => output[index..].to_string(),
             None => String::new(),
         },
-        None => String::new(),
     }
 }
 
@@ -5176,18 +5178,40 @@ fn a_neighborhood_is_reported_for_each_configuration() {
     );
 }
 
-/// T-5, Turchin 1988 §4. His own loop-back rule is available, is *not* the
-/// default, and costs specialisation when it fires — which is exactly the
-/// compilation-interpretation trade the paper describes on p. 538. The
-/// metasystem transition needs the compilative end, so this test pins both.
+/// T-5, Turchin 1988 §4. His own loop-back rule is available, and the default
+/// is the *search* over the two ends rather than either end by decree — which
+/// is exactly the compilation-interpretation trade the paper describes on
+/// p. 538. The metasystem transition needs the compilative end, so this test
+/// pins the choice the search makes there and the fact that the other end is
+/// still selectable.
 #[test]
-fn the_interpretive_strategy_is_available_and_off_by_default() {
-    let compilative = residualize_driven_file("examples/metasystem-unroll.ref", &[]);
+fn the_search_is_the_default_and_each_end_stays_selectable() {
+    let searched = residualize_driven_file("examples/metasystem-unroll.ref", &[]);
+    assert!(searched.status.success());
+    let searched_stdout = String::from_utf8_lossy(&searched.stdout).to_string();
+    assert!(
+        searched_stdout.contains("neighborhood-loops: 0"),
+        "the search must keep the end that eliminates the interpreter:\n{searched_stdout}"
+    );
+    assert!(
+        searched_stdout.contains("strategy: compilative"),
+        "the report must say which end won:\n{searched_stdout}"
+    );
+
+    let compilative = residualize_driven_file(
+        "examples/metasystem-unroll.ref",
+        &["--strategy", "compilative"],
+    );
     assert!(compilative.status.success());
     let compilative_stdout = String::from_utf8_lossy(&compilative.stdout).to_string();
     assert!(
         compilative_stdout.contains("neighborhood-loops: 0"),
-        "the default must not take the interpretive loop-back:\n{compilative_stdout}"
+        "the compilative end takes no neighborhood loop-back:\n{compilative_stdout}"
+    );
+    // Naming one end reports no choice, because there was none to make.
+    assert!(
+        !compilative_stdout.contains("strategy:"),
+        "an end named directly has no search to report:\n{compilative_stdout}"
     );
 
     let interpretive = residualize_driven_file(
@@ -5201,8 +5225,8 @@ fn the_interpretive_strategy_is_available_and_off_by_default() {
         "the interpretive rule must fire on a recurring neighborhood:\n{interpretive_stdout}"
     );
 
-    // And the metasystem gate still reports what it reported before: the
-    // compilative default is what makes the interpreter's loop disappear.
+    // And the metasystem gate still reports what it reported before: the end
+    // the search keeps is what makes the interpreter's loop disappear.
     let metasystem = metasystem_file("examples/metasystem-unroll.ref", &[]);
     let metasystem_stdout = String::from_utf8_lossy(&metasystem.stdout).to_string();
     assert!(
@@ -5214,6 +5238,203 @@ fn the_interpretive_strategy_is_available_and_off_by_default() {
     let invalid =
         residualize_driven_file("examples/metasystem-unroll.ref", &["--strategy", "nope"]);
     assert!(!invalid.status.success());
+}
+
+/// T-4, Turchin 1988 p. 538. The strategy search is not decoration: on this
+/// program one end of the axis produces **no program at all**. `Accum` grows
+/// its accumulator by one term per step, so no configuration recurs exactly,
+/// the compilative whistle never fires, and the budget runs out. The
+/// interpretive end terminates for Turchin's own reason -- finitely many
+/// first-order neighborhoods -- and emits a residue.
+///
+/// This is the non-vacuity gate for the search: without it, "the search keeps
+/// the better end" would be true of a corpus on which both ends always agree,
+/// which is a statement about the corpus and not about the search.
+#[test]
+fn the_search_keeps_the_end_that_produces_a_residue_at_all() {
+    let compilative = residualize_driven_file(
+        "examples/driven-strategy-search.ref",
+        &["--strategy", "compilative"],
+    );
+    assert!(
+        !compilative.status.success(),
+        "the compilative end is expected to produce no residue here, and it did:\n{}",
+        String::from_utf8_lossy(&compilative.stdout)
+    );
+
+    let interpretive = residualize_driven_file(
+        "examples/driven-strategy-search.ref",
+        &["--strategy", "interpretive"],
+    );
+    assert!(
+        interpretive.status.success(),
+        "the interpretive end must terminate on a recurring neighborhood:\n{}",
+        String::from_utf8_lossy(&interpretive.stderr)
+    );
+
+    let searched = residualize_driven_file("examples/driven-strategy-search.ref", &[]);
+    assert!(searched.status.success());
+    let searched_stdout = String::from_utf8_lossy(&searched.stdout).to_string();
+    assert!(
+        searched_stdout.contains("strategy: interpretive"),
+        "the search must keep the only end that produced a residue:\n{searched_stdout}"
+    );
+    assert!(
+        searched_stdout.contains("strategy-other: compilative produced no residue"),
+        "and it must report the end that produced none:\n{searched_stdout}"
+    );
+    assert_eq!(
+        driven_residue(&searched_stdout),
+        driven_residue(&String::from_utf8_lossy(&interpretive.stdout)),
+        "the searched residue must be the interpretive end's, byte for byte"
+    );
+
+    // The residue is a program: it checks, and it answers what the source
+    // answered.
+    let residue = driven_residue(&searched_stdout);
+    let scratch = scratch_source("refal-search", &residue);
+    let scratch_path = scratch.to_string_lossy().to_string();
+    let checked = check_path(&scratch_path, &[]);
+    assert!(
+        checked.status.success(),
+        "the searched residue must check:\n{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+    let source_output = run_file("examples/driven-strategy-search.ref", &["a", "b", "c"]);
+    let residue_output = Command::new(refal_bin())
+        .args(["run", &scratch_path, "a", "b", "c"])
+        .output()
+        .expect("run the residue");
+    assert_eq!(
+        String::from_utf8_lossy(&source_output.stdout),
+        String::from_utf8_lossy(&residue_output.stdout),
+        "the searched residue must answer what the source answered"
+    );
+}
+
+/// The cost the search compares on, parsed out of the two report lines.
+///
+/// `None` is the end that produced no residue, which is the worst outcome
+/// rather than a cost of zero.
+fn reported_cost(line: &str) -> Option<(usize, usize)> {
+    let work = line.split("residual-work ").nth(1)?;
+    let (work, rest) = work.split_once(' ')?;
+    let size = rest.split("size ").nth(1)?;
+    let size = size.split(' ').next()?;
+    Some((work.trim().parse().ok()?, size.trim().parse().ok()?))
+}
+
+fn strategy_lines(stdout: &str) -> (String, String) {
+    let mut chosen = String::new();
+    let mut other = String::new();
+    for line in stdout.lines() {
+        if let Some(rest) = line.strip_prefix("strategy-other: ") {
+            other = rest.to_string();
+        } else if let Some(rest) = line.strip_prefix("strategy: ") {
+            chosen = rest.to_string();
+        }
+    }
+    (chosen, other)
+}
+
+/// T-4, §4.4. The search is optimal by construction, and this test is what
+/// says the construction is implemented: the end it keeps must cost no more
+/// than either end it could have kept, over every corpus program and at a
+/// budget tight enough that the choice can go either way.
+///
+/// The assertion is not a tautology. A search that measured the wrong residue,
+/// compared the wrong pair of numbers, or kept the loser would fail it.
+#[test]
+fn the_searched_end_is_no_worse_than_either_fixed_end() {
+    let mut compared = 0usize;
+    let mut chose_interpretive = 0usize;
+    let mut chose_compilative = 0usize;
+    let mut names: Vec<String> = fs::read_dir(workspace_path("examples"))
+        .expect("read the examples directory")
+        .filter_map(|entry| {
+            let path = entry.ok()?.path();
+            let name = path.file_name()?.to_string_lossy().into_owned();
+            (name.ends_with(".ref") && name != "compiler.ref").then_some(name)
+        })
+        .collect();
+    names.sort();
+
+    for name in names {
+        let path = format!("examples/{name}");
+        for budget in ["6", "12", "40"] {
+            let searched = residualize_driven_file(&path, &["--steps", budget]);
+            if !searched.status.success() {
+                continue;
+            }
+            let searched_stdout = String::from_utf8_lossy(&searched.stdout).to_string();
+            let (chosen, other) = strategy_lines(&searched_stdout);
+            if chosen.is_empty() {
+                panic!("a searched run must report its choice:\n{searched_stdout}");
+            }
+            let Some(chosen_cost) = reported_cost(&chosen) else {
+                panic!("the chosen end must report a cost:\n{searched_stdout}");
+            };
+
+            // The short circuit. Its *premise* — that an end which finished
+            // inside its budget cannot be beaten by one whose rule only folds
+            // earlier — is verified where it can be measured directly, in
+            // `refal-core`'s `an_end_that_finished_inside_its_budget_is_never_beaten`.
+            // What this sweep checks is the reporting contract.
+            if other.contains("not run (the compilative end finished inside its budget)") {
+                assert!(
+                    chosen.starts_with("compilative"),
+                    "{name} at {budget}: only the compilative end may short-circuit:\n{searched_stdout}"
+                );
+                compared += 1;
+                chose_compilative += 1;
+                continue;
+            }
+            if other.ends_with("produced no residue") {
+                assert!(
+                    chosen.starts_with("interpretive"),
+                    "{name} at {budget}: an end that produced no residue cannot be chosen:\n{searched_stdout}"
+                );
+                compared += 1;
+                chose_interpretive += 1;
+                continue;
+            }
+            let Some(other_cost) = reported_cost(&other) else {
+                panic!(
+                    "the other end must report a cost or say it produced none:\n{searched_stdout}"
+                );
+            };
+            if chosen.starts_with("compilative") {
+                chose_compilative += 1;
+                assert!(
+                    chosen_cost <= other_cost,
+                    "{name} at {budget}: the search kept the compilative end at {chosen_cost:?} over {other_cost:?}:\n{searched_stdout}"
+                );
+            } else {
+                chose_interpretive += 1;
+                assert!(
+                    chosen_cost < other_cost,
+                    "{name} at {budget}: the search kept the interpretive end at {chosen_cost:?} over {other_cost:?}, but a tie goes to the compilative end:\n{searched_stdout}"
+                );
+            }
+            compared += 1;
+        }
+    }
+
+    assert!(
+        compared > 40,
+        "the sweep must actually compare something: {compared}"
+    );
+    // Non-vacuity in both directions. A search that always returned the same
+    // end would satisfy the optimality assertion trivially on a corpus where
+    // that end always wins.
+    assert!(
+        chose_compilative > 0,
+        "the search must keep the compilative end somewhere"
+    );
+    assert!(
+        chose_interpretive > 0,
+        "the search must keep the interpretive end somewhere"
+    );
 }
 
 /// A residue produced at the interpretive end is still Refal and still answers

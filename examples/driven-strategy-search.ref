@@ -1,0 +1,34 @@
+* T-4, Turchin 1988 p. 538: the compilation strategy is a CHOICE, and the
+* search is what makes the choice from measurement rather than from a rule.
+*
+* The two ends of the compilation-interpretation axis do not merely produce
+* different programs here. One of them produces NO program. `Accum` below
+* walks an unknown expression into an accumulator that grows by one term per
+* step, so no configuration of `Accum` recurs exactly: the compilative whistle
+* never fires, the step budget runs out, and that end reports
+*
+*   ground driver does not support unbound residual variables
+*
+* The interpretive end loops back on the first-order neighborhood instead
+* (Turchin 1988 section 4), which terminates for his reason rather than by
+* embedding -- there are finitely many first-order neighborhoods -- and emits
+* a residue.
+*
+* `refal residualize-driven` therefore searches: it drives both ends, measures
+* each residue the same way, and keeps the smaller. The report says which end
+* won and what the other one cost, so the choice is observable rather than
+* asserted. `metasystem-unroll.ref` is the other direction: there the
+* compilative end reaches zero residual work and the interpretive end is not
+* even run.
+$ENTRY Go {
+  e.X = <Accum () e.X>;
+}
+
+* Move every term of the argument into the accumulator, one at a time. The
+* accumulator is an argument rather than a result, so each call's argument is
+* larger than the one before it and the sequence of configurations never
+* repeats -- which is exactly the shape the compilative whistle cannot catch.
+Accum {
+  (e.Acc) = e.Acc;
+  (e.Acc) t.C e.Rest = <Accum (e.Acc t.C) e.Rest>;
+}

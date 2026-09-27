@@ -529,6 +529,10 @@ pub struct DrivenResidualization {
     /// The explicit bounded generalized configuration graph, when requested by the generalized
     /// residualization API. The legacy API leaves this absent and preserves its source graph.
     pub generalized_graph: Option<StateGraph>,
+    /// Which end of the compilation-interpretation axis this residue came from,
+    /// and what both ends cost. `None` for a run that named one end directly,
+    /// which has nothing to choose between.
+    pub strategy_choice: Option<StrategyChoice>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -616,7 +620,7 @@ pub fn drive_ground(
         .ok_or(DriveError::NoEntry)?
         .function
         .clone();
-    let strategy = DriveStrategy::default();
+    let strategy = DriveStrategy::Compilative;
     let mut context = DriveContext {
         graph,
         visited: Vec::new(),
@@ -696,6 +700,9 @@ pub fn drive_symbolic_with_strategy(
     max_steps: usize,
     strategy: DriveStrategy,
 ) -> Result<SymbolicDriveReport, DriveError> {
+    // A driving pass has no residue to compare, so `Search` resolves to the
+    // finer end here rather than running twice.
+    let strategy = strategy.point();
     let entry = graph.entry.ok_or(DriveError::NoEntry)?;
     let function = graph
         .states
@@ -794,7 +801,8 @@ pub fn drive_symbolic_with_strategy(
     })
 }
 
-/// Where on the compilation-interpretation axis driving sits.
+/// Where on the compilation-interpretation axis driving sits, or the search
+/// that chooses a point by measurement.
 ///
 /// Turchin is explicit that this is a choice and not a defect (1988 p. 538):
 /// "There are several variants of the algorithm, which place the resulting
@@ -803,21 +811,153 @@ pub fn drive_symbolic_with_strategy(
 /// program; the more general the basic configurations are, the more
 /// interpretive the program)."
 ///
-/// The default here is the compilative end, because that is what the metasystem
-/// transition needs: `examples/metasystem-unroll.ref` only reaches 98% fewer
-/// steps because the interpreter's counter-driven loop is unrolled, and the
-/// interpretive rule stops that unrolling.
+/// # The search is not a third point on the axis
+///
+/// `Search` is a *meta* value: it names no residue of its own. It runs both
+/// ends, measures what each produced, and keeps the better one. Turchin's
+/// point on p. 538 is that the variants are a choice; the search is the
+/// mechanism that makes the choice from measurement instead of from a rule.
+///
+/// It is the default because the compilative end is not merely coarser when it
+/// loses — it can **fail**. A growing accumulator (`F { (e.Acc) s.C e.Rest =
+/// <F (e.Acc s.C) e.Rest>; }`) has no configuration that recurs exactly, so the
+/// compilative whistle never fires, the step budget runs out, and driving
+/// reports `ground driver does not support unbound residual variables`. The
+/// interpretive end terminates on that same program for Turchin's own reason
+/// (finitely many first-order neighborhoods) and emits a residue. A compiler
+/// that refuses a legal program has a bug, and the search is the fix.
+///
+/// The driving passes that have no residue to compare — `drive_ground`,
+/// `drive_symbolic` — resolve `Search` to the finer end, which is what they did
+/// before the search existed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DriveStrategy {
-    /// Whistle on a configuration that grows relative to one already seen, so
-    /// the residue stays as specialised as driving can make it. The default.
+    /// Evaluate both ends and keep the better residue (§4.4). The default.
     #[default]
+    Search,
+    /// Whistle on a configuration that grows relative to one already seen, so
+    /// the residue stays as specialised as driving can make it.
     Compilative,
     /// Additionally loop back whenever a *first-order neighborhood* recurs,
     /// which is Turchin's own rule in 1988 §4. Coarser, and finite for his
     /// reason rather than by embedding: there are finitely many first-order
     /// neighborhoods.
     Interpretive,
+}
+
+impl DriveStrategy {
+    /// The point on the axis this value denotes. `Search` names no point, so it
+    /// resolves to the finer end for the passes that cannot compare residues.
+    pub fn point(self) -> DriveStrategy {
+        match self {
+            DriveStrategy::Search | DriveStrategy::Compilative => DriveStrategy::Compilative,
+            DriveStrategy::Interpretive => DriveStrategy::Interpretive,
+        }
+    }
+
+    /// The name this end is reported under.
+    pub fn name(self) -> &'static str {
+        match self {
+            DriveStrategy::Search => "search",
+            DriveStrategy::Compilative => "compilative",
+            DriveStrategy::Interpretive => "interpretive",
+        }
+    }
+}
+
+/// What a residue costs, in the terms §4.4's strategy choice trades between.
+///
+/// The ordering is lexicographic in field order, so `residual_work` dominates.
+/// That is deliberate: `residual_work` is zero exactly when driving moved
+/// *every* call from run time to compile time, which is the strongest thing a
+/// residue can be, and it is the general form of "the interpreter is
+/// eliminated".
+///
+/// Both fields are measured by walking the residue's syntax tree, so the
+/// Refal-authored compiler computes the identical number without driving
+/// anything a second time — the two implementations have to agree byte for
+/// byte on a report built from this. How far a residue still is from being a
+/// fixpoint of the driver is the third thing §4.4 cares about, and it is
+/// [`residue_steps_to_fixpoint`]: it costs a whole extra driving pass, so it is
+/// verified by test rather than folded into the ordering.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ResidueCost {
+    /// Σ (1 + terms in the arguments) over every call in the residue whose
+    /// callee the residue still defines: the work the residue still does at
+    /// run time.
+    pub residual_work: usize,
+    /// Terms in the residue program.
+    pub size: usize,
+}
+
+/// What one end of the axis produced when the search asked it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EndOutcome {
+    /// A residue, and what it costs.
+    Residue(ResidueCost),
+    /// The end ran and produced no program. Not a cost of zero — the worst
+    /// outcome there is.
+    Failed,
+    /// The end was not asked, because the other one already reached the global
+    /// minimum (`residual_work == 0`) and nothing can beat it.
+    Skipped,
+}
+
+impl EndOutcome {
+    /// The cost to compare on. `Failed` sorts above every real cost and
+    /// `Skipped` never competes.
+    fn cost(self) -> Option<ResidueCost> {
+        match self {
+            EndOutcome::Residue(cost) => Some(cost),
+            _ => None,
+        }
+    }
+
+    fn report(self) -> String {
+        match self {
+            EndOutcome::Residue(cost) => {
+                format!("residual-work {} size {}", cost.residual_work, cost.size)
+            }
+            EndOutcome::Failed => "produced no residue".to_string(),
+            EndOutcome::Skipped => {
+                "not run (the compilative end finished inside its budget)".to_string()
+            }
+        }
+    }
+}
+
+/// Which end a searched residue came from, and what both ends produced.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StrategyChoice {
+    pub chosen: DriveStrategy,
+    pub compilative: EndOutcome,
+    pub interpretive: EndOutcome,
+}
+
+/// The two report lines a searched run prints.
+///
+/// It lives here, next to the search, so the Rust CLI and the Refal-authored
+/// compiler cannot drift on the wording — the differential compares their
+/// reports byte for byte.
+pub fn format_strategy_choice(choice: &StrategyChoice) -> String {
+    let (chosen, other, other_name) = match choice.chosen {
+        DriveStrategy::Interpretive => (
+            choice.interpretive,
+            choice.compilative,
+            DriveStrategy::Compilative.name(),
+        ),
+        _ => (
+            choice.compilative,
+            choice.interpretive,
+            DriveStrategy::Interpretive.name(),
+        ),
+    };
+    format!(
+        "strategy: {} {}\nstrategy-other: {other_name} {}\n",
+        choice.chosen.name(),
+        chosen.report(),
+        other.report()
+    )
 }
 
 /// A configuration whose residual has been computed.
@@ -3663,8 +3803,110 @@ pub fn residualize_entry_graph(
     residualize_entry_graph_with_strategy(program, graph, max_steps, DriveStrategy::default())
 }
 
-/// [`residualize_entry_graph`] at a chosen point on the compilation axis.
+/// [`residualize_entry_graph`] at a chosen point on the compilation axis, or
+/// searched across both points (§4.4).
+///
+/// A `Search` run drives both ends, measures each residue with [`residue_cost`],
+/// and keeps the smaller.
+///
+/// # The short circuit is a proof, not a heuristic
+///
+/// The interpretive rule only ever folds **earlier** than the compilative one —
+/// it fires on a first-order neighborhood recurrence, which the compilative
+/// rule does not catch — so the configurations it expands are a subset of the
+/// ones the compilative end expands, and a call the compilative end drove is
+/// either driven or folded by the interpretive end. The interpretive residue
+/// therefore retains at least as much undriven work, and **cannot** be the
+/// better of the two.
+///
+/// That argument needs the compilative end to have finished expanding. A run
+/// that stopped short of its budget stopped for that reason and no other, so
+/// the second pass is skipped. A run that *exhausted* its budget may have been
+/// cut off mid-expansion, and then the interpretive end can win — which is the
+/// whole point of the search, and the case
+/// `examples/driven-strategy-search.ref` exercises.
 pub fn residualize_entry_graph_with_strategy(
+    program: &CoreProgram,
+    graph: &StateGraph,
+    max_steps: usize,
+    strategy: DriveStrategy,
+) -> Result<DrivenResidualization, DriveError> {
+    if strategy != DriveStrategy::Search {
+        return residualize_entry_graph_at(program, graph, max_steps, strategy);
+    }
+
+    let compilative =
+        residualize_entry_graph_at(program, graph, max_steps, DriveStrategy::Compilative);
+    let compilative_outcome = match &compilative {
+        Ok(residual) => EndOutcome::Residue(residue_cost(&residual.program)),
+        Err(_) => EndOutcome::Failed,
+    };
+
+    // The compilative end is provably optimal when it finished inside its
+    // budget, and it is trivially so when it did no residual work at all.
+    let finished_inside_budget = compilative
+        .as_ref()
+        .map(|residual| residual.report.steps < max_steps)
+        .unwrap_or(false);
+    if finished_inside_budget {
+        return compilative.map(|mut residual| {
+            residual.strategy_choice = Some(StrategyChoice {
+                chosen: DriveStrategy::Compilative,
+                compilative: compilative_outcome,
+                interpretive: EndOutcome::Skipped,
+            });
+            residual
+        });
+    }
+
+    let interpretive =
+        residualize_entry_graph_at(program, graph, max_steps, DriveStrategy::Interpretive);
+    let interpretive_outcome = match &interpretive {
+        Ok(residual) => EndOutcome::Residue(residue_cost(&residual.program)),
+        Err(_) => EndOutcome::Failed,
+    };
+
+    let choice = StrategyChoice {
+        chosen: choose_end(compilative_outcome, interpretive_outcome),
+        compilative: compilative_outcome,
+        interpretive: interpretive_outcome,
+    };
+
+    let chosen = match choice.chosen {
+        DriveStrategy::Interpretive => interpretive,
+        // `choose_end` never returns anything else, and a tie goes to the
+        // compilative end so the choice is deterministic.
+        _ => compilative,
+    };
+    chosen.map(|mut residual| {
+        residual.strategy_choice = Some(choice);
+        residual
+    })
+}
+
+/// Which end a search keeps: the smaller cost, ties to the compilative end.
+///
+/// An end that produced no residue is not a cost of zero — it is the worst
+/// outcome, and it loses to any residue at all.
+fn choose_end(compilative: EndOutcome, interpretive: EndOutcome) -> DriveStrategy {
+    match (compilative.cost(), interpretive.cost()) {
+        (Some(left), Some(right)) => {
+            if right < left {
+                DriveStrategy::Interpretive
+            } else {
+                DriveStrategy::Compilative
+            }
+        }
+        (Some(_), None) => DriveStrategy::Compilative,
+        (None, Some(_)) => DriveStrategy::Interpretive,
+        // Neither end produced a program; the caller returns the compilative
+        // error, and naming it keeps the report honest about what was tried.
+        (None, None) => DriveStrategy::Compilative,
+    }
+}
+
+/// Drive and residualise at one named end of the axis.
+fn residualize_entry_graph_at(
     program: &CoreProgram,
     graph: &StateGraph,
     max_steps: usize,
@@ -3678,7 +3920,121 @@ pub fn residualize_entry_graph_with_strategy(
         report,
         generalized_states,
         generalized_graph: None,
+        strategy_choice: None,
     })
+}
+
+/// Measure a residue: how much work it still does at run time, how big it is,
+/// and how far it is from being a fixpoint of the driver.
+pub fn residue_cost(program: &CoreProgram) -> ResidueCost {
+    let defined = program
+        .functions
+        .iter()
+        .map(|function| function.name.to_ascii_lowercase())
+        .collect::<HashSet<_>>();
+    let mut residual_work = 0usize;
+    let mut size = 0usize;
+    for function in &program.functions {
+        for sentence in &function.sentences {
+            measure_terms(&sentence.pattern, &defined, &mut residual_work, &mut size);
+            for condition in &sentence.conditions {
+                measure_terms(&condition.result, &defined, &mut residual_work, &mut size);
+                measure_terms(&condition.pattern, &defined, &mut residual_work, &mut size);
+            }
+            measure_terms(&sentence.result, &defined, &mut residual_work, &mut size);
+        }
+    }
+    ResidueCost {
+        residual_work,
+        size,
+    }
+}
+
+/// The terms in one term, counting the term itself and everything inside it.
+fn term_size(term: &CoreTerm) -> usize {
+    match &term.kind {
+        CoreTermKind::Bracket(inner) => 1 + inner.iter().map(term_size).sum::<usize>(),
+        CoreTermKind::Call { args, .. } => 1 + args.iter().map(term_size).sum::<usize>(),
+        CoreTermKind::Block {
+            argument,
+            sentences,
+        } => {
+            1 + argument.iter().map(term_size).sum::<usize>()
+                + sentences
+                    .iter()
+                    .map(|sentence| {
+                        sentence.pattern.iter().map(term_size).sum::<usize>()
+                            + sentence
+                                .conditions
+                                .iter()
+                                .map(|condition| {
+                                    condition.result.iter().map(term_size).sum::<usize>()
+                                        + condition.pattern.iter().map(term_size).sum::<usize>()
+                                })
+                                .sum::<usize>()
+                            + sentence.result.iter().map(term_size).sum::<usize>()
+                    })
+                    .sum::<usize>()
+        }
+        _ => 1,
+    }
+}
+
+/// Walk a term sequence, counting its size and the work a residue still owes.
+///
+/// A call counts toward the work only when the residue itself defines the
+/// callee: a call to `Prout` or `Chr` is a builtin the machine performs, not a
+/// piece of the source program that driving failed to move to compile time.
+fn measure_terms(
+    terms: &[CoreTerm],
+    defined: &HashSet<String>,
+    residual_work: &mut usize,
+    size: &mut usize,
+) {
+    for term in terms {
+        *size += 1;
+        match &term.kind {
+            CoreTermKind::Call { name, args } => {
+                if defined.contains(&name.to_ascii_lowercase()) {
+                    *residual_work += 1 + args.iter().map(term_size).sum::<usize>();
+                }
+                measure_terms(args, defined, residual_work, size);
+            }
+            CoreTermKind::Bracket(inner) => measure_terms(inner, defined, residual_work, size),
+            CoreTermKind::Block {
+                argument,
+                sentences,
+            } => {
+                measure_terms(argument, defined, residual_work, size);
+                for sentence in sentences {
+                    measure_terms(&sentence.pattern, defined, residual_work, size);
+                    for condition in &sentence.conditions {
+                        measure_terms(&condition.result, defined, residual_work, size);
+                        measure_terms(&condition.pattern, defined, residual_work, size);
+                    }
+                    measure_terms(&sentence.result, defined, residual_work, size);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Steps the driver takes on a residue before it stops changing.
+///
+/// Zero means the residue is already a fixpoint of the driver, which is what a
+/// fully driven residue is. An end that produced no program at all returns
+/// `usize::MAX`, so it sorts last.
+pub fn residue_steps_to_fixpoint(program: &CoreProgram, max_steps: usize) -> usize {
+    let graph = clean_unreachable_states(&build_seed_graph(program));
+    let before = format_program(program);
+    match drive_entry_configuration(&graph, max_steps) {
+        Ok(report) => {
+            let after = format_program(&residualize_symbolic_program(program, &report));
+            if after == before { 0 } else { report.steps }
+        }
+        Err(_) => usize::MAX,
+    }
 }
 
 /// Semantically clean a driven graph by closing over calls in retained configurations.
@@ -3828,6 +4184,7 @@ pub fn residualize_driven_graph(
         report,
         generalized_states,
         generalized_graph: None,
+        strategy_choice: None,
     })
 }
 
@@ -3865,6 +4222,7 @@ pub fn residualize_driven_with_generalization(
         report,
         generalized_states,
         generalized_graph: Some(generalized_graph),
+        strategy_choice: None,
     })
 }
 
@@ -6619,5 +6977,155 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// A program whose call argument grows by one term per step.
+    ///
+    /// No configuration of `Accum` recurs exactly, so the compilative whistle
+    /// never fires and only the budget stops it. This is the shape the search
+    /// exists for.
+    fn growing_accumulator() -> CoreProgram {
+        CoreProgram {
+            declarations: vec![],
+            functions: vec![
+                core_function(
+                    "Go",
+                    Visibility::Entry,
+                    vec![core_sentence(
+                        vec![core_var(VariableKind::Expression, "X")],
+                        vec![core_call(
+                            "Accum",
+                            vec![
+                                core_bracket(vec![]),
+                                core_var(VariableKind::Expression, "X"),
+                            ],
+                        )],
+                    )],
+                ),
+                core_function(
+                    "Accum",
+                    Visibility::Local,
+                    vec![
+                        core_sentence(
+                            vec![core_bracket(vec![core_var(
+                                VariableKind::Expression,
+                                "Acc",
+                            )])],
+                            vec![core_var(VariableKind::Expression, "Acc")],
+                        ),
+                        core_sentence(
+                            vec![
+                                core_bracket(vec![core_var(VariableKind::Expression, "Acc")]),
+                                core_var(VariableKind::Term, "C"),
+                                core_var(VariableKind::Expression, "Rest"),
+                            ],
+                            vec![core_call(
+                                "Accum",
+                                vec![
+                                    core_bracket(vec![
+                                        core_var(VariableKind::Expression, "Acc"),
+                                        core_var(VariableKind::Term, "C"),
+                                    ]),
+                                    core_var(VariableKind::Expression, "Rest"),
+                                ],
+                            )],
+                        ),
+                    ],
+                ),
+            ],
+        }
+    }
+
+    /// A program whose recursion terminates, so the compilative end finishes.
+    fn finite_recursion() -> CoreProgram {
+        CoreProgram {
+            declarations: vec![],
+            functions: vec![
+                core_function(
+                    "Go",
+                    Visibility::Entry,
+                    vec![core_sentence(
+                        vec![],
+                        vec![core_call("Count", vec![core_char('a'), core_char('a')])],
+                    )],
+                ),
+                core_function(
+                    "Count",
+                    Visibility::Local,
+                    vec![
+                        core_sentence(vec![], vec![]),
+                        core_sentence(
+                            vec![core_var(VariableKind::Term, "C")],
+                            vec![core_call("Count", vec![core_var(VariableKind::Term, "C")])],
+                        ),
+                    ],
+                ),
+            ],
+        }
+    }
+
+    /// §4.4's short circuit, checked rather than assumed.
+    ///
+    /// The search skips the interpretive end when the compilative end finished
+    /// inside its budget, on the argument that a rule which only folds earlier
+    /// cannot produce a more driven residue. This test is the argument's
+    /// premise: for every budget at which the compilative end finished, the
+    /// interpretive end is run anyway and required to be no better.
+    ///
+    /// Budgets are chosen so both regimes are covered: small ones cut the
+    /// compilative end off (where the search must compare), large ones let it
+    /// finish (where the short circuit applies).
+    #[test]
+    fn an_end_that_finished_inside_its_budget_is_never_beaten() {
+        let mut checked = 0usize;
+        let mut cut_off = 0usize;
+        for (label, program) in [
+            ("growing accumulator", growing_accumulator()),
+            ("finite recursion", finite_recursion()),
+        ] {
+            let graph = clean_unreachable_states(&build_seed_graph(&program));
+            for budget in [2usize, 3, 5, 8, 13, 21, 40, 10_000] {
+                let compilative = residualize_entry_graph_with_strategy(
+                    &program,
+                    &graph,
+                    budget,
+                    DriveStrategy::Compilative,
+                );
+                let Ok(compilative) = compilative else {
+                    continue;
+                };
+                if compilative.report.steps >= budget {
+                    // The premise does not apply here; this is the case the
+                    // search has to run both ends for.
+                    cut_off += 1;
+                    continue;
+                }
+                let interpretive = residualize_entry_graph_with_strategy(
+                    &program,
+                    &graph,
+                    budget,
+                    DriveStrategy::Interpretive,
+                );
+                let interpretive_cost = interpretive
+                    .ok()
+                    .map(|residual| residue_cost(&residual.program));
+                let compilative_cost = residue_cost(&compilative.program);
+                assert!(
+                    interpretive_cost.is_none_or(|cost| compilative_cost <= cost),
+                    "{label} at budget {budget}: an end that finished inside its budget was \
+                     beaten by the end the search skips -- {compilative_cost:?} against \
+                     {interpretive_cost:?}"
+                );
+                checked += 1;
+            }
+        }
+        assert!(
+            checked >= 6,
+            "the premise must be exercised across the budgets, not once: {checked}"
+        );
+        assert!(
+            cut_off >= 3,
+            "and so must the regime where the compilative end is cut off: {cut_off}"
+        );
     }
 }

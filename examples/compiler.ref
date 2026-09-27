@@ -82,6 +82,10 @@ Dispatch {
     <Prout <DsRdRun e.Source>>;
   ('RESIDUALIZE-DRIVEN') (e.N) (e.Source) =
     <Prout <DsRdBudget <Numb e.N> e.Source>>;
+  ('RESIDUALIZE-DRIVEN-COMPILATIVE') (e.Source) =
+    <Prout <DsRdRunAt 'C' e.Source>>;
+  ('RESIDUALIZE-DRIVEN-INTERPRETIVE') (e.Source) =
+    <Prout <DsRdRunAt 'I' e.Source>>;
   ('NORMALIZE') (e.Source) =
     <Normalize <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>;
   (e.Mode) (e.Source) = <Prout 'unknown mode: ' e.Mode>;
@@ -1974,7 +1978,7 @@ DsRdRun {
 }
 
 DsRdRun2 {
-  (PROG e.Items) = <DsRdSelect (REPORT) (PROG e.Items) <CleanG <BuildG e.Items>>>;
+  (PROG e.Items) = <DsRdRender <DsRdSearch (REPORT) (PROG e.Items)>>;
 }
 
 * The program a driven graph denotes, with no report. `Compile` uses this, and
@@ -1983,7 +1987,7 @@ DsRdRun2 {
 * prints both, because a reader wants to know which states were visited;
 * `Compile` emits only the program, because a report is not a program.
 DsRdProgram {
-  (PROG e.Items) = <DsRdSelect (PLAIN) (PROG e.Items) <CleanG <BuildG e.Items>>>;
+  (PROG e.Items) = <DsRdPlain <DsRdSearch (PLAIN) (PROG e.Items)>>;
 }
 
 * Compile with a driving budget of `e.N` steps. `RESIDUALIZE-DRIVEN` alone uses
@@ -1999,33 +2003,258 @@ DsRdBudget {
 }
 
 DsRdBudget2 {
-  s.N (PROG e.Items) =
-    <DsRdSelect (SEED s.N) (PROG e.Items) <CleanG <BuildG e.Items>>>;
+  s.N (PROG e.Items) = <DsRdRender <DsRdSearch (SEED s.N) (PROG e.Items)>>;
+}
+
+* One end named directly, with no search and therefore no strategy lines: there
+* was nothing to choose between, and reporting a choice that was never made
+* would be a lie.
+DsRdRunAt {
+  s.Strat e.Source =
+    <DsRdBoth <DsRdAt (REPORT) s.Strat
+      <Parse <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>>>;
+}
+
+DsRdBoth {
+  (RD e.Rep (PROG e.P) s.Steps) = e.Rep <Emit (PROG e.P)>;
+  (ERR) = "driven residualization error: undecided call";
+  e.Other = e.Other;
+}
+
+* ---- the strategy search (Turchin 1988 p. 538)
+*
+* The two ends are both points on the compilation-interpretation axis, and
+* which one is better is a measurement rather than a rule. The search runs
+* both, measures each residue with `DsCost`, and keeps the smaller. Both
+* numbers come from walking the residue's syntax tree, so this side and
+* `refal_core::residue_cost` compute the identical pair without either having
+* to drive anything a second time.
+*
+* The one short circuit is sound rather than heuristic: zero residual work
+* means driving moved every call to compile time, so no other end can beat it
+* and the interpretive pass is not run.
+*
+* The search is not decoration. On a growing accumulator --
+* `F { (e.Acc) t.C e.Rest = <F (e.Acc t.C) e.Rest>; }` -- no configuration
+* recurs exactly, so the compilative whistle never fires, the budget runs out,
+* and that end produces nothing at all. The interpretive end stops for
+* Turchin's own reason (finitely many first-order neighborhoods) and emits a
+* residue. Without the search the compiler refuses a legal program.
+DsRdSearch {
+  (e.M) (PROG e.Items) =
+    <DsRdSearch2 (e.M) (PROG e.Items) <DsRdAt (e.M) 'C' (PROG e.Items)>>;
+}
+
+* One end of the axis, driven: the mode picks the report, the strategy
+* character picks the point.
+DsRdAt {
+  (e.M) s.Strat (PROG e.Items) =
+    <DsRdSelect (e.M) s.Strat (PROG e.Items) <CleanG <BuildG e.Items>>>;
+}
+
+DsRdSearch2 {
+  (e.M) (PROG e.Items) (RD e.RepC (PROG e.C) s.StepsC) =
+    <DsRdSearch2C (e.M) (PROG e.Items) (RD e.RepC (PROG e.C) s.StepsC) s.StepsC
+      <DsCost (PROG e.C)>>;
+  (e.M) (PROG e.Items) (ERR) =
+    <DsRdSearchI (e.M) (ERR) (NONE) <DsRdAt (e.M) 'I' (PROG e.Items)>>;
+  (e.M) (PROG e.Items) e.Other = e.Other;
+}
+
+* The short circuit. The driver's budget is 10000 and the counter only reaches
+* it by running out, so a counter below 10000 says the compilative end finished
+* expanding -- and an end that finished cannot be beaten by one whose rule only
+* ever folds earlier. See the Rust side's comment on
+* `residualize_entry_graph_with_strategy` for why that is a proof and not a
+* guess. The seeded budget mode starts the counter at `10000 - N`, so the same
+* comparison decides it there too, with no budget to thread.
+DsRdSearch2C {
+  (e.M) (PROG e.Items) (RD e.RepC (PROG e.C) s.StepsC) s.StepsC (s.WC s.SC),
+    <Compare s.StepsC 10000> : '-' =
+    (RD e.RepC (PROG e.C) s.StepsC 'C' s.WC s.SC (SKIPPED));
+  (e.M) (PROG e.Items) (RD e.RepC (PROG e.C) s.StepsC) s.StepsC (s.WC s.SC) =
+    <DsRdSearchI (e.M) (RD e.RepC (PROG e.C) s.StepsC) (SOME (s.WC s.SC))
+      <DsRdAt (e.M) 'I' (PROG e.Items)>>;
+}
+
+DsRdSearchI {
+  (e.M) (RD e.RepC (PROG e.C) s.StepsC) (e.CC) (RD e.RepI (PROG e.I) s.StepsI) =
+    <DsRdSearchI2 (RD e.RepC (PROG e.C) s.StepsC) (e.CC)
+      (RD e.RepI (PROG e.I) s.StepsI) <DsCost (PROG e.I)>>;
+  (e.M) (RD e.RepC (PROG e.C) s.StepsC) (SOME (s.WC s.SC)) (ERR) =
+    (RD e.RepC (PROG e.C) s.StepsC 'C' s.WC s.SC (FAILED));
+  (e.M) (ERR) (NONE) (ERR) = (ERR);
+  (e.M) (e.C) (NONE) (RD e.RepI (PROG e.I) s.StepsI),
+    <DsCost (PROG e.I)> : (s.WI s.SI) =
+    (RD e.RepI (PROG e.I) s.StepsI 'I' s.WI s.SI (FAILED));
+  (e.M) (e.C) (NONE) e.Other = e.Other;
+}
+
+* A tie goes to the compilative end, so the choice is deterministic.
+DsRdSearchI2 {
+  (RD e.RepC (PROG e.C) s.StepsC) (SOME (s.WC s.SC))
+  (RD e.RepI (PROG e.I) s.StepsI) (s.WI s.SI),
+    <DsCostLt (s.WI s.SI) (s.WC s.SC)> : '1' =
+    (RD e.RepI (PROG e.I) s.StepsI 'I' s.WI s.SI (SOME (s.WC s.SC)));
+  (RD e.RepC (PROG e.C) s.StepsC) (SOME (s.WC s.SC))
+  (RD e.RepI (PROG e.I) s.StepsI) (s.WI s.SI) =
+    (RD e.RepC (PROG e.C) s.StepsC 'C' s.WC s.SC (SOME (s.WI s.SI)));
+  (RD e.RepC (PROG e.C) s.StepsC) (NONE) (RD e.RepI (PROG e.I) s.StepsI) (s.WI s.SI) =
+    (RD e.RepI (PROG e.I) s.StepsI 'I' s.WI s.SI (FAILED));
+}
+
+* Is the first cost strictly smaller than the second? Lexicographic on
+* (residual-work, size) -- the same order `ResidueCost` derives.
+DsCostLt {
+  (s.W1 s.S1) (s.W2 s.S2), <Compare s.W1 s.W2> : '-' = '1';
+  (s.W1 s.S1) (s.W2 s.S2), <Compare s.W1 s.W2> : '0',
+    <Compare s.S1 s.S2> : '-' = '1';
+  (s.W1 s.S1) (s.W2 s.S2) = ;
+}
+
+DsRdRender {
+  (RD e.Rep (PROG e.P) s.Steps s.Chosen s.W s.S (e.Other)) =
+    e.Rep
+    "strategy: " <DsStratName s.Chosen> " residual-work " s.W " size " s.S <NL>
+    "strategy-other: " <DsOtherName s.Chosen> " " <DsOtherReport (e.Other)> <NL>
+    <Emit (PROG e.P)>;
+  (ERR) = "driven residualization error: undecided call";
+  e.Other = e.Other;
+}
+
+* `Compile` wants the program and nothing else: a report is not a program, and
+* the strategy lines are accounting rather than source.
+DsRdPlain {
+  (RD e.Rep (PROG e.P) s.Steps s.Chosen s.W s.S (e.Other)) = <Emit (PROG e.P)>;
+  (ERR) = "driven residualization error: undecided call";
+  e.Other = e.Other;
+}
+
+DsStratName {
+  'C' = "compilative";
+  'I' = "interpretive";
+}
+
+DsOtherName {
+  'C' = "interpretive";
+  'I' = "compilative";
+}
+
+DsOtherReport {
+  (SKIPPED) = "not run (the compilative end finished inside its budget)";
+  (FAILED) = "produced no residue";
+  (SOME (s.W s.S)) = "residual-work " s.W " size " s.S;
+}
+
+* ---- measuring a residue
+*
+* `residual-work` counts a call only when the residue itself defines the
+* callee. A call to `Prout` or `Chr` is a builtin the machine performs, not a
+* piece of the source program that driving failed to move to compile time, and
+* counting it would make every residue look equally undriven.
+DsCost {
+  (PROG e.Items) = <DsCostItems (e.Items) (<DsDefNames (e.Items)>) (0 0)>;
+}
+
+* One cost per function, in program order: the diagnostic that says which
+* function the walk is getting wrong.
+* The names the program defines, lowercased: Classic name equivalence is
+* case-insensitive, so `Foo` and `foo` are one function.
+DsDefNames {
+  () = ;
+  ((FUN (Ident e.Fn) (e.V) e.Sents) e.Rest) = (<Canon e.Fn>) <DsDefNames (e.Rest)>;
+  (t.Item e.Rest) = <DsDefNames (e.Rest)>;
+}
+
+* Is the name `(e.N)` one the program defines? A name here is a character
+* sequence rather than a symbol, so membership is a sequence comparison and
+* goes through `EqName`, the same equivalence the checker's duplicate-name
+* pass uses.
+DsNameIn {
+  (e.N) () = ;
+  (e.N) ((e.M) e.Rest), <EqName (e.N) (e.M)> : '1' = '1';
+  (e.N) (t.Name e.Rest) = <DsNameIn (e.N) (e.Rest)>;
+}
+
+DsCostItems {
+  () (e.Names) (s.W s.S) = (s.W s.S);
+  ((FUN (Ident e.Fn) (e.V) e.Sents) e.Rest) (e.Names) (s.W s.S) =
+    <DsCostItems (e.Rest) (e.Names) <DsCostSents (e.Sents) (e.Names) (s.W s.S)>>;
+  (t.Item e.Rest) (e.Names) (s.W s.S) = <DsCostItems (e.Rest) (e.Names) (s.W s.S)>;
+}
+
+DsCostSents {
+  () (e.Names) (s.W s.S) = (s.W s.S);
+  ((SENT (e.Pat) (e.Conds) (e.Res)) e.Rest) (e.Names) (s.W s.S) =
+    <DsCostSents (e.Rest) (e.Names)
+      <DsCostSeq (e.Res) (e.Names)
+        <DsCostConds (e.Conds) (e.Names)
+          <DsCostSeq (e.Pat) (e.Names) (s.W s.S)>>>>;
+}
+
+DsCostConds {
+  () (e.Names) (s.W s.S) = (s.W s.S);
+  ((COND (e.Expr) (e.CPat)) e.Rest) (e.Names) (s.W s.S) =
+    <DsCostConds (e.Rest) (e.Names)
+      <DsCostSeq (e.CPat) (e.Names) <DsCostSeq (e.Expr) (e.Names) (s.W s.S)>>>;
+}
+
+DsCostSeq {
+  () (e.Names) (s.W s.S) = (s.W s.S);
+  (t.T e.Rest) (e.Names) (s.W s.S) =
+    <DsCostSeq (e.Rest) (e.Names) <DsCostTerm t.T (e.Names) (s.W s.S)>>;
+}
+
+DsCostTerm {
+  (CALL (ID e.N) e.Args) (e.Names) (s.W s.S),
+    <DsNameIn (<Canon e.N>) (e.Names)> : '1' =
+    <DsCostSeq (e.Args) (e.Names)
+      (<Add s.W <Add 1 <DsSeqSize (e.Args)>>> <Add s.S 1>)>;
+  (CALL (ID e.N) e.Args) (e.Names) (s.W s.S) =
+    <DsCostSeq (e.Args) (e.Names) (s.W <Add s.S 1>)>;
+  (BR e.Inner) (e.Names) (s.W s.S) =
+    <DsCostSeq (e.Inner) (e.Names) (s.W <Add s.S 1>)>;
+  (e.Any) (e.Names) (s.W s.S) = (s.W <Add s.S 1>);
+}
+
+* The terms in one term, counting the term itself and everything inside it.
+* A term is always a bracket here -- `(SYM c)`, `(ID n)`, `(CALL ...)` -- so the
+* catch-all is a bracket containing anything, not `(t.T)`, which would demand a
+* one-term bracket and fail on every symbol.
+DsTermSize {
+  (BR e.Inner) = <Add 1 <DsSeqSize (e.Inner)>>;
+  (CALL (ID e.N) e.Args) = <Add 1 <DsSeqSize (e.Args)>>;
+  (e.Any) = 1;
+}
+
+DsSeqSize {
+  () = 0;
+  (t.T e.Rest) = <Add <DsTermSize t.T> <DsSeqSize (e.Rest)>>;
 }
 
 DsRdSelect {
-  (e.M) (PROG e.Items) (CG () (e.States) (e.Trans)) =
+  (e.M) s.Strat (PROG e.Items) (CG () (e.States) (e.Trans)) =
     "driven residualization error: no entry";
-  (e.M) (PROG e.Items) (CG (s.E) (e.States) (e.Trans)) =
-    <DsRdTop (e.M) (PROG e.Items) (e.States) s.E>;
+  (e.M) s.Strat (PROG e.Items) (CG (s.E) (e.States) (e.Trans)) =
+    <DsRdTop (e.M) s.Strat (PROG e.Items) (e.States) s.E>;
 }
 
 DsRdTop {
-  (e.M) (PROG e.Items) (e.States) s.E =
-    <DsRdTop2 (e.M) (PROG e.Items) (e.States) s.E <DvNameOf s.E (e.States)>>;
+  (e.M) s.Strat (PROG e.Items) (e.States) s.E =
+    <DsRdTop2 (e.M) s.Strat (PROG e.Items) (e.States) s.E <DvNameOf s.E (e.States)>>;
 }
 
 DsRdTop2 {
-  (e.M) (PROG e.Items) (e.States) s.E (NONE) =
+  (e.M) s.Strat (PROG e.Items) (e.States) s.E (NONE) =
     "driven residualization error: no entry";
-  (e.M) (PROG e.Items) (e.States) s.E (SOME (e.Fn)) =
-    <DsRdGo (e.M) (PROG e.Items) (e.Fn) (e.States) s.E <DsRdArgs (e.States) s.E>>;
+  (e.M) s.Strat (PROG e.Items) (e.States) s.E (SOME (e.Fn)) =
+    <DsRdGo (e.M) s.Strat (PROG e.Items) (e.Fn) (e.States) s.E <DsRdArgs (e.States) s.E>>;
 }
 
 DsRdGo {
-  (e.M) (PROG e.Items) (e.Fn) (e.States) s.E (e.Args) =
+  (e.M) s.Strat (PROG e.Items) (e.Fn) (e.States) s.E (e.Args) =
     <DsRdOut (e.M) (PROG e.Items) (e.Fn) (e.Args)
-      <DsInvoke (SX s.E 'C' (e.States) <DsSeed (e.M)> () () () () () () () (NONE) 0 ())
+      <DsInvoke (SX s.E s.Strat (e.States) <DsSeed (e.M)> () () () () () () () (NONE) 0 ())
                 (e.Fn) (e.Args)>>;
 }
 
@@ -2064,19 +2293,25 @@ DsRdOut {
   (e.M) (PROG e.Items) (e.Fn) (e.Args) (FAILS (e.Ctx)) =
     <DsRdEmit (e.M) (PROG e.Items) (e.Fn) <DsCallSeq (e.Fn) (e.Args)> <DsRewire <DsLoop (e.Ctx)>>>;
   (e.M) (PROG e.Items) (e.Fn) (e.Args) (ERR) =
-    "driven residualization error: undecided call";
+    (ERR);
 }
 
+* A driven run returns `(RD <report> <program>)` rather than rendered text, and
+* the separation is what makes the strategy search possible: the search has to
+* *measure* two residues before it can print one, and a measurement needs the
+* program rather than a rendering of it. `(ERR)` is the arm where driving could
+* not decide a call at all.
 DsRdEmit {
   (REPORT) (PROG e.Items) (e.Fn) (e.Residual) (LOOP (e.Ctx)) =
-    <DsRdReport (e.Ctx)> <Emit <DsRdBuild (e.Items) (e.Fn) (e.Residual) (e.Ctx)>>;
+    (RD <DsRdReport (e.Ctx)> <DsRdBuild (e.Items) (e.Fn) (e.Residual) (e.Ctx)>
+        <DsSteps (e.Ctx)>);
   (PLAIN) (PROG e.Items) (e.Fn) (e.Residual) (LOOP (e.Ctx)) =
-    <Emit <DsRdBuild (e.Items) (e.Fn) (e.Residual) (e.Ctx)>>;
+    (RD () <DsRdBuild (e.Items) (e.Fn) (e.Residual) (e.Ctx)> <DsSteps (e.Ctx)>);
   (SEED s.N) (PROG e.Items) (e.Fn) (e.Residual) (LOOP (e.Ctx)) =
-    <DsRdReportFrom <DsSeed (SEED s.N)> (e.Ctx)>
-    <Emit <DsRdBuild (e.Items) (e.Fn) (e.Residual) (e.Ctx)>>;
+    (RD <DsRdReportFrom <DsSeed (SEED s.N)> (e.Ctx)>
+        <DsRdBuild (e.Items) (e.Fn) (e.Residual) (e.Ctx)> <DsSteps (e.Ctx)>);
   (e.M) (PROG e.Items) (e.Fn) (e.Residual) (ERR) =
-    "driven residualization error: undecided call";
+    (ERR);
 }
 
 DsRdReport {

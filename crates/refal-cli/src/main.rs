@@ -262,11 +262,13 @@ fn print_usage() {
     eprintln!(
         "  drive-symbolic  Partially drive from an expression variable [--steps N] [--configurations]"
     );
-    eprintln!("                  [--neighborhoods] [--strategy compilative|interpretive]");
+    eprintln!("                  [--neighborhoods] [--strategy search|compilative|interpretive]");
     eprintln!("  residualize  Emit Refal for the supported symbolic residual subset [--steps N]");
     eprintln!("  residualize-graph  Emit structurally cleaned reachable Core Refal");
     eprintln!("  residualize-driven  Emit driven Core Refal with whistle evidence [--steps N]");
-    eprintln!("                      [--strategy compilative|interpretive]  (Turchin 1988 4)");
+    eprintln!(
+        "                      [--strategy search|compilative|interpretive]  (Turchin 1988 4)"
+    );
     eprintln!("  residualize-generalized  Emit explicit generalized residual graph [--steps N]");
     eprintln!("  clean      Drive, residualize, then clean the residue of sentences no call");
     eprintln!("             site can select (Turchin 1980 4.3) [--steps N]");
@@ -525,12 +527,12 @@ struct DriveOptions {
     show_neighborhoods: bool,
 }
 
-const DRIVE_USAGE: &str = "Usage: refal <drive-symbolic|residualize-driven> <file.ref> [--steps N]      [--strategy compilative|interpretive] [--configurations] [--neighborhoods]";
+const DRIVE_USAGE: &str = "Usage: refal <drive-symbolic|residualize-driven> <file.ref> [--steps N]      [--strategy search|compilative|interpretive] [--configurations] [--neighborhoods]";
 
 fn drive_options(args: &[String]) -> Result<DriveOptions, String> {
     let mut options = DriveOptions {
         max_steps: 10_000,
-        strategy: refal_core::DriveStrategy::default(),
+        strategy: refal_core::DriveStrategy::Search,
         show_configurations: false,
         show_neighborhoods: false,
     };
@@ -551,6 +553,7 @@ fn drive_options(args: &[String]) -> Result<DriveOptions, String> {
                     return Err(DRIVE_USAGE.to_string());
                 };
                 options.strategy = match name.as_str() {
+                    "search" => refal_core::DriveStrategy::Search,
                     "compilative" => refal_core::DriveStrategy::Compilative,
                     "interpretive" => refal_core::DriveStrategy::Interpretive,
                     _ => return Err(DRIVE_USAGE.to_string()),
@@ -798,6 +801,9 @@ fn residualize_driven_program(program: &refal_ast::Program, args: &[String]) {
         .collect::<Vec<_>>()
         .join(", ");
     println!("generalized-states: {generalized_states}");
+    if let Some(choice) = &residual.strategy_choice {
+        print!("{}", refal_core::format_strategy_choice(choice));
+    }
     print!("{}", refal_core::format_program(&residual.program));
 }
 

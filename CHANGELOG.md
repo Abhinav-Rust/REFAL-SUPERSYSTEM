@@ -2,6 +2,120 @@
 
 ## Unreleased
 
+### The compilation strategy is searched, and the search found a refused program (2026-09-27)
+
+`DriveStrategy` was `Compilative | Interpretive`, the choice was selectable, and
+it was made **by hand**: the compilative end was the default "because of a
+measurement rather than because of a rule", which is the same thing as a rule
+with a footnote. Turchin's point on p. 538 of the 1988 paper is that the variants
+place the resulting program at different points on the compilation-interpretation
+axis and that choosing between them is a *strategy* decision, so the choice is
+now a measurement. `DriveStrategy::Search` — the new default — drives both ends,
+measures each residue, and keeps the smaller.
+
+**The search is not decoration, and the corpus alone would not have shown that.**
+On `examples/driven-strategy-search.ref` one end of the axis produces **no
+program at all**. `Accum` walks an unknown expression into an accumulator that
+grows by one term per step, so no configuration recurs exactly, the compilative
+whistle never fires, the budget runs out, and that end reports
+
+```
+driven residualization error: ground driver does not support unbound residual variables
+```
+
+The interpretive end loops back on the first-order neighborhood instead —
+Turchin's own rule in 1988 §4, finite for his reason rather than by embedding —
+and emits a residue that checks and answers what the source answered. Before the
+search, `refal residualize-driven` **refused a legal program**. That is a bug, and
+the search is the fix.
+
+#### The cost functional
+
+Two numbers, both from walking the residue's syntax tree — which is what lets the
+Refal-authored compiler compute the identical pair without driving anything a
+second time:
+
+- `residual-work` — Σ (1 + terms in the arguments) over every call in the residue
+  whose callee the residue still defines. A call to `Prout` or `Chr` is a builtin
+  the machine performs, not a piece of the source program driving failed to move
+  to compile time, and counting it would make every residue look equally undriven.
+  It is zero exactly when driving moved *every* call to compile time, which is the
+  general form of "the interpreter is eliminated".
+- `size` — the residue's term count.
+
+`residual-work` dominates, then `size`, and a tie goes to the compilative end so
+the choice is deterministic. How far a residue still is from being a fixpoint of
+the driver is the third thing §4.4 cares about; it costs a whole extra driving
+pass, so it is `residue_steps_to_fixpoint`, a measurement the tests use rather
+than a third key in the ordering.
+
+The report says which end won and what the other cost:
+
+```
+strategy: compilative residual-work 0 size 7
+strategy-other: interpretive not run (the compilative end finished inside its budget)
+```
+
+#### The short circuit is a proof, not a heuristic
+
+The interpretive rule only ever folds **earlier** than the compilative one, so the
+configurations it expands are a subset of the ones the compilative end expands, a
+call the compilative end drove is either driven or folded by the interpretive end,
+and the interpretive residue therefore retains at least as much undriven work — it
+**cannot** be the better of the two. That argument needs the compilative end to
+have *finished* expanding, so the second pass is skipped when the compilative run
+stopped short of its budget, and is run when the run exhausted it, which is
+exactly the case above. On the compiler's own 132 KB source this is the difference
+between 2m14s and 4m18s for one self-application.
+
+The premise is checked rather than assumed.
+`an_end_that_finished_inside_its_budget_is_never_beaten` runs both ends at eight
+budgets over two library programs — one that grows without repeating, one that
+terminates — and requires the interpretive end to be no better wherever the
+compilative end finished. It counts both regimes, so a test that exercised only
+one of them fails on the counts.
+
+#### Both implementations carry it
+
+`compiler.ref` searches too: `RESIDUALIZE-DRIVEN` drives both ends, measures each
+with `DsCost`, and keeps the smaller. `RESIDUALIZE-DRIVEN-COMPILATIVE` and
+`RESIDUALIZE-DRIVEN-INTERPRETIVE` name one end and report no choice, because there
+was none to make. The Refal short circuit is the same comparison with no budget to
+thread: the driver's budget is 10000 and the counter only reaches it by running
+out, so `steps < 10000` says the run finished, and the seeded budget mode starts
+the counter at `10000 - N` so the same test decides it there.
+
+**A trap worth recording.** A name in `compiler.ref`'s AST is a **character
+sequence**, not a symbol: `(ID e.N)` holds the name's characters, which is why
+`EmitTerms` prints `(ID e.N)` as `e.N` directly. Comparing one with `s.` fails
+outright, and a walker that swallows the failure reports `residual-work 0` for
+every residue — which reads like a perfect compiler rather than a broken one. The
+cost walker goes through `Canon`/`EqName`, the same equivalence the checker's
+duplicate-name pass uses.
+
+#### Gates
+
+- `the_searched_end_is_no_worse_than_either_fixed_end` — the chosen end costs no
+  more than either fixed end over every corpus program at budgets 6, 12 and 40,
+  non-vacuous in *both* directions (the search must keep each end somewhere).
+- `the_search_keeps_the_end_that_produces_a_residue_at_all` — the compilative end
+  fails on the new fixture, the interpretive end succeeds, the search keeps it,
+  and the residue checks and answers what the source answered.
+- `the_search_is_the_default_and_each_end_stays_selectable` — the report names the
+  winner, and a directly named end reports no choice.
+- `refal_authored_residualize_driven_matches_the_rust_oracle` — 57 matched, 0
+  diverged, 25 out of scope.
+- `an_end_that_finished_inside_its_budget_is_never_beaten` — the short circuit's
+  premise, in `refal-core`.
+
+#### Completion
+
+**~85% → ~87%.** The graph-of-states row takes 7.5 of 8.5 (its named open item,
+§4.4's strategy search, is closed; the other half of §4.4 — perfection by
+transformation — is not) and the Refal-compiler row 24.0 of 25.5 (the compiler now
+emits a program for *every* legal program it is given, where before it refused
+one; its remaining deduction is speed on very large inputs).
+
 ### Residualization is total: the compiler always emits a program (2026-09-26)
 
 The driven path had a budget of 10000 steps, and when it ran out it **refused**:
