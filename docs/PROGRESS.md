@@ -34,18 +34,18 @@ objective to a gate. Not another Refal implementation.
 
 | | |
 |---|---|
-| Honest completion | **~87%** (product completeness — one method, see below) |
-| Tests | 329 passing, 0 clippy, fmt clean |
+| Honest completion | **~89%** (product completeness — one method, see below) |
+| Tests | 331 passing, 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
 
 **Verification state at this commit, stated precisely.** The Refal-authored
-differentials are green: the seed graph and residualization (55/55 each), the
+differentials are green: the seed graph and residualization (58/58 each), the
 ground driver, the symbolic driver on the default, `--configurations` and
-`--neighborhoods` reports (55/55, 0 diverged) with `--strategy interpretive`
+`--neighborhoods` reports (57/57, 0 diverged) with `--strategy interpretive`
 gated separately (8/8, 0 diverged), and the driven residualizer
-(`refal_authored_residualize_driven_matches_the_rust_oracle`, **57 matched, 0
-diverged, 25 out of scope**). `compile_command_compiles_the_compiler_itself`
+(`refal_authored_residualize_driven_matches_the_rust_oracle`, **58 matched, 0
+diverged, 27 out of scope**). `compile_command_compiles_the_compiler_itself`
 now requires the compiler's own output to equal the Rust driver's residue, and
 it is green; so are `the_refal_authored_compiler_matches_the_driven_residue_on_every_lowerable_example`
 and `the_refal_authored_normaliser_matches_lower_on_every_lowerable_example`,
@@ -57,6 +57,95 @@ Rust oracle at budgets 1, 2, 5 and 12. The T-4/T-6 differential
 corpus gate is green at `cases: 71`, `positive: 31`, `check-failure: 6`,
 `runtime-failure: 1`, `residual: 33`, `cleaned-sentences: 1`, and
 `clippy --all-targets -D warnings` and `cargo fmt --check` are clean.
+
+### Done — release 0.9.0: the release machinery, cut
+
+The row's named gaps were "no full Classic conformance claim and no release
+packaging". The second is closed; the first is not, and the version says so.
+
+**The version is 0.9.0, not 1.0.** The project's own definition of done is in
+`REFAL-FIRST-COMPLETION.md` and the honest figure is below it, so a 1.0 tag would
+be a claim the repository cannot make. `CHANGELOG.md` now carries a dated version
+heading, `Cargo.toml` carries the same number, and the binary reports it —
+because **a release is one version in three places, and three places is two
+chances to forget one.** Gate 10,
+`the_workspace_version_and_the_changelog_agree`, reads all three and requires them
+to agree, requires the newest heading to carry an ISO date, and requires
+`Unreleased` to stay above it. It is what makes the archive honest: `package.sh`
+names the tarball from `Cargo.toml`, so a changelog that was not updated would
+ship an archive whose version has no entry.
+
+`refal --version` is new, and it is the half of that gate a user can see without
+reading a file. Until now the only way to ask the binary what it was, was to give
+it a file and read the usage message it printed when it failed.
+
+**`scripts/package.sh`** cuts the archive: the binary, the documentation, the
+corpus, the scripts, and an `INSTALL.md` that says what the binary is and is not.
+The Refal sources are in it because they are the point — this is a compiler that
+compiles them, and the binary is what runs it and what the differential gates
+compare it against. The version comes from `Cargo.toml`, so the archive cannot be
+named after a release that does not exist.
+
+**`scripts/perf.sh`** measures every speed figure the README publishes *about
+the compiler*, on the
+compiler's own source, which is the largest input the repository has and the only
+one whose size is a property of the project rather than of a fixture. It prints
+timings rather than asserting them — a performance figure that fails a test on a
+loaded machine is a flaky test, not a regression — and the one thing it does
+assert is the *shape*: the ratios between three input sizes, because a runtime
+that copies on every bracket it opens is quadratic in disguise and the linearity
+claim is the claim worth checking.
+
+**`RELEASE-CHECKLIST.md`** now names ten gates rather than eight, states the
+supported scope clause by clause, and — the part that was simply absent — says
+what is and is not promised. What is promised for 0.9.0: the accepted language,
+the lowered output format *within* a release (which is what C1 = C2 = C3 proves),
+that the driven residue is deployable, and the published `--strict` guarantee with
+its own stated bound. What is not: the lowered format *across* releases, the CLI
+surface below 1.0, and performance.
+
+### Done — the front end's clause-by-clause conformance corpus
+
+Milestone 2's exit criterion was "positive and negative golden fixtures cover
+every lexical and grammar category in scope, each traceable to the clause of the
+reference it exercises". The fixtures existed and were broad; the *traceability*
+did not. It does now.
+
+`examples/conformance.manifest` is the corpus — `clause|fixture|mode`, where the
+mode is `accept` (the compiler must accept the fixture) or `reject` (it must
+refuse it, with a diagnostic). The clauses are the *Refal-5 syntax reference*'s
+own: §1.1–1.4 lexical, §2 the expression grammar, §3 the sentence and program
+grammar, §4 comments.
+
+`every_reference_clause_has_a_traceable_fixture` is what makes it a corpus rather
+than a list. It:
+
+1. requires the clause set to match the clauses the Classic front end is in scope
+   for — hard-coded in the test, so the manifest cannot narrow its own contract;
+2. requires every cited fixture to exist;
+3. requires a `reject` row for every clause whose rule has a forbidden half,
+   because **a lexer that accepts everything passes every `accept` row**;
+4. requires the two modes to be disjoint, and every rejected fixture to carry the
+   repository's `bad-` prefix;
+5. runs every row and requires the declared outcome, including a diagnostic on
+   stderr for each rejection.
+
+Fifty rows: 30 accepted, 20 rejected, covering all eleven clauses in scope and all
+ten that state a rule with a forbidden half.
+
+**Two clauses had no fixture at all, and both are the interesting kind.** §1.4
+says lexical units may follow one another without separators — which is why
+`s1s2s3` is `s1 s2 s3` — and then says the same juxtaposition in the *dotted*
+form, `s.1s.2s.3`, is a syntax error, because the dotted form is not
+self-delimiting. §1.2.1 caps an identifier at 15 characters. Neither had a
+negative fixture: the shorthand half of §1.4 was tested, the forbidden half was
+not. `examples/bad-juxtaposed-dotted-variables.ref` and
+`examples/bad-long-identifier.ref` are those two, and both are rejected with the
+diagnostic the clause implies. §4's inline-comment half had no *positive* fixture
+either — no example used `/* */` — so `examples/conformance-block-comment.ref`
+places a comment in all three positions one can take, and the differential corpus
+runs it, because a comment dropped in one position and not another changes the
+program rather than merely its text.
 
 ### Done — §4.4's compilation strategy is searched, and the search is not decoration
 
@@ -426,17 +515,28 @@ What is left of `Dups` is a constant factor rather than an exponent: `Split`
 concatenates one element onto a growing half at each level, which is O(n^2) in
 list copying with a much smaller constant. Recorded, not yet worth doing.
 
-**The full suite is no longer slow.** `cargo test --all -j 2 --
---test-threads=1` takes **7 minutes** (the CLI suite alone is 6.3), down from the
-~36 minutes four serial self-hosting stages used to cost. The `-j 2` and
-`--test-threads=1` discipline is still kept, but the OOM that used to make the
-parallel run unusable — `memory allocation of 913568 bytes failed`, which reads
-like a semantic failure and is not one — is gone with the quadratic: the machine
-no longer builds an O(n^2) amount of run-list.
+**The full suite's cost, measured rather than remembered.**
+`cargo test --all -j 2 -- --test-threads=1` takes **35 minutes** on this machine
+(the CLI suite alone is 2108 s of it), not the 7 minutes an earlier revision of
+this file claimed. The earlier figure was wrong, and the reason it was wrong is
+worth recording: it was carried forward from a run whose heavy tests were the
+*Rust* driver's, and the suite's cost now sits in the tests that interpret the
+132 KB `compiler.ref` itself — `compiler_ref_reaches_a_self_hosting_fixpoint`,
+`the_refal_driver_reaches_a_fixpoint_on_the_compiler_itself`, and the five
+`refal_authored_*` differentials, each of which pays the compiler's own
+lex-parse-check before it does anything. The strategy search does **not**
+contribute: on the corpus and on the compiler's own source the compilative end
+finishes well inside its budget, so the short circuit skips the second pass.
+
+The `-j 2` and `--test-threads=1` discipline is still kept, and the OOM that used
+to make the parallel run unusable — `memory allocation of 913568 bytes failed`,
+which reads like a semantic failure and is not one — is gone with the quadratic:
+the machine no longer builds an O(n^2) amount of run-list. `cargo fmt --check`
+needs no build lock and runs alongside a suite.
 
 ### Workstream credit
 
-**One number, one method: ~87%.** Each workstream is credited for what is
+**One number, one method: ~89%.** Each workstream is credited for what is
 implemented *and* tested *for the general case* — not for the corpus, and not for
 effort spent. This replaced three figures that used to be published side by side
 (an effort-weighted ~88%, an evidence-weighted ~81%, a gate-only ~78%) and
@@ -446,23 +546,23 @@ exists. `README.md` and `PLAN.md` section 5 publish the same table.
 
 | Workstream | Weight | Credit |
 |---|---:|---:|
-| Bootstrap frontend | 8.5% | 7.0 |
+| Bootstrap frontend | 8.5% | 8.0 |
 | Bootstrap semantics | 6.0% | 4.5 |
 | Refal machine / runtime | 19.5% | 19.0 |
 | Graph of states / Refal emission | 8.5% | 7.5 |
 | Static verification (Tier 1) | 15.0% | 12.5 |
 | Compiler implemented in Refal | 25.5% | 24.0 |
 | Verified self-hosting fixpoint | 13.0% | 11.5 |
-| Conformance / release evidence | 4.0% | 1.5 |
-| **Total** | **100%** | **~87%** |
+| Conformance / release evidence | 4.0% | 3.0 |
+| **Total** | **100%** | **~89%** |
 
 The two heaviest rows — the Refal compiler and the self-hosting fixpoint that
 depends on it — hold 38.5 of the 100 points. The runtime has left the deducted
 group entirely: it was the repository's largest engineering item, and both
 shapes it was still deducting for are closed and measured. What remains
-concentrated is *release*: the front end's missing clause-by-clause corpus, the
-compiler's speed on very large inputs, §6.4's `unknown` values, §4.4's
-perfection-by-transformation, and packaging. The figure agrees with the
+concentrated is *release*: the compiler's speed on very large inputs, §6.4's
+`unknown` values, §4.4's perfection-by-transformation, and a full Classic
+conformance claim for the runtime and the builtin library. The figure agrees with the
 milestone table, which is the point: counting ticks and reading the percentage
 should reach the same conclusion.
 
@@ -1325,13 +1425,29 @@ Refal-authored compiler and a `Compile` that drives.
   function iteration instead, and that the first-order algorithm is complete in
   the sense that every strategy is a refinement of it — so this is an
   optimisation, not a gap.
+- **The compiler's speed on very large inputs**, measured rather than described.
+  `scripts/perf.sh` prints the numbers; on this machine, against the compiler's
+  own 146 KB source: `refal compile` **47.8 s**, `compiler.ref GRAPH` **25.5 s**,
+  `compiler.ref RESIDUALIZE-DRIVEN` **45.4 s**, `compiler.ref` compiling itself
+  **46.6 s** — against **0.23 s** for `refal residualize-driven` and **0.30 s**
+  for `refal graph` in the bootstrap. The difference is not the algorithm, it is
+  that `compile` runs the *Refal-authored* compiler through the interpreter, so
+  every invocation pays the compiler's own lex-parse-check before it does any
+  work. That is the Refal-compiler row's remaining deduction, and it is a
+  constant-factor problem in the interpreter rather than a missing pass.
+  (Per-invocation timings on this machine also carry about 0.8 s of process
+  startup, which `scripts/perf.sh` measures as a baseline before subtracting it.)
 - **T-8** metacodes (Ch. 1.3) — closed for ground expressions; see the section
   above. The §6.4 `unknown` values remain open and are recorded there.
 - **The `Reverse` shape** — a rope whose left spine is as deep as the nesting,
   built by a result that puts a call before other terms. Every prepend-shaped
   walk is O(1) per step, the compiler's own source is linear, and the shape
-  itself measures linear (16,000/32,000/64,000 characters in 614/712/911 ms), so
-  this is a bound rather than a cost. Balancing the rope — a height in the
+  itself measures linear (16,000/32,000/64,000 characters in 614/712/911 ms on the
+  2026-09-24 machine), so this is a bound rather than a cost. `scripts/perf.sh`
+  does not reproduce that figure and says why: `--input-file` hands a program one
+  character-string term rather than one term per character, and the CLI wraps each
+  argument in a bracket, so a large flat term list cannot be handed to a program
+  from outside it. Balancing the rope — a height in the
   `Concat` node and a rotation in `ViewField::concat` — is the fix if a shape
   ever does pay it.
 - **`Dups` is linear now; what is left of it is a constant.** `Split` in the new
@@ -1345,31 +1461,37 @@ Refal-authored compiler and a `Compile` that drives.
 
 ## NEXT ACTION
 
-**T-8's §6.4 `unknown` values, then the front end's clause-by-clause conformance
-corpus and release packaging.**
+**T-8's §6.4 `unknown` values, then a full Classic conformance claim for the
+runtime and the builtin library.**
 
 The order this file carried for four sessions is done: `Compile` drives, the
-normalising path is its own mode with its own test, residualization is total,
-and the compilation strategy is *searched* rather than fixed. Every one of those
-gates found a real defect — the search found that the compiler refused a legal
-program on a growing accumulator — which is the argument for building them
-before needing them.
+normalising path is its own mode with its own test, residualization is total, the
+compilation strategy is *searched* rather than fixed, and the front end has a
+clause-by-clause conformance corpus. Every one of those gates found a real defect
+— the search found that the compiler refused a legal program on a growing
+accumulator, and the conformance corpus found two clauses with no negative
+fixture — which is the argument for building them before needing them.
 
 **What to do, in order.**
 
-1. **T-8's §6.4 `unknown` values.** Every runtime `Value` is ground, so the
-   manual's `unknown(t,n,i)` rules have nothing to act on until a non-ground
-   value exists. The work is a representation for a value carrying a type, a
-   count and an index; the `Dn`/`Up` rules that act on it; and a CLI fixture.
-   The metacode table is otherwise closed, so this is the last piece of T-8.
-2. **The front end's clause-by-clause conformance corpus.** Every lexical and
-   grammar row in `FRONTEND-COVERAGE.md` needs a fixture traceable to the clause
-   of the reference it exercises, and the two rows still short of that are the
-   malformed-program suite and the general positive corpus. This is bookkeeping
-   rather than engineering, and it is the largest single deduction left.
-3. **Release packaging.** `RELEASE-CHECKLIST.md` names eight gates; all eight
-   run, and what is missing is a versioned changelog, an installable artifact, a
-   performance suite and a compatibility statement.
+1. **T-8's §6.4 `unknown` values** — the last piece of T-8, and now the last
+   named gap in the runtime. Every runtime `Value` is ground, so the manual's
+   rules have nothing to act on. **The primary source is now read and recorded
+   verbatim** in `REFAL5-BUILTIN-REFERENCE-NOTES.md` — the four rules and the
+   tracer's printed form — and the two things it does *not* pin are recorded
+   there with it: what `Prout` prints for an unknown value (the manual specifies
+   only the *tracer*'s format, `#type.level  inde.X`), and how matching treats
+   one beyond "an `s`-unknown denotes some symbol and a `t`-unknown some term,
+   taken into account when matching". Resolve those from the Programming Guide
+   before writing code; a guessed printed form is the kind of arm that is
+   written, unexercised and wrong the first time it matters.
+2. **A full Classic conformance claim.** The front end is clause-complete;
+   the runtime and the builtin library are not. The builtin suite is broad and
+   tested, but no clause-by-clause corpus binds each builtin's documented
+   behaviour to the fixture that exercises it, and that is the last named gap in
+   the conformance row. `examples/conformance.manifest` is the shape to copy: a
+   `clause|fixture|mode` table plus a test that requires the clause set to match
+   the reference and runs every row.
 
 **§4.4's other half is deliberately not on this list.** Perfection by
 *transformation* — rewriting a walk so that it becomes feasible, rather than
@@ -1403,6 +1525,12 @@ deep-copying its contents. Measure the shape, not only the count.
   pass uses. Comparing with `s.` against a name silently measures nothing:
   `Member` fails outright, and a walker that swallows the failure reports
   `residual-work 0` for every residue, which reads like a perfect compiler.
+- Do not let a conformance row be *added* to satisfy the corpus. A row is a claim
+  about the clause; the fixture has to exercise it, and the negative half is the
+  half that costs. `every_reference_clause_has_a_traceable_fixture` checks that
+  every clause in scope has a row and that every rule with a forbidden half has a
+  rejection, but it cannot check that the fixture is about the clause — that is
+  what review is for.
 
 
 ### What the graph pass needed (so the next session starts here)

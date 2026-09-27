@@ -6313,3 +6313,245 @@ fn refal_authored_interpretive_drive_matches_the_rust_oracle() {
         failures.join("\n")
     );
 }
+
+/// Milestone 2's exit criterion, as a test: **every clause of the syntax
+/// reference has a fixture that exercises it**, in both directions where the
+/// clause states a rule with two halves.
+///
+/// `examples/conformance.manifest` is the corpus — `clause|fixture|mode`, where
+/// the mode is `accept` (the compiler must accept the fixture) or `reject` (it
+/// must refuse it, with a diagnostic). This test is what makes it a corpus
+/// rather than a list. It:
+///
+/// 1. requires the clause set to match the clauses of the reference that the
+///    Classic front end is in scope for, so a row cannot be dropped silently;
+/// 2. requires every cited fixture to exist;
+/// 3. requires a `reject` row for every clause whose rule has a forbidden half,
+///    because a lexer that accepts everything passes every `accept` row;
+/// 4. requires the two modes to be disjoint — a fixture cannot be both admitted
+///    and refused — and every `reject` fixture to carry the repository's `bad-`
+///    prefix;
+/// 5. runs every row and requires the declared outcome, including a diagnostic
+///    on stderr for each rejection.
+///
+/// The reference is the *Refal-5 syntax reference*,
+/// <http://www.refal.net/refer_r5.html>: §1.1–1.4 lexical, §2 the expression
+/// grammar, §3 the sentence and program grammar, §4 comments.
+#[test]
+fn every_reference_clause_has_a_traceable_fixture() {
+    /// The clauses the Classic front end is in scope for. Hard-coded, so the
+    /// manifest cannot narrow its own contract.
+    const CLAUSES: &[&str] = &[
+        "1.1", "1.2", "1.2.1", "1.2.2", "1.2.3", "1.2.4", "1.3", "1.4", "2", "3", "4",
+    ];
+    /// The clauses that state a rule with a forbidden half, and therefore need
+    /// a `reject` row. §1.2 alone is a category list rather than a rule.
+    const CLAUSES_WITH_A_FORBIDDEN_HALF: &[&str] = &[
+        "1.1", "1.2.1", "1.2.2", "1.2.3", "1.2.4", "1.3", "1.4", "2", "3", "4",
+    ];
+
+    let manifest_path = workspace_path("examples/conformance.manifest");
+    let manifest = fs::read_to_string(&manifest_path)
+        .unwrap_or_else(|error| panic!("read {manifest_path}: {error}"));
+
+    let mut rows: Vec<(String, String, String)> = Vec::new();
+    for (index, line) in manifest.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let fields: Vec<&str> = line.split('|').collect();
+        assert_eq!(
+            fields.len(),
+            3,
+            "{}:{}: a row is `clause|fixture|mode`, found {line:?}",
+            manifest_path,
+            index + 1
+        );
+        let (clause, fixture, mode) = (fields[0].trim(), fields[1].trim(), fields[2].trim());
+        assert!(
+            CLAUSES.contains(&clause),
+            "{}:{}: `{clause}` is not a clause of the reference in scope",
+            manifest_path,
+            index + 1
+        );
+        assert!(
+            matches!(mode, "accept" | "reject"),
+            "{}:{}: mode `{mode}` is neither accept nor reject",
+            manifest_path,
+            index + 1
+        );
+        assert!(
+            !fixture.is_empty() && fixture.ends_with(".ref"),
+            "{}:{}: `{fixture}` is not a fixture name",
+            manifest_path,
+            index + 1
+        );
+        rows.push((clause.to_string(), fixture.to_string(), mode.to_string()));
+    }
+    assert!(
+        rows.len() >= 40,
+        "the corpus must cover the reference, not sample it: {} rows",
+        rows.len()
+    );
+
+    // 1. Every clause in scope is covered.
+    for clause in CLAUSES {
+        assert!(
+            rows.iter().any(|(row_clause, _, _)| row_clause == clause),
+            "clause {clause} has no fixture"
+        );
+    }
+    // 3. And every clause whose rule forbids something has a rejection.
+    for clause in CLAUSES_WITH_A_FORBIDDEN_HALF {
+        assert!(
+            rows.iter()
+                .any(|(row_clause, _, mode)| row_clause == clause && mode == "reject"),
+            "clause {clause} states a rule with a forbidden half and has no `reject` row"
+        );
+    }
+
+    // 4. The modes are disjoint, and a rejection is named for what it is.
+    let accepted: Vec<&str> = rows
+        .iter()
+        .filter(|(_, _, mode)| mode == "accept")
+        .map(|(_, fixture, _)| fixture.as_str())
+        .collect();
+    for (_, fixture, mode) in &rows {
+        if mode == "reject" {
+            assert!(
+                !accepted.contains(&fixture.as_str()),
+                "`{fixture}` is cited as both accepted and rejected"
+            );
+            assert!(
+                fixture.starts_with("bad-"),
+                "a rejected fixture must be named `bad-*`: `{fixture}`"
+            );
+        }
+    }
+
+    // 2 and 5. Every fixture exists, and every row's declared outcome holds.
+    let mut accept_rows = 0usize;
+    let mut reject_rows = 0usize;
+    for (clause, fixture, mode) in &rows {
+        let path = workspace_path(&format!("examples/{fixture}"));
+        assert!(
+            std::path::Path::new(&path).is_file(),
+            "clause {clause} cites `{fixture}`, which does not exist"
+        );
+        let checked = check_path(&path, &[]);
+        let stdout = String::from_utf8_lossy(&checked.stdout);
+        let stderr = String::from_utf8_lossy(&checked.stderr);
+        match mode.as_str() {
+            "accept" => {
+                assert!(
+                    checked.status.success(),
+                    "clause {clause}: `{fixture}` must be accepted, and it was not:/n{stderr}"
+                );
+                accept_rows += 1;
+            }
+            _ => {
+                assert!(
+                    !checked.status.success(),
+                    "clause {clause}: `{fixture}` must be refused, and it was accepted:/n{stdout}"
+                );
+                assert!(
+                    !stderr.trim().is_empty(),
+                    "clause {clause}: `{fixture}` was refused without a diagnostic"
+                );
+                reject_rows += 1;
+            }
+        }
+    }
+    assert!(
+        accept_rows >= 20,
+        "the corpus admits too little: {accept_rows}"
+    );
+    assert!(
+        reject_rows >= 15,
+        "the corpus forbids too little: {reject_rows}"
+    );
+}
+
+/// A release is **one version in three places** — `Cargo.toml`, the binary, and
+/// the newest dated heading in `CHANGELOG.md` — and three places is two chances
+/// to forget one. This test reads all three and requires them to agree.
+///
+/// It is what makes `scripts/package.sh` honest: the archive is named from
+/// `Cargo.toml`, so a changelog that was not updated would ship an archive whose
+/// version has no entry, and a binary that reported a different number would be
+/// a binary nobody can identify from the release notes.
+#[test]
+fn the_workspace_version_and_the_changelog_agree() {
+    let manifest = fs::read_to_string(workspace_path("Cargo.toml")).expect("read Cargo.toml");
+    let version = manifest
+        .lines()
+        .skip_while(|line| !line.trim_start().starts_with("[workspace.package]"))
+        .find_map(|line| {
+            line.trim()
+                .strip_prefix("version = \"")
+                .and_then(|rest| rest.strip_suffix('"'))
+        })
+        .expect("a `version` under [workspace.package] in Cargo.toml")
+        .to_string();
+    assert!(
+        version.chars().next().is_some_and(|c| c.is_ascii_digit()),
+        "the workspace version must be a version: {version:?}"
+    );
+
+    // 1. The binary reports it.
+    let reported = Command::new(refal_bin())
+        .arg("--version")
+        .output()
+        .expect("run refal --version");
+    assert!(
+        reported.status.success(),
+        "--version must succeed without an input file:\n{}",
+        String::from_utf8_lossy(&reported.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&reported.stdout).trim(),
+        format!("refal {version}"),
+        "the binary must report the workspace version"
+    );
+
+    // 2. The changelog's newest dated heading is it.
+    let changelog = fs::read_to_string(workspace_path("CHANGELOG.md")).expect("read CHANGELOG.md");
+    let newest = changelog
+        .lines()
+        .filter_map(|line| line.strip_prefix("## ").map(str::trim))
+        .find(|heading| *heading != "Unreleased")
+        .expect("a dated version heading in CHANGELOG.md, below `Unreleased`");
+    let mut tokens = newest.split_whitespace();
+    let heading_version = tokens.next().expect("a version in the newest heading");
+    let date = tokens.last().unwrap_or("");
+    assert_eq!(
+        heading_version, version,
+        "the changelog's newest version must be the workspace version, or a release was cut in one place and not the other"
+    );
+    let date_parts: Vec<&str> = date.split('-').collect();
+    assert!(
+        date_parts.len() == 3
+            && date_parts[0].len() == 4
+            && date_parts[1].len() == 2
+            && date_parts[2].len() == 2
+            && date_parts
+                .iter()
+                .all(|part| part.chars().all(|c| c.is_ascii_digit())),
+        "the newest changelog heading must carry an ISO date: {newest:?}"
+    );
+
+    // 3. `Unreleased` stays above it, so a reader meets the newest first.
+    let unreleased = changelog
+        .lines()
+        .position(|line| line.trim() == "## Unreleased")
+        .expect("an `Unreleased` section, even when it is empty");
+    let dated = changelog
+        .lines()
+        .position(|line| line.trim() == format!("## {newest}").trim())
+        .expect("the newest dated heading");
+    assert!(
+        unreleased < dated,
+        "`## Unreleased` must come before the newest release section"
+    );
+}

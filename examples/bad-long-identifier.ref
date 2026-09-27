@@ -1,0 +1,11 @@
+* Reference 1.2.1: an identifier is a string of alphanumeric characters
+* beginning with an uppercase letter, and its length must not exceed 15
+* characters. `ThisNameIsSeventeen` is 17, so it is not an identifier and the
+* lexer must say so rather than truncate it.
+$ENTRY Go {
+  = <ThisNameIsSeventeen>;
+}
+
+ThisNameIsSeventeen {
+  = ;
+}

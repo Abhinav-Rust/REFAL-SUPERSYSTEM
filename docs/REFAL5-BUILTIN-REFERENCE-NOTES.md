@@ -188,5 +188,55 @@ makes the builtin `Up` *static* (module-scoped visibility, like `Mu`); this
 bootstrap has whole-program visibility, which is the static contract for a
 single-module program.
 
-Source: http://www.refal.net/refer_r5.html section C.5 and
-https://www.refal.net/chap6_r5.html §6.2, accessed 2026-09-13.
+**The section itself, read on 2026-09-27.** The manual is not reachable at its
+canonical host any more (`www.refal.net` answers 502), but the Internet Archive
+serves it, and the passage is worth recording verbatim because it is the whole
+specification:
+
+> В поле зрения допускается использование объектов дополнительного типа. Эти
+> объекты будут рассматриваться как **неизвестные**. Информационным наполнением
+> неизвестного является его **тип** (S, T или E), его **уровень**
+> (неотрицательное целое число) и его **индекс** (макроцифра). Система знает, что
+> неизвестное s-типа обозначает некоторый символ, а неизвестное t-типа — некоторый
+> терм; это принимается во внимание при сопоставлении. … Неизвестные можно
+> обнаружить с помощью трассировщика, который распечатывает их в виде:
+> `#type.level  inde.X`
+
+An unknown is therefore a *fourth kind of view-field object*, carrying a type
+(S, T or E), a **level** (a non-negative integer) and an **index** (a
+macrodigit). The four rules are:
+
+```
+<Up '*'s.T s.I> = unknown(s.T,0,s.I);
+<Up unknown(t,n,i)> = unknown(t,n+1,i);
+<Dn unknown(s.T,0,s.I)> = '*'s.T s.I;
+<Dn unknown(t,n+1,i)> = unknown(t,n,i);
+```
+
+so `Up` **raises** the level and `Dn` **lowers** it, and the level-0 unknown is
+exactly the metacode of a free variable. The manual is explicit about why the
+current abort is wrong in principle: it says something like
+`<Up '*E'.X> = e.X` would contradict Refal's syntax, which is the observation
+this repository recorded from Exercise 6.2 — but the manual's answer to it is
+`unknown`, not an error. `Up` is also the *only* creator of unknowns, and there
+is a builtin `Ev-met` ("evaluate over metacode") defined as
+`Ev-met { e.X = <Freezer <Up e.X>>; }` with `Freezer` a fictitious
+closing function, which is what §6.4 exists for.
+
+**Two things the passage does not pin, and they are why this is still open.**
+First, the printed form above is the **tracer's**, not `Prout`'s: the manual
+introduces it as what a tracer prints, and says nothing about what `Prout` does
+with an unknown value, so any CLI fixture would be testing a form the source does
+not specify. Second, "это принимается во внимание при сопоставлении" — that the
+type is taken into account when matching — is the whole of what is said about
+matching: an `s`-unknown denotes some symbol and a `t`-unknown some term, and the
+system "does not notice their existence" as they pass from one expression to
+another and are copied. Whether a literal pattern matches an unknown, and whether
+two unknowns of the same type are equal, follow from that only by argument. Both
+should be settled against the Programming Guide's longer treatment before code is
+written: an arm that is written, unexercised and wrong the first time it matters
+is the failure this repository keeps paying for.
+
+Source: http://www.refal.net/refer_r5.html section C.5,
+https://www.refal.net/chap6_r5.html §6.4 (retrieved through the Internet Archive
+on 2026-09-27), and http://www.refal.net/refer_r5.html, accessed 2026-09-13.

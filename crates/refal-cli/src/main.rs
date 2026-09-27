@@ -21,6 +21,15 @@ fn main() {
         return;
     }
 
+    // A release is one version in three places -- this one, `Cargo.toml`, and
+    // the newest dated heading in `CHANGELOG.md` -- and
+    // `the_workspace_version_and_the_changelog_agree` requires all three to
+    // agree. `--version` is the only one a user can see without reading a file.
+    if command == "-V" || command == "--version" {
+        println!("refal {}", env!("CARGO_PKG_VERSION"));
+        return;
+    }
+
     let Some(path) = args.next() else {
         eprintln!("missing input file for `{command}`");
         eprintln!();
@@ -237,6 +246,7 @@ fn apply_lint_flag(
 
 fn print_usage() {
     eprintln!("Usage: refal <command> <file.ref> [args...]");
+    eprintln!("       refal --version | --help");
     eprintln!();
     eprintln!("Commands:");
     eprintln!("  check      Check a Refal source file for syntax and semantic errors");

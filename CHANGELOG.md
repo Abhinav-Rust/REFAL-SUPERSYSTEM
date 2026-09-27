@@ -2,6 +2,95 @@
 
 ## Unreleased
 
+Nothing yet.
+
+## 0.9.0 — 2026-09-27
+
+The first release candidate. **Not 1.0**: the project's own definition of done is
+in `docs/REFAL-FIRST-COMPLETION.md` and the honest completion figure is below it,
+so a 1.0 tag would be a claim the repository cannot yet make. What remains is
+§6.4's `unknown` values, §4.4's perfection-by-transformation, the compiler's speed
+on very large inputs, and the release evidence `docs/RELEASE-CHECKLIST.md` tracks.
+
+What this version is:
+
+- A **Classic Refal-5 compiler written in Refal**. `examples/compiler.ref` lexes,
+  parses, checks, drives and emits, and its output is byte-identical to the Rust
+  bootstrap's on every lowerable example.
+- **Self-hosting**, and driven: C1 = C2 = C3 byte-identical at 12,599 bytes with
+  every generation checked, and `refal compile examples/compiler.ref` emits the
+  residue the Rust driver denotes, so the self-application is a supercompilation
+  rather than a re-print.
+- Built on Turchin's architecture: compilation *is* driving a configuration into a
+  graph of states (§4.2), cleaned (§4.3) and measured for perfection (§4.5), with
+  generalisation by common neighborhood (§4.6, 1988 §2–4), and the compilation
+  strategy **searched** rather than fixed (§4.4).
+- **Total**: residualization leaves an undecided call residual rather than
+  aborting, and the strategy search means a program the compilative end cannot
+  residualise at all still comes out.
+- **Verified**: `--strict` rejects every program in which a recognition-impossible,
+  a builtin domain error, or a dead sentence is reachable, with zero false
+  positives on the corpus — and it does not and cannot prove absence of logic
+  errors or non-termination, by §5.8 Theorem 5.1.
+- **Traceable**: every clause of the syntax reference the front end is in scope for
+  is bound to a fixture in `examples/conformance.manifest`.
+
+Compatibility promises, and what is deliberately not promised, are in
+`docs/RELEASE-CHECKLIST.md`.
+
+### The front end's clause-by-clause conformance corpus (2026-09-27)
+
+Milestone 2's exit criterion was "positive and negative golden fixtures cover
+every lexical and grammar category in scope, each traceable to the clause of the
+reference it exercises". The fixtures existed and were broad; the *traceability*
+did not.
+
+`examples/conformance.manifest` is the corpus — `clause|fixture|mode`, where the
+mode is `accept` (the compiler must accept the fixture) or `reject` (it must
+refuse it, with a diagnostic). The clauses are the *Refal-5 syntax reference*'s
+own: §1.1–1.4 lexical, §2 the expression grammar, §3 the sentence and program
+grammar, §4 comments.
+
+`every_reference_clause_has_a_traceable_fixture` is what makes it a corpus rather
+than a list:
+
+1. it requires the clause set to match the clauses the Classic front end is in
+   scope for, hard-coded in the test so the manifest cannot narrow its own
+   contract;
+2. it requires every cited fixture to exist;
+3. it requires a `reject` row for every clause whose rule has a forbidden half —
+   a lexer that accepts everything passes every `accept` row, so the negative half
+   is part of the contract rather than a bonus;
+4. it requires the two modes to be disjoint, and every rejected fixture to carry
+   the repository's `bad-` prefix;
+5. it runs every row and requires the declared outcome, including a diagnostic on
+   stderr for each rejection.
+
+Fifty rows: 30 accepted, 20 rejected, covering all eleven clauses in scope and all
+ten that state a rule with a forbidden half.
+
+**Two clauses had no fixture at all, and both are the interesting kind.** §1.4
+says lexical units may follow one another without separators — which is why
+`s1s2s3` is `s1 s2 s3` — and then says the same juxtaposition in the *dotted*
+form, `s.1s.2s.3`, is a syntax error, because the dotted form is not
+self-delimiting. The shorthand half was tested; the forbidden half was not.
+§1.2.1 caps an identifier at 15 characters and had no negative fixture either. New
+fixtures `examples/bad-juxtaposed-dotted-variables.ref` and
+`examples/bad-long-identifier.ref` close both, and the lexer rejects each with the
+diagnostic the clause implies.
+
+§4's inline-comment half had no *positive* fixture — no example used `/* */` — so
+`examples/conformance-block-comment.ref` places a comment in all three positions
+one can take: before the pattern, between the pattern and the result, and inside a
+call. The differential corpus runs it, because a comment dropped in one position
+and not another changes the program rather than merely its text.
+
+Milestone 2 moves to **Complete** in the README's milestone table, the frontend
+workstream takes 8.0 of 8.5, and `FRONTEND-COVERAGE.md`'s exit criteria are met
+rather than "not met". The half-point withheld is that the corpus cites the
+*syntax* reference clause by clause rather than the Programming Guide's longer
+treatment of the same rules. Completion **~87% → ~88%**.
+
 ### The compilation strategy is searched, and the search found a refused program (2026-09-27)
 
 `DriveStrategy` was `Compilative | Interpretive`, the choice was selectable, and
@@ -103,8 +192,8 @@ duplicate-name pass uses.
   and the residue checks and answers what the source answered.
 - `the_search_is_the_default_and_each_end_stays_selectable` — the report names the
   winner, and a directly named end reports no choice.
-- `refal_authored_residualize_driven_matches_the_rust_oracle` — 57 matched, 0
-  diverged, 25 out of scope.
+- `refal_authored_residualize_driven_matches_the_rust_oracle` — 58 matched, 0
+  diverged, 27 out of scope.
 - `an_end_that_finished_inside_its_budget_is_never_beaten` — the short circuit's
   premise, in `refal-core`.
 

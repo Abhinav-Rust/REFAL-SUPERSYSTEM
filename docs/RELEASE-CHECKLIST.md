@@ -16,8 +16,10 @@ not evidence.
 | 6 | Self-hosting | `compiler_ref_reaches_a_self_hosting_fixpoint` — C1 = C2 = C3, each generation checked |
 | 7 | Soundness | `strict_mode_has_no_false_positives_on_the_corpus` — `--strict` rejects nothing already believed sound |
 | 8 | Scale | `recurses_far_deeper_than_any_constant_call_limit` — 50,000 frames, no fixed cap |
+| 9 | Front-end conformance | `every_reference_clause_has_a_traceable_fixture` — every clause of the syntax reference has a fixture bound to it in `examples/conformance.manifest`, in both directions wherever the clause states a rule with a forbidden half |
+| 10 | One version, everywhere | `the_workspace_version_and_the_changelog_agree` — the binary's `--version`, `Cargo.toml`'s workspace version, and the newest dated heading in `CHANGELOG.md` are the same number |
 
-Gates 1–3 are enforced by CI on every push. Gates 4–8 are enforced by the test
+Gates 1–3 are enforced by CI on every push. Gates 4–10 are enforced by the test
 suite; they are listed separately because they are the ones that speak to the
 project's actual claims rather than to Rust hygiene.
 
@@ -26,10 +28,18 @@ project's actual claims rather than to Rust hygiene.
 1. Confirm the honest completion figure in `README.md` matches the workstream
    table in `docs/PLAN.md` and the live state in `docs/PROGRESS.md`. A figure
    that disagrees with its own table is a defect.
-2. Run all eight gates on a clean checkout.
-3. Update `CHANGELOG.md`: move `Unreleased` under a version heading and date it.
+2. Run all ten gates on a clean checkout.
+3. Update `CHANGELOG.md`: move `Unreleased` under a dated version heading, and set
+   the same version in `Cargo.toml`. Gate 10 is what notices if only one of the
+   two moved.
 4. Confirm the supported-scope statement below still matches reality.
-5. Tag the commit. CI must be green on the tag, not on an ancestor of it.
+5. Measure, do not remember: `cargo build --release -p refal && ./scripts/perf.sh`.
+   A published figure that no longer reproduces is a defect, and the only way to
+   know is to run it.
+6. Cut the archive: `./scripts/package.sh`. It carries the version from
+   `Cargo.toml`, so an archive cannot be named after a release that does not
+   exist.
+7. Tag the commit. CI must be green on the tag, not on an ancestor of it.
 
 ## Supported scope
 
@@ -48,11 +58,45 @@ Programming Guide and Reference Manual* (1989; revised 1999). Within that:
 - **Not supported.** Native code generation (§4.7, deliberately after
   self-hosting); a heap-allocated single view field, so a block sentence
   carrying conditions still takes the recursive path; `Mu` outside the supported
-  subset; Chapter 6 metacodes beyond the tagged `Dn`/`Up` subset.
+  subset; Chapter 6 metacodes beyond the tagged `Dn`/`Up` subset; §6.4's
+  `unknown` values, whose four rules and two open questions are recorded in
+  `REFAL5-BUILTIN-REFERENCE-NOTES.md`.
+- **Traceable.** Every clause of the syntax reference the front end is in scope
+  for is bound to a fixture in `examples/conformance.manifest` — see
+  `FRONTEND-COVERAGE.md`.
 
 ## Compatibility guarantees
 
-None yet. No release has been cut, so there is no version whose behaviour is
-promised to be stable. The lowered output format is stable *between compiler
-generations* — that is what the C1 = C2 = C3 gate proves — but it is not yet
-promised across releases.
+**Version 0.9.0 is a release candidate, not 1.0.** The project's own definition of
+done is in `REFAL-FIRST-COMPLETION.md`, and the honest completion figure is below
+it: what remains is §6.4's `unknown` values, §4.4's perfection-by-transformation,
+the compiler's speed on very large inputs, and the rest of the release evidence
+this file tracks. A 1.0 tag would be a claim the repository cannot yet make.
+
+What is promised for 0.9.0:
+
+- **The accepted language.** The Classic Refal-5 scope above. A program this
+  compiler rejects is rejected with a diagnostic that names the clause of the
+  reference it violates, or it is a bug.
+- **The lowered output format, across compiler generations.** This is what the
+  C1 = C2 = C3 gate proves: the compiler's output recompiles to itself, byte for
+  byte, and the Rust bootstrap's `lower` agrees with it on every lowerable
+  example. It is stable *within* a release.
+- **The driven residue is deployable.** `refal differential --compiled` runs the
+  residue and requires the source's output, over the corpus.
+- **The published guarantees.** `--strict` rejects every program in which a
+  recognition-impossible, a builtin domain error, or a dead sentence is
+  reachable, with zero false positives on the corpus — and it does not and cannot
+  prove absence of logic errors or non-termination, by Turchin 1980 §5.8
+  Theorem 5.1.
+
+What is **not** promised:
+
+- **The lowered output format across releases.** It is not yet frozen, and a
+  program emitted by 0.9.0 is not promised to be byte-identical to what a later
+  release emits.
+- **The CLI surface.** Flags may be added or renamed between releases while the
+  project is below 1.0. `refal --version` and the modes documented in
+  `refal --help` are the stable part.
+- **Performance.** The figures `scripts/perf.sh` prints are measurements, not
+  contracts.

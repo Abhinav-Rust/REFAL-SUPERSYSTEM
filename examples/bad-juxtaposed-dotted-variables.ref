@@ -1,0 +1,8 @@
+* Reference 1.4: invisible characters are ignored between lexical units and act
+* as separators, and lexical units may follow one another without them -- which
+* is why `s1s2s3` is `s1 s2 s3`. The dotted form is not self-delimiting, so the
+* same juxtaposition is a syntax error: the reference states it outright with
+* `s.1s.2s.3`, and this fixture is that example.
+$ENTRY Go {
+  s.1s.2s.3 = ;
+}

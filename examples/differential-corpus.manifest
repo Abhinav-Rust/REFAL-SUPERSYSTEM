@@ -78,3 +78,7 @@ residual|clean-graph.ref|k x
 # check and still answer what the source answered.
 positive|driven-strategy-search.ref|a b c
 residual|driven-strategy-search.ref|a b c
+# The inline-comment half of reference clause 4, run rather than merely checked:
+# a comment dropped in one of the three positions it can take changes the
+# program, and this is what notices.
+positive|conformance-block-comment.ref|

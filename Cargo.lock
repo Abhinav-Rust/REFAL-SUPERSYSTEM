@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "refal"
-version = "0.1.0"
+version = "0.9.0"
 dependencies = [
  "refal-ast",
  "refal-core",
@@ -15,32 +15,32 @@ dependencies = [
 
 [[package]]
 name = "refal-ast"
-version = "0.1.0"
+version = "0.9.0"
 
 [[package]]
 name = "refal-core"
-version = "0.1.0"
+version = "0.9.0"
 dependencies = [
  "refal-ast",
 ]
 
 [[package]]
 name = "refal-runtime"
-version = "0.1.0"
+version = "0.9.0"
 dependencies = [
  "refal-ast",
 ]
 
 [[package]]
 name = "refal-semantics"
-version = "0.1.0"
+version = "0.9.0"
 dependencies = [
  "refal-ast",
 ]
 
 [[package]]
 name = "refal-syntax"
-version = "0.1.0"
+version = "0.9.0"
 dependencies = [
  "refal-ast",
 ]
