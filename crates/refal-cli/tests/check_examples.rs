@@ -6183,32 +6183,6 @@ fn refal_authored_symbolic_driver_matches_refal_drive_symbolic() {
         }
         let actual = String::from_utf8_lossy(&actual.stdout).into_owned();
         if actual != expected {
-            // One example differs in the *transition list* of the
-            // `--configurations` projection and in nothing else. The exclusion
-            // is narrow on purpose: the projection with the transitions and
-            // their count removed must still agree line for line, so a
-            // divergence anywhere else is still a failure, and so is a second
-            // example joining the list.
-            if KNOWN_DIVERGENT_CONFIGURATION_REPORTS.contains(&name.as_str()) {
-                let projection = |text: &str| -> Vec<String> {
-                    text.lines()
-                        .filter(|line| !(line.starts_with('C') && line.contains("-> residual")))
-                        .map(|line| {
-                            if line.starts_with("configuration-transitions:") {
-                                "configuration-transitions: <n>".to_string()
-                            } else {
-                                line.to_string()
-                            }
-                        })
-                        .collect()
-                };
-                assert_eq!(
-                    projection(&expected),
-                    projection(&actual),
-                    "{name}: only the transition list of the --configurations projection may differ"
-                );
-                continue;
-            }
             failures.push(format!(
                 "{name} (--configurations):\n  drive-symbolic: {expected:?}\n  refal: {actual:?}"
             ));
@@ -6262,28 +6236,6 @@ fn refal_authored_symbolic_driver_matches_refal_drive_symbolic() {
         failures.join("\n")
     );
 }
-
-/// Examples whose `--configurations` *projection* differs between the two
-/// implementations while the residue does not.
-///
-/// This is a divergence in the report, not in the compiler. Both sides agree on
-/// `steps`, `visited`, `neighborhood-loops`, the configuration list and the
-/// whole residue, and differ only in the transition list: the Refal side
-/// records two transitions the Rust side does not.
-///
-/// The cause is a real asymmetry, and it is pre-existing -- reverting the
-/// `contains_undecided_term` change reproduces it identically. The Rust
-/// driver's `instantiate_symbolic` returns `Residual` as soon as one of a
-/// call's arguments cannot be reduced, so it never reaches `invoke_symbolic`
-/// for the callee and never calls `record_call`; the Refal driver's work list
-/// invokes the callee anyway, creating a configuration for it and recording the
-/// transition *from that new configuration* rather than from the one that made
-/// the call. Fixing it means deciding which of those two is right and changing
-/// the other, and it is the first item of `docs/PROGRESS.md`'s NEXT ACTION.
-///
-/// It was found by `examples/builtin-system-conformance.ref`, which applies a
-/// helper function to `<Type <Step>>` -- a call -- and no earlier example did.
-const KNOWN_DIVERGENT_CONFIGURATION_REPORTS: &[&str] = &["builtin-system-conformance.ref"];
 
 /// The interpretive strategy, in Refal, against the Rust oracle.
 ///

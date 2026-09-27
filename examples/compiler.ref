@@ -3026,9 +3026,17 @@ DsHasTr {
   (e.CT) s.From (e.Callee) (e.In) = <DsHasTrL (e.CT) s.From (e.Callee) (e.In)>;
 }
 
+* The pattern's arity is part of the contract. A transition is
+* `(CFT from callee input to)` -- five terms -- and the pattern below was four
+* for as long as it existed, so it matched no transition at all and this test
+* always answered no. The work list then appended a duplicate of every edge it
+* resolved. Nothing caught it because a duplicate edge changes no residue and
+* no step count: the only report it changes is the `--configurations`
+* transition list, and no example with a ground edge had ever been compared
+* against the Rust oracle on that projection.
 DsHasTrL {
   () s.From (e.Callee) (e.In) = ;
-  ((CFT s.From (e.C) (e.In)) e.Rest) s.From (e.Callee) (e.In),
+  ((CFT s.From (e.C) (e.In) (e.To)) e.Rest) s.From (e.Callee) (e.In),
     <SameChars (<Upper e.C>) (<Upper e.Callee>)> : '1' = '1';
   (t.T e.Rest) s.From (e.Callee) (e.In) = <DsHasTrL (e.Rest) s.From (e.Callee) (e.In)>;
 }
@@ -3999,30 +4007,39 @@ DsLoopOne {
 DsLoopOneA {
   (e.Ctx) s.Cursor (CFT s.From (e.Callee) (e.In) (SOME s.To)) = (OK (e.Ctx));
   (e.Ctx) s.Cursor (CFT s.From (e.Callee) (e.In) (NONE)) =
-    <DsLoopOneB (e.Ctx) s.Cursor (e.Callee) (e.In)
+    <DsLoopOneB (e.Ctx) s.Cursor s.From (e.Callee) (e.In)
                 <DsConfForCall (e.Ctx) (e.Callee) (e.In)>>;
 }
 
 DsLoopOneB {
-  (e.Ctx) s.Cursor (e.Callee) (e.In) (SOME s.Target) =
+  (e.Ctx) s.Cursor s.From (e.Callee) (e.In) (SOME s.Target) =
     (OK <DsSetTr (e.Ctx) s.Cursor (SOME s.Target)>);
-  (e.Ctx) s.Cursor (e.Callee) (e.In) (NONE), <DsAnySymVar (e.In)> : '1' =
+  (e.Ctx) s.Cursor s.From (e.Callee) (e.In) (NONE), <DsAnySymVar (e.In)> : '1' =
     (OK (e.Ctx));
-  (e.Ctx) s.Cursor (e.Callee) (e.In) (NONE), <DsHasFunc (e.Ctx) (e.Callee)> : '1' =
-    <DsLoopInvoke (e.Ctx) s.Cursor (e.Callee) (e.In)>;
-  (e.Ctx) s.Cursor (e.Callee) (e.In) (NONE) = (OK (e.Ctx));
+  (e.Ctx) s.Cursor s.From (e.Callee) (e.In) (NONE), <DsHasFunc (e.Ctx) (e.Callee)> : '1' =
+    <DsLoopInvoke (e.Ctx) s.From (e.Callee) (e.In)>;
+  (e.Ctx) s.Cursor s.From (e.Callee) (e.In) (NONE) = (OK (e.Ctx));
 }
 
-* The active configuration is set to the transition's source, which is what the
-* Rust pass does before the same invocation. The angle brackets are load
+* The active configuration is set to the transition's *source*, which is what
+* the Rust pass does before the same invocation. The angle brackets are load
 * bearing: `(DsSetActive ...)` is a bracket holding three terms, not a call, so
 * the driver received `(DsSetActive <context> (SOME <cursor>))` where a context
 * belongs -- a defect that stayed invisible because the work list only invokes a
 * ground edge whose callee is a defined function, and no example reached it
 * until the driven residualizer exercised the same machinery.
+*
+* It is the source and not the cursor. The cursor is a position in the
+* transition list; the source is a configuration. They coincide whenever the
+* list is one transition per configuration in order, which is the common case
+* and is why passing the cursor looked right. Where they differ, the
+* invocation records its transition from a configuration that does not exist,
+* and the report gains a duplicate line under a number no configuration list
+* contains -- which is exactly how `examples/builtin-system-conformance.ref`,
+* the first example to hand a helper a call term, diverged.
 DsLoopInvoke {
-  (e.Ctx) s.Cursor (e.Callee) (e.In) =
-    <DsLoopInvoke2 <DsInvoke <DsSetActive (e.Ctx) (SOME s.Cursor)> (e.Callee) (e.In)>
+  (e.Ctx) s.From (e.Callee) (e.In) =
+    <DsLoopInvoke2 <DsInvoke <DsSetActive (e.Ctx) (SOME s.From)> (e.Callee) (e.In)>
                    (e.Ctx)>;
 }
 
