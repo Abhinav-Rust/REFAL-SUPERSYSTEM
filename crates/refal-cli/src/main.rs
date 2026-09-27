@@ -1583,6 +1583,7 @@ fn render_values(values: &[Value]) -> String {
                 output.push_str(&render_values(inner));
                 output.push(')');
             }
+            Value::Unknown(unknown) => output.push_str(&unknown.tracer_form()),
         }
     }
     output

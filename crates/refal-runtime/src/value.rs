@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use refal_ast::identifiers_equal;
+use refal_ast::{Symbol, identifiers_equal};
 
 #[derive(Debug, Clone, Eq)]
 pub enum Value {
@@ -20,6 +20,129 @@ pub enum Value {
     /// a bracket from a binding -- `<Walk (e.Rest)>`, the shape every list walk
     /// is written in -- is a reference count too.
     Bracket(Slice),
+    /// A view-field object of the fourth kind: an **unknown** (Refal-5 manual,
+    /// section 6.4).
+    ///
+    /// An unknown stands for a value that is not known yet -- it is what a
+    /// supercompiler carries in place of a free variable while it drives a
+    /// configuration. It is created only by `Up` and transformed only by `Up`
+    /// and `Dn`; no other builtin may decide anything from it.
+    Unknown(Unknown),
+}
+
+/// What an unknown denotes (Refal-5 manual, section 6.4): "the system knows
+/// that an `s`-type unknown denotes some symbol and a `t`-type unknown some
+/// term; this is taken into account when matching".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnknownKind {
+    /// Denotes some symbol. Bindable by an `s.` variable.
+    Symbol,
+    /// Denotes some term -- a symbol or a bracket. Bindable by an `s.` or `t.`
+    /// variable.
+    Term,
+    /// Denotes some expression, which may be empty or several terms. Bindable
+    /// only by an `e.` variable.
+    Expression,
+}
+
+impl UnknownKind {
+    /// The letter the metacode of a free variable of this kind carries, which
+    /// is also the letter an unknown of this kind is written under.
+    pub fn letter(self) -> char {
+        match self {
+            Self::Symbol => 'S',
+            Self::Term => 'T',
+            Self::Expression => 'E',
+        }
+    }
+
+    /// The kind a metacode marker names. The manual writes the marker with an
+    /// upper-case letter (`'*S'`, `'*T'`, `'*E'`); the lower-case spelling is
+    /// accepted too, because section 6.4's rule is stated over an unconstrained
+    /// symbol `s.T` rather than over a literal.
+    pub fn from_letter(letter: char) -> Option<Self> {
+        match letter {
+            'S' | 's' => Some(Self::Symbol),
+            'T' | 't' => Some(Self::Term),
+            'E' | 'e' => Some(Self::Expression),
+            _ => None,
+        }
+    }
+}
+
+/// An unknown, carrying the three things section 6.4 gives it: a type, a level
+/// (a non-negative integer) and an index (a macrodigit).
+///
+/// The level is what makes `Up` and `Dn` inverses over a *pair* of rules rather
+/// than over one: `Up` raises the level and `Dn` lowers it, so a level-0
+/// unknown -- the metacode of a free variable -- survives exactly one lowering
+/// back into metacode, and a raised one survives a lowering as a lower-level
+/// unknown.
+///
+/// The index is kept as the symbol it was written as, not as text, so that
+/// lowering a level-0 unknown back into metacode reproduces the metacode it was
+/// created from, term for term. An unknown is identified by the whole triple,
+/// which is what lets a repeated variable compare one to a copy of itself.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Unknown {
+    pub kind: UnknownKind,
+    pub level: u64,
+    pub index: Symbol,
+}
+
+impl Unknown {
+    pub fn new(kind: UnknownKind, level: u64, index: Symbol) -> Self {
+        Self { kind, level, index }
+    }
+
+    /// The index as text, which is how the tracer writes it.
+    pub fn index_text(&self) -> String {
+        match &self.index {
+            Symbol::Char(character) => character.to_string(),
+            Symbol::Identifier(name) | Symbol::Number(name) => name.clone(),
+        }
+    }
+
+    /// The form the manual gives for printing an unknown. The reference's
+    /// tracer section is the specification, and its table is exact:
+    ///
+    /// ```text
+    /// неизвестное(t,n,i)   ->   #t.ni
+    /// ```
+    ///
+    /// so it is the marker, the type, a dot, the level and the index run
+    /// together. (Chapter 6 section 6.4 mentions the same rendering in passing
+    /// as `#type.level  inde.X`; where the two disagree the reference's tracer
+    /// table wins, because it is the tracer's specification rather than a
+    /// tutorial's paraphrase. Both are recorded verbatim in
+    /// `docs/REFAL5-BUILTIN-REFERENCE-NOTES.md`.)
+    ///
+    /// This runtime has one output channel rather than a separate tracer, so
+    /// `Prout` uses this form -- a rendering decision that changes nothing about
+    /// matching, about `Up` and `Dn`, or about which steps an unknown blocks.
+    pub fn tracer_form(&self) -> String {
+        format!(
+            "#{}.{}{}",
+            self.kind.letter(),
+            self.level,
+            self.index_text()
+        )
+    }
+
+    /// The unknown one level up, which is what `Up` produces.
+    pub fn raised(&self) -> Self {
+        Self::new(self.kind, self.level + 1, self.index.clone())
+    }
+
+    /// The unknown one level down, or `None` at level 0, where `Dn` produces
+    /// the metacode of a free variable instead.
+    pub fn lowered(&self) -> Option<Self> {
+        self.level.checked_sub(1).map(|level| Self {
+            kind: self.kind,
+            level,
+            index: self.index.clone(),
+        })
+    }
 }
 
 impl Value {
@@ -51,6 +174,7 @@ impl PartialEq for Value {
             (Self::Identifier(left), Self::Identifier(right)) => identifiers_equal(left, right),
             (Self::Number(left), Self::Number(right)) => left == right,
             (Self::Bracket(left), Self::Bracket(right)) => left == right,
+            (Self::Unknown(left), Self::Unknown(right)) => left == right,
             _ => false,
         }
     }

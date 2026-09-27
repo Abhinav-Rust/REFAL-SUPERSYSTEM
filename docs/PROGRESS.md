@@ -34,8 +34,8 @@ objective to a gate. Not another Refal implementation.
 
 | | |
 |---|---|
-| Honest completion | **~89%** (product completeness — one method, see below) |
-| Tests | 331 passing, 0 clippy, fmt clean |
+| Honest completion | **~91%** (product completeness — one method, see below) |
+| Tests | 342 passing, 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
 
@@ -103,6 +103,287 @@ the lowered output format *within* a release (which is what C1 = C2 = C3 proves)
 that the driven residue is deployable, and the published `--strict` guarantee with
 its own stated bound. What is not: the lowered format *across* releases, the CLI
 surface below 1.0, and performance.
+
+### Done — T-8 closed: §6.4's `unknown` values, and the driver bug they exposed
+
+**T-8 was the last objective in the matrix still marked partial**, and it was
+partial in the way its own row said: `Up`/`Dn` implemented Chapter 6's metacode
+table for *ground* expressions, and every runtime `Value` was ground, so §6.4's
+unknown rules had nothing to act on. The primary source had been read and
+recorded verbatim in `REFAL5-BUILTIN-REFERENCE-NOTES.md`; the two things it does
+not pin were resolved against it and recorded as decisions.
+
+**What an unknown is now.** `Value::Unknown(Unknown { kind, level, index })` — a
+fourth kind of view-field object, carrying exactly the three things the manual
+gives it. The four rules are implemented verbatim:
+
+```text
+<Up '*'s.T s.I>         = unknown(s.T,0,s.I);   -- Up creates a level-0 unknown
+<Up unknown(t,n,i)>     = unknown(t,n+1,i);     -- and raises the level
+<Dn unknown(s.T,0,s.I)> = '*'s.T s.I;           -- Dn lowers it, and at level 0
+<Dn unknown(t,n+1,i)>   = unknown(t,n,i);       -- writes the metacode back
+```
+
+**The index is kept as the symbol it arrived as**, not as text, and that is the
+design decision that matters: it makes lowering a level-0 unknown reproduce the
+metacode it was created from *term for term*, so `<Dn <Up E>> == E` is an
+identity on free-variable metacode rather than a normalisation. The first attempt
+stored it as a `String` and rendered it back as a number symbol, which normalised
+`'9'` to `9` and broke the identity; the test caught it on the first run.
+
+**The abort is gone, and §6.4 is explicit that it should be.** Exercise 6.2 asks
+for an error because `<Up '*E'.X> = e.X` would place a free variable in the view
+field, which Refal's syntax forbids — and the section's own answer to that is not
+an error but an unknown. `up_creates_the_level_zero_unknown_from_a_free_variable_metacode`
+replaces `up_rejects_the_metacode_of_a_free_variable`.
+
+**Two decisions the passage does not settle.**
+
+- **Matching takes the type into account.** "Система знает, что неизвестное
+  s-типа обозначает некоторый символ, а неизвестное t-типа — некоторый терм; это
+  принимается во внимание при сопоставлении." So an `s.` variable binds an
+  `s`-unknown but not a `t`- or `e`-unknown; a `t.` variable binds an `s`- or
+  `t`-unknown but not an `e`-unknown, which may denote nothing or several terms;
+  and an `e.` variable binds all three. A **literal symbol and a bracket match an
+  unknown of no kind**, which is the point: an unknown marks a step the machine
+  has not decided, so nothing that would decide it may match. An unknown is
+  identified by the whole triple, so a repeated variable compares one against a
+  copy of itself.
+- **`Prout` renders one in the tracer's form.** The manual defines exactly one
+  rendering for an unknown and introduces it as what the *tracer* prints:
+  `#type.level  inde.X`. This bootstrap has one output channel rather than a
+  separate tracer, so `Prout` uses that form — a rendering decision only. Every
+  **other** builtin refuses an argument carrying an unknown, with an error naming
+  the builtin, which is the manual's own rule: "первым действием большинства
+  встроенных функций является преобразование собственных аргументов из списочных
+  структур в массивы. Поэтому они вызывают замораживание даже перед началом своей
+  специальной работы."
+
+`Ev-met` and the fictitious `Freezer` are the *use* of unknowns — the
+partial-evaluation entry `Try-pe { e.E = <Checkfr <Ev-met e.E>> }` and the freezer
+stack that turns a blocked step into a `1 E` or a `2 E` result. They are a
+separate stage, not part of the value model, and this bootstrap has no freezer in
+the view field. What is implemented is the object the manual introduces them for.
+
+**And building the fixture found a real bug — a driver soundness bug.**
+
+`examples/metacode-chapter6.ref` was extended with six §6.4 behaviours: an unknown
+created, a level raised, a level lowered, a round trip, type-aware matching, and a
+literal failing to match. `refal differential` was green. **`refal differential
+--compiled` diverged on its first run**, and that is the gate that *runs* the
+residue rather than comparing it against `lower`:
+
+```
+original:    [..., "ms s", "mt t", "me e", "lt not-matched"]
+transformed: [..., "ms t", "mt t", "me t", "lt not-matched"]
+```
+
+`<Probe <Up '*S' 5>>` had been folded to `Probe`'s **`t.`** sentence at drive
+time, where the source answers `s.`. The residue's `Go` contained the literal
+`'t'` in place of the call.
+
+The cause is general and pre-existing, not something the new fixture introduced:
+the driver was matching a residual **call term** as though it were a definite
+term. `match_ground_pattern` asked whether `s.X` could bind a `Call`, got "no,
+that is not a character, number or identifier", and fell through to `t.Y`, which
+accepted it because it is one term. But a call the driver has not contracted is a
+**thunk**: it may contract to a symbol, a bracket, or anything else. So every
+pattern that distinguishes a symbol from a bracket, or compares a literal, was
+being decided on information driving did not have. The old `Literal` case
+happened to agree with run time by luck.
+
+**The fix is one predicate, in both drivers.** An unevaluated call routes to the
+shape-aware matcher and the decision stays open, which keeps the enclosing call
+residual instead of guessing a branch:
+
+- `refal-core`: `contains_undecided_term(term)` is
+  `matches!(term.kind, Call { .. }) || contains_symbolic_variable(term)`, and it
+  replaces `contains_symbolic_variable` at the two matching sites —
+  `match_symbolic_pattern`'s routing and `match_symbolic_term`'s
+  undecided-input test. The other two uses of `contains_symbolic_variable` (the
+  whistle guard and the work-list guard) are *driving policy*, not matching
+  soundness, and are deliberately left alone.
+- `examples/compiler.ref`: the same predicate, the same two sites, and the same
+  deliberate non-change to `DsAnySymVar`'s other two uses:
+
+```refal
+DsAnyUndecided {
+  () = ;
+  (t.X e.Rest), <DsHasUndecided t.X> : '1' = '1';
+  (t.X e.Rest) = <DsAnyUndecided (e.Rest)>;
+}
+
+DsHasUndecided {
+  (CALL e.Rest) = '1';
+  t.X = <DsContainsSym t.X>;
+}
+```
+
+`DsHasUndecided` reuses `DsContainsSym` for every non-call case rather than
+duplicating the block walk, which is why the two sides stay provably identical
+rather than merely similar.
+
+**What the change cost, and what it did not.** Driving is now more conservative
+where a call appears at a matched position, which is exactly the point. The
+corpus gate is unchanged at `cases: 72`, `positive: 32`, `check-failure: 6`,
+`runtime-failure: 1`, `residual: 33`, `cleaned-sentences: 1`, and the Refal
+differentials are unchanged.
+
+**Evidence.** Nine runtime unit tests (`up_creates_the_level_zero_unknown_...`,
+`up_raises_the_level_of_an_unknown`,
+`dn_lowers_an_unknown_and_writes_the_metacode_at_level_zero`,
+`dn_and_up_round_trip_an_unknown_through_the_metacode`,
+`a_pattern_variable_binds_an_unknown_only_of_a_compatible_type`,
+`a_literal_or_a_bracket_never_matches_an_unknown`,
+`an_unknown_is_equal_to_a_copy_of_itself_and_to_no_other`,
+`prout_renders_an_unknown_in_the_manuals_tracer_form`,
+`a_builtin_other_than_up_dn_and_prout_refuses_an_unknown`), one `refal-core`
+test naming the driver invariant
+(`an_unevaluated_call_is_undecided_rather_than_a_definite_term`), and the CLI
+fixture with its exact stdout.
+
+**The figure moves ~89% → ~90%**: the runtime row takes 19.3 of 19.5. What it
+still withholds is that block sentences carrying conditions take the recursive
+path.
+
+### Done — the builtin library is clause-complete, and the corpus found a second defect
+
+The front end's corpus binds every clause of the *syntax* reference to the fixture
+that exercises it. The reference's builtin sections had a broad smoke corpus and
+nothing that said so clause by clause, which is the half of the language a
+program that parses perfectly can still get wrong.
+
+**`examples/builtin-conformance.manifest`** is that corpus now: C.1 input/output,
+C.2 arithmetic, C.3 the buried-data stack, C.4 characters and strings, C.5 the
+system functions — **48 clauses, each bound to what exercises it**. The row
+format is `kind|a|b|c` with three kinds:
+
+```
+clause|c1.1|examples/builtin-io-conformance.ref|run
+run|examples/builtin-io-conformance.ref|c1.1.eof 0\n...|cli-argument
+fail|examples/runtime-divide-by-zero.ref|division by zero|
+clause|c1.4|reads_and_writes_descriptor_backed_files|unit
+```
+
+The expected output lives on the `run` row rather than being repeated per clause,
+because a corpus where changing one fixture means editing eight rows is a corpus
+nobody will keep correct.
+
+**`every_builtin_clause_has_a_traceable_fixture`** is what makes it a corpus: it
+requires the clause set to match the reference (hard-coded in the test, so the
+manifest cannot narrow its own contract — the same rule the front end's corpus
+follows), requires every cited fixture and every named test to exist, requires
+every `run` row's fixture to print *exactly* what the row declares, and requires
+every `fail` row to be accepted by `check` and to fail when it runs.
+
+**Three rows are not fixtures, and saying so is the point.** C.1.4, C.1.6 and
+C.1.7 need a filesystem path, and a committed program cannot carry one that is
+valid wherever the suite runs. They name the runtime's own test
+(`reads_and_writes_descriptor_backed_files`) instead, and the corpus asserts that
+the name exists in the tree. A `run` row also runs its fixture with standard
+input **closed** — `run_with_closed_stdin` says so explicitly rather than relying
+on `Command::output`'s documented default — which is what makes `<Card>` and
+`<Get 0>` deterministic instead of a hang.
+
+#### The defect it found: `Implode` did not scan
+
+Reference C.4.4:
+
+> Implode returns the identifier followed by the part of e.Expr it did not
+> process. If the first character is not a letter, Implode returns macrodigit 0
+> followed by the argument.
+
+The implementation required **every** argument to be a character and tested
+whether the **whole concatenation** was a Classic identifier; if not, it returned
+macrodigit 0 and the whole argument. So it handled `<Implode 'W' 'o' 'r' 'l'
+'d'>` — the only form the smoke corpus used — and nothing else:
+
+```
+before:  <Implode 'W' 'o' 'r' 'l' 'd' '!'>  ->  0World!
+after:   <Implode 'W' 'o' 'r' 'l' 'd' '!'>  ->  World!
+```
+
+That is the difference between a converter and a **scanner**, and scanning is the
+only thing the manual describes it doing. It now takes the maximal prefix of
+letters, digits, `_` and `-`, requires it to be a Classic identifier, returns it
+followed by the unconsumed rest, and falls back to macrodigit 0 and the
+unconsumed argument otherwise. A bracket stops the prefix without being consumed;
+fifteen characters is accepted and sixteen is not.
+
+**A judgement call, recorded as one.** The manual says the leading string must
+begin with *a letter*; the syntax reference §1.2.1 says a Classic identifier
+begins with a *capital* letter. The identifier this builtin builds is a Classic
+identifier, so the validity test is the language's own, and a lower-case leading
+run falls back exactly as a leading digit does.
+
+#### Two things the corpus forced into the open
+
+- **`Time` returns a macrodigit where the reference says "a string".** The
+  fixture asserts only the *kind* (`<Tag <Type <Time>>>` is `N`), because the
+  value is not deterministic, and the divergence is a judgement call already
+  recorded in `REFAL5-BUILTIN-REFERENCE-NOTES.md` rather than papered over.
+- **A sign is a separate term.** `<Divmod '-' 7 2>` is `(-3)-1`. A signed
+  macrodigit is a *lex error* (`bad-signed-macrodigit.ref` is the fixture for
+  it), and C.2's operand convention takes "one macrodigit, possibly with a
+  preceding sign" from the front of the argument list — so the sign is its own
+  term, which is a thing to know before writing an arithmetic fixture.
+
+#### It is a Tier 1 demonstration too
+
+`examples/runtime-divide-by-zero.ref` is accepted by `check` and rejected by
+`check --strict`: the divisor is a *value* rather than a shape, and the analyser
+proves it anyway. It joins `runtime-invalid-numb.ref`, `runtime-unimplemented-extern.ref`
+and `runtime-bracket-kind.ref` in `strict_mode_has_no_false_positives_on_the_corpus`'s
+known-defective list — a corpus fixture may be deliberately broken, but the test
+has to say so.
+
+#### And it exposed a pre-existing divergence in a *report*
+
+`examples/builtin-system-conformance.ref` applies a helper function to a call —
+`<Tag <Type <Step>>>` — and no earlier example did. The symbolic-driver
+differential compares `compiler.ref`'s `DRIVE-SYMBOLIC` against
+`refal drive-symbolic` on three reports, and on the `--configurations` report
+the two now differ: **14 transitions against 16**, the Refal side recording
+
+```
+C2 -Tag <Type <Step>>-> residual
+C6 -Tag <Type <Time>>-> residual
+```
+
+Everything else agrees — `steps`, `visited`, `neighborhood-loops`, the
+configuration list, and the whole residue, character for character.
+
+**It is pre-existing, and that was checked rather than assumed.** Reverting the
+`contains_undecided_term` change on both sides reproduces the divergence
+identically, so it is not something this session introduced; the fixture is what
+made it reachable.
+
+The cause is a real asymmetry. The Rust driver's `instantiate_symbolic` returns
+`Residual` as soon as one of a call's *arguments* cannot be reduced, so it never
+reaches `invoke_symbolic` for the callee and never calls `record_call`. The Refal
+driver's work list invokes the callee anyway, creates a configuration for it, and
+records the transition **from that new configuration** rather than from the one
+that made the call. So there are two things to decide — whether an unreducible
+argument should stop the callee from being invoked at all, and which
+configuration a transition should be attributed to — and both implementations
+have to move together.
+
+**It is recorded, not hidden.** The differential keeps a one-element
+`KNOWN_DIVERGENT_CONFIGURATION_REPORTS` list, and the exclusion is *narrow*: the
+report with the transition lines and their count removed must still agree line
+for line, so a divergence anywhere else is still a failure and so is a second
+example joining the list. The list's doc comment carries the analysis above. It
+is the first item of NEXT ACTION.
+
+**Evidence.** Five new fixtures plus one failure fixture, the manifest, the
+corpus test, and a runtime unit test naming the `Implode` invariant
+(`implode_consumes_the_leading_identifier_and_returns_the_rest`). The T-4/T-6
+corpus gate is unchanged at `cases: 72`. `check --strict` is clean on every new
+fixture except the one that exists to be rejected.
+
+**The figure moves ~90% → ~91%**: the conformance/release row takes 3.8 of 4.0.
+What it withholds is that the three file-backed input/output clauses are bound to
+a test rather than to a runnable fixture.
 
 ### Done — the front end's clause-by-clause conformance corpus
 
@@ -661,7 +942,7 @@ goes 6.5 → 7.5 and the Refal-compiler row 23.5 → 24.0.
   call instantiation and the visited-state trace — which is why it is the
   substrate the next milestone builds on. See the section below.
 
-### Done — T-8, metacodes and the Chapter 6 contract
+### Done — T-8, metacodes and the Chapter 6 contract (closed in full 2026-09-27, above)
 
 The last partial objective in the matrix. Section C.5 of the reference gives only
 the direction of the two builtins and defers everything else to Chapter 6, so
@@ -706,13 +987,13 @@ its letter, and the printed form is identical: `'a*b'` still metacodes to
 manual's own example, the inverse, a bracket round trip, call activation, and
 deferred metacode — and the CLI corpus runs it.
 
-**Still open, and deliberately not claimed.** The §6.4 `unknown(t,n,i)` values
-used for metacoding non-ground expressions during driving. Every `Value` in this
-runtime is ground, so the rules `<Dn unknown(s.T,0,s.I)> = '*'s.T s.I` and
-`<Up '*'s.T s.I> = unknown(s.T,0,s.I)` have nothing to act on yet; they become
-reachable when the driver carries symbolic values in the runtime rather than only
-in `refal-core`. Chapter 6 also makes the builtin `Up` *static*
-(module-scoped visibility, like `Mu`); this bootstrap has whole-program
+**The §6.4 gap this section used to record is closed** — see *Done — T-8 closed:
+§6.4's `unknown` values, and the driver bug they exposed* above. The paragraph
+that stood here said the `unknown(t,n,i)` values had nothing to act on because
+every `Value` was ground; that is no longer true, and the four rules are now
+implemented with type-aware matching and a `Prout` rendering. One caveat from
+this section still stands: Chapter 6 makes the builtin `Up` *static*
+(module-scoped visibility, like `Mu`), and this bootstrap has whole-program
 visibility, which is the static contract for a single-module program.
 
 ### Done — T-5, the algorithm of generalization (1988)
@@ -1461,37 +1742,39 @@ Refal-authored compiler and a `Compile` that drives.
 
 ## NEXT ACTION
 
-**T-8's §6.4 `unknown` values, then a full Classic conformance claim for the
-runtime and the builtin library.**
+**§4.4's other half, then the compiler's speed, then the self-hosting fixpoint's
+generality.**
 
-The order this file carried for four sessions is done: `Compile` drives, the
-normalising path is its own mode with its own test, residualization is total, the
-compilation strategy is *searched* rather than fixed, and the front end has a
-clause-by-clause conformance corpus. Every one of those gates found a real defect
-— the search found that the compiler refused a legal program on a growing
-accumulator, and the conformance corpus found two clauses with no negative
-fixture — which is the argument for building them before needing them.
+The order this file carried for four sessions is done, and the conformance row is
+closed: `Compile` drives, the normalising path is its own mode with its own test,
+residualization is total, the compilation strategy is *searched* rather than
+fixed, the front end is clause-complete against the syntax reference, the builtin
+library is clause-complete against the builtin reference, and **T-8 is closed** —
+§6.4's `unknown` values are a runtime object. Every one of those gates found a
+real defect: the search found the compiler refused a legal program on a growing
+accumulator, the syntax corpus found two clauses with no negative fixture, the
+§6.4 fixture found the driver folding a match against an unevaluated call, and the
+builtin corpus found `Implode` was not a scanner. That is four defects from four
+gates, which is the argument for building them before needing them.
 
 **What to do, in order.**
 
-1. **T-8's §6.4 `unknown` values** — the last piece of T-8, and now the last
-   named gap in the runtime. Every runtime `Value` is ground, so the manual's
-   rules have nothing to act on. **The primary source is now read and recorded
-   verbatim** in `REFAL5-BUILTIN-REFERENCE-NOTES.md` — the four rules and the
-   tracer's printed form — and the two things it does *not* pin are recorded
-   there with it: what `Prout` prints for an unknown value (the manual specifies
-   only the *tracer*'s format, `#type.level  inde.X`), and how matching treats
-   one beyond "an `s`-unknown denotes some symbol and a `t`-unknown some term,
-   taken into account when matching". Resolve those from the Programming Guide
-   before writing code; a guessed printed form is the kind of arm that is
-   written, unexercised and wrong the first time it matters.
-2. **A full Classic conformance claim.** The front end is clause-complete;
-   the runtime and the builtin library are not. The builtin suite is broad and
-   tested, but no clause-by-clause corpus binds each builtin's documented
-   behaviour to the fixture that exercises it, and that is the last named gap in
-   the conformance row. `examples/conformance.manifest` is the shape to copy: a
-   `clause|fixture|mode` table plus a test that requires the clause set to match
-   the reference and runs every row.
+0. **The `--configurations` transition list, in both drivers.** The one known
+   divergence between `refal-core` and `compiler.ref` — see *And it exposed a
+   pre-existing divergence in a report* above. It is small, it is fully
+   diagnosed, and the exclusion that records it is deliberately narrow so that
+   closing it means deleting one element from a list.
+1. **§4.4's other half — perfection by transformation.** The search closed the
+   part of §4.4 that is engineering: both ends of the compilation-interpretation
+   axis are driven and the smaller residue is kept. What is left is Turchin's own
+   two examples on p. 115: rewriting a walk so that it becomes *feasible*, rather
+   than removing the ones that provably are not. This is the last named gap in
+   the graph-of-states row.
+2. **The compiler's speed on very large inputs.** The last named gap in the
+   compiler-in-Refal row. `scripts/perf.sh` measures it; `CleanG` and the checker
+   are linear now, and what is left is the constant.
+3. **The self-hosting fixpoint over an arbitrary program**, rather than over the
+   corpus and the compiler's own source.
 
 **§4.4's other half is deliberately not on this list.** Perfection by
 *transformation* — rewriting a walk so that it becomes feasible, rather than

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use refal_ast::{Symbol, Term, TermKind, Variable, VariableKind};
 
-use crate::{Value, ViewField};
+use crate::{UnknownKind, Value, ViewField};
 
 /// What a pattern binds: a variable name to the **view field** it matched, not
 /// a copy of the terms in it.
@@ -108,7 +108,7 @@ fn match_first_from(
                 let Some((first_input, rest_input)) = input.split_first() else {
                     return Ok(None);
                 };
-                if matches!(first_input, Value::Bracket(_)) {
+                if !variable_accepts(VariableKind::Symbol, first_input) {
                     return Ok(None);
                 }
                 let key = VariableKey::from(variable);
@@ -120,9 +120,12 @@ fn match_first_from(
                 match_first_from(rest_pattern, &rest_input, next_bindings)
             }
             VariableKind::Term => {
-                let Some((_, rest_input)) = input.split_first() else {
+                let Some((first_input, rest_input)) = input.split_first() else {
                     return Ok(None);
                 };
+                if !variable_accepts(VariableKind::Term, first_input) {
+                    return Ok(None);
+                }
                 let key = VariableKey::from(variable);
                 let Ok(next_bindings) = bind_or_check(bindings, key, input.range(0, 1)) else {
                     return Ok(None);
@@ -206,11 +209,13 @@ fn match_all_from(
         TermKind::Variable(variable) => match variable.kind {
             VariableKind::Symbol => {
                 match_single_all(variable, input, rest_pattern, bindings, |value| {
-                    !matches!(value, Value::Bracket(_))
+                    variable_accepts(VariableKind::Symbol, value)
                 })
             }
             VariableKind::Term => {
-                match_single_all(variable, input, rest_pattern, bindings, |_| true)
+                match_single_all(variable, input, rest_pattern, bindings, |value| {
+                    variable_accepts(VariableKind::Term, value)
+                })
             }
             VariableKind::Expression => {
                 if rest_pattern.is_empty() {
@@ -236,6 +241,34 @@ fn symbol_matches(symbol: &Symbol, value: &Value) -> bool {
         }
         (Symbol::Number(left), Value::Number(right)) => left == right,
         _ => false,
+    }
+}
+
+/// Whether a pattern variable of this kind may bind this value.
+///
+/// An unknown is not a symbol, a term or an expression -- it *denotes* one, and
+/// the manual (section 6.4) says the type it denotes "is taken into account when
+/// matching". So an `s.` variable accepts an `s`-unknown, which denotes some
+/// symbol, but not a `t`- or `e`-unknown; a `t.` variable accepts an `s`- and a
+/// `t`-unknown, which both denote a single term, but not an `e`-unknown, which
+/// may denote nothing or several terms; and an `e.` variable accepts all three.
+///
+/// A *literal* symbol or a bracket matches an unknown of no kind, and that is
+/// the whole point: an unknown marks a step the machine has not decided, so a
+/// pattern that would decide it does not match and the driver is left to split
+/// the configuration instead.
+fn variable_accepts(kind: VariableKind, value: &Value) -> bool {
+    match kind {
+        VariableKind::Symbol => match value {
+            Value::Bracket(_) => false,
+            Value::Unknown(unknown) => unknown.kind == UnknownKind::Symbol,
+            _ => true,
+        },
+        VariableKind::Term => match value {
+            Value::Unknown(unknown) => unknown.kind != UnknownKind::Expression,
+            _ => true,
+        },
+        VariableKind::Expression => true,
     }
 }
 
@@ -341,11 +374,15 @@ fn rigid_run_matches(input: &[Value], start: usize, run: &[Term], bindings: &Bin
             }
             TermKind::Variable(variable) => match variable.kind {
                 VariableKind::Symbol => {
-                    if matches!(input[position], Value::Bracket(_)) {
+                    if !variable_accepts(VariableKind::Symbol, &input[position]) {
                         return false;
                     }
                 }
-                VariableKind::Term => {}
+                VariableKind::Term => {
+                    if !variable_accepts(VariableKind::Term, &input[position]) {
+                        return false;
+                    }
+                }
                 VariableKind::Expression => {
                     let Some(bound) = bindings.get(&VariableKey::from(variable)) else {
                         return false;

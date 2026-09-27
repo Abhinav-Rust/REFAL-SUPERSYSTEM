@@ -10,6 +10,13 @@
 * expression already in the form the transformation wants, which Up reproduces
 * verbatim instead of lifting.
 *
+* Section 6.4 adds a fourth kind of view-field object, the *unknown*, which is
+* what a free variable's metacode lifts to. An unknown carries a type (S, T or
+* E), a level, and an index; Up raises the level and Dn lowers it, and the type
+* is taken into account when matching. `Prout` renders one in the form the
+* reference gives for the tracer, `#t.ni` -- the marker, the type, a dot, the
+* level and the index run together.
+*
 * In this dialect the asterisk is a one-character symbol, so the manual's
 * single-symbol markers are written as two terms here; they print the same.
 
@@ -20,9 +27,34 @@ $ENTRY Go {
     <Prout 'up ' <Up 'a*Vb'>>
     <Prout 'br ' <Up <Dn ('a' ('b') 'c')>>>
     <Prout 'ca ' <Up '*'((Echo) 'Z')>>
-    <Prout 'df ' <Up '*!'('*E')>>;
+    <Prout 'df ' <Up '*!'('*E')>>
+    <Prout 'u0 ' <Up '*S' 1>>
+    <Prout 'u1 ' <Up <Up '*T' 2>>>
+    <Prout 'd0 ' <Dn <Up '*E' 3>>>
+    <Prout 'rt ' <Dn <Dn <Up <Up '*S' 4>>>>>
+    <Prout 'ms ' <Probe <Up '*S' 5>>>
+    <Prout 'mt ' <Probe <Up '*T' 6>>>
+    <Prout 'me ' <Probe <Up '*E' 7>>>
+    <Prout 'lt ' <Literal <Up '*S' 8>>>;
 }
 
 Echo {
   e.X = e.X;
+}
+
+* Section 6.4: "the system knows that an s-type unknown denotes some symbol and
+* a t-type unknown some term; this is taken into account when matching". So an
+* `s.` variable takes an s-unknown, a `t.` variable takes an s- or a t-unknown,
+* and an `e.` variable takes all three.
+Probe {
+  s.X = 's';
+  t.Y = 't';
+  e.Z = 'e';
+}
+
+* A literal does not match an unknown of any kind: an unknown marks a step the
+* machine has not decided, so nothing that would decide it may match.
+Literal {
+  'a' = 'matched';
+  e.X = 'not-matched';
 }

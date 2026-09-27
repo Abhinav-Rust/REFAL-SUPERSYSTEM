@@ -52,28 +52,31 @@ Programming Guide and Reference Manual* (1989; revised 1999). Within that:
   `$ENTRY` and `$EXTERN`; `*` line comments and `/* */` block comments;
   integers, reals and quoted strings with the doubled-quote escape; Classic
   identifier and variable-index name equivalence.
-- **Supported for execution.** The builtin suite listed in `README.md`. Calls to
-  any other declared external are rejected by `check` rather than failing at run
-  time.
+- **Supported for execution.** Every builtin of the reference's sections C.1 to
+  C.5 — input/output, arithmetic, the buried-data stack, characters and strings,
+  the system functions — each bound clause by clause in
+  `examples/builtin-conformance.manifest`. Calls to any other declared external
+  are rejected by `check` rather than failing at run time.
 - **Not supported.** Native code generation (§4.7, deliberately after
   self-hosting); a heap-allocated single view field, so a block sentence
   carrying conditions still takes the recursive path; `Mu` outside the supported
-  subset; Chapter 6 metacodes beyond the tagged `Dn`/`Up` subset; §6.4's
-  `unknown` values, whose four rules and two open questions are recorded in
-  `REFAL5-BUILTIN-REFERENCE-NOTES.md`.
-- **Traceable.** Every clause of the syntax reference the front end is in scope
-  for is bound to a fixture in `examples/conformance.manifest` — see
-  `FRONTEND-COVERAGE.md`.
+  subset. Chapter 6's metacode is supported in full, including §6.4's `unknown`
+  values — see `REFAL5-BUILTIN-REFERENCE-NOTES.md`.
+- **Traceable.** Every clause of the syntax reference is bound to a fixture in
+  `examples/conformance.manifest` — see `FRONTEND-COVERAGE.md` — and every
+  clause of the builtin reference's sections C.1 to C.5 to a fixture or a named
+  test in `examples/builtin-conformance.manifest`.
 
 ## Compatibility guarantees
 
-**Version 0.9.0 is a release candidate, not 1.0.** The project's own definition of
+**Version 0.10.0 is a release candidate, not 1.0.** The project's own definition of
 done is in `REFAL-FIRST-COMPLETION.md`, and the honest completion figure is below
-it: what remains is §6.4's `unknown` values, §4.4's perfection-by-transformation,
-the compiler's speed on very large inputs, and the rest of the release evidence
-this file tracks. A 1.0 tag would be a claim the repository cannot yet make.
+it: what remains is §4.4's perfection-by-transformation, a full Classic
+conformance claim for the runtime and the builtin library, the compiler's speed on
+very large inputs, and the rest of the release evidence this file tracks. A 1.0
+tag would be a claim the repository cannot yet make.
 
-What is promised for 0.9.0:
+What is promised for 0.10.0:
 
 - **The accepted language.** The Classic Refal-5 scope above. A program this
   compiler rejects is rejected with a diagnostic that names the clause of the
@@ -93,7 +96,7 @@ What is promised for 0.9.0:
 What is **not** promised:
 
 - **The lowered output format across releases.** It is not yet frozen, and a
-  program emitted by 0.9.0 is not promised to be byte-identical to what a later
+  program emitted by 0.10.0 is not promised to be byte-identical to what a later
   release emits.
 - **The CLI surface.** Flags may be added or renamed between releases while the
   project is below 1.0. `refal --version` and the modes documented in

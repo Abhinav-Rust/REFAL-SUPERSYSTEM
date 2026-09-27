@@ -1,0 +1,96 @@
+# The clause-by-clause conformance corpus for the Classic Refal-5 builtin
+# library.
+#
+# Every row has four `|`-separated fields, and its first field says what the row
+# is:
+#
+#   clause|CLAUSE|SUBJECT|MODE
+#       binds a clause of the reference to what exercises it. MODE is `run`,
+#       meaning SUBJECT is a fixture with a `run` row below; `fail`, meaning it
+#       is a fixture with a `fail` row; or `unit`, meaning SUBJECT names a test
+#       function instead -- which is how the clauses that need a filesystem path
+#       or an environment the CLI cannot give a committed program are covered.
+#   run|FIXTURE|EXPECTED|ARGS
+#       FIXTURE prints exactly EXPECTED, with `\n` for a newline, when it is run
+#       with ARGS (space-separated, possibly empty) and its standard input
+#       closed.
+#   fail|FIXTURE|DIAGNOSTIC|
+#       FIXTURE is accepted by `check` and fails when it runs, with DIAGNOSTIC
+#       somewhere in the message.
+#
+# The reference is http://www.refal.net/refer_r5.html: C.1 input/output, C.2
+# arithmetic, C.3 the buried-data stack, C.4 characters and strings, C.5 the
+# system functions -- and section D for the tracer's rendering of an unknown,
+# which is what section 6.4 of Chapter 6 defines the unknown for.
+#
+# `every_builtin_clause_has_a_traceable_fixture` reads this file, requires the
+# clause set below to match the clauses the reference defines, requires every
+# fixture and every named test to exist, and runs every row.
+
+# --- what each clause is exercised by
+clause|c1.1|examples/builtin-io-conformance.ref|run
+clause|c1.2|examples/builtin-io-conformance.ref|run
+clause|c1.3|examples/builtin-io-conformance.ref|run
+clause|c1.4|reads_and_writes_descriptor_backed_files|unit
+clause|c1.5|examples/builtin-io-conformance.ref|run
+clause|c1.5|reads_and_writes_descriptor_backed_files|unit
+clause|c1.6|reads_and_writes_descriptor_backed_files|unit
+clause|c1.7|reads_and_writes_descriptor_backed_files|unit
+clause|c1.8|examples/builtin-io-conformance.ref|run
+
+# --- C.2 Arithmetic functions
+clause|c2.1|examples/builtin-arithmetic-conformance.ref|run
+clause|c2.2|examples/builtin-arithmetic-conformance.ref|run
+clause|c2.3|examples/builtin-arithmetic-conformance.ref|run
+clause|c2.4|examples/builtin-arithmetic-conformance.ref|run
+clause|c2.5|examples/builtin-arithmetic-conformance.ref|run
+clause|c2.6|examples/builtin-arithmetic-conformance.ref|run
+clause|c2.7|examples/builtin-arithmetic-conformance.ref|run
+clause|c2.8|examples/builtin-arithmetic-conformance.ref|run
+clause|c2.9|examples/builtin-arithmetic-conformance.ref|run
+clause|c2.10|examples/builtin-arithmetic-conformance.ref|run
+clause|c2.11|examples/builtin-arithmetic-conformance.ref|run
+clause|c2.13|examples/builtin-arithmetic-conformance.ref|run
+clause|c2.14|examples/builtin-arithmetic-conformance.ref|run
+clause|c2.15|examples/builtin-arithmetic-conformance.ref|run
+clause|c2.12|examples/runtime-divide-by-zero.ref|fail
+
+# --- C.3 Stack operations
+clause|c3.1|examples/builtin-stack-conformance.ref|run
+clause|c3.2|examples/builtin-stack-conformance.ref|run
+clause|c3.3|examples/builtin-stack-conformance.ref|run
+clause|c3.4|examples/builtin-stack-conformance.ref|run
+clause|c3.5|examples/builtin-stack-conformance.ref|run
+clause|c3.6|examples/builtin-stack-conformance.ref|run
+
+# --- C.4 Character and string handling
+clause|c4.1|examples/builtin-string-conformance.ref|run
+clause|c4.2|examples/builtin-string-conformance.ref|run
+clause|c4.3|examples/builtin-string-conformance.ref|run
+clause|c4.4|examples/builtin-string-conformance.ref|run
+clause|c4.5|examples/builtin-string-conformance.ref|run
+clause|c4.6|examples/builtin-string-conformance.ref|run
+clause|c4.7|examples/builtin-string-conformance.ref|run
+clause|c4.8|examples/builtin-string-conformance.ref|run
+clause|c4.9|examples/builtin-string-conformance.ref|run
+clause|c4.10|examples/builtin-string-conformance.ref|run
+clause|c4.11|examples/builtin-string-conformance.ref|run
+clause|c4.12|examples/builtin-string-conformance.ref|run
+
+# --- C.5 System functions
+clause|c5.1|examples/builtin-system-conformance.ref|run
+clause|c5.2|examples/builtin-system-conformance.ref|run
+clause|c5.3|examples/builtin-system-conformance.ref|run
+clause|c5.4|examples/builtin-system-conformance.ref|run
+clause|c5.5|examples/metacode-chapter6.ref|run
+clause|c5.6|examples/metacode-chapter6.ref|run
+clause|c5.7|examples/metacode-chapter6.ref|run
+
+# --- what a fixture is expected to print, or how it fails
+run|examples/builtin-io-conformance.ref|c1.1.eof 0\nc1.2.print-before\nP\nc1.2.print-returns [P]\nc1.3.prout-before\nQ\nc1.3.prout-returns []\nc1.8.terminal [0]\n|
+run|examples/builtin-arithmetic-conformance.ref|c2.1.wrap 10\nc2.1.neg -1\nc2.1.zero 0\nc2.1.mul 42949672941\nc2.3.spread 24\nc2.3.bracket 15\nc2.4.int 3\nc2.4.real 3.5\nc2.5 17\nc2.6 7\nc2.7 60\nc2.8.int 3\nc2.8.real 3.5\nc2.9 (3)1\nc2.9.sign (-3)-1\nc2.10 1\nc2.11.lt -\nc2.11.gt +\nc2.11.eq 0\nc2.13 3\nc2.14 3.0\nc2.15.one 0.0\nc2.15.two 1024.0\n|
+run|examples/builtin-stack-conformance.ref|c3.5.empty []\nc3.1.name 1\nc3.2.newest 2\nc3.2.absent []\nc3.3.copy 8 / 8\nc3.4.replace 2\nc3.5.whole (q=2)(p=1)(x=1)\nc3.5.after []\nc3.6.order (c=3)(b=2)(a=1)\n|
+run|examples/builtin-string-conformance.ref|c4.1.letter La\nc4.1.digit N1\nc4.1.ident FHello\nc4.1.real R1.5\nc4.1.other O*\nc4.1.bracket B(a)\nc4.1.empty [*]\nc4.2 42\nc4.3 42\nc4.4.ident World\nc4.4.rest World!\nc4.4.notletter 01x\nc4.4.bracket W(a)\nc4.4.fifteen Abcdefghijklmno\nc4.4.sixteen [0Abcdefghijklmnop]\nc4.5 Hello\nc4.6 AB\nc4.6.wrap A\nc4.7 6566\nc4.8 (ab)c\nc4.8.short (ab)\nc4.9 a(bc)\nc4.10 3abc\nc4.11 ab\nc4.12 AB\n|
+run|examples/builtin-system-conformance.ref|c5.1.step N\nc5.2.time N\nc5.3.arg cli-argument\nc5.4.name Z\nc5.4.string Z\n|cli-argument
+run|examples/metacode-chapter6.ref|dn a*Vb\nup a*b\nbr (a(b)c)\nca Z\ndf *E\nu0 #S.01\nu1 #T.12\nd0 *E3\nrt *S4\nms s\nmt t\nme e\nlt not-matched\n|
+fail|examples/runtime-divide-by-zero.ref|division by zero|

@@ -4,6 +4,65 @@
 
 Nothing yet.
 
+## 0.10.0 — 2026-09-27
+
+**T-8 is closed.** Chapter 6 section 6.4's `unknown` values are a runtime object,
+and building them found and fixed a soundness bug in the driver.
+
+- **An unknown is a fourth kind of view-field object**, carrying the three things
+  the manual gives it: a type (S, T or E), a level, and an index. The four rules
+  are implemented verbatim — `Up` creates a level-0 unknown from a free variable's
+  metacode and raises the level of one it meets, `Dn` lowers the level and writes
+  the metacode back at level 0. The index is kept as the symbol it arrived as, so
+  `<Dn <Up E>> == E` is an identity on free-variable metacode rather than a
+  normalisation.
+- **Matching takes the type into account**: an `s.` variable binds an `s`-unknown,
+  a `t.` variable an `s`- or `t`-unknown, an `e.` variable all three, and a literal
+  symbol or a bracket matches an unknown of no kind — an unknown marks a step the
+  machine has not decided, so nothing that would decide it may match.
+- **`Prout` renders one in the tracer's form** the reference specifies,
+  `#t.ni` — the marker, the type, a dot, the level and the index run together.
+  Every other builtin refuses an argument carrying an unknown with an error
+  naming the builtin, which is the manual's own rule that a builtin freezes
+  before beginning its special work.
+- The Exercise 6.2 abort is **replaced by the manual's answer**: `<Up '*E'.X>` no
+  longer errors, it produces an unknown.
+- **A driver soundness bug is fixed.** A residual *call term* was being matched as
+  though it were a definite term, so `<Probe <Up '*S' 5>>` folded to `Probe`'s
+  `t.` sentence at drive time where the source answers `s.`. An unevaluated call is
+  a thunk, so it now routes to the shape-aware matcher and the decision stays open,
+  keeping the enclosing call residual. Both drivers carry the same predicate
+  (`contains_undecided_term` in `refal-core`, `DsAnyUndecided`/`DsHasUndecided` in
+  `examples/compiler.ref`), so their differential stays byte-identical.
+- `examples/metacode-chapter6.ref` exercises all five section 6.2 behaviours and
+  all six section 6.4 behaviours end to end.
+
+
+- **The builtin library is now clause-complete against the reference.**
+  `examples/builtin-conformance.manifest` binds every clause of the reference's
+  builtin sections — C.1 input/output, C.2 arithmetic, C.3 the buried-data
+  stack, C.4 characters and strings, C.5 the system functions — to what
+  exercises it, and `every_builtin_clause_has_a_traceable_fixture` requires the
+  clause set to match the reference, requires every fixture and every named test
+  to exist, and runs every row. The clauses that need a filesystem path or an
+  environment the CLI cannot give a committed program are bound to the runtime's
+  own test instead, which the manifest names.
+- **One known divergence, recorded rather than hidden.**
+  `examples/builtin-system-conformance.ref` applies a helper function to a call,
+  and on the `--configurations` report the two drivers' transition lists differ
+  (14 against 16) while the residue, the step count and the configuration list
+  agree exactly. It is pre-existing — reverting this release's driver change
+  reproduces it — and the differential records it in a one-element list whose
+  exclusion is narrow: everything but the transition list must still agree line
+  for line.
+- **Building that corpus found a second real defect.** Reference C.4.4 says
+  `Implode` "returns the identifier followed by the part of e.Expr it did not
+  process"; it was returning macrodigit 0 and the whole argument whenever the
+  whole argument was not itself an identifier, so `<Implode 'W' 'o' 'r' 'l' 'd'
+  '!'>` gave `0World!` instead of `World!`. It now consumes the leading
+  identifier and returns the rest, which is what makes it the scanner the manual
+  describes.
+
 ## 0.9.0 — 2026-09-27
 
 The first release candidate. **Not 1.0**: the project's own definition of done is

@@ -19,6 +19,14 @@ disjoint, and then runs every row and requires the declared outcome, including a
 on stderr for each rejection. A lexer that accepts everything passes every `accept` row,
 which is why the negative half is a required part of the contract rather than a bonus.
 
+**The builtin library has its own corpus**, because this one is about what the front
+end accepts: `examples/builtin-conformance.manifest` binds every clause of the
+reference's sections C.1 to C.5 — input/output, arithmetic, the buried-data stack,
+characters and strings, the system functions — to the fixture or the test that
+exercises it, and `every_builtin_clause_has_a_traceable_fixture` enforces it. A
+program that parses perfectly and whose builtins disagree with the reference is not
+a conforming Refal-5, which is why the two contracts are separate.
+
 Primary clean-room references:
 
 - Refal-5 syntax reference: https://www.refal.net/refer_r5.html

@@ -178,65 +178,81 @@ arise for a builtin argument, which is an evaluated value and can contain neithe
 free variables nor calls; the metacode of a program is written in source as
 `'*'((F)↓E)`, and `Up` runs it.
 
-**Still open, and deliberately not claimed:** the §6.4 `unknown(t,n,i)` values
-used for metacoding non-ground expressions during driving. This runtime has no
-free-variable values — every `Value` is ground — so the unknown rules
-`<Dn unknown(s.T,0,s.I)> = '*'s.T s.I` and `<Up '*'s.T s.I> = unknown(s.T,0,s.I)`
-have nothing to act on yet. They become reachable only when the driver carries
-symbolic values in the runtime rather than only in `refal-core`. Chapter 6 also
-makes the builtin `Up` *static* (module-scoped visibility, like `Mu`); this
-bootstrap has whole-program visibility, which is the static contract for a
-single-module program.
+**§6.4 `unknown` values -- implemented 2026-09-27.** The section is now a
+runtime feature rather than a recorded gap. `Value::Unknown` carries the three
+things the manual gives an unknown -- a type (`UnknownKind::Symbol`, `Term` or
+`Expression`), a **level**, and an **index** kept as the symbol it was written
+as -- and the four rules are implemented exactly:
 
-**The section itself, read on 2026-09-27.** The manual is not reachable at its
-canonical host any more (`www.refal.net` answers 502), but the Internet Archive
-serves it, and the passage is worth recording verbatim because it is the whole
-specification:
-
-> В поле зрения допускается использование объектов дополнительного типа. Эти
-> объекты будут рассматриваться как **неизвестные**. Информационным наполнением
-> неизвестного является его **тип** (S, T или E), его **уровень**
-> (неотрицательное целое число) и его **индекс** (макроцифра). Система знает, что
-> неизвестное s-типа обозначает некоторый символ, а неизвестное t-типа — некоторый
-> терм; это принимается во внимание при сопоставлении. … Неизвестные можно
-> обнаружить с помощью трассировщика, который распечатывает их в виде:
-> `#type.level  inde.X`
-
-An unknown is therefore a *fourth kind of view-field object*, carrying a type
-(S, T or E), a **level** (a non-negative integer) and an **index** (a
-macrodigit). The four rules are:
-
-```
-<Up '*'s.T s.I> = unknown(s.T,0,s.I);
-<Up unknown(t,n,i)> = unknown(t,n+1,i);
-<Dn unknown(s.T,0,s.I)> = '*'s.T s.I;
-<Dn unknown(t,n+1,i)> = unknown(t,n,i);
+```text
+<Up '*'s.T s.I>         = unknown(s.T,0,s.I);   -- Up creates a level-0 unknown
+<Up unknown(t,n,i)>     = unknown(t,n+1,i);     -- and raises the level
+<Dn unknown(s.T,0,s.I)> = '*'s.T s.I;           -- Dn lowers it, and at level 0
+<Dn unknown(t,n+1,i)>   = unknown(t,n,i);       -- writes the metacode back
 ```
 
-so `Up` **raises** the level and `Dn` **lowers** it, and the level-0 unknown is
-exactly the metacode of a free variable. The manual is explicit about why the
-current abort is wrong in principle: it says something like
-`<Up '*E'.X> = e.X` would contradict Refal's syntax, which is the observation
-this repository recorded from Exercise 6.2 — but the manual's answer to it is
-`unknown`, not an error. `Up` is also the *only* creator of unknowns, and there
-is a builtin `Ev-met` ("evaluate over metacode") defined as
-`Ev-met { e.X = <Freezer <Up e.X>>; }` with `Freezer` a fictitious
-closing function, which is what §6.4 exists for.
+Keeping the index as the symbol it arrived as is what makes lowering a level-0
+unknown reproduce the metacode it was created from **term for term**, so the
+round trip `<Dn <Up E>> == E` is an identity on free-variable metacode and not a
+normalisation.
 
-**Two things the passage does not pin, and they are why this is still open.**
-First, the printed form above is the **tracer's**, not `Prout`'s: the manual
-introduces it as what a tracer prints, and says nothing about what `Prout` does
-with an unknown value, so any CLI fixture would be testing a form the source does
-not specify. Second, "это принимается во внимание при сопоставлении" — that the
-type is taken into account when matching — is the whole of what is said about
-matching: an `s`-unknown denotes some symbol and a `t`-unknown some term, and the
-system "does not notice their existence" as they pass from one expression to
-another and are copied. Whether a literal pattern matches an unknown, and whether
-two unknowns of the same type are equal, follow from that only by argument. Both
-should be settled against the Programming Guide's longer treatment before code is
-written: an arm that is written, unexercised and wrong the first time it matters
-is the failure this repository keeps paying for.
+Two things the passage does not settle, resolved and recorded as decisions:
 
-Source: http://www.refal.net/refer_r5.html section C.5,
-https://www.refal.net/chap6_r5.html §6.4 (retrieved through the Internet Archive
-on 2026-09-27), and http://www.refal.net/refer_r5.html, accessed 2026-09-13.
+- **Matching takes the type into account.** The manual says the system knows an
+  `s`-type unknown denotes some symbol and a `t`-type unknown some term, and
+  that "this is taken into account when matching". So an `s.` variable binds an
+  `s`-unknown but not a `t`- or `e`-unknown; a `t.` variable binds an `s`- or
+  `t`-unknown but not an `e`-unknown, which may denote nothing or several terms;
+  and an `e.` variable binds all three. A **literal symbol and a bracket match
+  an unknown of no kind** -- which is the point, because an unknown marks a step
+  the machine has not decided, so nothing that would decide it may match. An
+  unknown is identified by the whole triple, so a repeated variable compares one
+  against a copy of itself.
+- **`Prout` renders it in the tracer's form.** The manual gives a rendering for
+  an unknown in two places and they disagree. Chapter 6 section 6.4 mentions it
+  in passing:
+
+  > Неизвестные можно обнаружить с помощью трассировщика, который распечатывает
+  > их в виде: `#type.level  inde.X`
+
+  The reference's tracer section is the *specification*, and its table is exact:
+
+  ```text
+  неизвестное(t,n,i)        ->   #t.ni
+  ```
+
+  **The reference wins**, because it is the tracer's specification rather than a
+  tutorial's paraphrase, and because it is self-consistent with the notation
+  `неизвестное(t,n,i)` the same page uses: the marker, the type, a dot, the level
+  and the index run together. So an `s`-unknown at level 0 with index 1 prints as
+  `#S.01`. This bootstrap has one output channel rather than a separate tracer, so
+  `Prout` uses that form. It is a rendering decision only: it changes nothing
+  about matching, about `Up` and `Dn`, or about which steps an unknown blocks.
+  Every **other** builtin refuses an argument carrying an unknown, with an error
+  naming the builtin -- which is the manual's own rule, since "the first action of
+  most builtin functions is to convert their own arguments from list structures
+  into arrays", so they "cause freezing even before beginning their special
+  work", and with no freezer in the view field freezing is an error.
+
+`Ev-met` and the fictitious `Freezer` function are the *use* of unknowns -- the
+partial-evaluation entry `Try-pe { e.E = <Checkfr <Ev-met e.E>> }` and the
+freezer stack that turns a blocked step into a `1 E` or a `2 E` result. They are
+a separate stage, not part of the value model, and they are not implemented here:
+this bootstrap has no freezer in the view field. What is implemented is the
+object the manual introduces them for.
+
+**A driver soundness bug this closed.** Building the fixture found that a
+residual *call term* in a driven configuration was being matched as though it
+were a definite term: `<Probe <Up '*S' 5>>` folded to `Probe`'s `t.` sentence at
+drive time, where at run time the unknown matches `s.`. A call the driver has not
+contracted is a thunk -- it may contract to a symbol, a bracket, or anything else
+-- so it now routes to the shape-aware matcher and the decision stays open, which
+keeps the enclosing call residual. Both drivers carry the same predicate
+(`contains_undecided_term` in `refal-core`, `DsAnyUndecided`/`DsHasUndecided` in
+`compiler.ref`) so the two stay byte-identical. `refal differential --compiled`
+is the gate that caught it, because it *runs* the residue.
+
+Source: http://www.refal.net/refer_r5.html sections C.5 and D (the tracer
+table), https://www.refal.net/chap6_r5.html section 6.4 (retrieved through the
+Internet Archive on 2026-09-27), and http://www.refal.net/refer_r5.html, accessed
+2026-09-13.

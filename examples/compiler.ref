@@ -3038,7 +3038,7 @@ DsHasTrL {
 DsMatchSym {
   ((VAR 'e' e.N)) ((VAR s.K e.M)) (e.B) =
     (YES (e.B (VE (<Canon e.N>) ((VAR s.K e.M)))));
-  (e.Pat) (e.In) (e.B), <DsAnySymVar (e.In)> : '1' =
+  (e.Pat) (e.In) (e.B), <DsAnyUndecided (e.In)> : '1' =
     <DsMatchShape (e.Pat) (e.In) (e.B)>;
   (e.Pat) (e.In) (e.B) = <DsMatchGround (e.Pat) (e.In) (e.B)>;
 }
@@ -3139,7 +3139,7 @@ DsMSTerm {
   (BR e.P) (BR e.I) (e.B) = <DsMatchShape (e.P) (e.I) (e.B)>;
   t.P t.I (e.B), <DsShape t.P> : (BR), <DsShape t.I> : (SYM) = (NO);
   t.P t.I (e.B), <DsShape t.P> : (SYM), <DsShape t.I> : (BR) = (NO);
-  t.P t.I (e.B), <DsContainsSym t.I> : '1' = (UNK);
+  t.P t.I (e.B), <DsHasUndecided t.I> : '1' = (UNK);
   t.P t.I (e.B), <DvGround t.P t.I> : '1' = (YES (e.B));
   t.P t.I (e.B) = (NO);
 }
@@ -3175,6 +3175,23 @@ DsVarAccepts {
 
 * Whether the input contains any symbolic variable, which is what decides
 * between the shape matcher and the ground one.
+* Whether the input contains a term driving cannot see through -- a symbolic
+* variable, or a call it has not evaluated. Both are terms whose value, and even
+* whose kind, are not yet known, so both must route to the shape matcher: a
+* pattern that distinguishes a symbol from a bracket, or compares a literal,
+* must not commit. Treating a call as a definite term is what would let the
+* driver fold `<F <G e.X>>` by matching the *call* against `F`'s patterns.
+DsAnyUndecided {
+  () = ;
+  (t.X e.Rest), <DsHasUndecided t.X> : '1' = '1';
+  (t.X e.Rest) = <DsAnyUndecided (e.Rest)>;
+}
+
+DsHasUndecided {
+  (CALL e.Rest) = '1';
+  t.X = <DsContainsSym t.X>;
+}
+
 DsAnySymVar {
   () = ;
   (t.X e.Rest), <DsContainsSym t.X> : '1' = '1';

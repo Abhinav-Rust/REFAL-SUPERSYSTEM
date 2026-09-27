@@ -1,0 +1,34 @@
+* The system builtins of the Refal-5 reference, clause by clause (section C.5,
+* clauses 1 to 4; Up and Dn are in `metacode-chapter6.ref`).
+*
+* C.5.1  <Step> returns the current step number as a macrodigit.
+* C.5.2  <Time> returns a string indicating the system's current running time.
+* C.5.3  <Arg s.N> returns the command-line argument with ordinal number s.N.
+* C.5.4  <Mu s.F-name e.Expr> or <Mu (e.String) e.Expr> looks up a visible
+*        function by identifier or by character-string name and applies it.
+*
+* Step and Time do not return fixed values, so what is asserted here is their
+* *kind*: `Tag` keeps only the type symbol <Type> reports and drops the value,
+* which requires the value to be exactly one term and reports 'N' for a
+* macrodigit. (The reference says Time returns "a string"; this implementation
+* returns a macrodigit of elapsed milliseconds, which is a judgement call
+* recorded in `docs/REFAL5-BUILTIN-REFERENCE-NOTES.md`.)
+
+$EXTERN Arg, Mu, Prout, Step, Time, Type;
+
+$ENTRY Go {
+  e.Input = <Prout 'c5.1.step ' <Tag <Type <Step>>>>
+    <Prout 'c5.2.time ' <Tag <Type <Time>>>>
+    <Prout 'c5.3.arg ' <Arg 1>>
+    <Prout 'c5.4.name ' <Mu Echo 'Z'>>
+    <Prout 'c5.4.string ' <Mu ('Echo') 'Z'>>;
+}
+
+* The type symbol <Type> reports, with the value it leaves alone dropped.
+Tag {
+  s.Tag e.Rest = s.Tag;
+}
+
+Echo {
+  e.X = e.X;
+}

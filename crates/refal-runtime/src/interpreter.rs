@@ -17,7 +17,7 @@ use crate::matcher::{
     Bindings, MatchError, VariableKey, match_pattern_candidates, match_pattern_first,
     match_pattern_with_bindings_candidates,
 };
-use crate::{Piece, Slice, Value, ViewField};
+use crate::{Piece, Slice, Unknown, UnknownKind, Value, ViewField};
 
 /// Refal call depth is bounded by memory, not by a constant. Turchin's machine
 /// has no fixed stack: compilation is driving a configuration through a graph of
@@ -950,7 +950,22 @@ impl<'a> Evaluator<'a> {
         args: &[Value],
         call_depth: usize,
     ) -> Option<Result<Vec<Value>, EvalError>> {
-        match canonical_identifier(name).as_str() {
+        let canonical = canonical_identifier(name);
+        // Section 6.4: an unknown is not a value a builtin may decide anything
+        // from -- "one cannot operate on unknowns the same way as on other
+        // legitimate Refal objects", and a builtin that converts its arguments
+        // to arrays "causes freezing even before beginning its special work".
+        // With no freezer in the view field, freezing surfaces as an error
+        // naming the builtin. Three are exempt: `Up` and `Dn` are the pair the
+        // manual names as the ones that create and transform unknowns, and
+        // `Prout` is the single place the manual gives a rendering for.
+        if carries_unknown(args) && !matches!(canonical.as_str(), "UP" | "DN" | "PROUT" | "PRINT") {
+            return Some(Err(invalid_builtin_arguments(
+                name,
+                "an argument contains an unknown, which only Up, Dn and Prout may handle",
+            )));
+        }
+        match canonical.as_str() {
             "CARD" => Some(self.card()),
             "OPEN" => Some(self.open_file(args)),
             "GET" => Some(self.get_file(args)),
@@ -1076,7 +1091,10 @@ impl<'a> Evaluator<'a> {
                 .iter()
                 .map(|value| match value {
                     Value::Char(character) => Ok(*character),
-                    Value::Identifier(_) | Value::Number(_) | Value::Bracket(_) => Err(()),
+                    Value::Identifier(_)
+                    | Value::Number(_)
+                    | Value::Bracket(_)
+                    | Value::Unknown(_) => Err(()),
                 })
                 .collect::<Result<String, ()>>()
                 .map_err(|_| {
@@ -1085,7 +1103,7 @@ impl<'a> Evaluator<'a> {
                         "dynamic function name must be an identifier or character string",
                     )
                 })?,
-            Value::Char(_) | Value::Number(_) => {
+            Value::Char(_) | Value::Number(_) | Value::Unknown(_) => {
                 return Err(invalid_builtin_arguments(
                     "Mu",
                     "function name must be an identifier or character string",
@@ -1282,6 +1300,10 @@ fn change_case(args: &[Value], upper: bool) -> Result<Vec<Value>, EvalError> {
             Value::Bracket(inner) => {
                 Value::bracket(inner.iter().map(|value| transform(value, upper)).collect())
             }
+            // Unreachable through a program -- the builtin guard refuses any
+            // builtin but `Up`, `Dn` and `Prout` an argument carrying an
+            // unknown -- but the transform is total, so it copies it through.
+            Value::Unknown(_) => value.clone(),
         }
     }
 
@@ -1299,28 +1321,55 @@ fn explode(args: &[Value]) -> Result<Vec<Value>, EvalError> {
     Ok(identifier.chars().map(Value::Char).collect())
 }
 
+/// `<Implode e.Expr>` (reference C.4.4). The manual's contract is:
+///
+/// > Implode takes the leading alphanumeric characters of e.Expr and makes an
+/// > identifier of them. The leading string must begin with a letter and end
+/// > with a non-alphabetic character, a bracket, or the end of the expression.
+/// > It must not exceed 15 characters. Underscore and hyphen are also
+/// > permitted. Implode returns the identifier followed by the part of e.Expr
+/// > it did not process. If the first character is not a letter, Implode
+/// > returns macrodigit 0 followed by the argument.
+///
+/// So the function **consumes a prefix and returns the rest**, which is what
+/// makes it a scanner: `<Implode 'W' 'o' 'r' 'l' 'd' '!'>` is `World` followed
+/// by `!`. Returning the whole argument whenever the whole argument is not
+/// itself an identifier -- which is what this used to do -- makes the function
+/// useless for the one thing the manual describes it doing, and the clause
+/// corpus caught it.
+///
+/// **A judgement call, recorded as one.** The manual says the leading string
+/// must begin with *a letter*; the syntax reference (1.2.1) says a Classic
+/// identifier begins with a *capital* letter and is at most 15 characters. The
+/// identifier this builtin builds is a Classic identifier, so the validity test
+/// is the language's own -- which means a lower-case leading run falls back to
+/// macrodigit 0 followed by the argument, exactly as a leading digit does.
 fn implode(args: &[Value]) -> Result<Vec<Value>, EvalError> {
-    let Some(identifier) = args
-        .iter()
-        .map(|value| match value {
-            Value::Char(ch) => Some(*ch),
-            Value::Identifier(_) | Value::Number(_) | Value::Bracket(_) => None,
-        })
-        .collect::<Option<String>>()
-    else {
-        return Err(invalid_builtin_arguments(
-            "Implode",
-            "expected an expression made only of character symbols",
-        ));
-    };
-
-    if is_classic_identifier(&identifier) {
-        Ok(vec![Value::Identifier(identifier)])
-    } else {
-        let mut result = vec![Value::Number("0".to_string())];
-        result.extend_from_slice(args);
-        Ok(result)
+    fn is_identifier_char(character: char) -> bool {
+        character.is_ascii_alphanumeric() || matches!(character, '_' | '-')
     }
+
+    let leading = args
+        .iter()
+        .take_while(|value| matches!(value, Value::Char(ch) if is_identifier_char(*ch)))
+        .count();
+    let name: String = args[..leading]
+        .iter()
+        .filter_map(|value| match value {
+            Value::Char(character) => Some(*character),
+            _ => None,
+        })
+        .collect();
+
+    if is_classic_identifier(&name) {
+        let mut result = vec![Value::Identifier(name)];
+        result.extend_from_slice(&args[leading..]);
+        return Ok(result);
+    }
+
+    let mut result = vec![Value::Number("0".to_string())];
+    result.extend_from_slice(args);
+    Ok(result)
 }
 
 fn terms_are_worklist_safe(terms: &[Term]) -> bool {
@@ -1391,9 +1440,6 @@ const META_ASTERISK: char = 'V';
 /// The letter marking deferred metacode: `'*!'(e.Expr)` stands for an expression
 /// already in the desired form, which `Up` reproduces verbatim.
 const META_DEFER: char = '!';
-/// The letters marking the metacodes of the three free-variable kinds. None can
-/// occur in the metacode of a ground expression, which is the domain of `Up`.
-const META_VARIABLE_TYPES: [char; 3] = ['S', 'T', 'E'];
 
 /// `<Dn e.Expr>` lowers an expression into metacode (manual 6.2).
 ///
@@ -1420,6 +1466,22 @@ fn metacode_sequence(values: &[Value]) -> Vec<Value> {
         if is_marker(value, META_MARKER) {
             encoded.push(Value::Char(META_MARKER));
             encoded.push(Value::Char(META_ASTERISK));
+        } else if let Value::Unknown(unknown) = value {
+            // Section 6.4 extends `Dn` by two rules:
+            //
+            //   <Dn unknown(s.T,0,s.I)> = '*'s.T s.I
+            //   <Dn unknown(t,n+1,i)>   = unknown(t,n,i)
+            //
+            // so lowering at level 0 writes the metacode of a free variable and
+            // lowering above it simply takes the level down.
+            match unknown.lowered() {
+                Some(lowered) => encoded.push(Value::Unknown(lowered)),
+                None => {
+                    encoded.push(Value::Char(META_MARKER));
+                    encoded.push(Value::Char(unknown.kind.letter()));
+                    encoded.push(eval_symbol(&unknown.index));
+                }
+            }
         } else if let Value::Bracket(inner) = value {
             encoded.push(Value::bracket(metacode_sequence(inner)));
         } else {
@@ -1442,12 +1504,41 @@ fn marker_char(value: &Value) -> Option<char> {
                 _ => None,
             }
         }
-        Value::Number(_) | Value::Bracket(_) => None,
+        Value::Number(_) | Value::Bracket(_) | Value::Unknown(_) => None,
     }
 }
 
 fn is_marker(value: &Value, character: char) -> bool {
     marker_char(value) == Some(character)
+}
+
+/// The symbol an unknown's index is written as. Section 6.4 gives the index as
+/// a macrodigit and states the rule over an unconstrained symbol `s.I`, so any
+/// symbol is taken and preserved verbatim -- which is what makes lowering a
+/// level-0 unknown reproduce the metacode it was created from, term for term.
+fn index_symbol(value: &Value) -> Option<Symbol> {
+    match value {
+        Value::Char(character) => Some(Symbol::Char(*character)),
+        Value::Identifier(name) => Some(Symbol::Identifier(name.clone())),
+        Value::Number(name) => Some(Symbol::Number(name.clone())),
+        Value::Bracket(_) | Value::Unknown(_) => None,
+    }
+}
+
+/// Whether an expression carries an unknown anywhere inside it, brackets
+/// included.
+///
+/// This is what a builtin tests before it touches its arguments. Section 6.4 is
+/// explicit that "the first action of most builtin functions is to convert their
+/// own arguments from list structures into arrays", so they freeze even before
+/// their own work begins; with no freezer in the view field, an unknown that
+/// reaches one is an error rather than a value.
+fn carries_unknown(values: &[Value]) -> bool {
+    values.iter().any(|value| match value {
+        Value::Unknown(_) => true,
+        Value::Bracket(inner) => carries_unknown(inner),
+        Value::Char(_) | Value::Identifier(_) | Value::Number(_) => false,
+    })
 }
 
 /// `Up` needs the evaluator and a call depth, exactly as `Mu` does, because the
@@ -1481,6 +1572,11 @@ impl<'a> Evaluator<'a> {
         while let Some(value) = values.get(index) {
             if is_marker(value, META_MARKER) {
                 index += self.lift_marker(values, index, call_depth, &mut lifted)?;
+            } else if let Value::Unknown(unknown) = value {
+                // Section 6.4: `<Up unknown(t,n,i)> = unknown(t,n+1,i)`, so
+                // lifting an unknown raises its level rather than consuming it.
+                lifted.push(Value::Unknown(unknown.raised()));
+                index += 1;
             } else if let Value::Bracket(inner) = value {
                 lifted.push(Value::bracket(self.lift_sequence(inner, call_depth)?));
                 index += 1;
@@ -1501,8 +1597,14 @@ impl<'a> Evaluator<'a> {
     /// '*'V'          ->  the object asterisk
     /// '*'((F) e.1)   ->  the call <F e.1>, which is activated
     /// '*!'(e.1)      ->  deferred metacode, reproduced verbatim
-    /// '*S'|'*T'|'*E' ->  a free variable, which is outside the domain
+    /// '*S'|'*T'|'*E' ->  an unknown, the metacode of a free variable
     /// ```
+    ///
+    /// The last row is section 6.4's: the metacode of a free variable is exactly
+    /// the level-0 unknown, so `Up` *creates* one. That is why `Up`'s domain
+    /// extends past ground expressions, and it replaces the abort Exercise 6.2
+    /// asks for: writing the free variable into the view field would contradict
+    /// Refal's syntax, and an unknown is what §6.4 puts there instead.
     fn lift_marker(
         &self,
         values: &[Value],
@@ -1526,10 +1628,16 @@ impl<'a> Evaluator<'a> {
             lifted.extend(deferred.iter().cloned());
             return Ok(3);
         }
-        if let Some(kind) = follower_char.filter(|kind| META_VARIABLE_TYPES.contains(kind)) {
-            return Err(up_domain_error(&format!(
-                "`*{kind}` is the metacode of a free variable"
-            )));
+        if let Some(kind) = follower_char.and_then(UnknownKind::from_letter) {
+            // `<Up '*'s.T s.I> = unknown(s.T,0,s.I)`: the type letter and the
+            // index are what the unknown is made of, so the rule needs both.
+            let Some(index_value) = values.get(index + 2).and_then(index_symbol) else {
+                return Err(up_domain_error(
+                    "`*S`, `*T` and `*E` must be followed by the index of the unknown",
+                ));
+            };
+            lifted.push(Value::Unknown(Unknown::new(kind, 0, index_value)));
+            return Ok(3);
         }
         if matches!(follower, Some(Value::Bracket(_))) {
             let (result, consumed) = self.lift_call(values, index, call_depth)?;
@@ -1638,7 +1746,9 @@ fn file_path(descriptor: u32, name: &[Value]) -> String {
         name.iter()
             .filter_map(|value| match value {
                 Value::Char(ch) => Some(*ch),
-                Value::Identifier(_) | Value::Number(_) | Value::Bracket(_) => None,
+                Value::Identifier(_) | Value::Number(_) | Value::Bracket(_) | Value::Unknown(_) => {
+                    None
+                }
             })
             .collect()
     }
@@ -1680,6 +1790,10 @@ fn render_values(values: &[Value]) -> String {
                 output.push_str(&render_values(inner));
                 output.push(')');
             }
+            // Section 6.4 defines exactly one rendering for an unknown, and it is
+            // the tracer's. This runtime has one output channel rather than a
+            // separate tracer, so `Prout` uses that form.
+            Value::Unknown(unknown) => output.push_str(&unknown.tracer_form()),
         }
     }
     output
@@ -1704,7 +1818,9 @@ fn chr(args: &[Value]) -> Vec<Value> {
                 .ok()
                 .map(|number| Value::Char(number.rem_euclid(256) as u8 as char))
                 .unwrap_or_else(|| value.clone()),
-            Value::Char(_) | Value::Identifier(_) | Value::Bracket(_) => value.clone(),
+            Value::Char(_) | Value::Identifier(_) | Value::Bracket(_) | Value::Unknown(_) => {
+                value.clone()
+            }
         })
         .collect()
 }
@@ -1713,7 +1829,9 @@ fn ord(args: &[Value]) -> Vec<Value> {
     args.iter()
         .map(|value| match value {
             Value::Char(ch) => Value::Number((*ch as u32).to_string()),
-            Value::Identifier(_) | Value::Number(_) | Value::Bracket(_) => value.clone(),
+            Value::Identifier(_) | Value::Number(_) | Value::Bracket(_) | Value::Unknown(_) => {
+                value.clone()
+            }
         })
         .collect()
 }
@@ -1723,7 +1841,11 @@ fn numb(args: &[Value]) -> Result<Vec<Value>, EvalError> {
         .iter()
         .map(|value| match value {
             Value::Char(ch) if ch.is_ascii_digit() => Some(*ch),
-            Value::Char(_) | Value::Identifier(_) | Value::Number(_) | Value::Bracket(_) => None,
+            Value::Char(_)
+            | Value::Identifier(_)
+            | Value::Number(_)
+            | Value::Bracket(_)
+            | Value::Unknown(_) => None,
         })
         .collect::<Option<String>>()
     else {
@@ -2370,7 +2492,7 @@ fn realfun(args: &[Value]) -> Result<Vec<Value>, EvalError> {
         .iter()
         .map(|value| match value {
             Value::Char(ch) => Some(*ch),
-            Value::Identifier(_) | Value::Number(_) | Value::Bracket(_) => None,
+            Value::Identifier(_) | Value::Number(_) | Value::Bracket(_) | Value::Unknown(_) => None,
         })
         .collect::<Option<String>>()
         .ok_or_else(|| {
@@ -2599,6 +2721,11 @@ fn type_of(args: &[Value]) -> Vec<Value> {
         Some(Value::Char(ch)) if ch.is_ascii_alphabetic() => 'L',
         Some(Value::Char(ch)) if ch.is_ascii_digit() => 'D',
         Some(Value::Char(_)) => 'O',
+        // Section 6.4's unknown is a fourth kind of view-field object, not one
+        // of the categories `Type` reports. The builtin guard refuses `Type` an
+        // argument carrying an unknown, so this arm is unreachable from a
+        // program; it exists so the report stays total.
+        Some(Value::Unknown(_)) => 'U',
     };
 
     let mut result = vec![Value::Char(tag)];
@@ -2678,6 +2805,12 @@ mod tests {
         Program {
             items: functions.into_iter().map(Item::Function).collect(),
         }
+    }
+
+    /// An unknown whose index is a macrodigit, which is what section 6.4 gives
+    /// an index as and what a program writes.
+    fn an_unknown(kind: UnknownKind, level: u64, index: &str) -> Value {
+        Value::Unknown(Unknown::new(kind, level, Symbol::Number(index.to_string())))
     }
 
     /// Calls a runtime builtin through the evaluator's dispatch, so the name
@@ -3068,6 +3201,47 @@ mod tests {
             vec![Value::Char('U')]
         );
         assert!(evaluator.captured_output().is_empty());
+    }
+
+    #[test]
+    fn implode_consumes_the_leading_identifier_and_returns_the_rest() {
+        // Reference C.4.4: "Implode returns the identifier followed by the part
+        // of e.Expr it did not process." The clause corpus found that this used
+        // to return macrodigit 0 and the whole argument whenever the whole
+        // argument was not itself an identifier, which makes the builtin
+        // useless for the scanning the manual describes it doing.
+        let program = program(vec![]);
+        let evaluator = Evaluator::new(&program);
+        let chars = |text: &str| text.chars().map(Value::Char).collect::<Vec<_>>();
+
+        assert_eq!(
+            evaluator
+                .evaluate_function("Implode", &chars("World!"))
+                .unwrap(),
+            vec![Value::Identifier("World".to_string()), Value::Char('!')],
+            "the identifier is consumed and the rest is returned"
+        );
+        assert_eq!(
+            evaluator
+                .evaluate_function("Implode", &[Value::Char('W'), Value::bracket(chars("a"))])
+                .unwrap(),
+            vec![
+                Value::Identifier("W".to_string()),
+                Value::bracket(chars("a"))
+            ],
+            "a bracket stops the identifier without being consumed"
+        );
+        assert_eq!(
+            evaluator
+                .evaluate_function("Implode", &chars("1x"))
+                .unwrap(),
+            vec![
+                Value::Number("0".to_string()),
+                Value::Char('1'),
+                Value::Char('x')
+            ],
+            "a leading non-letter gives macrodigit 0 and the unconsumed argument"
+        );
     }
 
     #[test]
@@ -4149,23 +4323,203 @@ mod tests {
     }
 
     #[test]
-    fn up_rejects_the_metacode_of_a_free_variable() {
-        // Manual 6.2, Exercise 6.2: raising '*E'.X would place the free variable
-        // e.X in the view field, which the Refal machine forbids, so Up must
-        // abort rather than pass it through unchanged.
+    fn up_creates_the_level_zero_unknown_from_a_free_variable_metacode() {
+        // Manual section 6.4 replaces the abort Exercise 6.2 asks for. Writing
+        // the free variable itself into the view field would contradict Refal's
+        // syntax, and the manual's answer is an *unknown* instead:
+        //
+        //   <Up '*'s.T s.I> = unknown(s.T,0,s.I)
+        //
+        // so `'*E'.1` lifts to the level-0 unknown of type E and index 1.
         let program = program(vec![]);
         let evaluator = Evaluator::new(&program);
 
-        let error = evaluator
-            .evaluate_function("Up", &[Value::Char('*'), Value::Char('E')])
-            .unwrap_err();
+        assert_eq!(
+            evaluator
+                .evaluate_function(
+                    "Up",
+                    &[
+                        Value::Char('*'),
+                        Value::Char('E'),
+                        Value::Number("1".to_string())
+                    ]
+                )
+                .unwrap(),
+            vec![an_unknown(UnknownKind::Expression, 0, "1")]
+        );
+    }
+
+    #[test]
+    fn up_raises_the_level_of_an_unknown() {
+        // Manual section 6.4: `<Up unknown(t,n,i)> = unknown(t,n+1,i)`, so Up
+        // does not consume an unknown it meets, it raises it.
+        let program = program(vec![]);
+        let evaluator = Evaluator::new(&program);
+        let unknown = an_unknown(UnknownKind::Term, 3, "7");
 
         assert_eq!(
-            error,
-            EvalError::InvalidBuiltinArguments {
-                name: "Up".to_string(),
-                message: "argument is not the metacode of a ground expression: `*E` is the metacode of a free variable".to_string(),
+            evaluator.evaluate_function("Up", &[unknown]).unwrap(),
+            vec![an_unknown(UnknownKind::Term, 4, "7")]
+        );
+    }
+
+    #[test]
+    fn dn_lowers_an_unknown_and_writes_the_metacode_at_level_zero() {
+        // Manual section 6.4:
+        //   <Dn unknown(t,n+1,i)>   = unknown(t,n,i)
+        //   <Dn unknown(s.T,0,s.I)> = '*'s.T s.I
+        // so Dn is the inverse of Up on both halves of the rule pair.
+        let raised = an_unknown(UnknownKind::Symbol, 2, "5");
+        assert_eq!(
+            dn(&[raised]).unwrap(),
+            vec![an_unknown(UnknownKind::Symbol, 1, "5")]
+        );
+
+        let level_zero = an_unknown(UnknownKind::Symbol, 0, "5");
+        assert_eq!(
+            dn(&[level_zero]).unwrap(),
+            vec![
+                Value::Char('*'),
+                Value::Char('S'),
+                Value::Number("5".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn dn_and_up_round_trip_an_unknown_through_the_metacode() {
+        // The composition the four rules exist for: raising then lowering takes
+        // the level back, and lowering a level-0 unknown writes its metacode,
+        // which Up turns back into the same level-0 unknown.
+        let program = program(vec![]);
+        let evaluator = Evaluator::new(&program);
+        let metacode = vec![
+            Value::Char('*'),
+            Value::Char('T'),
+            Value::Number("9".to_string()),
+        ];
+
+        let created = evaluator.evaluate_function("Up", &metacode).unwrap();
+        assert_eq!(created, vec![an_unknown(UnknownKind::Term, 0, "9")]);
+        assert_eq!(dn(&created).unwrap(), metacode);
+
+        let raised = evaluator.evaluate_function("Up", &created).unwrap();
+        assert_eq!(raised, vec![an_unknown(UnknownKind::Term, 1, "9")]);
+        assert_eq!(
+            dn(&raised).unwrap(),
+            vec![an_unknown(UnknownKind::Term, 0, "9")]
+        );
+        assert_eq!(dn(&dn(&raised).unwrap()).unwrap(), metacode);
+    }
+
+    #[test]
+    fn a_pattern_variable_binds_an_unknown_only_of_a_compatible_type() {
+        // Manual section 6.4: "the system knows that an s-type unknown denotes
+        // some symbol and a t-type unknown some term; this is taken into account
+        // when matching". So an `s.` variable takes an s-unknown and not a
+        // t-unknown, a `t.` variable takes either and not an e-unknown, and an
+        // `e.` variable takes all three.
+        let symbol = an_unknown(UnknownKind::Symbol, 0, "1");
+        let term = an_unknown(UnknownKind::Term, 0, "2");
+        let expression = an_unknown(UnknownKind::Expression, 0, "3");
+
+        for (kind, accepted) in [
+            (VariableKind::Symbol, vec![symbol.clone()]),
+            (VariableKind::Term, vec![symbol.clone(), term.clone()]),
+            (
+                VariableKind::Expression,
+                vec![symbol.clone(), term.clone(), expression.clone()],
+            ),
+        ] {
+            for value in [&symbol, &term, &expression] {
+                let pattern = vec![var(kind, "X")];
+                let matched =
+                    match_pattern_first(&pattern, &ViewField::owned(vec![value.clone()])).is_ok();
+                assert_eq!(
+                    matched,
+                    accepted.contains(value),
+                    "a `{:?}` variable against {:?}",
+                    kind,
+                    value
+                );
             }
+        }
+    }
+
+    #[test]
+    fn a_literal_or_a_bracket_never_matches_an_unknown() {
+        // The whole point of an unknown is that the step which would decide it
+        // has not been taken, so nothing that decides it may match.
+        let symbol = an_unknown(UnknownKind::Symbol, 0, "1");
+        let term_unknown = an_unknown(UnknownKind::Term, 0, "2");
+
+        assert!(
+            match_pattern_first(
+                &[var(VariableKind::Symbol, "X")],
+                &ViewField::owned(vec![symbol.clone()])
+            )
+            .is_ok()
+        );
+        assert!(
+            match_pattern_first(
+                &[term(TermKind::Symbol(Symbol::Char('a')))],
+                &ViewField::owned(vec![symbol.clone()])
+            )
+            .is_err(),
+            "a literal symbol must not match an unknown"
+        );
+        assert!(
+            match_pattern_first(
+                &[term(TermKind::Bracket(vec![var(
+                    VariableKind::Expression,
+                    "Y"
+                )]))],
+                &ViewField::owned(vec![term_unknown.clone()])
+            )
+            .is_err(),
+            "a bracket must not match an unknown"
+        );
+    }
+
+    #[test]
+    fn an_unknown_is_equal_to_a_copy_of_itself_and_to_no_other() {
+        // An unknown is identified by its type, level and index, which is what
+        // lets a repeated variable compare one against a copy of itself.
+        let one = an_unknown(UnknownKind::Symbol, 0, "1");
+        assert_eq!(one, one.clone());
+        assert_ne!(one, an_unknown(UnknownKind::Symbol, 0, "2"));
+        assert_ne!(one, an_unknown(UnknownKind::Symbol, 1, "1"));
+        assert_ne!(one, an_unknown(UnknownKind::Term, 0, "1"));
+    }
+
+    #[test]
+    fn prout_renders_an_unknown_in_the_manuals_tracer_form() {
+        // The reference's tracer section is the specification and its table is
+        // exact: `неизвестное(t,n,i)` prints as `#t.ni`.
+        let unknown = an_unknown(UnknownKind::Expression, 2, "17");
+        assert_eq!(render_values(&[unknown]), "#E.217");
+    }
+
+    #[test]
+    fn a_builtin_other_than_up_dn_and_prout_refuses_an_unknown() {
+        // Section 6.4: a builtin "causes freezing even before beginning its
+        // special work", and with no freezer in the view field that is an error
+        // rather than a value.
+        let program = program(vec![]);
+        let evaluator = Evaluator::new(&program);
+        let unknown = an_unknown(UnknownKind::Symbol, 0, "1");
+
+        let error = evaluator
+            .evaluate_function("Lenw", std::slice::from_ref(&unknown))
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            EvalError::InvalidBuiltinArguments { ref name, .. } if name == "Lenw"
+        ));
+
+        assert_eq!(
+            evaluator.evaluate_function("Prout", &[unknown]).unwrap(),
+            Vec::<Value>::new()
         );
     }
 

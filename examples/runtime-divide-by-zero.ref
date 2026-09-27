@@ -1,0 +1,13 @@
+* Clause C.2.12 of the Refal-5 reference: "an error arises in this and the two
+* other division functions when the value of e.N2 is 0".
+*
+* This is a *runtime* failure, not a check-time one -- the divisor is a value,
+* not a shape -- so the fixture is accepted by `check` and fails when it runs.
+* The conformance manifest binds the clause to this fixture with a `runfail`
+* row, which requires the diagnostic to name the builtin that refused.
+
+$EXTERN Div, Prout;
+
+$ENTRY Go {
+  = <Prout 'never reached' <Div 1 0>>;
+}

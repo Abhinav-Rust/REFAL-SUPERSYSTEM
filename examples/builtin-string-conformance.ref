@@ -1,0 +1,54 @@
+* The character and string builtins of the Refal-5 reference, clause by clause
+* (section C.4).
+*
+* C.4.1  <Type e.Expr> returns s.Type e.Expr with e.Expr unchanged, where
+*        s.Type is 'L' for a letter, 'D' for a digit, 'F' for an identifier or
+*        function name, 'N' for a macrodigit, 'R' for a real number, 'O' for
+*        any other symbol, 'B' for a left bracket, and '*' when e.Expr is empty.
+* C.4.2, C.4.3  Numb turns a string of digits into a macrodigit and Symb is its
+*        inverse.
+* C.4.4  <Implode e.Expr> takes the leading alphanumeric characters and makes an
+*        identifier of them, returning it followed by the part it did not
+*        consume; when the first character is not a letter it returns macrodigit
+*        0 followed by its whole argument.
+* C.4.5  <Explode s.Identifier> returns the character string that made it up.
+* C.4.6  <Chr e.Expr> replaces every macrodigit with the keyboard character of
+*        the same ASCII code modulo 256; C.4.7 <Ord> is its inverse.
+* C.4.8  <First s.N e.Expr> returns (e.1)e.2 with the first s.N terms in e.1,
+*        and the whole expression in e.1 when there are fewer than s.N.
+* C.4.9  <Last s.N e.Expr> is First with the s.N terms going into e.2.
+* C.4.10 <Lenw e.Expr> returns the length of e.Expr in terms, then e.Expr.
+* C.4.11, C.4.12  Lower and Upper change character case.
+
+$EXTERN Chr, Explode, First, Implode, Last, Lenw, Lower, Numb, Ord, Prout, Symb,
+  Type, Upper;
+
+$ENTRY Go {
+  = <Prout 'c4.1.letter ' <Type 'a'>>
+    <Prout 'c4.1.digit ' <Type 1>>
+    <Prout 'c4.1.ident ' <Type Hello>>
+    <Prout 'c4.1.real ' <Type 1.5>>
+    <Prout 'c4.1.other ' <Type '*'>>
+    <Prout 'c4.1.bracket ' <Type ('a')>>
+    <Prout 'c4.1.empty [' <Type> ']'>
+    <Prout 'c4.2 ' <Numb '0042'>>
+    <Prout 'c4.3 ' <Symb 42>>
+    <Prout 'c4.4.ident ' <Implode 'W' 'o' 'r' 'l' 'd'>>
+    <Prout 'c4.4.rest ' <Implode 'W' 'o' 'r' 'l' 'd' '!'>>
+    <Prout 'c4.4.notletter ' <Implode '1' 'x'>>
+    <Prout 'c4.4.bracket ' <Implode 'W' ('a')>>
+    <Prout 'c4.4.fifteen ' <Implode 'A' 'b' 'c' 'd' 'e' 'f' 'g' 'h' 'i' 'j' 'k'
+      'l' 'm' 'n' 'o'>>
+    <Prout 'c4.4.sixteen [' <Implode 'A' 'b' 'c' 'd' 'e' 'f' 'g' 'h' 'i' 'j' 'k'
+      'l' 'm' 'n' 'o' 'p'> ']'>
+    <Prout 'c4.5 ' <Explode Hello>>
+    <Prout 'c4.6 ' <Chr 65 66>>
+    <Prout 'c4.6.wrap ' <Chr 321>>
+    <Prout 'c4.7 ' <Ord 'A' 'B'>>
+    <Prout 'c4.8 ' <First 2 'a' 'b' 'c'>>
+    <Prout 'c4.8.short ' <First 5 'a' 'b'>>
+    <Prout 'c4.9 ' <Last 2 'a' 'b' 'c'>>
+    <Prout 'c4.10 ' <Lenw 'a' 'b' 'c'>>
+    <Prout 'c4.11 ' <Lower 'A' 'b'>>
+    <Prout 'c4.12 ' <Upper 'a' 'B'>>;
+}

@@ -2060,7 +2060,7 @@ fn match_symbolic_pattern(
         bindings.insert(name.to_ascii_lowercase(), input.to_vec());
         return SymbolicMatch::Yes;
     }
-    if input.iter().any(contains_symbolic_variable) {
+    if input.iter().any(contains_undecided_term) {
         return match_shape_pattern(pattern, input, bindings);
     }
     if match_ground_pattern(pattern, input, bindings) {
@@ -2279,7 +2279,7 @@ fn match_symbolic_term(
     ) {
         return SymbolicMatch::No;
     }
-    if contains_symbolic_variable(input) {
+    if contains_undecided_term(input) {
         return SymbolicMatch::Unknown;
     }
     if ground_term_matches(pattern, input) {
@@ -2299,6 +2299,22 @@ fn is_expression_variable(term: &CoreTerm) -> bool {
             ..
         }
     )
+}
+
+/// Whether a term is one driving cannot see through: a symbolic variable, or a
+/// call it has not evaluated.
+///
+/// Both play the same role in the view field -- a term whose value, and even
+/// whose kind, are not yet known -- so both must be treated the same way by
+/// matching. A call term is not "a term that is not a symbol": it is a thunk,
+/// and it may contract to a symbol, a bracket, or anything else. Treating it as
+/// a definite term is what lets a driver fold `<F <G e.X>>` by matching the
+/// *call* against `F`'s patterns, which is unsound whenever a pattern
+/// distinguishes a symbol from a bracket or compares a literal. Routing such an
+/// input to the shape-aware matcher instead leaves the decision open, and an
+/// open decision keeps the call residual rather than guessing a branch.
+fn contains_undecided_term(term: &CoreTerm) -> bool {
+    matches!(term.kind, CoreTermKind::Call { .. }) || contains_symbolic_variable(term)
 }
 
 fn contains_symbolic_variable(term: &CoreTerm) -> bool {
@@ -6431,6 +6447,44 @@ mod tests {
         assert_eq!(
             match_symbolic_pattern(&pattern, &input, &mut bindings),
             SymbolicMatch::Unknown
+        );
+    }
+
+    #[test]
+    fn an_unevaluated_call_is_undecided_rather_than_a_definite_term() {
+        // A call the driver has not contracted is a thunk: it may contract to a
+        // symbol, a bracket, or anything else. Matching it as though it were a
+        // definite term is what lets the driver fold `<F <G e.X>>` by matching
+        // the *call* against `F`'s patterns, and that is unsound the moment a
+        // pattern distinguishes a symbol from a bracket or compares a literal.
+        // The answer has to be `Unknown` in every one of those cases, so that
+        // the enclosing call is kept residual instead of being decided.
+        let call = || core_call("G", vec![core_char('x')]);
+
+        for pattern in [
+            core_var(VariableKind::Symbol, "X"),
+            core_var(VariableKind::Term, "Y"),
+            core_char('x'),
+            core_bracket(vec![core_var(VariableKind::Expression, "B")]),
+        ] {
+            let mut bindings = HashMap::new();
+            assert_eq!(
+                match_symbolic_pattern(&[pattern], &[call()], &mut bindings),
+                SymbolicMatch::Unknown,
+                "a call term must leave the decision open"
+            );
+        }
+
+        // An `e.` variable still binds it: a call does contract to exactly one
+        // term, whatever that term turns out to be.
+        let mut bindings = HashMap::new();
+        assert_eq!(
+            match_symbolic_pattern(
+                &[core_var(VariableKind::Expression, "Z")],
+                &[call()],
+                &mut bindings
+            ),
+            SymbolicMatch::Yes
         );
     }
 
