@@ -34,8 +34,8 @@ objective to a gate. Not another Refal implementation.
 
 | | |
 |---|---|
-| Honest completion | **~91%** (product completeness — one method, see below) |
-| Tests | 342 passing, 0 clippy, fmt clean |
+| Honest completion | **~82%** (supersystem completeness — one method, one table, in `README.md`) |
+| Tests | 342 + 15 new, 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
 
@@ -57,6 +57,73 @@ Rust oracle at budgets 1, 2, 5 and 12. The T-4/T-6 differential
 corpus gate is green at `cases: 71`, `positive: 31`, `check-failure: 6`,
 `runtime-failure: 1`, `residual: 33`, `cleaned-sentences: 1`, and
 `clippy --all-targets -D warnings` and `cargo fmt --check` are clean.
+
+### Done — the meta-prover's entry and criterion (half of E-12/E-13)
+
+Layer 3's exit criterion was "a command that takes a predicate, drives it, and
+reports whether the graph reduced to `'True'`". That command now exists:
+`refal prove <file.ref> <Predicate> [--steps N]`.
+
+**The entry decision, which is the whole component.** `residualize_driven_graph`
+starts at the graph's entry, because a *compiler* compiles a program. A *prover*
+proves a predicate, and the predicate is one function among many. Driving the
+entry on a theorem-shaped program reduces `Go` and leaves the predicate invisible:
+measured on `examples/prove-predicate-true.ref`, entering at `Go` produces
+`steps: 1` and re-prints the source, with the predicate never reached. So the
+prover builds a graph whose entry *is* the predicate's first sentence and drives
+that.
+
+**Two defects found by running the command, not by reading it.**
+
+1. **The entry was not split, so no theorem could be proved.** A predicate such as
+   `Marked { s.First e.Rest = 'True'; }` has a *narrow* pattern by design, and
+   `split_configuration` refuses to split a narrow entry — correctly, because a
+   compiler's residue must keep the entry's own pattern. But a prover emits no
+   residue, and the partition `[] / s.H e.T / (e.B) e.T` *is* the case analysis
+   the predicate's sentences discriminate. Without the exemption the drive stopped
+   at `<Marked e.Input>` — an unevaluated call — reached zero terminal nodes, and
+   reported `verdict: open`. The fix is a `proof_entry` flag on the driver, set
+   only by `drive_symbolic_proof_entry`. Gate:
+   `a_narrow_predicate_still_drives_to_its_terminal_nodes`, and it was verified to
+   *fail* with the exemption removed — a gate that cannot fail is not a gate.
+
+2. **`build_seed_graph` ignored `$ENTRY` and searched for the literal name `Go`.**
+   A program whose entry function is named anything else had `entry: None`,
+   after which `clean_unreachable_states` pruned every state and the program
+   compiled to nothing. Everywhere else in the crate the entry is found via
+   `Visibility::Entry` (`clean_residual_program` does exactly that); this one site
+   was the outlier. The prover's fixtures exposed it because a prover's entry is a
+   predicate, not a `Go` — but the defect was the compiler's. `Go` remains the
+   fallback for a program that declares no entry.
+
+**A test that was passing for the wrong reason.** The refutation gate had used a
+fixture whose two sentences both matched `e.Input` unconditionally, so its second
+sentence was unreachable; the driver's earlier inability to split produced two
+bogus terminals from sentences that could not both run, and the test called that a
+refutation. With the entry split correctly the same program reports `Proved` —
+which is *correct*, because the graph really does reduce to `'True'`. The fixture
+was replaced with one that genuinely discriminates on the argument's shape
+(`discriminating_predicate`: a symbol head is `'True'`, the empty expression is
+`'False'`), and the test now refutes on a branch that actually executes.
+
+**Evidence.** Six gates in `refal-core` (the criterion is one node and not a
+prefix; a true-only predicate is proved; a discriminating predicate is refuted
+with a witness; a budget-truncated walk is incomplete rather than proved; an
+unknown predicate is an error, not a verdict; a narrow predicate still drives to
+its nodes) and three in `refal-cli` (the proof is reported with the single
+terminal; a refutation is never reported as a proof; an unknown predicate is a
+usage error). Two fixtures: `examples/prove-predicate-true.ref` (`Marked` →
+`proved`, exit 0) and `examples/prove-predicate.ref` (`Always` → `refuted
+('F' 'a' 'l' 's' 'e')`, exit 1); the exit status carries the verdict so the
+command can gate a build.
+
+**The figure moves ~75% → ~82%.** L3 takes 6.50 of 13.00. What it withholds is the
+*relational* half: the corpus's theorems are equivalences (associativity of
+`Append`, a sorting equality, a tree reversal) and an equivalence claim between
+two relational functions is not yet accepted. The criterion's wording was
+confirmed against the primary — `computer_science/1986_The_Concept_of_a_
+Supercompiler.html` §6 — which is what the conformance row had been withholding
+credit for.
 
 ### Done — release 0.9.0: the release machinery, cut
 
@@ -1773,11 +1840,14 @@ propagation and stack configurations (E-11, SCP4 1999), the reflection engine as
 service rather than an internal stage (E-4, 1991), and metavariable stratification
 in the transformer (E-17, 1995).
 
-**One row is marked and must be confirmed against the primary before it becomes a
-test.** E-12's `'True'` criterion is quoted from the archival edition's exposition
-of 1986 §6 rather than from a verbatim passage; the collection is a derived
-archival edition, not the scanned text, and `docs/turchin/pdf/` is where the
-primaries live.
+**The E-12 mark is discharged.** The `'True'` criterion was confirmed against the
+primary — `VT- CS+PW/computer_science/1986_The_Concept_of_a_Supercompiler.html`
+§6: *"If a predicate function P(x) is supercompiled and its configuration graph
+reduces to the single terminal node 'True', this constitutes an automated
+mathematical proof that P(x) holds for all inputs x."* `refal prove` implements
+exactly that and is gated on six `refal-core` tests and three `refal-cli` tests.
+What remains open in E-12/E-13 is the relational half: an equivalence claim
+between two functions is not yet accepted.
 
 The order this file carried for four sessions is done, and the conformance row is
 closed: `Compile` drives, the normalising path is its own mode with its own test,
@@ -1793,21 +1863,66 @@ projection found a dead dedup test and a cursor where a source belongs.
 
 **What to do, in order.**
 
-0. **The meta-prover (E-12, E-13).** Confirm the `'True'` criterion against the
-   primary of 1986 §6, then build the command: a predicate or an equivalence
-   claim, driven, reporting whether the graph reduced to `'True'`. The corpus's
-   theorem-shaped examples — associativity of `Append`, a sorting-equality, a tree
-   reversal — are its first gate. **The first step of this item is a
-   measurement**: proving costs more than compiling, so if driving a predicate on
-   the corpus is too slow, the speed item below moves ahead of it.
-1. **The reflection engine as a service (E-4).** A stable API over
-   `refal-runtime` and `refal-ast`: AST extraction, freeze/thaw as a first-class
-   operation rather than a builtin, and the driver's active configuration and
-   input exposed as data. **This moved up from last place, and the reason is
-   structural, not taste:** the prover must be written against a reflection API
-   rather than against the compiler's internals, which is what makes it *layer 3*
-   instead of a feature of layer 2. It is also the extraction step that makes the
-   runtime's term representation publishable as a standalone crate.
+0. **The meta-prover (E-12, E-13).** ~~Confirm the `'True'` criterion against the
+   primary of 1986 §6~~ — **confirmed, 2026-10-04.** §6 of *The Concept of a
+   Supercompiler* states: "If a predicate function P(x) is supercompiled and its
+   configuration graph reduces to the single terminal node `'True'`, this
+   constitutes an automated mathematical proof that P(x) holds for all inputs x."
+   The row is therefore turnable into a gate, and this is the next item. Build the
+   command: a predicate or an equivalence claim, driven, reporting whether the graph
+   reduced to `'True'`. The corpus's theorem-shaped examples — associativity of
+   `Append`, a sorting-equality, a tree reversal — are its first gate. **The first
+   step of this item is a measurement**: proving costs more than compiling, so if
+   driving a predicate on the corpus is too slow, the speed item below moves ahead
+   of it. *The archival edition the criterion was read from is a derived edition,
+   not the scanned primary, so the wording is confirmed again against
+   `docs/turchin/pdf/` if any test turns on the exact phrasing; here the criterion
+   is operational and turns on none.*
+
+   *One ordering note, 2026-10-04.* The prover was item 0 and the reflection
+   service item 1; they have been swapped. The reason is the sentence this file
+   already carried about item 1: "the prover must be written against a reflection
+   API rather than against the compiler's internals, which is what makes it *layer
+   3* instead of a feature of layer 2." Building the prover first produces a
+   command that works and a row (E-12) that stays arguable. The service is 4.50
+   against the prover's 13.00, so paying it first costs one gate. **Both ship as
+   one workstream and the published figure moves once, when both are gated.**
+1. ~~**The reflection engine as a service (E-4).**~~ **Closed, 2026-10-04:**
+   `refal reflect` freezes the entry configuration and returns it as terms through
+   `refal-core`'s public API — `reflect_entry_configuration` →
+   `ReflectionReport` → `FrozenConfiguration` with addressable successors and an
+   explicit completeness verdict, rendered by `format_reflection_report` as a term
+   sequence a metafunction could have produced. It deliberately accepts the entry
+   *argument* rather than assuming one expression variable, because that is what a
+   service is for: the inverter (item 2) enters with the output pinned and the
+   prover (item 0) enters with the predicate's argument free, and neither may reach
+   into the driver.
+
+   Four gates, all shape rather than answers, because the failure mode here is a
+   thin re-export of the driver that happens to answer the same questions:
+   `the_reflection_service_names_the_entry_even_when_the_driver_recorded_none`
+   (on `identity.ref` the driver reaches **zero** configurations and an
+   implementation that read the name off `report.configurations.first()` printed a
+   blank function — found by running the command, not by a test, and the gate now
+   pins it), `the_reflection_service_reports_whether_its_walk_was_complete`
+   (no conclusion may be drawn from the silence of a truncated walk),
+   `the_reflection_service_exposes_successors_as_addressable_configurations`, and
+   `a_reflected_configuration_renders_as_a_term_a_metafunction_could_have_made`.
+   The CLI side adds `freezes_and_inspects_the_entry_configuration_as_data`,
+   `reflection_names_the_entry_of_a_program_that_records_no_configuration` and
+   `a_reflection_walk_cut_off_by_its_budget_says_so`.
+
+   *Defect this step paid for — the entry that was not there.* The first
+   implementation derived the entry configuration's function name from
+   `report.configurations.first()`. On `identity.ref` that list is empty (the
+   program drives straight to a residue with nothing partitioned), so the service
+   reported `C0  [e.Input] -> (none)` — a configuration with no function, for a
+   program the machine was plainly inside. It is the general shape of the traps
+   this file already records: **the answer was right and the description of the
+   machine was wrong**, and no semantic differential can see it because the
+   semantic content is unchanged. Fixed by taking the entry's name from the graph
+   and using the driver's list only for configurations *after* the entry.
+
 2. **Function inversion (E-15).** Drive an inverse configuration with the output
    pinned and the input free. `refal residualize-driven` is the mechanism; what is
    missing is the entry decision that pins the output.

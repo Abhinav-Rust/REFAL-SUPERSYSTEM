@@ -120,6 +120,8 @@ fn main() {
         "compile" => compile_program(&source, &input_args),
         "normalize" => normalize_program(&source, &input_args),
         "graph" => graph_program(&program, &input_args),
+        "reflect" => reflect_program(&program, &input_args),
+        "prove" => prove_program(&program, &input_args),
         "analyze" => analyze_program(&program, &input_args),
         "formats" => formats_program(&program, &input_args),
         "overlap" => overlap_program(&program, &input_args),
@@ -265,6 +267,12 @@ fn print_usage() {
     );
     eprintln!("  normalize  Re-print Refal source with the Refal-authored compiler (no driving)");
     eprintln!("  graph      Print the deterministic seed graph of sentence states and calls");
+    eprintln!(
+        "  reflect    Freeze the entry configuration and inspect it as data (Turchin 1991 L1)"
+    );
+    eprintln!("             [--steps N]");
+    eprintln!("  prove      Prove a predicate by complete tree reduction (Turchin 1986 6)");
+    eprintln!("             refal prove <file.ref> <Predicate> [--steps N]");
     eprintln!("  analyze    Report bounded Tier 1 reachability, terminals, and SCCs");
     eprintln!("  overlap    Report conservative sentence-pattern compatibility pairs");
     eprintln!("  formats    Report inferred function formats (argument -> result)");
@@ -466,6 +474,86 @@ fn analyze_program(program: &refal_ast::Program, args: &[String]) {
     print!("{}", refal_core::format_graph_analysis(&report));
 }
 
+/// Prove a predicate by complete tree reduction.
+///
+/// Layer 3 of the 1991 supersystem. The criterion is Turchin's own, from 1986 §6:
+/// a proof is a driven configuration graph whose only terminal node is `'True'`.
+///
+/// The command enters at the *predicate*, not at the program's entry, because a
+/// prover proves a predicate and a compiler compiles a program. Measured on the
+/// theorem fixtures, entering at the entry proves nothing at speed: `Go` is
+/// symbolically reduced, the predicate's role is invisible from there, and the
+/// residue is the source re-printed.
+fn prove_program(program: &refal_ast::Program, args: &[String]) {
+    let Some(predicate) = args.first() else {
+        eprintln!("{PROVE_USAGE}");
+        process::exit(2);
+    };
+    let options = match drive_options(&args[1..]) {
+        Ok(options) => options,
+        Err(usage) => {
+            eprintln!("{usage}");
+            process::exit(2);
+        }
+    };
+    let core = refal_core::lower_program(program);
+    let graph = refal_core::clean_unreachable_states(&refal_core::build_seed_graph(&core));
+    let report = match refal_core::prove_predicate(
+        &graph,
+        predicate,
+        vec![refal_core::input_expression_variable()],
+        options.max_steps,
+    ) {
+        Ok(report) => report,
+        Err(error) => {
+            eprintln!("proof error: {error}");
+            process::exit(1);
+        }
+    };
+    print!("{}", refal_core::format_proof_report(&report));
+    // The exit status carries the verdict, so a script can gate on it: 0 for a
+    // proof, 1 for a refutation, 2 for an unfinished attempt. A prover whose
+    // status is always 0 cannot be used as a gate.
+    match report.verdict {
+        refal_core::ProofVerdict::Proved => {}
+        refal_core::ProofVerdict::Refuted { .. } => process::exit(1),
+        refal_core::ProofVerdict::Incomplete { .. } | refal_core::ProofVerdict::Open => {
+            process::exit(2);
+        }
+    }
+}
+
+/// Freeze the entry configuration and inspect it.
+///
+/// This is layer 1 of the 1991 supersystem as a *service*: the machine's active
+/// configuration comes back as data, through a public API, rather than being read
+/// out of the driver's internals. A metafunction can pattern-match over the result,
+/// which is what lets the prover and the inverter be written against reflection
+/// rather than against `refal-core`.
+fn reflect_program(program: &refal_ast::Program, args: &[String]) {
+    let options = match drive_options(args) {
+        Ok(options) => options,
+        Err(usage) => {
+            eprintln!("{usage}");
+            process::exit(2);
+        }
+    };
+    let core = refal_core::lower_program(program);
+    let graph = refal_core::clean_unreachable_states(&refal_core::build_seed_graph(&core));
+    let report = match refal_core::reflect_entry_configuration(
+        &graph,
+        vec![refal_core::input_expression_variable()],
+        options.max_steps,
+    ) {
+        Ok(report) => report,
+        Err(error) => {
+            eprintln!("reflection error: {error}");
+            process::exit(1);
+        }
+    };
+    print!("{}", refal_core::format_reflection_report(&report));
+}
+
 fn overlap_program(program: &refal_ast::Program, args: &[String]) {
     if !args.is_empty() {
         eprintln!("Usage: refal overlap <file.ref>");
@@ -538,6 +626,8 @@ struct DriveOptions {
 }
 
 const DRIVE_USAGE: &str = "Usage: refal <drive-symbolic|residualize-driven> <file.ref> [--steps N]      [--strategy search|compilative|interpretive] [--configurations] [--neighborhoods]";
+
+const PROVE_USAGE: &str = "Usage: refal prove <file.ref> <Predicate> [--steps N] [--strategy search|compilative|interpretive]";
 
 fn drive_options(args: &[String]) -> Result<DriveOptions, String> {
     let mut options = DriveOptions {

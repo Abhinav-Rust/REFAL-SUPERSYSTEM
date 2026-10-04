@@ -638,6 +638,7 @@ pub fn drive_ground(
         neighborhood_loops: 0,
         steps: 0,
         max_steps,
+        proof_entry: false,
     };
     let output = context.invoke(&function, input)?;
     Ok(DriveReport {
@@ -700,6 +701,33 @@ pub fn drive_symbolic_with_strategy(
     max_steps: usize,
     strategy: DriveStrategy,
 ) -> Result<SymbolicDriveReport, DriveError> {
+    drive_symbolic_inner(graph, input, max_steps, strategy, false)
+}
+
+/// Drive a graph whose entry is a *predicate under proof* rather than a program.
+///
+/// The only difference from [`drive_symbolic_with_strategy`] is that the entry
+/// is partitioned even when its own pattern is narrow. A prover enters a
+/// predicate with a wholly unknown argument, and the predicate's sentences are
+/// the case analysis to be driven -- so refusing to split the entry leaves the
+/// claim undriven and every theorem "open". See the guard in
+/// `DriveContext::split_configuration` for the compiler-side reason, which is
+/// real and deliberately preserved.
+pub fn drive_symbolic_proof_entry(
+    graph: &StateGraph,
+    input: Vec<CoreTerm>,
+    max_steps: usize,
+) -> Result<SymbolicDriveReport, DriveError> {
+    drive_symbolic_inner(graph, input, max_steps, DriveStrategy::default(), true)
+}
+
+fn drive_symbolic_inner(
+    graph: &StateGraph,
+    input: Vec<CoreTerm>,
+    max_steps: usize,
+    strategy: DriveStrategy,
+    proof_entry: bool,
+) -> Result<SymbolicDriveReport, DriveError> {
     // A driving pass has no residue to compare, so `Search` resolves to the
     // finer end here rather than running twice.
     let strategy = strategy.point();
@@ -727,6 +755,7 @@ pub fn drive_symbolic_with_strategy(
         neighborhood_loops: 0,
         steps: 0,
         max_steps,
+        proof_entry,
     };
     let residual = match context.invoke_symbolic(&function, &input)? {
         SymbolicInvoke::Reduced(output) => output,
@@ -1267,6 +1296,17 @@ struct DriveContext<'a> {
     neighborhood_loops: usize,
     steps: usize,
     max_steps: usize,
+    /// Whether the graph's entry is a *predicate under proof* rather than a
+    /// program.
+    ///
+    /// A compiler drives a program, and the residue it emits must keep the
+    /// entry's own pattern; that is why `split_configuration` refuses to split
+    /// an entry with a narrow pattern. A prover drives a *predicate* over an
+    /// unknown argument, and there the predicate's sentences *are* the case
+    /// analysis -- partitioning the argument is Turchin's driving step, not a
+    /// change of meaning. The two callers want opposite residues from the same
+    /// entry, so the choice is declared rather than guessed.
+    proof_entry: bool,
 }
 
 impl<'a> DriveContext<'a> {
@@ -1691,7 +1731,18 @@ impl<'a> DriveContext<'a> {
         // does not fit. Splitting anyway would produce a residue that accepts
         // more than the source did, turning a program that fails into one that
         // loops.
-        if let Some(entry) = self.graph.entry
+        //
+        // A proof is the exception, and for the opposite reason. A predicate
+        // such as `Marked { s.First e.Rest = 'True'; }` has a narrow pattern by
+        // design: the partition `[] / s.H e.T / (e.B) e.T` is exactly the case
+        // analysis its sentences discriminate, and each branch either matches a
+        // sentence or leaves a call that fails where the source fails. The
+        // guard protects a *compiler's* residue, and a prover emits none, so it
+        // does not apply here. Without this exemption `Marked` drives to an
+        // unevaluated call and no terminal node is ever reached -- which is
+        // what the first version of the prover reported, as "open".
+        if !self.proof_entry
+            && let Some(entry) = self.graph.entry
             && let Some(state) = self.graph.states.get(entry.0)
             && state.function.eq_ignore_ascii_case(function)
             && !matches!(state.pattern.as_slice(), [term] if is_expression_variable(term))
@@ -2468,10 +2519,31 @@ pub fn build_seed_graph(program: &CoreProgram) -> StateGraph {
         }
     }
 
-    let entry = first_states
+    // The entry is the function the program *declares* as its entry. Searching
+    // for the literal name `Go` instead meant a program whose entry function was
+    // called anything else had no entry at all: `clean_unreachable_states` then
+    // pruned every state, and a well-formed program compiled to nothing. The
+    // prover's fixtures found this, because a prover's entry is a predicate
+    // rather than a `Go` -- but the defect was the compiler's.
+    //
+    // `Go` remains the fallback for a program that declares no entry, which is
+    // what the earlier behaviour amounted to for the common case and is what the
+    // corpus's examples rely on.
+    let entry = program
+        .functions
         .iter()
-        .find(|(name, _)| name.as_str() == "GO")
-        .map(|(_, &id)| id);
+        .find(|function| function.visibility == Visibility::Entry)
+        .and_then(|function| {
+            first_states
+                .get(&function.name.to_ascii_uppercase())
+                .copied()
+        })
+        .or_else(|| {
+            first_states
+                .iter()
+                .find(|(name, _)| name.as_str() == "GO")
+                .map(|(_, &id)| id)
+        });
     StateGraph {
         entry,
         states,
@@ -4808,11 +4880,1036 @@ fn format_term(term: &CoreTerm, output: &mut String) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// The reflection engine as a service (layer 1).
+//
+// Turchin's 1991 report places a reflection engine *beneath* the supercompiler:
+// the machine runs programs, and the reflection engine turns a running program
+// into inspectable data, which the supercompiler then transforms. This repository
+// has the primitives (`Dn`/`Up`, metacode, `dump-ast`, `graph`) and the
+// transformer, but no service -- nothing that takes a *live* configuration and
+// hands it back as data an ordinary Refal function could have produced.
+//
+// The distinction is not cosmetic. A prover written against `SymbolicDriveReport`
+// is a feature of layer 2 that happens to answer a proof-shaped question. A prover
+// written against this API is layer 3, because it observes the machine through the
+// same interface any other meta-program would use.
+//
+// Every function below is a *pure* function from a program to data. None of them
+// mutates the program, and none of them is reachable from the driver: the driver
+// drives, the reflection service observes. That is what keeps control asymmetric
+// (E-18).
+// ---------------------------------------------------------------------------
+
+/// A frozen configuration: what the machine is about to do, as inert data.
+///
+/// Freezing is Turchin's own operation (`Dn`, §1.3 and Chapter 6) lifted from a
+/// single expression to a whole machine state. A frozen configuration records the
+/// active function, the input it was entered with, and the state it is at -- all as
+/// terms, so a Refal metafunction can pattern-match over them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FrozenConfiguration {
+    /// The function the machine is currently reducing.
+    pub function: String,
+    /// The argument list the function was invoked with.
+    pub input: Vec<CoreTerm>,
+    /// The source sentence the configuration sits at, when it is a source state.
+    pub state: Option<StateId>,
+    /// The configurations this one can reach by one call, in discovery order.
+    pub successors: Vec<SuccessorConfiguration>,
+}
+
+/// One call out of a frozen configuration, with what is known about the target.
+///
+/// `target` is `Some` when the callee's own configuration was also reached inside
+/// the bound, and `None` when the call stayed residual -- either because the budget
+/// ran out or because the callee's configuration is not decidable from here.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SuccessorConfiguration {
+    pub callee: String,
+    pub input: Vec<CoreTerm>,
+    pub target: Option<usize>,
+}
+
+/// What the reflection service can say about a program's entry configuration.
+///
+/// This is the layer-1 answer to "what is this machine about to do": the entry
+/// function, the shape of the argument it accepts, and the call graph its
+/// configurations form. A prover reads this; so does an inverter; neither reads the
+/// driver's internals.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReflectionReport {
+    pub entry: FrozenConfiguration,
+    /// Every configuration reached, keyed by the id a successor refers to.
+    pub configurations: Vec<FrozenConfiguration>,
+    /// How many configurations were reached before the bound was hit.
+    pub steps: usize,
+    /// Whether the walk finished inside its budget. A walk that did not finish has
+    /// not seen the whole configuration space, and no conclusion may be drawn from
+    /// its silence.
+    pub complete: bool,
+}
+
+/// Freeze a program's entry configuration and inspect it.
+///
+/// The entry argument is supplied by the caller rather than assumed to be one
+/// expression variable, because that is the whole point of a *service*: an inverter
+/// enters with the output pinned, and a prover enters with the predicate's argument
+/// free. `drive_symbolic` hard-codes the free-variable case; this does not.
+///
+/// `max_steps` bounds the walk. The report says whether the bound was reached, so a
+/// caller cannot mistake a truncated walk for a complete one.
+pub fn reflect_entry_configuration(
+    graph: &StateGraph,
+    input: Vec<CoreTerm>,
+    max_steps: usize,
+) -> Result<ReflectionReport, DriveError> {
+    let report = drive_symbolic_with_input(graph, input.clone(), max_steps)?;
+    let entry_function = graph
+        .states
+        .get(graph.entry.ok_or(DriveError::NoEntry)?.0)
+        .ok_or(DriveError::NoEntry)?
+        .function
+        .clone();
+
+    let successors = report
+        .configuration_transitions
+        .iter()
+        .filter(|transition| transition.from == 0)
+        .map(|transition| SuccessorConfiguration {
+            callee: transition.callee.clone(),
+            input: transition.input.clone(),
+            target: transition.to,
+        })
+        .collect();
+
+    let configurations = configured_entries(graph, &report, input, successors);
+
+    let entry = configurations
+        .first()
+        .cloned()
+        .unwrap_or_else(|| FrozenConfiguration {
+            function: entry_function,
+            input: Vec::new(),
+            state: None,
+            successors: Vec::new(),
+        });
+
+    Ok(ReflectionReport {
+        entry,
+        configurations,
+        steps: report.steps,
+        // The driver stops early only by running out of budget, so a step count
+        // short of the bound is the evidence that the walk finished. Do not weaken
+        // this into a property of the program: it is a property of the run.
+        complete: report.steps < max_steps,
+    })
+}
+
+/// The frozen configurations of a symbolic drive, in the ids a successor refers to.
+///
+/// The entry configuration is *always* present, even when the driver reached no
+/// recorded configuration at all: `identity.ref` drives straight to a residue
+/// without partitioning anything, and a reflection service that reported "no
+/// configurations" for a program the machine is plainly in the middle of would be
+/// describing its own bookkeeping rather than the machine. The entry's name is
+/// therefore taken from the graph, and the driver's configuration list is used only
+/// to fill in the configurations *after* the entry.
+fn configured_entries(
+    graph: &StateGraph,
+    report: &SymbolicDriveReport,
+    entry_input: Vec<CoreTerm>,
+    entry_successors: Vec<SuccessorConfiguration>,
+) -> Vec<FrozenConfiguration> {
+    let entry_state = graph.entry;
+    let entry_function = entry_state
+        .and_then(|id| graph.states.get(id.0))
+        .map(|state| state.function.clone())
+        .unwrap_or_else(|| "Go".to_string());
+    let mut configurations: Vec<FrozenConfiguration> = vec![FrozenConfiguration {
+        function: entry_function,
+        input: entry_input,
+        state: entry_state,
+        successors: entry_successors,
+    }];
+    for configuration in &report.configurations {
+        // A drive that recorded the entry itself would otherwise duplicate it.
+        if configuration.state == entry_state.unwrap_or(StateId(usize::MAX)) {
+            continue;
+        }
+        let successors = report
+            .configuration_transitions
+            .iter()
+            .filter(|transition| transition.from == configuration.id)
+            .map(|transition| SuccessorConfiguration {
+                callee: transition.callee.clone(),
+                input: transition.input.clone(),
+                target: transition.to,
+            })
+            .collect();
+        configurations.push(FrozenConfiguration {
+            function: configuration_name(graph, configuration),
+            input: configuration.input.clone(),
+            state: Some(configuration.state),
+            successors,
+        });
+    }
+    configurations
+}
+
+/// The function name a symbolic configuration sits in.
+///
+/// A configuration generated by case splitting has no source function of its own:
+/// it stands for a partition, and the driver names the generated function after the
+/// order the split was created in. A source configuration names the function it
+/// came from. Both are derived here from the graph rather than from the driver's
+/// internals, so the service stays a service.
+fn configuration_name(graph: &StateGraph, configuration: &SymbolicConfiguration) -> String {
+    graph
+        .states
+        .get(configuration.state.0)
+        .map(|state| state.function.clone())
+        .unwrap_or_else(|| format!("S{}", configuration.state.0))
+}
+
+/// Render a reflection report the way a Refal metafunction would have produced it.
+///
+/// The output is deliberately a term sequence rather than prose: a caller can feed
+/// it to `Up` and pattern-match over it, which is what makes this a reflection
+/// *service* rather than a pretty-printer.
+pub fn format_reflection_report(report: &ReflectionReport) -> String {
+    let mut output = String::new();
+    output.push_str("reflection\n");
+    output.push_str(&format!(
+        "  entry: {}\n",
+        format_term_sequence(&report.entry.input)
+    ));
+    output.push_str(&format!("  steps: {}\n", report.steps));
+    output.push_str(&format!(
+        "  complete: {}\n",
+        if report.complete { "yes" } else { "no" }
+    ));
+    output.push_str(&format!(
+        "  configurations: {}\n",
+        report.configurations.len()
+    ));
+    for (id, configuration) in report.configurations.iter().enumerate() {
+        output.push_str(&format!(
+            "  C{id} {} [{}] ->",
+            configuration.function,
+            format_term_sequence(&configuration.input)
+        ));
+        if configuration.successors.is_empty() {
+            output.push_str(" (none)\n");
+            continue;
+        }
+        for successor in &configuration.successors {
+            match successor.target {
+                Some(target) => output.push_str(&format!(
+                    " C{target}:<{} {}>",
+                    successor.callee,
+                    format_term_sequence(&successor.input)
+                )),
+                None => output.push_str(&format!(
+                    " residual:<{} {}>",
+                    successor.callee,
+                    format_term_sequence(&successor.input)
+                )),
+            }
+        }
+        output.push('\n');
+    }
+    output
+}
+
+// ---------------------------------------------------------------------------
+// The meta-prover (layer 3).
+//
+// Turchin's test of a proof, stated in 1986 §6 of *The Concept of a
+// Supercompiler*: "If a predicate function P(x) is supercompiled and its
+// configuration graph reduces to the single terminal node 'True', this
+// constitutes an automated mathematical proof that P(x) holds for all inputs
+// x." The same mechanism is layer 3 of the 1991 CCNY report *A Supersystem of
+// Language Refal*, where the prover "accepts formal specifications expressed as
+// assertions or relational Refal functions, verifying program equivalence and
+// proving algorithmic invariants via complete tree reduction".
+//
+// **What the measured shape of the mechanism turned out to be, and why it is not
+// "drive the program and read the residue".** The obvious implementation -- drive
+// the entry and ask whether the residue is the single term 'True' -- proves
+// nothing and does it quickly. Measured on `examples/prove-associativity.ref`, a
+// program whose entry hands two Append nestings to an `Equivalent` predicate:
+// `residualize-driven` returns `steps: 1`, visits no state, and re-prints the
+// source. The driver enters through `Go`, whose argument is a wrapped triple, and
+// symbolically reduces `Go`; that `Equivalent` is a *predicate whose reduction is
+// the proof* is invisible from there. The seed graph does carry the edge
+// (`S0 -Equivalent-> S1`), so the information exists -- the prover simply has to
+// enter at the predicate rather than at the program's `Go`.
+//
+// So the prover is a *layer-3* component in the sense the conformance document
+// means, and not a wrapper: it reads the machine through the reflection service
+// (E-4), chooses a configuration to enter, drives it, and decides. Nothing below
+// is reachable from the driver, and nothing below re-enters `Go`.
+// ---------------------------------------------------------------------------
+
+/// The verdict a proof attempt reaches.
+///
+/// `Proved` is exactly Turchin's criterion: every terminal node of the driven
+/// configuration graph is the single term `'True'`. The other arms exist because
+/// a prover that reports only success is a prover whose failures are invisible --
+/// and because a refutation is a *result*, not an error.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProofVerdict {
+    /// Every terminal node is `'True'`, and at least one was reached.
+    Proved,
+    /// A terminal node other than `'True'` was reached. The claim is false, and
+    /// `witness` is the counterexample the graph reached.
+    Refuted { witness: String },
+    /// The claim holds for the cases driven but the graph did not close: the
+    /// walk ran out of budget, so the terminal nodes seen are a subset of the
+    /// real ones and no proof may be claimed.
+    Incomplete { steps: usize },
+    /// No terminal node was reached at all -- the graph is still open, or the
+    /// predicate's sentence selection was never decided.
+    Open,
+}
+
+/// One terminal configuration of a driven predicate.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TerminalOutcome {
+    pub configuration: usize,
+    pub value: Vec<CoreTerm>,
+    /// Whether this outcome is the node Turchin's criterion names.
+    pub is_true: bool,
+}
+
+/// The result of a proof attempt, with the evidence behind the verdict.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProofReport {
+    pub predicate: String,
+    pub verdict: ProofVerdict,
+    /// Every terminal node the driven graph reached, in discovery order.
+    pub terminals: Vec<TerminalOutcome>,
+    /// The driven configurations, as the reflection service reports them.
+    pub configurations: Vec<FrozenConfiguration>,
+    pub steps: usize,
+    /// Whether the walk finished inside its budget.
+    pub complete: bool,
+}
+
+/// Whether a term sequence is the single terminal node `True`.
+///
+/// The criterion names one terminal *node* whose value is `'True'`, so a sequence
+/// of any other length is not it -- including the empty sequence, which is a
+/// predicate that returned nothing rather than one that returned true.
+///
+/// The value arrives in either of the two forms the language gives a name:
+/// a bare identifier `True` when the source wrote one, and a character sequence
+/// `'T' 'r' 'u' 'e'` when it wrote `'True'`. Both are the same node, and a
+/// criterion that recognised only one would call the other a refutation -- which
+/// is how the first version of this function reported a true theorem as unproven.
+pub fn is_true_terminal(terms: &[CoreTerm]) -> bool {
+    match terms {
+        [term] => match &term.kind {
+            CoreTermKind::Identifier(name) => name.eq_ignore_ascii_case("True"),
+            _ => false,
+        },
+        _ => {
+            let text = terms
+                .iter()
+                .map(|term| match &term.kind {
+                    CoreTermKind::Char(letter) => Some(*letter),
+                    _ => None,
+                })
+                .collect::<Option<String>>();
+            text.is_some_and(|text| text.eq_ignore_ascii_case("True"))
+        }
+    }
+}
+
+/// Prove a predicate over a free configuration.
+///
+/// `predicate` names the function to enter; `input` is the argument it is entered
+/// with, which for a claim is the free configuration the claim quantifies over.
+/// The prover drives from there, collects the terminal nodes, and applies
+/// Turchin's criterion.
+///
+/// The verdict distinguishes *refuted* from *incomplete* deliberately. A prover
+/// that conflated them would report a false theorem as unproven and a true one
+/// as unproven when the budget ran out, and the two need different responses: one
+/// is a counterexample to examine, the other is a bigger budget.
+pub fn prove_predicate(
+    graph: &StateGraph,
+    predicate: &str,
+    input: Vec<CoreTerm>,
+    max_steps: usize,
+) -> Result<ProofReport, DriveError> {
+    let (report, terms) = drive_predicate(graph, predicate, input, max_steps)?;
+    let complete = report.steps < max_steps;
+
+    let terminals = collect_terminals(graph, &report, &terms);
+    let verdict = if terminals.is_empty() {
+        ProofVerdict::Open
+    } else if let Some(refutation) = terminals.iter().find(|terminal| !terminal.is_true) {
+        ProofVerdict::Refuted {
+            witness: format_term_sequence(&refutation.value),
+        }
+    } else if !complete {
+        // Every terminal seen is 'True', but the walk did not close. The unseen
+        // configurations may yet reach a 'False', so this is not a proof.
+        ProofVerdict::Incomplete {
+            steps: report.steps,
+        }
+    } else {
+        ProofVerdict::Proved
+    };
+
+    let configurations = reflection_of(graph, &report, &terms);
+    Ok(ProofReport {
+        predicate: predicate.to_string(),
+        verdict,
+        terminals,
+        configurations,
+        steps: report.steps,
+        complete,
+    })
+}
+
+/// Drive the graph by entering at a *named function* rather than at the entry.
+///
+/// This is the entry decision the 1991 report's layer 3 needs and the driver does
+/// not have: `residualize_driven_graph` always starts at the graph's entry,
+/// because a compiler compiles a program. A prover proves a *predicate*, and the
+/// predicate is one function among many.
+///
+/// The callee is named rather than identified by a state, because Refal enters a
+/// function at its *first* sentence: the sentence index of the state the caller
+/// happened to find is not part of the proof's meaning, and threading it through
+/// would suggest otherwise. What the state supplies is the function, and the
+/// function supplies the configuration to drive.
+fn drive_predicate(
+    graph: &StateGraph,
+    predicate: &str,
+    input: Vec<CoreTerm>,
+    max_steps: usize,
+) -> Result<(SymbolicDriveReport, Vec<CoreTerm>), DriveError> {
+    let entry_graph = predicate_entry_graph(graph, predicate)?;
+    let report = drive_symbolic_proof_entry(&entry_graph, input.clone(), max_steps)?;
+    Ok((report, input))
+}
+
+/// A graph whose entry is the named function's first sentence.
+///
+/// The states are re-used, so a driven configuration's `StateId` still indexes
+/// the *original* graph -- which is what lets `collect_terminals` read a reached
+/// configuration's sentence result off the caller's graph rather than a copy.
+///
+/// Re-pointing `graph.entry` alone would not be enough: `DriveContext::invoke`
+/// reads the callee out of the state at the entry, so the entry's *function* has
+/// to be the predicate's own -- which it is, because the states are the real
+/// ones. The transitions are carried over because a predicate's sentences may
+/// call other functions, and those calls have to resolve inside the drive.
+fn predicate_entry_graph(graph: &StateGraph, function: &str) -> Result<StateGraph, DriveError> {
+    let start = graph
+        .states
+        .iter()
+        .position(|state| state.function.eq_ignore_ascii_case(function))
+        .ok_or_else(|| DriveError::NoMatchingSentence {
+            function: function.to_string(),
+        })?;
+    Ok(StateGraph {
+        entry: Some(StateId(start)),
+        states: graph.states.clone(),
+        transitions: graph.transitions.clone(),
+    })
+}
+
+/// The terminal nodes of a driven predicate.
+///
+/// Turchin's criterion is about the *configuration graph*: the proof is that the
+/// graph reduces to the single terminal node `'True'`. A terminal node is a
+/// reached configuration whose reduction has stopped at a ground value.
+///
+/// Reading this off the top-level residual alone is not enough, and measurement
+/// shows why. Driving `Marked` -- one sentence, `s.First e.Rest = 'True'` --
+/// leaves the top-level residual as `<Split1 e.Input>`, an unevaluated call,
+/// while the value `'True'` lives in the split function's *second* sentence.
+/// The value is a property of the configuration, so the graph is what has to be
+/// walked, and the split functions are part of that graph.
+///
+/// Three sources of a terminal node, and all three are needed:
+///
+///  * a reached configuration whose sentence result is ground -- `Always`'s
+///    `'True'` and `'False'` nodes arrive this way;
+///  * a generated split function's sentences, which carry the partition's
+///    outcomes and are reached by no transition -- `Marked`'s `'True'` arrives
+///    this way;
+///  * the top-level residual, when the predicate reduced outright and left one.
+///
+/// A residual *call* is deliberately not a terminal: the predicate has not
+/// returned there, so no node has been reached, and the criterion does not cover
+/// it. This is why the prover must enter at the predicate and split it; a
+/// residual call is exactly the symptom of failing to do so.
+fn collect_terminals(
+    graph: &StateGraph,
+    report: &SymbolicDriveReport,
+    _entry_input: &[CoreTerm],
+) -> Vec<TerminalOutcome> {
+    let mut terminals = Vec::new();
+
+    for configuration in &report.configurations {
+        if let Some(state) = graph.states.get(configuration.state.0) {
+            push_ground_terminal(&mut terminals, &state.result);
+        }
+    }
+    for split in &report.split_functions {
+        for sentence in &split.sentences {
+            push_ground_terminal(&mut terminals, &sentence.result);
+        }
+    }
+    if !report.residual.is_empty() {
+        push_ground_terminal(&mut terminals, &report.residual);
+    }
+    terminals
+}
+
+/// Whether a term sequence contains no call and no variable.
+///
+/// A sequence with a call in it has not been evaluated, and a sequence with a
+/// variable in it is not ground. Neither is a terminal node's *value*.
+fn is_ground(terms: &[CoreTerm]) -> bool {
+    terms.iter().all(|term| match &term.kind {
+        CoreTermKind::Call { .. } | CoreTermKind::Variable { .. } => false,
+        CoreTermKind::Bracket(inner) => is_ground(inner),
+        CoreTermKind::Block { .. } => false,
+        _ => true,
+    })
+}
+
+/// Record a terminal outcome, deduplicating so one node is not counted twice.
+fn push_ground_terminal(terminals: &mut Vec<TerminalOutcome>, value: &[CoreTerm]) {
+    if !is_ground(value) {
+        return;
+    }
+    if terminals
+        .iter()
+        .any(|terminal| terminal.value == value.to_vec())
+    {
+        return;
+    }
+    terminals.push(TerminalOutcome {
+        configuration: terminals.len(),
+        is_true: is_true_terminal(value),
+        value: value.to_vec(),
+    });
+}
+
+/// The frozen configurations of a proof attempt, for the evidence section.
+fn reflection_of(
+    graph: &StateGraph,
+    report: &SymbolicDriveReport,
+    entry_input: &[CoreTerm],
+) -> Vec<FrozenConfiguration> {
+    configured_entries(graph, report, entry_input.to_vec(), Vec::new())
+}
+
+/// Render a proof attempt for a person reading a terminal.
+///
+/// The evidence comes before the verdict, because a verdict whose evidence is
+/// not printed is an assertion rather than a result.
+pub fn format_proof_report(report: &ProofReport) -> String {
+    let mut output = String::new();
+    output.push_str(&format!("proof: {}\n", report.predicate));
+    output.push_str(&format!("  steps: {}\n", report.steps));
+    output.push_str(&format!(
+        "  complete: {}\n",
+        if report.complete { "yes" } else { "no" }
+    ));
+    output.push_str(&format!(
+        "  configurations: {}\n",
+        report.configurations.len()
+    ));
+    output.push_str(&format!("  terminals: {}\n", report.terminals.len()));
+    for terminal in &report.terminals {
+        output.push_str(&format!(
+            "    {} {}\n",
+            if terminal.is_true { "True " } else { "other" },
+            format_term_sequence(&terminal.value)
+        ));
+    }
+    output.push_str(&format!(
+        "  verdict: {}\n",
+        match &report.verdict {
+            ProofVerdict::Proved => "proved".to_string(),
+            ProofVerdict::Refuted { witness } => format!("refuted ({witness})"),
+            ProofVerdict::Incomplete { steps } => {
+                format!("incomplete (budget spent after {steps} steps)")
+            }
+            ProofVerdict::Open => "open (no terminal node reached)".to_string(),
+        }
+    ));
+    output
+}
+
 #[cfg(test)]
 mod tests {
     use refal_ast::{Function, Item, Sentence, Span, Symbol, Term, Variable, Visibility};
 
     use super::*;
+
+    // -----------------------------------------------------------------------
+    // The reflection service (layer 1).
+    //
+    // These gates exist because the service has one failure mode that a semantic
+    // test cannot see: it can be a thin re-export of the driver's internals that
+    // happens to answer the same questions. A prover built on such a thing is a
+    // feature of layer 2 wearing a layer-3 label, which is exactly what
+    // `docs/TURCHIN-ECOSYSTEM-CONFORMANCE.md` E-4 withholds credit for.
+    //
+    // The invariant asserted here is therefore about *shape*, not about answers:
+    // the entry configuration is present even when the driver recorded none, and
+    // the report says whether its walk was complete. Both are properties of the
+    // service that the driver does not have.
+    // -----------------------------------------------------------------------
+
+    /// A program the driver reaches no recorded configuration for.
+    fn reflection_identity_program() -> CoreProgram {
+        CoreProgram {
+            declarations: vec![],
+            functions: vec![CoreFunction {
+                name: "Go".to_string(),
+                visibility: Visibility::Entry,
+                sentences: vec![CoreSentence {
+                    pattern: vec![CoreTerm {
+                        kind: CoreTermKind::Variable {
+                            kind: VariableKind::Expression,
+                            name: "Input".to_string(),
+                        },
+                        span: Span { start: 0, end: 0 },
+                    }],
+                    conditions: vec![],
+                    result: vec![CoreTerm {
+                        kind: CoreTermKind::Variable {
+                            kind: VariableKind::Expression,
+                            name: "Input".to_string(),
+                        },
+                        span: Span { start: 0, end: 0 },
+                    }],
+                    span: Span { start: 0, end: 0 },
+                }],
+                span: Span { start: 0, end: 0 },
+            }],
+        }
+    }
+
+    /// A program whose argument is partitioned, so the driver records splits.
+    fn reflection_branch_program() -> CoreProgram {
+        let variable = |name: &str, kind: VariableKind| CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind,
+                name: name.to_string(),
+            },
+            span: Span { start: 0, end: 0 },
+        };
+        let call = |name: &str, args: Vec<CoreTerm>| CoreTerm {
+            kind: CoreTermKind::Call {
+                name: name.to_string(),
+                args,
+            },
+            span: Span { start: 0, end: 0 },
+        };
+        CoreProgram {
+            declarations: vec![],
+            functions: vec![
+                CoreFunction {
+                    name: "Go".to_string(),
+                    visibility: Visibility::Entry,
+                    sentences: vec![CoreSentence {
+                        pattern: vec![variable("Input", VariableKind::Expression)],
+                        conditions: vec![],
+                        result: vec![call(
+                            "Choose",
+                            vec![variable("Input", VariableKind::Expression)],
+                        )],
+                        span: Span { start: 0, end: 0 },
+                    }],
+                    span: Span { start: 0, end: 0 },
+                },
+                CoreFunction {
+                    name: "Choose".to_string(),
+                    visibility: Visibility::Local,
+                    sentences: vec![
+                        CoreSentence {
+                            pattern: vec![],
+                            conditions: vec![],
+                            result: vec![CoreTerm {
+                                kind: CoreTermKind::Char('e'),
+                                span: Span { start: 0, end: 0 },
+                            }],
+                            span: Span { start: 0, end: 0 },
+                        },
+                        CoreSentence {
+                            pattern: vec![
+                                variable("Head", VariableKind::Symbol),
+                                variable("Tail", VariableKind::Expression),
+                            ],
+                            conditions: vec![],
+                            result: vec![CoreTerm {
+                                kind: CoreTermKind::Char('n'),
+                                span: Span { start: 0, end: 0 },
+                            }],
+                            span: Span { start: 0, end: 0 },
+                        },
+                    ],
+                    span: Span { start: 0, end: 0 },
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn the_reflection_service_names_the_entry_even_when_the_driver_recorded_none() {
+        let program = reflection_identity_program();
+        let graph = clean_unreachable_states(&build_seed_graph(&program));
+        let report = reflect_entry_configuration(&graph, vec![input_expression_variable()], 10_000)
+            .expect("the entry configuration reflects");
+        assert_eq!(
+            report.entry.function, "Go",
+            "a program the machine is plainly inside must not be described as having \
+             no entry configuration -- that would be reporting the driver's bookkeeping \
+             rather than the machine"
+        );
+        assert!(
+            !report.configurations.is_empty(),
+            "the entry configuration is always present, whatever the driver recorded"
+        );
+    }
+
+    #[test]
+    fn the_reflection_service_reports_whether_its_walk_was_complete() {
+        let program = reflection_branch_program();
+        let seed = build_seed_graph(&program);
+        let graph = clean_unreachable_states(&seed);
+        let complete =
+            reflect_entry_configuration(&graph, vec![input_expression_variable()], 10_000)
+                .expect("the entry configuration reflects");
+        assert!(
+            complete.complete,
+            "a walk that finished inside its budget is complete: {} steps",
+            complete.steps
+        );
+        let truncated = reflect_entry_configuration(&graph, vec![input_expression_variable()], 1)
+            .expect("the entry configuration reflects under a tight budget");
+        assert!(
+            !truncated.complete,
+            "a walk cut off by its budget must say so, because no conclusion may be drawn \
+             from the silence of an incomplete walk"
+        );
+    }
+
+    #[test]
+    fn the_reflection_service_exposes_successors_as_addressable_configurations() {
+        let program = reflection_branch_program();
+        let graph = clean_unreachable_states(&build_seed_graph(&program));
+        let report = reflect_entry_configuration(&graph, vec![input_expression_variable()], 10_000)
+            .expect("the entry configuration reflects");
+        let targets = report
+            .configurations
+            .iter()
+            .flat_map(|configuration| configuration.successors.iter())
+            .filter_map(|successor| successor.target)
+            .collect::<Vec<_>>();
+        assert!(
+            !targets.is_empty(),
+            "a partitioned argument yields successors the caller can address by id"
+        );
+        assert!(
+            targets
+                .iter()
+                .all(|target| *target < report.configurations.len()),
+            "every successor id must index a configuration the report actually carries: \
+             {targets:?} against {}",
+            report.configurations.len()
+        );
+    }
+
+    #[test]
+    fn a_reflected_configuration_renders_as_a_term_a_metafunction_could_have_made() {
+        let program = reflection_branch_program();
+        let graph = clean_unreachable_states(&build_seed_graph(&program));
+        let report = reflect_entry_configuration(&graph, vec![input_expression_variable()], 10_000)
+            .expect("the entry configuration reflects");
+        let rendered = format_reflection_report(&report);
+        assert!(
+            rendered.starts_with("reflection\n"),
+            "the report is a term sequence, not prose: {rendered}"
+        );
+        assert!(
+            rendered.contains("complete: yes"),
+            "and it carries its own completeness verdict: {rendered}"
+        );
+        assert!(
+            !rendered.contains("C0  ["),
+            "no configuration renders with a blank function name: {rendered}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // The meta-prover (layer 3).
+    //
+    // The criterion is Turchin's, from 1986 §6: a proof is a driven configuration
+    // graph whose only terminal node is 'True'. The gates below pin the three
+    // things a prover can get wrong and still look like it works:
+    //
+    //   * it can treat "no counterexample found" as "proved";
+    //   * it can treat a budget-exhausted walk as closed;
+    //   * it can fail to distinguish a terminal node from an unevaluated call.
+    //
+    // A prover that got any of these wrong would report true theorems as proved
+    // and false ones as proved too, which is the worst possible failure mode for
+    // the component whose entire job is to be trusted.
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn the_true_criterion_is_one_term_and_not_a_prefix() {
+        let identifier = |name: &str| CoreTerm {
+            kind: CoreTermKind::Identifier(name.to_string()),
+            span: Span { start: 0, end: 0 },
+        };
+        assert!(
+            is_true_terminal(&[identifier("True")]),
+            "the criterion names a single terminal node 'True'"
+        );
+        assert!(
+            is_true_terminal(&[identifier("TRUE")]),
+            "and Refal's identifier case folding reaches it"
+        );
+        assert!(
+            !is_true_terminal(&[identifier("True"), identifier("False")]),
+            "two nodes are two outcomes, not one proof"
+        );
+        assert!(
+            !is_true_terminal(&[]),
+            "a predicate that returned nothing has not returned true"
+        );
+        assert!(
+            !is_true_terminal(&[identifier("Truthy")]),
+            "and the test is equality, not a prefix"
+        );
+    }
+
+    /// A predicate that returns one outcome for *every* input.
+    ///
+    /// This is the shape of a theorem whose hypothesis is a tautology: whatever
+    /// the argument, the predicate reduces to `outcome`. It is used to test the
+    /// proved case, which is exactly "every terminal node is `'True'`".
+    fn total_predicate(outcome: &str) -> CoreProgram {
+        let sentence = CoreSentence {
+            pattern: vec![CoreTerm {
+                kind: CoreTermKind::Variable {
+                    kind: VariableKind::Expression,
+                    name: "Input".to_string(),
+                },
+                span: Span { start: 0, end: 0 },
+            }],
+            conditions: vec![],
+            result: vec![CoreTerm {
+                kind: CoreTermKind::Identifier(outcome.to_string()),
+                span: Span { start: 0, end: 0 },
+            }],
+            span: Span { start: 0, end: 0 },
+        };
+        CoreProgram {
+            declarations: vec![],
+            functions: vec![CoreFunction {
+                name: "Predicate".to_string(),
+                visibility: Visibility::Entry,
+                sentences: vec![sentence],
+                span: Span { start: 0, end: 0 },
+            }],
+        }
+    }
+
+    /// A predicate that *discriminates* on the shape of its argument.
+    ///
+    /// A non-empty text is `'True'` and the empty text is `'False'`. Both
+    /// sentences are genuinely reachable, because the partition the driver
+    /// produces -- `[] / s.H e.T / (e.B) e.T` -- puts `[]` in one branch and the
+    /// two non-empty branches in the others. A predicate that returned a fixed
+    /// outcome twice could not refute anything: its second sentence would be
+    /// unreachable, and a prover that reported it as a counterexample would be
+    /// refuting a claim with a branch that never runs.
+    fn discriminating_predicate() -> CoreProgram {
+        let symbol_head = CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind: VariableKind::Symbol,
+                name: "First".to_string(),
+            },
+            span: Span { start: 0, end: 0 },
+        };
+        let rest = CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind: VariableKind::Expression,
+                name: "Rest".to_string(),
+            },
+            span: Span { start: 0, end: 0 },
+        };
+        let value = |name: &str| CoreTerm {
+            kind: CoreTermKind::Identifier(name.to_string()),
+            span: Span { start: 0, end: 0 },
+        };
+        CoreProgram {
+            declarations: vec![],
+            functions: vec![CoreFunction {
+                name: "Predicate".to_string(),
+                visibility: Visibility::Entry,
+                sentences: vec![
+                    CoreSentence {
+                        pattern: vec![symbol_head, rest],
+                        conditions: vec![],
+                        result: vec![value("True")],
+                        span: Span { start: 0, end: 0 },
+                    },
+                    CoreSentence {
+                        pattern: vec![],
+                        conditions: vec![],
+                        result: vec![value("False")],
+                        span: Span { start: 0, end: 0 },
+                    },
+                ],
+                span: Span { start: 0, end: 0 },
+            }],
+        }
+    }
+
+    #[test]
+    fn a_predicate_whose_only_terminal_is_true_is_proved() {
+        let program = total_predicate("True");
+        let graph = clean_unreachable_states(&build_seed_graph(&program));
+        let report = prove_predicate(
+            &graph,
+            "Predicate",
+            vec![input_expression_variable()],
+            10_000,
+        )
+        .expect("the predicate exists");
+        assert_eq!(
+            report.verdict,
+            ProofVerdict::Proved,
+            "a graph whose only terminal node is 'True' is a proof: {:?}",
+            report
+        );
+        assert!(
+            report.terminals.iter().all(|terminal| terminal.is_true),
+            "and every terminal it reports is that node"
+        );
+    }
+
+    #[test]
+    fn a_predicate_that_can_return_false_is_refuted_with_a_witness() {
+        // The prover must never report this as proved. A 'False' terminal is a
+        // counterexample, and a prover that rounded it to "unproven" would hide
+        // the more interesting of its two answers.
+        let program = discriminating_predicate();
+        let graph = clean_unreachable_states(&build_seed_graph(&program));
+        let report = prove_predicate(
+            &graph,
+            "Predicate",
+            vec![input_expression_variable()],
+            10_000,
+        )
+        .expect("the predicate exists");
+        match &report.verdict {
+            ProofVerdict::Refuted { witness } => {
+                assert_eq!(witness, "False", "the witness is the failing node");
+            }
+            other => panic!("a reachable 'False' refutes the claim, not {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_walk_cut_off_by_its_budget_is_incomplete_rather_than_proved() {
+        // The distinction this pins: "every terminal I saw was True" is not
+        // "every terminal is True". A prover that conflated them would claim a
+        // theorem it had not checked, and the fix is a bigger budget -- which the
+        // caller can only know to supply if the verdict says so.
+        let program = total_predicate("True");
+        let graph = clean_unreachable_states(&build_seed_graph(&program));
+        let report = prove_predicate(&graph, "Predicate", vec![input_expression_variable()], 0)
+            .expect("the predicate exists");
+        assert!(
+            !report.complete,
+            "a walk that spent its budget is not complete"
+        );
+        assert!(
+            matches!(
+                report.verdict,
+                ProofVerdict::Incomplete { .. } | ProofVerdict::Open
+            ),
+            "and it must not be reported as proved: {:?}",
+            report.verdict
+        );
+    }
+
+    #[test]
+    fn an_unknown_predicate_is_an_error_rather_than_a_verdict() {
+        let program = total_predicate("True");
+        let graph = clean_unreachable_states(&build_seed_graph(&program));
+        assert!(
+            prove_predicate(
+                &graph,
+                "NoSuchFunction",
+                vec![input_expression_variable()],
+                100
+            )
+            .is_err(),
+            "naming a function the program does not define is a usage error, not 'open'"
+        );
+    }
+
+    #[test]
+    fn a_narrow_predicate_still_drives_to_its_terminal_nodes() {
+        // The measurement behind the whole component. On a theorem-shaped program
+        // the entry hands work to the predicate; driving the *entry* reduces `Go`
+        // and leaves the predicate invisible, while entering at the predicate is
+        // what makes the graph reduce at all. The two must therefore differ, and
+        // this test is what notices if the prover is quietly re-pointed at the
+        // program entry.
+        //
+        // A predicate whose pattern is *narrow* -- `s.First e.Rest` rather than a
+        // single expression variable -- is the case that matters, because it is
+        // what a theorem looks like in the corpus. Entering it with a free
+        // variable puts the driver in front of a configuration it cannot decide
+        // by matching, and the only way forward is to partition the argument
+        // against the predicate's own sentences. A driver that refuses leaves an
+        // unevaluated call as the residue, no terminal node is ever reached, and
+        // every theorem in the corpus reports "open". That was the prover's
+        // first defect and this gate is what notices it.
+        let program = discriminating_predicate();
+        let graph = clean_unreachable_states(&build_seed_graph(&program));
+        let report = prove_predicate(
+            &graph,
+            "Predicate",
+            vec![input_expression_variable()],
+            10_000,
+        )
+        .expect("the predicate proves");
+        assert!(
+            !report.terminals.is_empty(),
+            "a narrow predicate must still drive to a terminal node, or no theorem \
+             is provable: {report:?}"
+        );
+        assert_eq!(
+            report.terminals.len(),
+            2,
+            "and both of its reachable outcomes are nodes: {report:?}"
+        );
+        assert!(
+            !report.configurations.is_empty(),
+            "entering at the predicate records its configurations, which entering at \
+             the program entry does not"
+        );
+    }
 
     fn span() -> Span {
         Span { start: 4, end: 7 }

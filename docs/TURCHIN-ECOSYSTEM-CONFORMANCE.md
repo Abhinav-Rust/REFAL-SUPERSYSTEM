@@ -144,7 +144,7 @@ repository is green for the general case.
 | # | Objective | Source | Gate | Status |
 |---|---|---|---|---|
 | **E-3** | **Freeze / inspect / thaw.** A frozen expression is inert data; meta-functions pattern-match over it; a thaw returns control to the machine | 1991 *A Supersystem…*; 1989 manual (freezers, `Mu`) | `T-8`: `Dn` metacodes, `Up` inverts and activates, §6.2 and §6.4 behaviours exercised by `examples/metacode-chapter6.ref` | ✅ Closed |
-| **E-4** | The engine **extracts an AST, freezes active calls, and constructs symbolic execution graphs** as an addressable layer rather than an internal stage | 1991 *A Supersystem…* | `refal dump-ast`, `refal graph`; `compiler.ref` lexes/parses/checks/emits over the full Classic grammar | 🔶 Partial — the primitives and the graph exist, but there is no exposed *reflection* API: a running program's active calls cannot be frozen and inspected from Refal the way layer 0 can be driven from layer 2. The supersystem's layer 1 is a *service*, and this repository has the parts rather than the service |
+| **E-4** | The engine **extracts an AST, freezes active calls, and constructs symbolic execution graphs** as an addressable layer rather than an internal stage | 1991 *A Supersystem…* | `refal dump-ast`, `refal graph`, **`refal reflect`** — `reflect_entry_configuration` returns the machine's active configuration as `FrozenConfiguration` data through `refal-core`'s public API, with addressable successor configurations, a completeness verdict, and a term-sequence rendering; `compiler.ref` lexes/parses/checks/emits over the full Classic grammar | ✅ Closed — the service exists. `refal reflect` freezes the entry configuration and returns it as terms an ordinary Refal metafunction could have produced, so the prover (E-12) and the inverter (E-15) are written against reflection rather than against the driver's internals. The four gates assert *shape* rather than answers, because the failure mode here is a thin re-export of the driver that happens to answer the same questions: the entry is named even when the driver recorded no configuration (`identity.ref`), a walk cut off by its budget reports itself incomplete, and every successor id indexes a configuration the report actually carries |
 
 ### Layer 2 — the supercompiler core
 
@@ -162,8 +162,8 @@ repository is green for the general case.
 
 | # | Objective | Source | Gate | Status |
 |---|---|---|---|---|
-| **E-12** | The prover is a **layer**: it accepts assertions or relational functions and verifies equivalence and invariants by complete tree reduction. Turchin's stated test of a proof is that the configuration graph **reduces to the single terminal node `'True'`** | 1991 *A Supersystem…*; 1986 §6 ("Theorem Proving and Program Verification"); 1996 *Techniques and Results* §3.5; 1999 SCP4 §4 (associativity of `Append`, tree reversal, sorting equality) | — | ❌ Open — **and this is the largest vision gap in the repository.** What exists is adjacent but not it: `refal metasystem` proves *its own* transition sound and cheaper, and the corpus gate re-checks residues by execution. There is no command that takes a predicate or an equivalence claim, drives it, and reports a proof. *Marked: the exact wording of the `'True'` criterion is from the archival edition's exposition of 1986 §6 and must be confirmed against the primary before this row is turned into a test* |
-| **E-13** | **Proof is supercompilation**, and mathematics is constructive: a set is a generator, truth is a terminating verification algorithm, Cantor's diagonal argument is itself a metasystem transition | 1983 *The Cybernetic Foundation of Mathematics* I & II; 1987 *A Cybernetic Approach to the Foundations of Mathematics* | — | ❌ Open — same gate as E-12. The *runtime* implements the operational semantics these papers found mathematics on; the mathematical claim they make is exactly the prover that does not exist yet |
+| **E-12** | The prover is a **layer**: it accepts assertions or relational functions and verifies equivalence and invariants by complete tree reduction. Turchin's stated test of a proof is that the configuration graph **reduces to the single terminal node `'True'`** | 1991 *A Supersystem…*; 1986 §6 ("Theorem Proving and Program Verification"); 1996 *Techniques and Results* §3.5; 1999 SCP4 §4 (associativity of `Append`, tree reversal, sorting equality) | `refal prove <file.ref> <Predicate> [--steps N]` — enters the graph at the *named predicate* rather than at the program's entry, drives it with a free configuration, collects the terminal nodes, and applies Turchin's criterion | 🔶 Partial — the entry and the criterion exist and are gated; the *relational* half does not. The criterion's wording was confirmed against the primary (`1986_The_Concept_of_a_Supercompiler.html` §6, in `VT- CS+PW`): *"If a predicate function P(x) is supercompiled and its configuration graph reduces to the single terminal node 'True', this constitutes an automated mathematical proof that P(x) holds for all inputs x."* Six gates pin the verdicts — `Proved` for a predicate whose only terminal is `'True'`, `Refuted` with a witness for one that reaches `'False'`, `Incomplete` when the budget ran out, `Open` when nothing was reached, an error rather than a verdict for an unknown predicate, and a narrow predicate that still drives to its nodes. Two fixtures carry it: `examples/prove-predicate-true.ref` (`Marked`, proved, exit 0) and `examples/prove-predicate.ref` (`Always`, refuted, exit 1). **What is missing, and why the row is not closed:** the corpus's theorem-shaped examples are *equivalences* — associativity of `Append`, a sorting equality, a tree reversal — and an equivalence claim between two relational functions is not yet accepted. The entry takes a predicate and an implicit free argument, not a pair of functions and a claimed relation |
+| **E-13** | **Proof is supercompilation**, and mathematics is constructive: a set is a generator, truth is a terminating verification algorithm, Cantor's diagonal argument is itself a metasystem transition | 1983 *The Cybernetic Foundation of Mathematics* I & II; 1987 *A Cybernetic Approach to the Foundations of Mathematics* | Same gate as E-12: `refal prove` reports the reduction as a verdict rather than as a trace | 🔶 Partial — the mechanism this paper's claim reduces to now exists and runs: a proof *is* a driven configuration graph whose only terminal node is `'True'`, reported by the same supercompiler core the compiler uses. The philosophical claim is not yet fully cashed, because the constructive-mathematics reading (a set as a generator, truth as a terminating verification algorithm) needs the relational prover to be more than an illustration |
 
 ### Layer 4 — self-application and compiler generation
 
@@ -251,7 +251,8 @@ This repository is **layers 0–4** of the supersystem:
 
 ```
         ┌──────────────────────────────────────────────────────────┐
-   L3   │  meta-prover        assertions, equivalence, invariants  │  E-12, E-13  OPEN
+   L3   │  meta-prover        predicates (equivalence pending),    │  E-12, E-13  PARTIAL
+        │                     invariants by tree reduction         │
         ├──────────────────────────────────────────────────────────┤
    L2   │  supercompiler      driving, whistle, generalization,    │  E-5…E-11    CLOSED (E-11 open)
         │                     folding, residual synthesis          │
@@ -286,11 +287,12 @@ rejects a legal program is the defect, not the program).
 This replaces the ordering that `PROGRESS.md`'s `NEXT ACTION` carries, and it is
 the answer to "what does 100% mean". The order is by what unblocks what.
 
-1. **The meta-prover (E-12, E-13).** The largest gap, and the one the product's
-   own roadmap could not see. A command that takes a predicate or an equivalence
-   claim, drives it, and reports whether the graph reduced to `'True'` — with the
-   corpus's theorem-shaped examples as its first gate. Confirm the `'True'`
-   criterion against the primary of 1986 §6 first.
+1. **Equivalence claims in the meta-prover (E-12, E-13).** The *relational* half
+   of layer 3. `refal prove` now drives a predicate and applies Turchin's
+   `'True'` criterion; what it does not yet accept is a claim that two relational
+   functions are equivalent over all inputs, which is how the corpus states its
+   theorems (associativity of `Append`, a sorting equality, a tree reversal). The
+   criterion itself was confirmed against the primary of 1986 §6.
 2. **The 2nd and 3rd projections as artifacts (E-14).** Emit a standalone
    compiler by specialising the supercompiler with respect to an interpreter, and
    a compiler generator by specialising it with respect to itself. The mechanism
@@ -299,15 +301,16 @@ the answer to "what does 100% mean". The order is by what unblocks what.
    examples on p. 115. The last named gap in the graph-of-states row.
 4. **Negative information and stack configurations (E-11).** SCP4's propagation
    engines, which no example currently reaches.
-5. **The reflection engine as a service (E-4).** Expose freeze/inspect/thaw over
-   a running program's active calls.
-6. **Metavariable stratification in the transformer (E-17).** The 1995 report's
+5. **Metavariable stratification in the transformer (E-17).** The 1995 report's
    level indices, on top of §6.4's level-carrying unknown.
-7. **Function inversion (E-15).** Named by Glück and Turchin, ISSAC '90: an
+6. **Function inversion (E-15).** Named by Glück and Turchin, ISSAC '90: an
    inverse configuration driven with the output known and the input unknown,
    synthesising `f⁻¹` from `f`.
-8. **The compiler's speed on very large inputs.** The last named gap in the
+7. **The compiler's speed on very large inputs.** The last named gap in the
    compiler-in-Refal row.
+
+**Closed since this list was written:** the reflection engine as a service (E-4)
+and the meta-prover's entry and criterion (the first half of E-12/E-13).
 9. **The self-hosting fixpoint over an arbitrary program**, rather than over the
    corpus and the compiler's own source.
 

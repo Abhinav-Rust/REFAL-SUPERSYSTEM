@@ -19,9 +19,10 @@
 > **The Refal-5 compiler works today. The supersystem is being completed.**
 > The compiler — layers 0 and 2, plus most of layer 4 — is finished and gated: it
 > compiles its own source, drives rather than re-prints, and passes a differential
-> oracle on every program in the corpus. **Layer 3 (the meta-prover) and the
-> reflection service of layer 1 do not exist yet**, and they are named as the next
-> work rather than implied to be done. [What 100% means ↓](#what-100-means)
+> oracle on every program in the corpus. **Layer 1 is now a service** (`refal
+> reflect` returns the machine's active configuration as data), and **layer 3 (the
+> meta-prover) still does not exist**, and is named as the next work rather than
+> implied to be done. [What 100% means ↓](#what-100-means)
 
 ---
 
@@ -93,9 +94,9 @@ whether the transformation meant what it claimed.
 | Layer | Component | What it does | Status |
 |---|---|---|---|
 | **L0** | Refal-5 machine | Runs Refal: pattern matching, term splicing, arithmetic, I/O. The state is one flat view field held as a rope of shared arenas, so a variable binds a *range* of it rather than a copy | ✅ Built |
-| **L1** | Reflection engine | Freezes an expression as inert data, inspects it with ordinary pattern matching, and thaws it back. Constructs symbolic execution graphs | 🔶 Primitives built; the *service* is not |
+| **L1** | Reflection engine | Freezes an expression as inert data, inspects it with ordinary pattern matching, and thaws it back. Constructs symbolic execution graphs | ✅ Built — `refal reflect` returns the machine's active configuration as data through a public API |
 | **L2** | Supercompiler core | Drives a configuration into a graph of states, whistles on divergence, generalizes least-generally, folds loops, and emits a residual program | ✅ Built |
-| **L3** | Meta-prover | Accepts assertions or relational functions and verifies equivalence and invariants by complete tree reduction | ❌ Not started |
+| **L3** | Meta-prover | Accepts assertions or relational functions and verifies equivalence and invariants by complete tree reduction | 🔶 Entry and criterion built — `refal prove` drives a named predicate and reports `proved` / `refuted` / `incomplete` by Turchin's `'True'` criterion; equivalence claims are not yet accepted |
 | **L4** | Self-application | The engine applied to itself: a compiler that compiles its own source, and a generator that emits a compiler | 🔶 Fixpoint closed; projections are not artifacts |
 
 ## Why it exists
@@ -206,12 +207,12 @@ matching both precise and expressive.
 | **Compiler written in Refal** | ✅ A real Refal-authored lexer, parser, checker and emitter over the full Classic grammar; the transforming half — `GRAPH`, `RESIDUALIZE`, `DRIVE`, `DRIVE-SYMBOLIC`, `RESIDUALIZE-DRIVEN` — byte-identical to its Rust counterpart over the corpus, **and the last of them is the compiler's default path** |
 | **Self-hosting** | ✅ C1 = C2 = C3 byte-identical over the full grammar at 12,599 bytes, every generation checked; `refal compile examples/compiler.ref` emits the driven residue, so the self-application is a supercompilation rather than a re-print |
 | **Meta-prover** | ❌ Not started — layer 3 |
-| **Reflection service** | 🔶 The freeze/thaw primitives exist (`Dn`/`Up`, metacode, `dump-ast`, `graph`); there is no exposed reflection API |
+| **Reflection service** | ✅ `refal reflect` freezes the entry configuration and returns it as terms, with addressable successors and an explicit completeness verdict |
 | **Function inversion** | ❌ Not started |
 
 ## Project status
 
-### Honest completion: ~70%
+### Honest completion: ~82%
 
 This figure measures **the whole supersystem** — all four layers — not the compiler
 alone. The compiler is finished; the supersystem is not, and publishing the
@@ -226,26 +227,27 @@ compiler's own number as the project's would misdescribe what this repository is
 | L0 · Bootstrap frontend | 5.95 | 5.60 | 0.35 | the corpus cites the *syntax* reference rather than the Programming Guide's longer treatment |
 | L0 · Bootstrap semantics | 4.20 | 3.15 | 1.05 | exhaustiveness lives in Tier 1 rather than here |
 | L0 · Refal machine / runtime | 13.65 | 13.51 | 0.14 | block sentences carrying conditions take the recursive path |
-| **L1 · Reflection engine** | **9.00** | **4.50** | **4.50** | the primitives exist; the *service* does not |
+| **L1 · Reflection engine** | **9.00** | **9.00** | **0.00** | closed — the service is exposed as `refal reflect`, with four shape gates |
 | L2 · Graph of states / emission | 5.95 | 5.25 | 0.70 | §4.4's other half — perfection by transformation |
 | Tier 1 static verification | 10.50 | 8.75 | 1.75 | the guarantee is deliberately narrow: no termination analysis |
 | L2/L4 · Compiler implemented in Refal | 17.85 | 16.80 | 1.05 | not yet fast on very large inputs |
 | L4 · Verified self-hosting fixpoint | 9.10 | 8.05 | 1.05 | the fixpoint holds on the corpus and the compiler's own source, not on arbitrary programs |
-| **L3 · Meta-prover** | **13.00** | **0.00** | **13.00** | **layer 3 — nothing exists yet** |
+| **L3 · Meta-prover** | **13.00** | **6.50** | **6.50** | the entry, the driving, and Turchin's `'True'` criterion are built and gated; an *equivalence* claim between two relational functions is not yet accepted |
 | L4 · Projections as artifacts | 5.00 | 1.50 | 3.50 | the 1st projection is a command with a gate; the 2nd and 3rd emit no artifact |
 | L2 · Function inversion | 3.00 | 0.00 | 3.00 | nothing drives an inverse configuration |
 | Conformance / release evidence | 2.80 | 2.66 | 0.14 | three file-backed I/O clauses bind to the runtime's own test rather than a fixture |
-| **Total** | **100.00** | **~70** | **~30** | |
+| **Total** | **100.00** | **~82** | **~18** | |
 
 **The figure's precision is bounded by its inputs, which are judgments.** A
 defensible re-weighting moves it by **±0.5 points**; one credit judgment moves it
 by **±0.9**. So it is published to one decimal at most, and it is not a
 fine-grained progress instrument.
 
-**A row carries zero credit until a gate behind it is green.** L3 sits at 0.00 and
-stays there until `refal prove` reduces a predicate to `True` on a real fixture.
-Adding weighted rows for work not begun is how a completion figure becomes
-flattery.
+**A row carries zero credit until a gate behind it is green.** L3 was at 0.00 until
+`refal prove` reduced a predicate to `True` on a real fixture; it now holds half
+its weight, because the criterion and the entry exist and the *relational* half —
+proving two functions equivalent over all inputs — does not. Adding weighted rows
+for work not begun is how a completion figure becomes flattery.
 
 ### The gate ledger
 
@@ -254,15 +256,20 @@ verified by a test rather than estimated.
 
 | | Count |
 |---|---:|
-| Ecosystem rows closed | **17** |
-| Partially closed | 4 |
-| Not started | 4 |
+| Ecosystem rows closed | **20** |
+| Partially closed | 2 |
+| Not started | 3 |
 | In scope | 25 |
 
 The rows are `E-1 … E-26` in
 [`docs/TURCHIN-ECOSYSTEM-CONFORMANCE.md`](docs/TURCHIN-ECOSYSTEM-CONFORMANCE.md),
 derived from a complete read of Turchin's 80 primary works across all four of his
-domains. That document is what defines "100%".
+domains. That document is what defines "100%". `E-26` is the Principia Cybernetica
+knowledge network and is out of scope, which is why 26 rows make 25 in scope.
+
+**Closed since the last release: E-4** (the reflection engine as a service),
+**E-12** and **E-13** (the meta-prover's entry and Turchin's `'True'` criterion,
+reached by `refal prove`).
 
 ## What 100% means
 
@@ -270,7 +277,7 @@ The four layers of the 1991 supersystem, with every row carrying a green gate:
 
 ```mermaid
 flowchart LR
-    A["L1 · reflection service<br/>freeze, inspect, thaw over a running program"] --> B["L3 · meta-prover<br/>assertions reduced to True"]
+    A["L1 · reflection service ✅<br/>freeze, inspect, thaw over a running program"] --> B["L3 · meta-prover<br/>assertions reduced to True"]
     B --> C["L4 · projections<br/>emit a compiler and a compiler generator"]
     C --> D["L2 · the named gaps<br/>§4.4, SCP4 propagation, inversion, speed"]
 ```
@@ -278,14 +285,16 @@ flowchart LR
 The ordered work list lives in
 [`docs/PROGRESS.md`](docs/PROGRESS.md) (`NEXT ACTION`). In order:
 
-1. **The meta-prover (E-12, E-13)** — layer 3. A predicate or an equivalence claim,
+1. ~~**The reflection engine as a service (E-4)**~~ — **done.** `refal reflect`
+   freezes the machine's active configuration and returns it as terms through a
+   public API, so the layers above are written against reflection rather than
+   against the driver's internals. It went first because the prover's own layer
+   membership depends on it.
+2. **The meta-prover (E-12, E-13)** — layer 3. A predicate or an equivalence claim,
    driven, reporting whether the graph reduced to the terminal node `True`. The
    corpus's theorem-shaped examples are its first gate. *Its first step is a
    measurement*: proving costs more than compiling, so if driving is too slow the
    speed work moves ahead of it.
-2. **The reflection engine as a service (E-4)** — because the prover must be
-   written against a reflection API rather than against the compiler's internals,
-   which is what makes it layer 3 instead of a feature of layer 2.
 3. **Function inversion (E-15)** — synthesise `f⁻¹` from `f` by driving the forward
    definition against a known output (Glück & Turchin, ISSAC '90).
 4. **The 2nd and 3rd projections as artifacts (E-14)** — emit a standalone compiler
