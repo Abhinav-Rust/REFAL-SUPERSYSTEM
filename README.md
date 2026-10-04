@@ -20,9 +20,12 @@
 > The compiler — layers 0 and 2, plus most of layer 4 — is finished and gated: it
 > compiles its own source, drives rather than re-prints, and passes a differential
 > oracle on every program in the corpus. **Layer 1 is now a service** (`refal
-> reflect` returns the machine's active configuration as data), and **layer 3 (the
-> meta-prover) still does not exist**, and is named as the next work rather than
-> implied to be done. [What 100% means ↓](#what-100-means)
+> reflect` returns the machine's active configuration as data) and **function
+> inversion is built** (`refal invert` synthesises `f⁻¹` by driving `f`), but
+> **layer 3 (the meta-prover) is only half-built** — it decides a predicate against
+> Turchin's `'True'` criterion, and its *relational* half, proving two functions
+> equivalent, is named as the next work rather than implied to be done.
+> [What 100% means ↓](#what-100-means)
 
 ---
 
@@ -206,13 +209,13 @@ matching both precise and expressive.
 | **Tier 1 static analysis** | ✅ Complete for its published guarantee with zero false positives across the corpus: dead sentences, recognition-impossible reachability, builtin domain errors, and a format lattice that describes a bracket's contents recursively |
 | **Compiler written in Refal** | ✅ A real Refal-authored lexer, parser, checker and emitter over the full Classic grammar; the transforming half — `GRAPH`, `RESIDUALIZE`, `DRIVE`, `DRIVE-SYMBOLIC`, `RESIDUALIZE-DRIVEN` — byte-identical to its Rust counterpart over the corpus, **and the last of them is the compiler's default path** |
 | **Self-hosting** | ✅ C1 = C2 = C3 byte-identical over the full grammar at 12,599 bytes, every generation checked; `refal compile examples/compiler.ref` emits the driven residue, so the self-application is a supercompilation rather than a re-print |
-| **Meta-prover** | ❌ Not started — layer 3 |
+| **Meta-prover** | 🔶 Layer 3, partial — `refal prove` drives a predicate to Turchin's single terminal node `'True'`, and reports a counterexample with its witness. An equation over **free** variables is not proved: associativity of `Append` needs induction over list structure, and `examples/prove-append-reach.ref` publishes exactly that boundary |
 | **Reflection service** | ✅ `refal reflect` freezes the entry configuration and returns it as terms, with addressable successors and an explicit completeness verdict |
-| **Function inversion** | ❌ Not started |
+| **Function inversion** | ✅ `refal invert` drives the forward definition under an inverse configuration and emits the synthesised inverse; the round-trip gate runs `<Inverse <F x>> ≡ x` over the emitted program |
 
 ## Project status
 
-### Honest completion: ~82%
+### Honest completion: ~85%
 
 This figure measures **the whole supersystem** — all four layers — not the compiler
 alone. The compiler is finished; the supersystem is not, and publishing the
@@ -232,11 +235,11 @@ compiler's own number as the project's would misdescribe what this repository is
 | Tier 1 static verification | 10.50 | 8.75 | 1.75 | the guarantee is deliberately narrow: no termination analysis |
 | L2/L4 · Compiler implemented in Refal | 17.85 | 16.80 | 1.05 | not yet fast on very large inputs |
 | L4 · Verified self-hosting fixpoint | 9.10 | 8.05 | 1.05 | the fixpoint holds on the corpus and the compiler's own source, not on arbitrary programs |
-| **L3 · Meta-prover** | **13.00** | **6.50** | **6.50** | the entry, the driving, and Turchin's `'True'` criterion are built and gated; an *equivalence* claim between two relational functions is not yet accepted |
+| **L3 · Meta-prover** | **13.00** | **6.50** | **6.50** | the entry, the driving, and Turchin's `'True'` criterion are built and gated; a claim over free variables needs induction the driver does not perform, and the general relational form (two functions and a relation) is not accepted. A soundness defect — a truncated walk could refute — was found and fixed this session |
 | L4 · Projections as artifacts | 5.00 | 1.50 | 3.50 | the 1st projection is a command with a gate; the 2nd and 3rd emit no artifact |
-| L2 · Function inversion | 3.00 | 0.00 | 3.00 | nothing drives an inverse configuration |
+| **L2 · Function inversion** | **3.00** | **3.00** | **0.00** | closed — `refal invert` drives the forward definition and emits the synthesised inverse, round-tripped in a gate |
 | Conformance / release evidence | 2.80 | 2.66 | 0.14 | three file-backed I/O clauses bind to the runtime's own test rather than a fixture |
-| **Total** | **100.00** | **~82** | **~18** | |
+| **Total** | **100.00** | **~85** | **~15** | |
 
 **The figure's precision is bounded by its inputs, which are judgments.** A
 defensible re-weighting moves it by **±0.5 points**; one credit judgment moves it
@@ -256,9 +259,9 @@ verified by a test rather than estimated.
 
 | | Count |
 |---|---:|
-| Ecosystem rows closed | **20** |
+| Ecosystem rows closed | **21** |
 | Partially closed | 2 |
-| Not started | 3 |
+| Not started | 2 |
 | In scope | 25 |
 
 The rows are `E-1 … E-26` in
@@ -268,8 +271,12 @@ domains. That document is what defines "100%". `E-26` is the Principia Cyberneti
 knowledge network and is out of scope, which is why 26 rows make 25 in scope.
 
 **Closed since the last release: E-4** (the reflection engine as a service),
-**E-12** and **E-13** (the meta-prover's entry and Turchin's `'True'` criterion,
-reached by `refal prove`).
+**E-12** and **E-13** (the meta-prover — Turchin's `'True'` criterion, reached by
+`refal prove`), and **E-15** (function inversion — `refal invert` synthesises a
+function's inverse by driving its forward definition, and the gate splices the
+emitted inverse back into the source and round-trips it). A **soundness defect in the prover** was found and fixed in the same session: an
+unfinished walk could report a claim as `refuted`, and the verdict is now a
+property of the claim rather than of `--steps`.
 
 ## What 100% means
 
@@ -290,13 +297,17 @@ The ordered work list lives in
    public API, so the layers above are written against reflection rather than
    against the driver's internals. It went first because the prover's own layer
    membership depends on it.
-2. **The meta-prover (E-12, E-13)** — layer 3. A predicate or an equivalence claim,
-   driven, reporting whether the graph reduced to the terminal node `True`. The
-   corpus's theorem-shaped examples are its first gate. *Its first step is a
-   measurement*: proving costs more than compiling, so if driving is too slow the
-   speed work moves ahead of it.
-3. **Function inversion (E-15)** — synthesise `f⁻¹` from `f` by driving the forward
-   definition against a known output (Glück & Turchin, ISSAC '90).
+2. **The meta-prover (E-12, E-13)** — layer 3, **in progress.** A predicate is
+   driven and the graph reported against Turchin's single terminal node `True`.
+   What remains is a claim over free variables, which needs **induction over
+   structure** (generalisation and folding, 1980 §4.6) that the driver does not
+   perform, and the general relational form: a claim naming two functions and a
+   relation, accepted as such rather than written by hand as a predicate. The
+   boundary is measured and published in `examples/prove-append-reach.ref`.
+3. ~~**Function inversion (E-15)**~~ — **done.** Synthesise `f⁻¹` from `f` by
+   driving the forward definition against a known output (Glück & Turchin, ISSAC
+   '90): `refal invert` emits the inverse as a checked program whose patterns are
+   the forward function's outputs, and the gate round-trips the emitted inverse.
 4. **The 2nd and 3rd projections as artifacts (E-14)** — emit a standalone compiler
    and a compiler generator.
 5. **§4.4's other half (E-7)**, **SCP4 propagation (E-11)**, **the compiler's speed
@@ -351,7 +362,7 @@ Retrieve the primary sources the design is drawn from:
 ## Using the CLI
 
 <details>
-<summary><b>Full command reference</b> — 22 commands, one mode per layer capability</summary>
+<summary><b>Full command reference</b> — 23 commands, one mode per layer capability</summary>
 
 ```sh
 # Print command help
@@ -463,6 +474,12 @@ cargo run -p refal -- formats examples/hello.ref
 # T-9: drive an interpreter over a known object program and emit the residue,
 # refusing to claim a transition unless it is sound and measurably cheaper
 cargo run -p refal -- metasystem examples/metasystem-unroll.ref
+
+# L2: synthesise the inverse of a function by driving its forward definition
+# (Gluck & Turchin, ISSAC '90). The emitted program is the inverse: its patterns
+# are the forward function's outputs. The round-trip gate splices it back into
+# the source and requires <Inverse <F x>> to return x.
+cargo run -p refal -- invert examples/invert-list-encoder.ref Wrap --strategy interpretive
 
 # Run a .ref program with the bootstrap interpreter
 cargo run -p refal -- run examples/hello.ref

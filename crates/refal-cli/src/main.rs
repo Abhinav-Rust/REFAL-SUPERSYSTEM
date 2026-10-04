@@ -122,6 +122,7 @@ fn main() {
         "graph" => graph_program(&program, &input_args),
         "reflect" => reflect_program(&program, &input_args),
         "prove" => prove_program(&program, &input_args),
+        "invert" => invert_program(&program, &input_args),
         "analyze" => analyze_program(&program, &input_args),
         "formats" => formats_program(&program, &input_args),
         "overlap" => overlap_program(&program, &input_args),
@@ -273,6 +274,9 @@ fn print_usage() {
     eprintln!("             [--steps N]");
     eprintln!("  prove      Prove a predicate by complete tree reduction (Turchin 1986 6)");
     eprintln!("             refal prove <file.ref> <Predicate> [--steps N]");
+    eprintln!("  invert     Synthesise the inverse of a function by driving its forward");
+    eprintln!("             definition (Gluck & Turchin, ISSAC 90)");
+    eprintln!("             refal invert <file.ref> <Function> [--steps N]");
     eprintln!("  analyze    Report bounded Tier 1 reachability, terminals, and SCCs");
     eprintln!("  overlap    Report conservative sentence-pattern compatibility pairs");
     eprintln!("  formats    Report inferred function formats (argument -> result)");
@@ -523,6 +527,56 @@ fn prove_program(program: &refal_ast::Program, args: &[String]) {
     }
 }
 
+/// Synthesise the inverse of a function by driving its forward definition.
+///
+/// Function inversion (layer 2, E-15): Gluck and Turchin, *Application of
+/// Metasystem Transition to Function Inversion and Transformation* (ISSAC '90).
+/// The forward definition is driven under an inverse configuration -- the input
+/// free, the output known -- and the residue is the inverse function, whose
+/// patterns are the forward function's output shapes.
+///
+/// The artifact is the emitted program, so the command prints it: a synthesis
+/// whose result is not printed is a claim rather than a deliverable.
+fn invert_program(program: &refal_ast::Program, args: &[String]) {
+    let Some(function) = args.first() else {
+        eprintln!("{INVERT_USAGE}");
+        process::exit(2);
+    };
+    let options = match drive_options(&args[1..]) {
+        Ok(options) => options,
+        Err(usage) => {
+            eprintln!("{usage}");
+            process::exit(2);
+        }
+    };
+    let core = refal_core::lower_program(program);
+    let graph = refal_core::clean_unreachable_states(&refal_core::build_seed_graph(&core));
+    let report = match refal_core::invert_function_with_strategy(
+        &core,
+        &graph,
+        function,
+        options.max_steps,
+        options.strategy,
+    ) {
+        Ok(report) => report,
+        Err(error) => {
+            eprintln!("inversion error: {error}");
+            process::exit(1);
+        }
+    };
+    let program_text = refal_core::format_program(&report.program);
+    print!(
+        "{}",
+        refal_core::format_inversion_report(&report, &program_text)
+    );
+    // The exit status carries the outcome, so a script can gate on it: 0 when the
+    // inverse was synthesised over a closed walk, 2 when the budget truncated it
+    // and the artifact covers only the cases driven.
+    if !report.complete {
+        process::exit(2);
+    }
+}
+
 /// Freeze the entry configuration and inspect it.
 ///
 /// This is layer 1 of the 1991 supersystem as a *service*: the machine's active
@@ -628,6 +682,7 @@ struct DriveOptions {
 const DRIVE_USAGE: &str = "Usage: refal <drive-symbolic|residualize-driven> <file.ref> [--steps N]      [--strategy search|compilative|interpretive] [--configurations] [--neighborhoods]";
 
 const PROVE_USAGE: &str = "Usage: refal prove <file.ref> <Predicate> [--steps N] [--strategy search|compilative|interpretive]";
+const INVERT_USAGE: &str = "Usage: refal invert <file.ref> <Function> [--steps N] [--strategy search|compilative|interpretive]";
 
 fn drive_options(args: &[String]) -> Result<DriveOptions, String> {
     let mut options = DriveOptions {

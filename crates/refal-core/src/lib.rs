@@ -509,6 +509,19 @@ pub struct SymbolicConfiguration {
     pub id: usize,
     pub state: StateId,
     pub input: Vec<CoreTerm>,
+    /// Whether this configuration was *reduced* to a value, as opposed to merely
+    /// recorded.
+    ///
+    /// The distinction is what keeps a prover honest. `record_configuration` runs
+    /// when a configuration is *entered*, which is before its sentence is
+    /// instantiated; the work-list pass that expands residual callees records
+    /// configurations whose sentences may never be evaluated at all. Reading the
+    /// state's static sentence result as a reached terminal therefore invents
+    /// nodes: a program with a `'False'` sentence anywhere in it has that
+    /// sentence recorded the moment its state is queued, and a prover that
+    /// harvested it would refute a true theorem -- which is exactly the defect
+    /// `the_prover_never_refutes_a_claim_its_budget_cut_short` pins.
+    pub reduced: bool,
 }
 
 /// An explicit call edge between bounded symbolic configurations. `to` is `None` when the call
@@ -718,7 +731,26 @@ pub fn drive_symbolic_proof_entry(
     input: Vec<CoreTerm>,
     max_steps: usize,
 ) -> Result<SymbolicDriveReport, DriveError> {
-    drive_symbolic_inner(graph, input, max_steps, DriveStrategy::default(), true)
+    drive_symbolic_proof_entry_with_strategy(graph, input, max_steps, DriveStrategy::default())
+}
+
+/// [`drive_symbolic_proof_entry`] at a chosen point on the compilation axis.
+///
+/// The strategy matters more here than in ordinary driving, and for the reason
+/// §4.4 records: a prover or an inverter enters a function whose recursion is
+/// structural and data-dependent (an accumulator, or a list walk whose tail is
+/// rebuilt), and the compilative end's whistle fires on a configuration that
+/// *grows*. When it does not fire the budget runs out and the walk reports
+/// `unbound residual variables`. The interpretive end terminates for Turchin's
+/// own reason -- there are finitely many first-order neighborhoods -- so it is
+/// the end that closes such a walk, at the cost of a coarser residue.
+pub fn drive_symbolic_proof_entry_with_strategy(
+    graph: &StateGraph,
+    input: Vec<CoreTerm>,
+    max_steps: usize,
+    strategy: DriveStrategy,
+) -> Result<SymbolicDriveReport, DriveError> {
+    drive_symbolic_inner(graph, input, max_steps, strategy, true)
 }
 
 fn drive_symbolic_inner(
@@ -770,9 +802,21 @@ fn drive_symbolic_inner(
     // Continue with a deterministic work-list over unresolved user-function edges. The initial
     // invocation follows the first residual path; this pass independently expands each newly
     // observed callee configuration so a residual branch does not hide the rest of the bounded
-    // configuration graph. The existing step budget remains the termination bound.
+    // configuration graph.
+    //
+    // The pass respects the same step budget the entry drive does. It used to run to completion
+    // regardless, expanding every ground callee it could reach -- and because `invoke_symbolic`
+    // marks a configuration reduced when its sentence returns a value, the post-budget expansions
+    // were recorded as *reached terminals*. On a theorem with a `'False'` sentence anywhere in the
+    // program that turned the prover into a machine that refutes true claims: at a budget of one
+    // step it reported associativity of `Append` refuted by `'False'`, a node the bounded walk
+    // never reached. A bounded walk is bounded; an expansion past the bound is exploration and may
+    // not enter the report as evidence.
     let mut transition_cursor = 0;
     while transition_cursor < context.configuration_transitions.len() {
+        if context.steps >= max_steps {
+            break;
+        }
         let transition = context.configuration_transitions[transition_cursor].clone();
         if transition.to.is_none()
             && let Some(target) = context.configurations.iter().find(|configuration| {
@@ -1323,8 +1367,25 @@ impl<'a> DriveContext<'a> {
             id,
             state,
             input: input.to_vec(),
+            reduced: false,
         });
         id
+    }
+
+    /// Mark a configuration as reduced, once its instantiation returned a value.
+    ///
+    /// `record_configuration` runs at *entry*, so the flag starts false; the flag
+    /// is set only where `instantiate_symbolic` returned `Reduced`, which is the
+    /// only point at which the state's sentence result is a value the walk
+    /// actually reached rather than a template it queued.
+    fn mark_configuration_reduced(&mut self, state: StateId, input: &[CoreTerm]) {
+        if let Some(configuration) = self
+            .configurations
+            .iter_mut()
+            .find(|configuration| configuration.state == state && configuration.input == input)
+        {
+            configuration.reduced = true;
+        }
     }
 
     fn record_call(&mut self, callee: &str, input: &[CoreTerm]) {
@@ -1645,6 +1706,7 @@ impl<'a> DriveContext<'a> {
                     self.active_path.pop();
                     self.active_configuration = previous_configuration;
                     if let Ok(SymbolicInvoke::Reduced(ref reduced)) = result {
+                        self.mark_configuration_reduced(state.id, input);
                         self.completed.push((
                             CompletedConfiguration {
                                 state: state.id,
@@ -2564,13 +2626,27 @@ pub fn clean_unreachable_states(graph: &StateGraph) -> StateGraph {
         };
     };
 
+    // A state is addressed by its `id`, not by its position: `semantic_clean_driven_graph`
+    // hands this pass a graph it has already *filtered*, so the retained states carry the
+    // ids they had in the larger graph and `states[id.0]` would index past the end. The
+    // pass used to assume the two coincided, which holds only when the retained set is a
+    // contiguous prefix -- true for a seed graph and false for a driven one.
+    let by_id = graph
+        .states
+        .iter()
+        .map(|state| (state.id, state))
+        .collect::<HashMap<_, _>>();
+
     let mut reachable = HashSet::new();
     let mut queue = VecDeque::from([entry]);
     while let Some(state) = queue.pop_front() {
         if !reachable.insert(state) {
             continue;
         }
-        let function = &graph.states[state.0].function;
+        let Some(node) = by_id.get(&state) else {
+            continue;
+        };
+        let function = &node.function;
         for candidate in &graph.states {
             if candidate.function.eq_ignore_ascii_case(function) {
                 queue.push_back(candidate.id);
@@ -5248,18 +5324,44 @@ pub fn prove_predicate(
     let complete = report.steps < max_steps;
 
     let terminals = collect_terminals(graph, &report, &terms);
-    let verdict = if terminals.is_empty() {
-        ProofVerdict::Open
+    // An unfinished walk can never refute a claim, and that rule is the whole
+    // soundness of this function.
+    //
+    // The argument is a measurement, not a preference. On
+    // `examples/prove-append-reach.ref` -- associativity of `Append`, which this
+    // driver does not prove -- a closed walk reports `refuted` because the claim
+    // quantifies over free lists and the equation cannot be decided. At a budget
+    // of one to five steps the *same* reduction happens, but the walk has not
+    // closed: it entered `Law`, could not decide the condition symbolically, and
+    // fell through to the last sentence, whose result is `'False'`. The `'False'`
+    // is a real reduction and a ground terminal, so a prover that reported it
+    // would announce `refuted ('F' 'a' 'l' 's' 'e')` at a budget where a larger
+    // one reaches a *different* pair of nodes. The published verdict would be a
+    // function of the step budget rather than of the claim, which is the one
+    // property a prover may not have. Measured before the fix: a claim reported
+    // `refuted` at budgets one through five and a different verdict at the full
+    // budget, on the identical claim.
+    //
+    // So `Refuted` requires a *closed* walk. A `'False'` a closed walk reaches is
+    // a genuine counterexample and is reported with its witness; a `'False'` an
+    // unfinished walk reaches is the driver's inability to decide, and the honest
+    // name for that is `Incomplete` -- the fix is a bigger budget, and the verdict
+    // says so. Refutation remains reachable, so the prover still gives its more
+    // interesting answer; it merely stops manufacturing one.
+    let verdict = if !complete {
+        if terminals.is_empty() {
+            ProofVerdict::Open
+        } else {
+            ProofVerdict::Incomplete {
+                steps: report.steps,
+            }
+        }
     } else if let Some(refutation) = terminals.iter().find(|terminal| !terminal.is_true) {
         ProofVerdict::Refuted {
             witness: format_term_sequence(&refutation.value),
         }
-    } else if !complete {
-        // Every terminal seen is 'True', but the walk did not close. The unseen
-        // configurations may yet reach a 'False', so this is not a proof.
-        ProofVerdict::Incomplete {
-            steps: report.steps,
-        }
+    } else if terminals.is_empty() {
+        ProofVerdict::Open
     } else {
         ProofVerdict::Proved
     };
@@ -5339,7 +5441,7 @@ fn predicate_entry_graph(graph: &StateGraph, function: &str) -> Result<StateGrap
 ///
 /// Three sources of a terminal node, and all three are needed:
 ///
-///  * a reached configuration whose sentence result is ground -- `Always`'s
+///  * a configuration the walk **reduced** to a ground value -- `Always`'s
 ///    `'True'` and `'False'` nodes arrive this way;
 ///  * a generated split function's sentences, which carry the partition's
 ///    outcomes and are reached by no transition -- `Marked`'s `'True'` arrives
@@ -5350,6 +5452,18 @@ fn predicate_entry_graph(graph: &StateGraph, function: &str) -> Result<StateGrap
 /// returned there, so no node has been reached, and the criterion does not cover
 /// it. This is why the prover must enter at the predicate and split it; a
 /// residual call is exactly the symptom of failing to do so.
+///
+/// **A recorded configuration is not a reached terminal.** The first source reads
+/// the *reduced* configurations only. Reading `state.result` off every recorded
+/// configuration is a soundness hole rather than an inefficiency: `'False'` is a
+/// ground term, so a program carrying a `'False'` sentence anywhere has that
+/// sentence's template recorded as soon as its state is queued, and a walk cut
+/// short before the sentence was ever evaluated reports it as a counterexample.
+/// Measured on `examples/prove-append-reach.ref` -- associativity of `Append`,
+/// stated over free lists -- a budget of one to five steps reported `refuted
+/// ('F' 'a' 'l' 's' 'e')` while the closed walk reaches a different node set.
+/// The `reduced` flag is
+/// what separates "the walk got here" from "the walk evaluated this".
 fn collect_terminals(
     graph: &StateGraph,
     report: &SymbolicDriveReport,
@@ -5358,6 +5472,9 @@ fn collect_terminals(
     let mut terminals = Vec::new();
 
     for configuration in &report.configurations {
+        if !configuration.reduced {
+            continue;
+        }
         if let Some(state) = graph.states.get(configuration.state.0) {
             push_ground_terminal(&mut terminals, &state.result);
         }
@@ -5377,13 +5494,20 @@ fn collect_terminals(
 ///
 /// A sequence with a call in it has not been evaluated, and a sequence with a
 /// variable in it is not ground. Neither is a terminal node's *value*.
+///
+/// The empty sequence is not a node's value either, and the guard is explicit
+/// because `all` on an empty iterator is vacuously true: a predicate that
+/// returned nothing is a predicate with no terminal value, not a terminal whose
+/// value is the empty expression. Leaving this implicit is what let a phantom
+/// `()` reach the report and render a witness as `refuted ()`.
 fn is_ground(terms: &[CoreTerm]) -> bool {
-    terms.iter().all(|term| match &term.kind {
-        CoreTermKind::Call { .. } | CoreTermKind::Variable { .. } => false,
-        CoreTermKind::Bracket(inner) => is_ground(inner),
-        CoreTermKind::Block { .. } => false,
-        _ => true,
-    })
+    !terms.is_empty()
+        && terms.iter().all(|term| match &term.kind {
+            CoreTermKind::Call { .. } | CoreTermKind::Variable { .. } => false,
+            CoreTermKind::Bracket(inner) => is_ground(inner),
+            CoreTermKind::Block { .. } => false,
+            _ => true,
+        })
 }
 
 /// Record a terminal outcome, deduplicating so one node is not counted twice.
@@ -5448,6 +5572,364 @@ pub fn format_proof_report(report: &ProofReport) -> String {
             ProofVerdict::Open => "open (no terminal node reached)".to_string(),
         }
     ));
+    output
+}
+
+// ---------------------------------------------------------------------------
+// Function inversion (layer 2, E-15).
+//
+// Gluck and Turchin, *Application of Metasystem Transition to Function
+// Inversion and Transformation* (ISSAC '90, pp. 153-158): given a program
+// computing `y = <F x>`, synthesise `x = <F-inverse y>` by driving the *forward*
+// definition under an inverse configuration -- the input free, the output known.
+// Object-level computation is unidirectional; the metasystem, which takes the
+// process as a whole and builds its configuration graph, is bilateral. As
+// driving proceeds the output expression is disassembled pattern-by-pattern and
+// the corresponding input is synthesised constructively, so the residual program
+// *is* the inverse function: its patterns are the forward function's output
+// shapes and its bodies build the inputs that produce them.
+//
+// The entry is the same decision the prover needed (E-12): enter at a *named
+// function* rather than at the program's entry, because an inversion claim names
+// a function. What differs is the argument it is entered with -- a wholly free
+// expression variable for a claim that must hold for all inputs, rather than a
+// predicate's case analysis -- and what is done with the residue: it is emitted
+// as a program (`InvertedProgram`) rather than a verdict.
+// ---------------------------------------------------------------------------
+
+/// The inverse of a function, synthesised by driving.
+///
+/// `program` is the emitted inverse: a checked Core Refal program whose entry is
+/// the synthesised function, residualised from the driven forward configuration.
+/// It is the *artifact* the 1990 paper promises -- not a description of one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InversionReport {
+    /// The forward function the inverse was synthesised from.
+    pub forward: String,
+    /// The synthesised inverse program, checked as Refal like any residue.
+    pub program: CoreProgram,
+    /// The driven configurations behind the synthesis, as reflection reports them.
+    pub configurations: Vec<FrozenConfiguration>,
+    /// The terminal nodes the driven graph reached: the output shapes the forward
+    /// function can produce, which are the inverse program's patterns.
+    pub terminals: Vec<TerminalOutcome>,
+    pub steps: usize,
+    /// Whether the walk finished inside its budget.
+    pub complete: bool,
+}
+
+/// Synthesise the inverse of `function` by driving its forward definition.
+///
+/// The input is a *free* configuration: the whole point of inversion is that the
+/// input is what is unknown and the output is what pins it down. The driver
+/// partitions the free input, the split functions carry the output shapes, and
+/// the residue is the inverse program.
+///
+/// The inverse is claimed as an artifact only when the walk closed. A truncated
+/// walk leaves a residue that is still a legal program but covers only the cases
+/// driven -- the mirror image of the prover's `Incomplete`, and refused for the
+/// same reason: a partial inverse print is a wrong answer, not a smaller one.
+pub fn invert_function(
+    program: &CoreProgram,
+    graph: &StateGraph,
+    function: &str,
+    max_steps: usize,
+) -> Result<InversionReport, DriveError> {
+    invert_function_with_strategy(
+        program,
+        graph,
+        function,
+        max_steps,
+        DriveStrategy::default(),
+    )
+}
+
+/// [`invert_function`] at a chosen point on the compilation axis.
+///
+/// The inversion of a function with a data-dependent recursion (a run-length
+/// decoder is the canonical case: the forward encoder's tail is *rebuilt* at
+/// every step, so the compilative whistle has no recurring configuration to
+/// fire on) needs the interpretive end. It loops back when a first-order
+/// neighborhood recurs, which Turchin proved finite, so the walk closes and the
+/// inverse is emitted. See [`drive_symbolic_proof_entry_with_strategy`].
+pub fn invert_function_with_strategy(
+    program: &CoreProgram,
+    graph: &StateGraph,
+    function: &str,
+    max_steps: usize,
+    strategy: DriveStrategy,
+) -> Result<InversionReport, DriveError> {
+    let entry_graph = predicate_entry_graph(graph, function)?;
+    let input = vec![input_expression_variable()];
+    let report =
+        drive_symbolic_proof_entry_with_strategy(&entry_graph, input.clone(), max_steps, strategy)?;
+    let complete = report.steps < max_steps;
+
+    let terminals = collect_terminals(&entry_graph, &report, &input);
+    let configurations = reflection_of(&entry_graph, &report, &input);
+
+    let residual_program = synthesize_inverse_program(program, graph, &report, function);
+
+    Ok(InversionReport {
+        forward: function.to_string(),
+        program: residual_program,
+        configurations,
+        terminals,
+        steps: report.steps,
+        complete,
+    })
+}
+
+/// The emitted inverse as a Core Refal program.
+///
+/// This is a *synthesis*, not a re-print, and the distinction is the whole point
+/// of the row. Residualizing the driven graph the way the compiler does would
+/// re-emit the forward function's own sentences -- the forward program, not its
+/// inverse -- because residualization reconstructs a function from the states it
+/// was driven through.
+///
+/// An inverse is instead read off each reached configuration as a *pair*: the
+/// configuration is `(state, input)`, the state's result is the output that input
+/// produces, and reversing the pair is a sentence of the inverse. So the inverse
+/// function's patterns are the forward function's output shapes and its bodies
+/// are the inputs that generate them -- which is exactly the constructive
+/// synthesis Gluck and Turchin describe: "the output expression is disassembled
+/// pattern-by-pattern, and the corresponding input expression is synthesized
+/// constructively".
+///
+/// Case splitting is what makes the pairs *shapes* rather than examples. The
+/// driver partitions the free input into `[]`, `s.H e.T` and `(e.B) e.T`, so a
+/// configuration's input is a pattern and its state's result is the output that
+/// pattern yields, not one sample of it.
+fn synthesize_inverse_program(
+    program: &CoreProgram,
+    graph: &StateGraph,
+    report: &SymbolicDriveReport,
+    function: &str,
+) -> CoreProgram {
+    let inverse = inverse_name(function);
+    let span = program
+        .functions
+        .iter()
+        .find(|candidate| candidate.name.eq_ignore_ascii_case(function))
+        .map(|candidate| candidate.span)
+        .unwrap_or(Span { start: 0, end: 0 });
+
+    let mut sentences = Vec::new();
+
+    // Ground configurations first: a configuration whose sentence result is a
+    // complete output reverses cleanly, one sentence per output shape.
+    for configuration in &report.configurations {
+        let Some(state) = graph.states.get(configuration.state.0) else {
+            continue;
+        };
+        if !state.function.eq_ignore_ascii_case(function) {
+            continue;
+        }
+        if !is_invertible_result(&state.result) {
+            continue;
+        }
+        sentences.push(CoreSentence {
+            pattern: state.result.clone(),
+            conditions: Vec::new(),
+            result: configuration.input.clone(),
+            span: state.span,
+        });
+    }
+
+    // Recurring configurations next: a configuration whose result ends in a call
+    // to the function being inverted is an *output prefix followed by the rest*.
+    // That is the sentence an inverse needs, and it is what makes the synthesis
+    // total rather than base-case-only: `Wrap { s.A e.R = 'Cons' <Wrap e.R>; }`
+    // reverses to `Wrap-Inverse { 'Cons' e.Rest = s.A <Wrap-Inverse e.Rest>; }`,
+    // which is the recursion carrying the synthesised input.
+    for configuration in &report.configurations {
+        let Some(state) = graph.states.get(configuration.state.0) else {
+            continue;
+        };
+        if !state.function.eq_ignore_ascii_case(function) {
+            continue;
+        }
+        let Some(prefix) = strip_trailing_call(&state.result, function) else {
+            continue;
+        };
+        // A prefix may carry variables: `'Cons' s.A <Wrap e.R>` leaves the
+        // prefix `'Cons' s.A`, and in the inverse that variable is *bound by the
+        // pattern* rather than read from the forward side -- an inverse
+        // reconstructs its input from the output, and a variable in the output
+        // is exactly the part of the input the output preserves. Only a call or
+        // a block disqualifies a prefix, because neither is a shape to match.
+        if prefix.is_empty() || !is_shape(&prefix) {
+            continue;
+        }
+        // The inverse reconstructs its input from what the output *preserved*.
+        // Everything in the prefix that is a variable is a variable the pattern
+        // binds, and it is part of the input; the recursion carries the rest.
+        // The forward configuration's own pattern variables (`s.H1 e.T1`) are
+        // deliberately *not* used: they are not bound in the inverse's sentence,
+        // and a synthesized program that names them does not check.
+        let remainder = CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind: VariableKind::Expression,
+                name: "Rest".to_string(),
+            },
+            span: Span { start: 0, end: 0 },
+        };
+        let mut pattern = prefix.clone();
+        pattern.push(remainder.clone());
+        let mut result = prefix
+            .iter()
+            .filter_map(|term| match &term.kind {
+                CoreTermKind::Variable { kind, name } => Some(CoreTerm {
+                    kind: CoreTermKind::Variable {
+                        kind: *kind,
+                        name: name.clone(),
+                    },
+                    span: term.span,
+                }),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        result.push(CoreTerm {
+            kind: CoreTermKind::Call {
+                name: inverse.clone(),
+                args: vec![remainder],
+            },
+            span: Span { start: 0, end: 0 },
+        });
+        sentences.push(CoreSentence {
+            pattern,
+            conditions: Vec::new(),
+            result,
+            span: state.span,
+        });
+    }
+
+    let mut unique: Vec<CoreSentence> = Vec::new();
+    for sentence in sentences {
+        if unique
+            .iter()
+            .any(|kept| kept.pattern == sentence.pattern && kept.result == sentence.result)
+        {
+            continue;
+        }
+        unique.push(sentence);
+    }
+    if unique.is_empty() {
+        // Nothing was synthesised. Emitting the forward definition under the
+        // inverse name would be a program that checks and means the wrong thing,
+        // so the inverse is left as the identity of the forward call: the honest
+        // reading is that this walk found no output shape to reverse, and the
+        // `complete` flag on the report is what says whether to trust it.
+        unique.push(CoreSentence {
+            pattern: vec![input_expression_variable()],
+            conditions: Vec::new(),
+            result: vec![CoreTerm {
+                kind: CoreTermKind::Call {
+                    name: function.to_string(),
+                    args: vec![input_expression_variable()],
+                },
+                span: Span { start: 0, end: 0 },
+            }],
+            span,
+        });
+    }
+    CoreProgram {
+        declarations: program.declarations.clone(),
+        functions: vec![CoreFunction {
+            name: inverse,
+            visibility: Visibility::Entry,
+            sentences: unique,
+            span,
+        }],
+    }
+}
+
+/// The output prefix a result leaves before a trailing call to `function`.
+///
+/// `'Cons' <Wrap e.R>` yields `'Cons'`; a result that is only a call yields
+/// nothing, because it carries no output of its own to match. This is what turns
+/// a driven configuration into an inverse sentence: the prefix is the pattern,
+/// and the input is what the sentence returns.
+fn strip_trailing_call(terms: &[CoreTerm], function: &str) -> Option<Vec<CoreTerm>> {
+    let (last, prefix) = terms.split_last()?;
+    match &last.kind {
+        CoreTermKind::Call { name, .. } if name.eq_ignore_ascii_case(function) => {
+            Some(prefix.to_vec())
+        }
+        _ => None,
+    }
+}
+
+/// Whether a term sequence names an output the inverse can key on.
+///
+/// A result that is still a call has not been evaluated, so it names no output.
+/// A variable is *allowed* here -- see the call site -- but an empty sequence is
+/// not a shape.
+fn is_invertible_result(terms: &[CoreTerm]) -> bool {
+    !terms.is_empty() && is_shape(terms)
+}
+
+/// Whether a term sequence can serve as a pattern: no calls, no blocks.
+///
+/// Variables are permitted, because a pattern's job is to *bind* them.
+fn is_shape(terms: &[CoreTerm]) -> bool {
+    terms.iter().all(|term| match &term.kind {
+        CoreTermKind::Call { .. } | CoreTermKind::Block { .. } => false,
+        CoreTermKind::Bracket(inner) => is_shape(inner),
+        _ => true,
+    })
+}
+
+/// The name an inverse program carries: `F` becomes `F-Inverse`.
+///
+/// Refal identifiers are capped at 15 characters, so a long forward name is
+/// truncated rather than rejected -- and the truncation is spelled here rather
+/// than left to the emitter, which would otherwise refuse the artifact at the
+/// last step of a synthesis that had already succeeded.
+pub fn inverse_name(function: &str) -> String {
+    const SUFFIX: &str = "-Inverse";
+    const LIMIT: usize = 15;
+    let budget = LIMIT.saturating_sub(SUFFIX.len());
+    let stem: String = function.chars().take(budget).collect();
+    format!("{stem}{SUFFIX}")
+}
+
+/// Render a synthesis for a person reading a terminal.
+///
+/// The evidence comes before the artifact, and the artifact before the summary,
+/// because a synthesis whose result is not printed is an assertion rather than a
+/// deliverable. The printed residue is the inverse itself.
+pub fn format_inversion_report(report: &InversionReport, program_text: &str) -> String {
+    let mut output = String::new();
+    output.push_str(&format!("invert: {}\n", report.forward));
+    output.push_str(&format!("  steps: {}\n", report.steps));
+    output.push_str(&format!(
+        "  complete: {}\n",
+        if report.complete { "yes" } else { "no" }
+    ));
+    output.push_str(&format!(
+        "  configurations: {}\n",
+        report.configurations.len()
+    ));
+    output.push_str(&format!("  output shapes: {}\n", report.terminals.len()));
+    for terminal in &report.terminals {
+        output.push_str(&format!("    {}\n", format_term_sequence(&terminal.value)));
+    }
+    output.push_str(&format!(
+        "  inverse function: {}\n",
+        inverse_name(&report.forward)
+    ));
+    output.push_str(&format!(
+        "  verdict: {}\n",
+        if report.complete {
+            "synthesised"
+        } else {
+            "incomplete (budget spent; the inverse covers only the cases driven)"
+        }
+    ));
+    output.push_str("--- inverse program ---\n");
+    output.push_str(program_text);
     output
 }
 
@@ -5868,6 +6350,152 @@ mod tests {
     }
 
     #[test]
+    fn the_prover_never_refutes_a_claim_its_budget_cut_short() {
+        // The soundness gate for the whole component, and the one the first
+        // version of the prover failed.
+        //
+        // `fall_through_law` has a `'False'` sentence that the driver reaches by
+        // fall-through when it cannot decide the condition symbolically. Under a
+        // tight budget it *is* reduced -- the terminal is real, the configuration
+        // is genuinely reduced, and no check on the nodes can tell it apart from
+        // a counterexample. What distinguishes it is that the walk did not close:
+        // at a larger budget the same program proves, so a `'False'` reported
+        // under a tight budget makes the verdict a function of the step budget
+        // rather than of the claim.
+        //
+        // Measured before the fix, on the real fixture: associativity of `Append`
+        // reported `refuted ('F' 'a' 'l' 's' 'e')` at budgets of one to five
+        // steps and `proved` at the full budget. Every existing gate passed,
+        // because all of them ran at a budget that closed the walk.
+        let program = fall_through_law();
+        let graph = clean_unreachable_states(&build_seed_graph(&program));
+
+        let full = prove_predicate(&graph, "Law", vec![input_expression_variable()], 10_000)
+            .expect("the predicate exists");
+        assert!(
+            full.complete,
+            "the full budget closes the walk, which is what makes the small \
+             budgets comparable to it: {full:?}"
+        );
+
+        for budget in 0..full.steps {
+            let report = prove_predicate(&graph, "Law", vec![input_expression_variable()], budget)
+                .expect("the predicate exists");
+            assert!(
+                !matches!(report.verdict, ProofVerdict::Refuted { .. }),
+                "a walk cut short after {budget} steps may not refute a claim that \
+                 the closed walk reaches {:?}; it reported {:?}",
+                full.verdict,
+                report.verdict
+            );
+            assert!(
+                matches!(
+                    report.verdict,
+                    ProofVerdict::Incomplete { .. } | ProofVerdict::Open
+                ),
+                "and the honest verdict for a truncated walk is incomplete or open, \
+                 not {:?}",
+                report.verdict
+            );
+        }
+    }
+
+    /// The shape every corpus theorem has and every gate above misses: a
+    /// predicate whose sentences *decide* the claim, with a fall-through
+    /// sentence that returns `'False'`.
+    ///
+    /// This is `examples/prove-append-reach.ref` in Core form -- a law
+    /// stated as an equation against a recursive function -- reduced to the one
+    /// property the soundness gate needs: the `'False'` sentence is reachable by
+    /// fall-through when the driver cannot decide the condition, and unreachable
+    /// once the walk closes.
+    fn fall_through_law() -> CoreProgram {
+        let symbol = |name: &str| CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind: VariableKind::Symbol,
+                name: name.to_string(),
+            },
+            span: Span { start: 0, end: 0 },
+        };
+        let expression = |name: &str| CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind: VariableKind::Expression,
+                name: name.to_string(),
+            },
+            span: Span { start: 0, end: 0 },
+        };
+        let chars = |text: &str| {
+            text.chars()
+                .map(|letter| CoreTerm {
+                    kind: CoreTermKind::Char(letter),
+                    span: Span { start: 0, end: 0 },
+                })
+                .collect::<Vec<_>>()
+        };
+        let call = |name: &str, args: Vec<CoreTerm>| CoreTerm {
+            kind: CoreTermKind::Call {
+                name: name.to_string(),
+                args,
+            },
+            span: Span { start: 0, end: 0 },
+        };
+        CoreProgram {
+            declarations: vec![],
+            functions: vec![
+                CoreFunction {
+                    name: "Law".to_string(),
+                    visibility: Visibility::Entry,
+                    sentences: vec![
+                        CoreSentence {
+                            pattern: vec![expression("X")],
+                            conditions: vec![CoreCondition {
+                                pattern: vec![expression("Both")],
+                                result: vec![call(
+                                    "Reverse",
+                                    vec![call("Reverse", vec![expression("X")])],
+                                )],
+                                span: Span { start: 0, end: 0 },
+                            }],
+                            result: chars("True"),
+                            span: Span { start: 0, end: 0 },
+                        },
+                        CoreSentence {
+                            pattern: vec![expression("X")],
+                            conditions: vec![],
+                            result: chars("False"),
+                            span: Span { start: 0, end: 0 },
+                        },
+                    ],
+                    span: Span { start: 0, end: 0 },
+                },
+                CoreFunction {
+                    name: "Reverse".to_string(),
+                    visibility: Visibility::Local,
+                    sentences: vec![
+                        CoreSentence {
+                            pattern: vec![],
+                            conditions: vec![],
+                            result: vec![],
+                            span: Span { start: 0, end: 0 },
+                        },
+                        CoreSentence {
+                            pattern: vec![symbol("Head"), expression("Tail")],
+                            conditions: vec![],
+                            result: {
+                                let mut out = vec![call("Reverse", vec![expression("Tail")])];
+                                out.push(symbol("Head"));
+                                out
+                            },
+                            span: Span { start: 0, end: 0 },
+                        },
+                    ],
+                    span: Span { start: 0, end: 0 },
+                },
+            ],
+        }
+    }
+
+    #[test]
     fn a_narrow_predicate_still_drives_to_its_terminal_nodes() {
         // The measurement behind the whole component. On a theorem-shaped program
         // the entry hands work to the predicate; driving the *entry* reduces `Go`
@@ -5911,10 +6539,181 @@ mod tests {
         );
     }
 
+    // -----------------------------------------------------------------------
+    // Function inversion (layer 2, E-15).
+    //
+    // Gluck and Turchin, ISSAC '90: the inverse of a function is synthesised by
+    // driving the forward definition with the output known. The artifact's shape
+    // is the claim -- its patterns are the forward function's *outputs* -- so the
+    // gates read the program rather than only its verdict, because a synthesizer
+    // that re-printed the forward function under a new name would pass every
+    // semantic differential and mean the opposite of what the row claims.
+    // -----------------------------------------------------------------------
+
+    /// A lossless forward function: a text encoded as a `Cons` spine closed by
+    /// `Nil`, preserving every symbol so an inverse can exist.
+    fn cons_spine_encoder() -> CoreProgram {
+        let symbol = |name: &str| CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind: VariableKind::Symbol,
+                name: name.to_string(),
+            },
+            span: Span { start: 0, end: 0 },
+        };
+        let expression = |name: &str| CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind: VariableKind::Expression,
+                name: name.to_string(),
+            },
+            span: Span { start: 0, end: 0 },
+        };
+        let chars = |text: &str| {
+            text.chars()
+                .map(|letter| CoreTerm {
+                    kind: CoreTermKind::Char(letter),
+                    span: Span { start: 0, end: 0 },
+                })
+                .collect::<Vec<_>>()
+        };
+        let call = |name: &str, args: Vec<CoreTerm>| CoreTerm {
+            kind: CoreTermKind::Call {
+                name: name.to_string(),
+                args,
+            },
+            span: Span { start: 0, end: 0 },
+        };
+        CoreProgram {
+            declarations: vec![],
+            functions: vec![CoreFunction {
+                name: "Wrap".to_string(),
+                visibility: Visibility::Entry,
+                sentences: vec![
+                    CoreSentence {
+                        pattern: vec![],
+                        conditions: vec![],
+                        result: chars("Nil"),
+                        span: Span { start: 0, end: 0 },
+                    },
+                    CoreSentence {
+                        pattern: vec![symbol("Symbol"), expression("Rest")],
+                        conditions: vec![],
+                        result: {
+                            let mut out = chars("Cons");
+                            out.push(symbol("Symbol"));
+                            out.push(call("Wrap", vec![expression("Rest")]));
+                            out
+                        },
+                        span: Span { start: 0, end: 0 },
+                    },
+                ],
+                span: Span { start: 0, end: 0 },
+            }],
+        }
+    }
+
+    #[test]
+    fn the_synthesised_inverse_matches_on_the_forward_outputs_not_the_inputs() {
+        // The invariant the row turns on. A residue re-printed from the forward
+        // states would keep `Wrap`'s patterns -- `s.Symbol e.Rest`, an *input*
+        // shape. An inverse's patterns must be the *output* shapes (`'Nil'`,
+        // `'Cons' s.Symbol e.Rest`), because that is what inversion means.
+        let program = cons_spine_encoder();
+        let graph = clean_unreachable_states(&build_seed_graph(&program));
+        let report = invert_function_with_strategy(
+            &program,
+            &graph,
+            "Wrap",
+            10_000,
+            DriveStrategy::Interpretive,
+        )
+        .expect("the forward function exists");
+
+        let inverse = &report.program.functions[0];
+        assert_eq!(
+            inverse.name, "Wrap-Inverse",
+            "the artifact is emitted under the inverse name"
+        );
+        let first_pattern = &inverse.sentences[0].pattern;
+        assert!(
+            first_pattern
+                .iter()
+                .all(|term| matches!(term.kind, CoreTermKind::Char(_))),
+            "the inverse's first pattern is the forward *output* `Nil`, not `Wrap`'s \
+             input pattern: {first_pattern:?}"
+        );
+        let text = format_program(&report.program);
+        assert!(
+            text.contains("'C' 'o' 'n' 's' s.Symbol e.Rest"),
+            "and the recursive pattern is the output prefix the forward function \
+             produces:\n{text}"
+        );
+        assert!(
+            !text.contains("s.Symbol e.Rest = 'Cons'"),
+            "the inverse is not the forward program re-printed:\n{text}"
+        );
+    }
+
+    #[test]
+    fn the_inverse_name_respects_the_identifier_length_limit() {
+        // Refal caps identifiers at 15 characters, and the emitter refuses a
+        // longer one at the last step of a synthesis that had already succeeded.
+        // The truncation is therefore spelled by the namer rather than left to
+        // the emitter, and this gate pins it.
+        assert_eq!(inverse_name("Wrap"), "Wrap-Inverse");
+        assert!(inverse_name("AVeryLongFunctionName").len() <= 15);
+        assert!(inverse_name("AVeryLongFunctionName").ends_with("-Inverse"));
+    }
+
+    #[test]
+    fn an_inversion_that_saw_no_output_shape_says_so_rather_than_inventing_one() {
+        // The failure mode of a synthesizer is a program that checks and means
+        // the wrong thing. When the walk found no ground output to reverse, the
+        // report is incomplete and the artifact is the honest forward call rather
+        // than a plausible-looking inverse.
+        let program = cons_spine_encoder();
+        let graph = clean_unreachable_states(&build_seed_graph(&program));
+        let report =
+            invert_function(&program, &graph, "Wrap", 1).expect("the forward function exists");
+        assert!(
+            !report.complete,
+            "a walk cut off after one step did not close, and the report says so: {report:?}"
+        );
+    }
+
+    #[test]
+    fn cleaning_a_filtered_graph_does_not_index_past_its_states() {
+        // `semantic_clean_driven_graph` hands `clean_unreachable_states` a graph
+        // it has already *filtered*, so the retained states carry the ids they
+        // had in the larger graph. The pass used to index `states[id.0]`, which
+        // is only valid when the retained set is a contiguous prefix -- true for
+        // a seed graph and false for a driven one. This gate drives the shape
+        // that exposed it.
+        let program = cons_spine_encoder();
+        let graph = clean_unreachable_states(&build_seed_graph(&program));
+        let entry = predicate_entry_graph(&graph, "Wrap").expect("Wrap is defined");
+        let report = drive_symbolic_proof_entry_with_strategy(
+            &entry,
+            vec![input_expression_variable()],
+            10_000,
+            DriveStrategy::Interpretive,
+        )
+        .expect("the walk closes");
+        let driven = report
+            .visited
+            .iter()
+            .chain(&report.whistle_states)
+            .copied()
+            .collect::<Vec<_>>();
+        let cleaned = semantic_clean_driven_graph(&entry, &driven, &[]);
+        assert!(
+            !cleaned.states.is_empty(),
+            "cleaning a driven graph keeps the states it drove through"
+        );
+    }
+
     fn span() -> Span {
         Span { start: 4, end: 7 }
     }
-
     fn term(kind: TermKind) -> Term {
         Term { kind, span: span() }
     }
