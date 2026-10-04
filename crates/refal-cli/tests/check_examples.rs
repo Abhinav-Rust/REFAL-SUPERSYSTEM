@@ -113,6 +113,20 @@ fn symbolic_drive_file(path: &str, args: &[&str]) -> std::process::Output {
     command.output().expect("run refal binary")
 }
 
+fn reflect_file(path: &str, args: &[&str]) -> std::process::Output {
+    let mut command = Command::new(refal_bin());
+    command.args(["reflect", &workspace_path(path)]);
+    command.args(args);
+    command.output().expect("run refal binary")
+}
+
+fn prove_file(path: &str, predicate: &str, args: &[&str]) -> std::process::Output {
+    let mut command = Command::new(refal_bin());
+    command.args(["prove", &workspace_path(path), predicate]);
+    command.args(args);
+    command.output().expect("run refal binary")
+}
+
 fn residualize_file(path: &str, args: &[&str]) -> std::process::Output {
     let mut command = Command::new(refal_bin());
     command.args(["residualize", &workspace_path(path)]);
@@ -336,6 +350,152 @@ fn reports_pattern_overlap_for_recursive_fixture() {
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
         "Reverse: S1 vs S2 = unknown\n"
+    );
+}
+
+#[test]
+fn freezes_and_inspects_the_entry_configuration_as_data() {
+    // Layer 1 of the 1991 supersystem as a *service*: the machine's active
+    // configuration comes back as terms, which is what lets a prover and an
+    // inverter be written against reflection rather than against `refal-core`.
+    let output = reflect_file("examples/symbolic-branch.ref", &[]);
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.starts_with("reflection\n"),
+        "the report is a term sequence a metafunction could have produced:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("  entry: e.Input\n"),
+        "the entry configuration carries the argument it was entered with:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("  complete: yes\n"),
+        "and says whether its walk finished inside its budget:\n{stdout}"
+    );
+    // The partitioned argument reaches `Choose` in each shape the case split
+    // produced: the empty expression, a head-and-tail split, and a bracketed
+    // head. The third stays *residual* -- the driver has not decided it, so it
+    // is reported as a call rather than guessed at.
+    assert!(
+        stdout.contains("C1 Choose []"),
+        "the empty branch is an addressable configuration:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("C2 Choose [s.H1 e.T1]"),
+        "so is the non-empty branch:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("residual:<Choose (e.B1) e.T1>"),
+        "and the bracketed branch is reported residual rather than guessed:\n{stdout}"
+    );
+}
+
+#[test]
+fn reflection_names_the_entry_of_a_program_that_records_no_configuration() {
+    // `identity.ref` drives straight to a residue without partitioning anything,
+    // so the driver records no configuration at all. The service must still name
+    // the machine it is looking at: reporting "no configurations" for a program
+    // the machine is plainly inside would describe the driver's bookkeeping
+    // rather than the machine.
+    let output = reflect_file("examples/identity.ref", &[]);
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("C0 Go [e.Input]"),
+        "the entry configuration is named even when none was recorded:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("C0  ["),
+        "no configuration renders with a blank function name:\n{stdout}"
+    );
+}
+
+#[test]
+fn a_reflection_walk_cut_off_by_its_budget_says_so() {
+    // No conclusion may be drawn from the silence of an incomplete walk, so the
+    // report has to distinguish "there is nothing more" from "I stopped here".
+    let output = reflect_file("examples/symbolic-branch.ref", &["--steps", "1"]);
+    assert!(
+        output.status.success(),
+        "unexpected stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("  complete: no\n"),
+        "a truncated walk is reported as incomplete:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("  C0 Go [e.Input]"),
+        "and it still names the entry it stopped at:\n{stdout}"
+    );
+}
+
+#[test]
+fn the_prover_reports_a_proof_for_a_predicate_whose_only_terminal_is_true() {
+    // Turchin's criterion, 1986 6: a driven configuration graph whose only
+    // terminal node is 'True' is a proof. The exit status carries the verdict so
+    // the command can be used as a gate.
+    let output = prove_file("examples/prove-predicate-true.ref", "Marked", &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.starts_with("proof: Marked\n"),
+        "the report names the predicate it proved:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("  terminals: 1\n"),
+        "and the proof is the single terminal node the criterion names:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("  verdict: proved\n"),
+        "the verdict is printed after its evidence:\n{stdout}"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "a proof exits zero:\n{stdout}\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn the_prover_never_reports_a_refutation_as_a_proof() {
+    // The most important gate on the whole component. A predicate that can return
+    // something other than 'True' is not proved, and the exit status has to say
+    // so -- a prover that always exited zero could not be used to gate anything.
+    let output = prove_file("examples/prove-predicate.ref", "Always", &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("  verdict: refuted"),
+        "a predicate that can return 'False' is refuted, with the node named:\n{stdout}"
+    );
+    assert_ne!(
+        output.status.code(),
+        Some(0),
+        "and it does not exit zero:\n{stdout}"
+    );
+}
+
+#[test]
+fn an_unknown_predicate_is_a_usage_error_not_a_verdict() {
+    let output = prove_file("examples/identity.ref", "NoSuchFunction", &[]);
+    assert!(
+        !String::from_utf8_lossy(&output.stderr).is_empty(),
+        "naming a function the program does not define reports an error"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "and it is an error rather than a proof verdict"
     );
 }
 
