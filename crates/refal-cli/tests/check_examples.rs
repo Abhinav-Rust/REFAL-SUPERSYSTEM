@@ -497,7 +497,11 @@ fn the_prover_never_refutes_a_claim_its_budget_cut_short() {
     // So: no budget below closure may refute. A truncated walk says `incomplete`,
     // and a counterexample the *closed* walk reaches is still reported -- which is
     // what `the_prover_never_reports_a_refutation_as_a_proof` pins.
-    let full = prove_file("examples/prove-append-reach.ref", "Law", &["--steps", "3000"]);
+    let full = prove_file(
+        "examples/prove-append-reach.ref",
+        "Law",
+        &["--steps", "3000"],
+    );
     let full_stdout = String::from_utf8_lossy(&full.stdout);
     assert!(
         full_stdout.contains("  complete: yes\n"),
@@ -512,11 +516,19 @@ fn the_prover_never_refutes_a_claim_its_budget_cut_short() {
         .to_string();
 
     for budget in ["1", "2", "3", "4", "5", "6", "7"] {
-        let output = prove_file("examples/prove-append-reach.ref", "Law", &["--steps", budget]);
+        let output = prove_file(
+            "examples/prove-append-reach.ref",
+            "Law",
+            &["--steps", budget],
+        );
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert!(
             std::process::Command::new(refal_bin())
-                .args(["prove", &workspace_path("examples/prove-append-reach.ref"), "Law"])
+                .args([
+                    "prove",
+                    &workspace_path("examples/prove-append-reach.ref"),
+                    "Law"
+                ])
                 .args(["--steps", budget])
                 .output()
                 .is_ok(),
