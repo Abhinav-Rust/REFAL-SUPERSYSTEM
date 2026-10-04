@@ -1,9 +1,9 @@
 # Classic Refal-5 Frontend Coverage
 
-This matrix is the completion contract for Milestone 2. A row is complete only when the
+This matrix is the completion contract for the front end. A row is complete only when the
 lexer/parser behaviour and positive and negative tests are present.
 
-**Milestone 2 is complete.** An audit against the normative reference on 2026-08-05 found
+**The front end is complete.** An audit against the normative reference on 2026-08-05 found
 that sentence-ending blocks were not implemented and that four lexical rows diverged from
 the reference. The historical lexical defects are fixed in `641ffc0`; blocks and the
 macrodigit bound are now implemented with parser, semantic, runtime, core, and CLI
@@ -87,7 +87,7 @@ extensions must not silently enter the Classic Refal-5 frontend.
 | Optional semicolons between top-level definitions | Complete | Parser test covers separated definitions |
 | Full malformed-program golden suite | Complete | The negative corpus covers twenty-six distinct lexer/parser/semantic failure classes (`examples/bad-*.ref`), including unterminated comments, empty literals, missing variable names, over-long identifiers, juxtaposed dotted variables, unsupported directives, malformed exponents, delimiter failures, and invalid top-level items; parser cases assert exact diagnostics and locations. Every class is bound to its clause of the reference in `examples/conformance.manifest`, and `every_reference_clause_has_a_traceable_fixture` runs the binding |
 
-## Milestone 2 Exit Criteria
+## Front-end exit criteria
 
 **Met.** The list below is the contract, and each item now names the gate that decides it.
 
@@ -102,5 +102,5 @@ extensions must not silently enter the Classic Refal-5 frontend.
       greater length, so a second citation scheme would be a second name for one rule.
 - [x] `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` and
       `git diff --check` pass before each push.
-- [x] The README and roadmap report Milestone 2 as Complete, which they may do now that
+- [x] The README reports the front end as complete, which they may do now that
       the rows above are green.

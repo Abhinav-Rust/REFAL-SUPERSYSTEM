@@ -539,7 +539,6 @@ and a new workstream carries zero credit until a gate behind it is green.
 | [turchin/](docs/turchin/) | Primary sources index and fetch script |
 | [PROGRESS.md](docs/PROGRESS.md) | Live state, standing orders, and `NEXT ACTION` |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Crate structure and design decisions |
-| [ROADMAP.md](docs/ROADMAP.md) | Milestone plan and completion criteria |
 | [FRONTEND-COVERAGE.md](docs/FRONTEND-COVERAGE.md) | Lexer/parser coverage tracking |
 | [SEMANTIC-AUDIT.md](docs/SEMANTIC-AUDIT.md) | Semantic completion audit |
 | [LANGUAGE-SCOPE.md](docs/LANGUAGE-SCOPE.md) | Dialect features in and out of scope |

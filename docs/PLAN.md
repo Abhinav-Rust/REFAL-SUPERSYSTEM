@@ -86,15 +86,15 @@ toolchain makes.
 
 ---
 
-## 3. What changes from the current roadmap
+## 3. What changed from the original plan
 
 | Current | Proposed | Why |
 |---|---|---|
-| M4 tree-walking interpreter | **Flat view-field rewriting machine** | Host recursion capped depth at 1024, so a Refal-written compiler could not run on it. The cap is now removed: the evaluator is work-list driven and 50,000 frames completes in under a second. |
-| M5 `refal-core` = AST clone + pretty-printer | **Graph of states** (§4.2–4.6) | The current Core is isomorphic to the AST; nothing is lowered. It cannot carry a backend or an analysis. |
-| M6 native backend, before self-hosting | **Deferred off the critical path** | Not needed for "compiler in Refal emitting Refal." Becomes §4.7 inside the graph architecture, after self-hosting. |
-| M7 self-hosting last | **Moved ahead of native codegen** | Self-host on the machine; codegen after. Removes the largest chunk of work from the path to the goal. |
-| Milestones 2 & 3 marked Complete | **Reset to Partial** | Refal-5 blocks do not parse; 8 confirmed conformance defects. Docs gate future work on these being true. |
+| The tree-walking interpreter | **Flat view-field rewriting machine** | Host recursion capped depth at 1024, so a Refal-written compiler could not run on it. The cap is now removed: the evaluator is work-list driven and 50,000 frames completes in under a second. |
+| `refal-core` as an AST clone and pretty-printer | **Graph of states** (§4.2–4.6) | The current Core is isomorphic to the AST; nothing is lowered. It cannot carry a backend or an analysis. |
+| A native backend before self-hosting | **Deferred off the critical path** | Not needed for "compiler in Refal emitting Refal." Becomes §4.7 inside the graph architecture, after self-hosting. |
+| Self-hosting last | **Moved ahead of native codegen** | Self-host on the machine; codegen after. Removes the largest chunk of work from the path to the goal. |
+| The front end and semantic checker marked Complete | **Reset to Partial** | Refal-5 blocks do not parse; 8 confirmed conformance defects. Docs gate future work on these being true. |
 | — | **Tier 1 + Tier 2 analysis** | The Chief Architect's bug-elimination goal, made concrete. |
 
 Everything already built is retained. The Rust implementation becomes the **differential-testing
@@ -120,7 +120,7 @@ pass before the next begins.
 
 - Fix the eight confirmed conformance defects (issues #6–#13).
 - Build a **spec-traceable conformance corpus**: every fixture cites a § of the Refal-5 reference.
-- Correct `FRONTEND-COVERAGE.md`, `SEMANTIC-AUDIT.md`, `ROADMAP.md`, `README.md` to the real state.
+- Correct `FRONTEND-COVERAGE.md`, `SEMANTIC-AUDIT.md`, `README.md` to the real state.
 - Write `docs/TURCHIN-ARCHITECTURE.md` — his graph-of-states model mapped onto our crates, every
   decision cited to a section.
 - Write `docs/VERIFICATION-CONTRACT.md` — error classes, severity model, the published guarantee,
@@ -301,7 +301,7 @@ same table.
 | Workstream | Weight | Credit | What the product is still missing |
 |---|---:|---:|---|
 | Bootstrap frontend | 8.5% | 8.0 | Documented Classic scope with 26 traced negative fixture classes, and a clause-by-clause conformance corpus: `examples/conformance.manifest` binds every clause of the syntax reference to the fixture that exercises it, in both directions wherever the clause states a rule with a forbidden half, and `every_reference_clause_has_a_traceable_fixture` enforces the binding. The half-point withheld is that the citations are to the *syntax* reference rather than to the Programming Guide's longer treatment of the same rules |
-| Bootstrap semantics | 6.0% | 4.5 | Every rule of its milestone gate; exhaustiveness lives in Tier 1 rather than here |
+| Bootstrap semantics | 6.0% | 4.5 | Every rule of its gate; exhaustiveness lives in Tier 1 rather than here |
 | Refal machine | 19.5% | 19.3 | No fixed depth cap, the projecting matcher (§2.2), a broad covered builtin suite, and **the view field in all three of its shapes**: a binding is a range of a shared arena; a frame's result is a rope of runs of shared arenas; and a bracket's contents are a run of that arena as well, so opening a bracket is a reference count rather than a deep copy of everything inside it. That last one was the repository's largest hidden cost — a Refal program passes its lists in brackets, so every list-passing pattern paid it once per call, and the graph pass over the compiler's own 1,160-state graph copied millions of records merely to look at them. The rope is balanced too: `Concat` carries a height and `concat` rotates on a left-heavy join, which is the shape the 2026-09-24 note recorded as a bound rather than a cost. Both are measured, not asserted: `GRAPH` on the compiler's own 132 KB source is 24.0 s and `RESIDUALIZE-DRIVEN` 36.5 s, byte-identical to the Rust oracle, where neither finished before. **§6.4's `unknown` values are now a runtime object** — a type, a level and an index, with `Up` creating one and raising its level, `Dn` lowering it and writing the metacode back at level 0, type-aware matching, and every builtin but `Up`, `Dn` and `Prout` refusing one — and building the fixture found a **driver soundness bug**, an unevaluated call term matched as a definite term, now fixed in both drivers. What is left is that block sentences carrying conditions still take the recursive path |
 | Graph of states / Refal emission | 8.5% | 7.5 | **T-4, T-5, T-6, T-9** all closed and gated, **the compiler's default path drives**, so the stage that compiles pattern matching is the stage the compiler is, **residualization is total**: a call reached with the driving budget spent is left residual rather than aborting the compiler, so the budget bounds the number of driven states and not whether a program comes out, and **§4.4's compilation strategy is now *searched***: both ends of the compilation-interpretation axis are driven, each residue is measured by walking its syntax tree, and the smaller is kept — in `refal-core` and in `compiler.ref`, byte-identically. The search is not decoration: on `examples/driven-strategy-search.ref` the compilative end produces no residue at all and the interpretive end does, so before the search the compiler **refused a legal program**. What the product still lacks is §4.4's *other* half — perfection by transformation, Turchin's own two examples on p. 115 |
 | Static verification | 15.0% | 12.5 | Tier 1 complete for its published guarantee: dead sentences, recognition impossible, builtin domain errors, function formats (§2.3), `-W`/`-D`/`-A`, and a shape lattice that separates literal kinds and describes a bracket's contents recursively. The deduction is that the guarantee is deliberately narrow |
@@ -319,7 +319,7 @@ a bracket that deep-copied its contents on every pattern that opened it. What
 remains concentrated is *release*: §6.4's `unknown` values, §4.4's
 perfection-by-transformation, the compiler's speed on very large inputs, and a
 full Classic conformance claim for the runtime and the builtin library. The figure agrees with the
-milestone table in the README, which is the point: a reader counting ticks and a
+workstream table in the README, which is the point: a reader counting ticks and a
 reader reading the percentage should reach the same conclusion about where the
 work is.
 
@@ -328,7 +328,7 @@ keeping. The project published 96%, then 38%, then a ladder between 42% and 88%.
 None was fabricated — they were computed by different methods against different
 targets, and publishing them together made the headline the most flattering of
 the set. The 38% low point was real in a different way: it followed an audit that
-found two milestones credited **Complete** when they were not, and eight
+found the front end and the semantic checker credited **Complete** when they were not, and eight
 confirmed Classic Refal-5 conformance defects. All eight are fixed: six in `641ffc0`, and the last two — the builtin library (#7) and blocks (#13) — in Phase 1.
 
 ---
@@ -336,7 +336,7 @@ confirmed Classic Refal-5 conformance defects. All eight are fixed: six in `641f
 ## 6. Standing practice
 
 - Every change lands with tests, an example, a doc update, and a changelog entry — the existing
-  quality bar, kept. The fifth milestone is evidenced by SCC, reachability, and recursive ground-driver regressions.
+  quality bar, kept. The graph-of-states work is evidenced by SCC, reachability, and recursive ground-driver regressions.
 - `cargo fmt --check`, `cargo clippy --all-targets -D warnings`, `cargo test` stay gating.
 - No status claim without evidence. If a doc says Complete, a test proves it.
 - Every design decision traceable to a cited section of a primary source in `docs/turchin/`.
@@ -355,7 +355,7 @@ All seven were approved by the Chief Architect on 2026-08-05.
 | 2 | `--classic` / `--strict` severity split; strict checking never changes the language, only the diagnostics | Approved |
 | 3 | The graph of states replaces `refal-core` as the lowering | Approved |
 | 4 | Native code generation deferred until after self-hosting | Approved |
-| 5 | Milestones 2 and 3 reset to Partial in the public documentation | Approved |
+| 5 | The front end and semantic checker reset to Partial in the public documentation | Approved |
 | 6 | Completion figure restated honestly against the enlarged target | Approved |
 | 7 | Explicit work-list call execution, deterministic seed graph, SCC detection, structural cleanup, bounded ground driver, conservative symbolic driver, shape-aware symbolic configurations, and supported-subset Refal residualization added; weighted score advanced to 60% | Approved |
 | 8 | Phase 0 begins immediately | Approved, in progress |
