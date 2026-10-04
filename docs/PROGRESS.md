@@ -117,6 +117,77 @@ usage error). Two fixtures: `examples/prove-predicate-true.ref` (`Marked` →
 ('F' 'a' 'l' 's' 'e')`, exit 1); the exit status carries the verdict so the
 command can gate a build.
 
+### Done — the prover's soundness, and where the `'True'` criterion stops
+
+Two results, and the second is why the first matters.
+
+**The soundness defect: an unfinished walk refuted a claim.** Found while building
+the fixture below, measured on it:
+
+| `--steps` | verdict |
+|---:|---|
+| 1–5 | `refuted ('F' 'a' 'l' 's' 'e')` |
+| 6–7 | `incomplete` |
+| ≥ 8 (to 3000) | the closed verdict |
+
+The `'False'` was not a phantom: the driver enters `Law`, cannot decide the
+condition symbolically at a low budget, and falls through to the last sentence,
+whose result *is* a ground terminal of a genuinely reduced configuration. No check
+on the terminal nodes can separate it from a counterexample, because structurally
+it is one. What separates them is that **the walk had not closed** — so the
+published verdict was a function of `--steps` rather than of the claim, which is
+the one property a prover may not have.
+
+*The fix.* `prove_predicate` now requires a **closed** walk before it will report
+`Refuted`. A counterexample a closed walk reaches is still reported with its witness
+(`examples/prove-predicate.ref` still refutes, exit 1); a `'False'` a truncated walk
+reaches is reported as `Incomplete`, because the honest answer is a bigger budget.
+The prover keeps its more interesting answer and stops manufacturing one.
+
+*Two latent holes on the same path, closed with it.* `is_ground` returned **true for
+the empty sequence** — `all` on an empty iterator is vacuously true — so `[]` was
+receivable as a terminal value and a witness could render as `refuted ()`. And
+`collect_terminals` read `state.result` off *every recorded* configuration rather
+than the ones the walk **reduced**, conflating "the walk got here" with "the walk
+evaluated this"; `SymbolicConfiguration` now carries a `reduced` flag, set only
+where `instantiate_symbolic` returns `Reduced`.
+
+*The gate, verified to fail on the old behaviour.*
+`the_prover_never_refutes_a_claim_its_budget_cut_short` sweeps budgets 1–7 and
+requires a non-refutation verdict at every one. Reverting the ordering produces
+`FAILED` at budget 1 with the exact witness — checked by reverting it, not assumed.
+
+**Where the criterion stops: associativity of `Append` is not proved, and that is
+now published.** SCP4 1999 §4 names associativity of `Append` as the first of its
+theorem-shaped examples, and `examples/prove-append-reach.ref` states it — as an
+equation over three unknown lists, with a genuinely recursive `Append`. The prover
+reports `refuted` over a **closed** walk, and it is right to: the claim quantifies
+over free variables, and `<Append <Append e.X e.Y> e.Z>` does not reduce to a ground
+value while `e.X e.Y e.Z` are unknown, so the equality can only be decided by
+matching two unevaluated terms and every path falls through to `'False'`. Proving
+it needs **induction over list structure** — generalisation and folding, Turchin's
+1980 §4.6 — which this driver does not perform. The fixture is kept and named for
+what it does, because a prover whose reach is published is worth more than one whose
+reach is implied.
+
+*A degenerate fixture, and the gate that caught it.* The first version of that file
+wrote `Append` with the base case **first**:
+
+```
+Append { e.Rest = e.Rest; s.Head e.Tail e.Rest = ...; }
+```
+
+`e.Rest` alone matches every argument, so the recursive sentence was **unreachable**,
+`Append` was a typed identity, and the law "proved" because both sides reduced
+identically. `strict_mode_has_no_false_positives_on_the_corpus` (E-25, the Imperative
+of Variety) proved sentence 2 unreachable and failed the build. It is the same class
+of defect this file already records as "a test passing for the wrong reason", and it
+is the second time that gate has earned its keep. The base case goes last, the
+recursive sentence fires, and the honest verdict — `refuted` — is what the fixture
+now reports.
+
+
+
 **The figure moves ~75% → ~82%.** L3 takes 6.50 of 13.00. What it withholds is the
 *relational* half: the corpus's theorems are equivalences (associativity of
 `Append`, a sorting equality, a tree reversal) and an equivalence claim between
@@ -1923,9 +1994,46 @@ projection found a dead dedup test and a cursor where a source belongs.
    semantic content is unchanged. Fixed by taking the entry's name from the graph
    and using the driver's list only for configurations *after* the entry.
 
-2. **Function inversion (E-15).** Drive an inverse configuration with the output
-   pinned and the input free. `refal residualize-driven` is the mechanism; what is
-   missing is the entry decision that pins the output.
+2. ~~**Function inversion (E-15).**~~ **Closed, 2026-10-04.** `refal invert
+   <file.ref> <Function> [--strategy ...]` drives the forward definition under an
+   inverse configuration — the input free, the output known — and emits the
+   synthesised inverse as a checked Core Refal program. The synthesis reads each
+   reached configuration as a *pair*: the configuration is `(state, input)`, the
+   state's result is the output that input produces, and reversing the pair is a
+   sentence of the inverse. So the inverse's patterns are the forward function's
+   **outputs** rather than a re-print of its inputs, which is the distinction a
+   residue of the ordinary kind cannot make.
+
+   *Three gates, and each pins a different half of the claim.*
+   `the_synthesised_inverse_matches_on_the_forward_outputs_not_the_inputs` reads
+   the emitted artifact and requires its patterns to be output shapes and *not*
+   the forward program; `a_synthesised_inverse_round_trips_through_the_forward_function`
+   splices the emitted inverse into the source it was driven from and *runs*
+   `<Wrap-Inverse <Wrap x>>` for four inputs, requiring `x` back — the same "run
+   the residue" standard `refal differential --compiled` holds the compiler to;
+   and `an_inversion_that_saw_no_output_shape_says_so_rather_than_inventing_one`
+   pins the honest failure, because a synthesizer's characteristic defect is a
+   program that checks and means the wrong thing.
+   `cleaning_a_filtered_graph_does_not_index_past_its_states` is the defect gate.
+
+   *The defect this row paid for.* `semantic_clean_driven_graph` hands
+   `clean_unreachable_states` a graph it has already **filtered**, so the retained
+   states carry the ids they had in the larger graph — and the pass indexed
+   `graph.states[id.0]`, which is valid only when the retained set is a
+   contiguous prefix. That holds for a seed graph and fails for a driven one, so
+   the first inversion panicked with `index out of bounds: the len is 4 but the
+   index is 4`. It is the general shape this file has recorded before: **a lookup
+   by an id that assumes the id is a position.** The pass now resolves states
+   through an id-keyed map, and the gate drives the shape that exposed it.
+
+   *Measured, and a real limit.* Inversion needs the *interpretive* end on a
+   function whose recursion rebuilds its own argument: the compilative whistle
+   has no recurring configuration to fire on and the budget runs out, reporting
+   `unbound residual variables`. The command takes `--strategy`, and the fixture
+   passes `interpretive`. And a forward function that is **lossy** has no inverse
+   at all — a run-length encoder drops the run's symbols — which is a property of
+   the program rather than of the synthesizer, and is why `examples/invert-list-encoder.ref`
+   encodes losslessly.
 3. **The 2nd and 3rd projections as artifacts (E-14).** The 1st is `refal
    metasystem`. The 2nd and 3rd are reachable — the compiler is self-applicable
    and the fixpoint is gated — but neither emits a standalone compiler or a

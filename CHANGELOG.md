@@ -2,7 +2,48 @@
 
 ## Unreleased
 
-Nothing yet.
+**The prover no longer refutes a claim its budget cut short.** A soundness defect:
+an unfinished walk could report a true theorem as `refuted`, because the `'False'`
+it fell through to was a genuine reduction and no check on the terminal nodes could
+tell it from a counterexample.
+
+- **A soundness defect is fixed: an unfinished walk could refute a claim.** At
+  budgets of one to five steps the prover reported `refuted ('F' 'a' 'l' 's' 'e')`
+  for a law it reported differently at a larger budget. The `'False'` was not a
+  phantom — the driver enters the predicate, cannot decide the condition
+  symbolically, and falls through to the last sentence, whose result is a ground
+  terminal of a genuinely reduced configuration — so the only thing separating it
+  from a counterexample is that the walk had not closed. `prove_predicate` now
+  requires a **closed** walk before it will report `Refuted`: a counterexample a
+  closed walk reaches is still reported with its witness, but a `'False'` a
+  truncated walk reaches is reported as `Incomplete`, because the honest answer is
+  a bigger budget. The published verdict is now a property of the claim rather than
+  of `--steps`.
+- **The gate fails on the old behaviour, and that was checked.**
+  `the_prover_never_refutes_a_claim_its_budget_cut_short` sweeps budgets 1–7 and
+  requires a non-refutation verdict at every one; reverting the ordering produces
+  `FAILED` at budget 1 with the exact witness.
+- **Two latent holes on the same path are closed.** `is_ground` returned true for
+  the empty sequence — `all` on an empty iterator is vacuously true — so `[]` was
+  receivable as a terminal value and a witness could render as `refuted ()`. And
+  `collect_terminals` read `state.result` off every *recorded* configuration rather
+  than the ones the walk *reduced*, conflating "the walk got here" with "the walk
+  evaluated this"; `SymbolicConfiguration` now carries a `reduced` flag.
+- **`examples/prove-append-reach.ref` measures where the criterion stops.**
+  Associativity of `Append` — the corpus's own first theorem (SCP4 1999 §4) —
+  stated as an equation, with a genuinely recursive `Append`. The prover **does not
+  prove it**, and reports `refuted` over a closed walk, because the claim quantifies
+  over three free lists and `<Append <Append e.X e.Y> e.Z>` does not reduce to a
+  ground value while they are unknown. Proving it needs induction over list
+  structure — generalisation and folding, 1980 §4.6 — which this driver does not
+  perform. The fixture is kept, and named for what it does, because a prover whose
+  reach is published is worth more than one whose reach is implied.
+- **A degenerate fixture was caught by the existing gate.** The first version of
+  that file wrote `Append` with the base case first (`e.Rest = e.Rest;`), which
+  matches every argument and left the recursive sentence unreachable — so `Append`
+  was a typed identity and the law "proved" trivially.
+  `strict_mode_has_no_false_positives_on_the_corpus` (E-25) proved sentence 2
+  unreachable and failed the build. The base case now goes last.
 
 ## 0.10.0 — 2026-09-27
 

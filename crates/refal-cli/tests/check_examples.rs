@@ -1,5 +1,6 @@
 use std::{
     env, fs,
+    path::PathBuf,
     process::{self, Command},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -123,6 +124,13 @@ fn reflect_file(path: &str, args: &[&str]) -> std::process::Output {
 fn prove_file(path: &str, predicate: &str, args: &[&str]) -> std::process::Output {
     let mut command = Command::new(refal_bin());
     command.args(["prove", &workspace_path(path), predicate]);
+    command.args(args);
+    command.output().expect("run refal binary")
+}
+
+fn invert_file(path: &str, function: &str, args: &[&str]) -> std::process::Output {
+    let mut command = Command::new(refal_bin());
+    command.args(["invert", &workspace_path(path), function]);
     command.args(args);
     command.output().expect("run refal binary")
 }
@@ -468,6 +476,70 @@ fn the_prover_reports_a_proof_for_a_predicate_whose_only_terminal_is_true() {
 }
 
 #[test]
+fn the_prover_never_refutes_a_claim_its_budget_cut_short() {
+    // The soundness gate for the prover, and the defect the first version had.
+    //
+    // `examples/prove-append-reach.ref` states associativity of `Append` as an
+    // equation, which the prover does not prove (see that file's header: the claim
+    // quantifies over three free lists and needs induction). What matters here is
+    // *how* it fails to prove it. Under a tight budget the driver enters `Law`,
+    // cannot decide the condition symbolically, and falls through to the `'False'`
+    // sentence -- a real reduction producing a real ground terminal, structurally
+    // indistinguishable from a counterexample.
+    //
+    // A prover that reported that node as a counterexample would announce
+    // `refuted` for a claim whose verdict then depends on the step budget rather
+    // than on the claim. Measured on the earlier version of this fixture, that
+    // was the behaviour: `refuted ('F' 'a' 'l' 's' 'e')` at budgets of one to
+    // five steps, `proved` at a larger one. No earlier gate noticed, because every
+    // earlier gate ran at a budget that closed the walk.
+    //
+    // So: no budget below closure may refute. A truncated walk says `incomplete`,
+    // and a counterexample the *closed* walk reaches is still reported -- which is
+    // what `the_prover_never_reports_a_refutation_as_a_proof` pins.
+    let full = prove_file("examples/prove-append-reach.ref", "Law", &["--steps", "3000"]);
+    let full_stdout = String::from_utf8_lossy(&full.stdout);
+    assert!(
+        full_stdout.contains("  complete: yes\n"),
+        "the full budget closes the walk, which is what makes the small budgets \
+         comparable to it://n{full_stdout}//n{}",
+        String::from_utf8_lossy(&full.stderr)
+    );
+    let closed_verdict = full_stdout
+        .lines()
+        .find(|line| line.contains("verdict:"))
+        .unwrap_or_default()
+        .to_string();
+
+    for budget in ["1", "2", "3", "4", "5", "6", "7"] {
+        let output = prove_file("examples/prove-append-reach.ref", "Law", &["--steps", budget]);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            std::process::Command::new(refal_bin())
+                .args(["prove", &workspace_path("examples/prove-append-reach.ref"), "Law"])
+                .args(["--steps", budget])
+                .output()
+                .is_ok(),
+            "the command runs"
+        );
+        assert!(
+            !stdout.contains("  verdict: refuted"),
+            "a walk cut short after {budget} steps may not refute a claim the \
+             closed walk reports as `{closed_verdict}`:\n{stdout}"
+        );
+        assert_ne!(
+            output.status.code(),
+            Some(1),
+            "and it must not exit with the refutation status://n{stdout}"
+        );
+        assert!(
+            stdout.contains("  verdict: incomplete"),
+            "the honest verdict for a truncated walk is incomplete://n{stdout}"
+        );
+    }
+}
+
+#[test]
 fn the_prover_never_reports_a_refutation_as_a_proof() {
     // The most important gate on the whole component. A predicate that can return
     // something other than 'True' is not proved, and the exit status has to say
@@ -497,6 +569,119 @@ fn an_unknown_predicate_is_a_usage_error_not_a_verdict() {
         Some(1),
         "and it is an error rather than a proof verdict"
     );
+}
+
+#[test]
+fn the_inverter_synthesises_an_inverse_whose_patterns_are_the_forward_outputs() {
+    // E-15, and the shape of the artifact is the claim. Gluck and Turchin
+    // (ISSAC '90) invert a function by driving its forward definition with the
+    // output known; the residue is the inverse, so the inverse's *patterns* must
+    // be the forward function's output shapes. A synthesizer that emitted the
+    // forward program under a new name would satisfy every semantic differential
+    // and be wrong, which is why this gate reads the artifact rather than
+    // running it.
+    let output = invert_file(
+        "examples/invert-list-encoder.ref",
+        "Wrap",
+        &["--strategy", "interpretive"],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("$ENTRY Wrap-Inverse {"),
+        "the inverse is emitted under its own name:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("'N' 'i' 'l' =;"),
+        "the forward base case becomes an inverse sentence:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("'C' 'o' 'n' 's' s.Symbol e.Rest = s.Symbol <Wrap-Inverse e.Rest>;"),
+        "and the recursive case reconstructs the input from the output prefix:\n{stdout}"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "a synthesis over a closed walk exits zero:\n{stdout}\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn a_synthesised_inverse_round_trips_through_the_forward_function() {
+    // The claim is not that the right words were printed but that the program
+    // works. The emitted inverse is spliced into the forward source, and the
+    // round trip `<Inverse <F x>>` is required to return `x` for every input
+    // tried. This is the same "run the residue" standard the compiler's own
+    // differential holds its output to.
+    let synthesis = invert_file(
+        "examples/invert-list-encoder.ref",
+        "Wrap",
+        &["--strategy", "interpretive"],
+    );
+    let stdout = String::from_utf8_lossy(&synthesis.stdout);
+    let program = stdout
+        .split_once("--- inverse program ---\n")
+        .map(|(_, program)| program.to_string())
+        .unwrap_or_else(|| panic!("the synthesis prints its artifact:\n{stdout}"));
+    // The emitted program carries its own declarations; splice only the function
+    // definition into the forward source, so the harness supplies the entry
+    // point and the forward definition the residue was driven from.
+    let definition = program
+        .split_once("$ENTRY Wrap-Inverse {")
+        .map(|(_, body)| format!("Wrap-Inverse {{{body}"))
+        .unwrap_or_else(|| panic!("the artifact contains the inverse definition:\n{stdout}"));
+
+    let source = fs::read_to_string(workspace_path("examples/invert-list-encoder.ref"))
+        .expect("read the forward source");
+    // The forward source defines `Go`; the round-trip harness needs its own
+    // entry, so the source's `$ENTRY Go` is stripped and replaced. Its `Wrap`
+    // definition is kept verbatim: the inverse is spliced in beside the program
+    // it was synthesised from, which is the whole claim.
+    let body = source
+        .replace("$ENTRY Go {", "$ENTRY Go-Removed {")
+        .replace("(e.Input) = <Prout <Wrap e.Input>>;", "(e.Input) = ;");
+    let harness = format!(
+        "{body}{definition}\n$ENTRY Go {{\n  (e.Input) = <Prout <Wrap-Inverse <Wrap e.Input>>>;\n}}\n"
+    );
+
+    for input in ["abc", "a", "xy", "Hello"] {
+        let output = run_source_text(&harness, &["unused", input]);
+        assert!(
+            output.status.success(),
+            "the spliced program runs for `{input}`:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout).trim(),
+            input,
+            "the inverse round-trips `{input}` through the forward function"
+        );
+    }
+}
+
+/// Writes a source string to a scratch file under the repo's target directory and
+/// runs the named entry against `args` (the first of which is the `.ref` path the
+/// CLI insists on).
+///
+/// The scratch file lives under `target/` rather than the system temp directory
+/// because the CLI resolves relative paths against the workspace, and a run that
+/// cannot find its own source reports a usage error rather than a result.
+fn run_source_text(source: &str, args: &[&str]) -> std::process::Output {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock after unix epoch")
+        .as_nanos();
+    let directory = PathBuf::from(workspace_path("target/invert-scratch"));
+    fs::create_dir_all(&directory).expect("create scratch directory");
+    let path = directory.join(format!("round-trip-{}-{unique}.ref", process::id()));
+    fs::write(&path, source).expect("write scratch source");
+
+    let mut command = Command::new(refal_bin());
+    command.arg("run").arg(&path);
+    command.args(&args[1..]);
+    let output = command.output().expect("run refal binary");
+    let _ = fs::remove_file(&path);
+    output
 }
 
 #[test]

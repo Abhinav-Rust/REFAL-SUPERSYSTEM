@@ -1,0 +1,35 @@
+/* Function inversion by driving (E-15).
+
+   Gluck and Turchin, *Application of Metasystem Transition to Function
+   Inversion and Transformation* (ISSAC '90, pp. 153-158): given a program
+   computing `y = <F x>`, synthesise `x = <F-Inverse y>` by driving the *forward*
+   definition under an inverse configuration -- the input free, the output known.
+   Object-level computation is unidirectional; the metasystem, which takes the
+   process as a whole and builds its configuration graph, is bilateral, so
+   "information flows backward from outputs to inputs just as easily as forward
+   from inputs to outputs". As driving proceeds the output is disassembled
+   pattern-by-pattern and the corresponding input is synthesised constructively.
+
+   `Wrap` is the forward program: it encodes a text as a `Cons` spine closed by
+   `Nil`, preserving every symbol. The inverse is *not written here* -- it is the
+   artifact `refal invert examples/invert-list-encoder.ref Wrap` produces, and it
+   is emitted, checked, and round-tripped by the gate in `check_examples.rs`.
+   Writing the decoder by hand would defeat the demonstration.
+
+   The forward program must be lossless for an inverse to exist at all: a step
+   whose output drops a symbol destroys the information the inverse would need.
+   That is a property of the program, not of the synthesizer, and it is why a
+   run-length encoder is *not* the fixture this row uses. */
+
+$EXTERN Prout;
+
+/* Each command-line argument arrives as a bracket of its characters. */
+$ENTRY Go {
+  (e.Input) = <Prout <Wrap e.Input>>;
+}
+
+/* The forward program under inversion: encode a text as a Cons spine. */
+Wrap {
+  = 'Nil';
+  s.Symbol e.Rest = 'Cons' s.Symbol <Wrap e.Rest>;
+}
