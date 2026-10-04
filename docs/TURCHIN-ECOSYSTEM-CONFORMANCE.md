@@ -79,6 +79,14 @@ control**:
 | **2** | The supercompiler core | "Executes driving, homeomorphic whistle checks, dynamic generalization, and loop folding. Provides automated deforestation and program specialization." |
 | **3** | The meta-prover | "Accepts formal specifications expressed as assertions or relational Refal functions, verifying program equivalence and proving algorithmic invariants via complete tree reduction." |
 
+**There are exactly four layers, and an earlier revision of this file said
+otherwise.** It called the Principia Cybernetica knowledge network "layer 5".
+That was a synthesis, not Turchin's: the 1991 report gives four concentric rings,
+and the network is the **social context the program is for**, not a layer of the
+program. Conflating an artifact with the movement it serves is what leaves a
+project with no completion criterion, so the distinction is kept explicitly here —
+the four layers *are* the program, and row E-26 sits deliberately outside them.
+
 Two mechanisms bind the layers. The first is the **freezer protocol**: an object
 expression `E` is frozen so the runtime treats it as a literal compound term and
 evaluates nothing inside it; meta-functions then inspect its subterms with
@@ -178,7 +186,7 @@ repository is green for the general case.
 | **E-23** | **Objects and laws are invariants of action.** An entity is what survives a class of transformations unchanged | 1993 *The Cybernetic Ontology of Action* | The `Slice` / `ViewField` invariants: a binding is a *range* of a shared arena, a result is a *rope of runs*, and four named tests assert what is *shared* rather than what is computed | ✅ Closed |
 | **E-24** | **The Imperative of Truth**: deliberate infidelity in an information model degrades the social metasystem's predictive capacity | 1990 *The Cybernetic Manifesto*; PCP node `ETHICS` | One figure, one method, from one table; no figure is raised without a green gate behind it; `the_workspace_version_and_the_changelog_agree` | ✅ Closed |
 | **E-25** | **The Imperative of Variety**: a control system stays stable only if it keeps enough internal variety, so a compiler must not narrow what it accepts | 1990 *The Cybernetic Manifesto*; PCP node `ETHICS`; Ashby's Law of Requisite Variety | `strict_mode_has_no_false_positives_on_the_corpus`: if a Tier 1 check rejects an example the repository believes sound, **the check is wrong** | ✅ Closed |
-| **E-26** | **The socio-technical layer**: the next metasystem transition is the Global Brain, and its substrate is a computer-supported, hyperlinked knowledge network | 1990 *The Cybernetic Manifesto*; 1991 *A Short Introduction to the PCP*; 1993 *Synopsis*; 1995 *The PCP: Using Computers and Cybernetics…*; PCP nodes `SUPERORG`, `MSTLEVEL` | — | ⬜ **Out of scope, by an explicit boundary.** This repository is layers 0–4 of the supersystem. Layer 5 is a different kind of artifact — a knowledge network, not a compiler — and the honest thing is to name the boundary rather than to claim the layer. See §5 |
+| **E-26** | **The social context — not a layer**: the next metasystem transition is the Global Brain, and Turchin's substrate for it is a computer-supported, hyperlinked knowledge network | 1990 *The Cybernetic Manifesto*; 1991 *A Short Introduction to the PCP*; 1993 *Synopsis*; 1995 *The PCP: Using Computers and Cybernetics…*; PCP nodes `SUPERORG`, `MSTLEVEL` | — | ⬜ **Out of scope, and outside the layer structure.** The supersystem is four layers; this row is the *social context the program is for*, a different artifact class — a knowledge network, not an engine — with no completion criterion, which is why it is excluded from the target rather than listed in it. Tracked here only because the corpus names it and because the boundary must be stated rather than left implicit. See §5 |
 
 ---
 
@@ -258,16 +266,18 @@ This repository is **layers 0–4** of the supersystem:
          E-14…E-17           E-18                   E-19, E-21
 ```
 
-Layer 5 — the knowledge network of the Principia Cybernetica Project — is **not**
-claimed. It is a different artifact class, and pretending otherwise would be the
-one thing Turchin's own epistemology forbids: an information model whose fidelity
-is degraded for presentational effect.
+The Principia Cybernetica knowledge network is **not claimed, and it is not a
+layer.** It is the social context the program is for — a different artifact class
+— and pretending otherwise would be the one thing Turchin's own epistemology
+forbids: an information model whose fidelity is degraded for presentational
+effect. It is also unbounded. It has no completion criterion, which is why it is
+excluded from the target rather than listed in it.
 
-What *is* claimed from layer 5 is the two ethical imperatives that have a
-concrete, testable consequence for a compiler, and both are gates in this
-repository today: E-24 (the Imperative of Truth — no figure without a gate behind
-it) and E-25 (the Imperative of Variety — a check that rejects a legal program is
-the defect, not the program).
+What *is* claimed from the corpus's social and ethical writings is the two
+imperatives that have a concrete, testable consequence for a compiler, and both
+are gates in this repository today: E-24 (the Imperative of Truth — no figure
+without a gate behind it) and E-25 (the Imperative of Variety — a check that
+rejects a legal program is the defect, not the program).
 
 ---
 
@@ -308,7 +318,8 @@ Items 1, 2 and 7 are the ones this read added. Items 3, 8 and 9 were already the
 
 ## 7. One sentence
 
-**100% means layers 0–4 of the 1991 supersystem: a Refal-5 machine, a reflection
-engine, a supercompiler, a meta-prover, and a self-application that emits a
-compiler and a compiler generator — with every row above carrying a green gate,
-and layer 5 named as the boundary rather than claimed.**
+**100% means the four layers of the 1991 supersystem: a Refal-5 machine, a
+reflection engine, a supercompiler, a meta-prover, and a self-application that
+emits a compiler and a compiler generator — with every row above carrying a green
+gate. There is no fifth layer; the knowledge network is the social context the
+program is for, and it is named as the boundary rather than claimed.**

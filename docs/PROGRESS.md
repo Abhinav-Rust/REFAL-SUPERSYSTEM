@@ -1797,27 +1797,37 @@ projection found a dead dedup test and a cursor where a source belongs.
    primary of 1986 §6, then build the command: a predicate or an equivalence
    claim, driven, reporting whether the graph reduced to `'True'`. The corpus's
    theorem-shaped examples — associativity of `Append`, a sorting-equality, a tree
-   reversal — are its first gate.
-1. **The 2nd and 3rd projections as artifacts (E-14).** The 1st is `refal
-   metasystem`. The 2nd and 3rd are reachable — the compiler is self-applicable
-   and the fixpoint is gated — but neither emits a standalone compiler or a
-   compiler generator, and neither has its own gate.
+   reversal — are its first gate. **The first step of this item is a
+   measurement**: proving costs more than compiling, so if driving a predicate on
+   the corpus is too slow, the speed item below moves ahead of it.
+1. **The reflection engine as a service (E-4).** A stable API over
+   `refal-runtime` and `refal-ast`: AST extraction, freeze/thaw as a first-class
+   operation rather than a builtin, and the driver's active configuration and
+   input exposed as data. **This moved up from last place, and the reason is
+   structural, not taste:** the prover must be written against a reflection API
+   rather than against the compiler's internals, which is what makes it *layer 3*
+   instead of a feature of layer 2. It is also the extraction step that makes the
+   runtime's term representation publishable as a standalone crate.
 2. **Function inversion (E-15).** Drive an inverse configuration with the output
    pinned and the input free. `refal residualize-driven` is the mechanism; what is
    missing is the entry decision that pins the output.
-3. **§4.4's other half — perfection by transformation (E-7).** Turchin's own two
+3. **The 2nd and 3rd projections as artifacts (E-14).** The 1st is `refal
+   metasystem`. The 2nd and 3rd are reachable — the compiler is self-applicable
+   and the fixpoint is gated — but neither emits a standalone compiler or a
+   compiler generator, and neither has its own gate.
+4. **§4.4's other half — perfection by transformation (E-7).** Turchin's own two
    examples on p. 115. The last named gap in the graph-of-states row.
-4. **Negative information and stack configurations (E-11).** SCP4's propagation
+5. **Negative information and stack configurations (E-11).** SCP4's propagation
    engines, which no example currently reaches.
-5. **The compiler's speed on very large inputs.** The last named gap in the
+6. **The compiler's speed on very large inputs.** The last named gap in the
    compiler-in-Refal row. `scripts/perf.sh` measures it; `CleanG` and the checker
    are linear now, and what is left is the constant.
-6. **The self-hosting fixpoint over an arbitrary program**, rather than over the
+7. **The self-hosting fixpoint over an arbitrary program**, rather than over the
    corpus and the compiler's own source.
-7. **The reflection engine as a service (E-4)** and **metavariable stratification
-   in the transformer (E-17).** The cheapest open rows, and the least likely to be
-   attempted, because nothing in the product's own acceptance criteria asks for
-   them.
+8. **Metavariable stratification in the transformer (E-17).** The 1995 report's
+   level indices, on top of §6.4's level-carrying unknown. The last of the named
+   behaviours, and the least likely to be attempted, because nothing in the
+   product's own acceptance criteria asks for it.
 
 **The order this paragraph used to carry is closed, including its item 0.** The
 `--configurations` transition-list divergence is gone: `DsHasTrL` tested a
@@ -1963,16 +1973,28 @@ Five pieces, in the order the output depends on them:
 
 ### Still open
 
-- §4.4's strategy *search*, and T-8's §6.4 `unknown` values. `NEXT ACTION` orders
-  the first.
-- The front end's clause-by-clause conformance corpus, and release packaging —
-  the 4-point row still at 1.5.
+The authoritative ordered list is `NEXT ACTION` above. Summarised, the named gaps
+are:
+
+- **The meta-prover (E-12, E-13)** — layer 3 of the supersystem, the largest
+  single gap — and **the reflection engine as a service (E-4)**, which the prover
+  must be written against. See
+  [`TURCHIN-ECOSYSTEM-CONFORMANCE.md`](TURCHIN-ECOSYSTEM-CONFORMANCE.md).
+- **Function inversion (E-15)**, **the 2nd and 3rd projections as artifacts
+  (E-14)**, **§4.4's other half — perfection by transformation (E-7)**, **negative
+  information and stack configurations (E-11)**, and **metavariable
+  stratification (E-17)**.
 - The compiler's speed on very large inputs; the graph pass's comparison count —
   `MemberL`, `SameChars`, `SameFunc3`, `FuncName` — which the profile ranks. The
   pass is linear in the compiler's own source, so this is a bound rather than a
   cost.
 - The `Reverse` rope shape, and the interpretive driver's cost in Refal — both
   measured and recorded above as bounds rather than costs.
+
+*(Closed since this list was written: §4.4's strategy **search** and T-8's §6.4
+`unknown` values, in `5de4d3c` and `d538976`; the front end's clause-by-clause
+conformance corpus and release packaging, in `cf6cbd6`; the last known divergence
+between the two drivers, in `f39e314`.)*
 
 *(Closed on 2026-09-26: the driven path **is** wired into `Compile`; `refal
 compile` drives, `refal normalize` is the normalising path with its own
