@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" width="1200" height="400" role="img" aria-labelledby="hero-title hero-desc">
+  <title id="hero-title">REFAL-SUPERSYSTEM — four layers of cybernetic control</title>
+  <desc id="hero-desc">On the left, the project name and tagline. On the right, four nested rectangles representing the layers of the supersystem: the Refal-5 machine at the centre, then the reflection engine, the supercompiler core, and the meta-prover outermost.</desc>
+
+  <rect x="0.5" y="0.5" width="1199" height="399" rx="16" fill="#FFFFFF" stroke="#D0D7DE"/>
+
+  <g fill="none" stroke-linecap="round">
+    <circle cx="76" cy="76" r="19" stroke="#0D9488" stroke-width="2.5" stroke-dasharray="88 32" transform="rotate(-40 76 76)"/>
+    <circle cx="76" cy="76" r="11" stroke="#14B8A6" stroke-width="2.5" stroke-dasharray="48 21" transform="rotate(60 76 76)"/>
+  </g>
+  <circle cx="76" cy="76" r="3.5" fill="#0F766E"/>
+
+  <text x="108" y="80" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="3.2" fill="#0F766E">A LANGUAGE OF METASYSTEMS</text>
+
+  <text x="56" y="152" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="46" font-weight="600" letter-spacing="-0.6" fill="#1F2328">REFAL</text>
+  <text x="56" y="204" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="46" font-weight="600" letter-spacing="-0.6" fill="#1F2328">SUPERSYSTEM</text>
+
+  <line x1="56" y1="238" x2="404" y2="238" stroke="#D0D7DE" stroke-width="1"/>
+
+  <g font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#57606A">
+    <text x="56" y="268">One reflective engine, four layers</text>
+    <text x="56" y="292">of cybernetic control, and a single</text>
+    <text x="56" y="316">shared expression space.</text>
+  </g>
+
+  <text x="56" y="356" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="1.6" fill="#0F766E">A FUTURE THAT COMPILES ITSELF</text>
+
+  <g fill="none">
+    <rect x="464" y="56" width="680" height="288" rx="20" stroke="#0F766E" stroke-width="1.5"/>
+    <rect x="500" y="88" width="608" height="224" rx="17" stroke="#0D9488" stroke-width="1.5"/>
+    <rect x="536" y="120" width="536" height="160" rx="14" stroke="#14B8A6" stroke-width="1.5"/>
+    <rect x="572" y="152" width="464" height="96" rx="11" stroke="#2DD4BF" stroke-width="1.5"/>
+  </g>
+
+  <g font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" letter-spacing="1.3" fill="#0F766E">
+    <text x="488" y="77">L3 &#183; THE META-PROVER</text>
+    <text x="524" y="109">L2 &#183; THE SUPERCOMPILER CORE</text>
+    <text x="560" y="141">L1 &#183; THE REFLECTION ENGINE</text>
+    <text x="596" y="180">L0 &#183; THE REFAL-5 MACHINE</text>
+  </g>
+  <text x="596" y="204" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#57606A">matching &#183; term splicing &#183; arithmetic &#183; I/O</text>
+</svg>
