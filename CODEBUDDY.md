@@ -1,39 +1,60 @@
 # CODEBUDDY.md
 
-This file provides guidance to CodeBuddy Code when working with code in this repository.
+Guidance for CodeBuddy Code when working in this repository.
 
-## Autonomous Execution Protocol (Zero-Babysitting Mode)
+## What this repository is
 
-When the user instructs you to "resume work", "continue", or "complete the repository":
-1. **Self-Sequencing**:
-   - Consult `REFAL_PROGRESS_ASSESSMENT.md` to identify the current highest-priority incomplete deliverable (e.g., runtime view field, pattern-matching compiler stage, driver.ref, self-hosting fixpoint).
-   - Do NOT stop to ask the user for permission, clarification, or next steps. Proceed autonomously with full ownership.
+`REFAL-SUPERSYSTEM` — a four-layer engine for meta-computation, built to Valentin
+Turchin's 1991 design: a Refal-5 machine (L0), a reflection engine (L1), a
+supercompiler core (L2) and a meta-prover (L3), over a single shared expression
+space, with self-application (L4) as the headline capability.
 
-2. **Self-Healing & Verification**:
-   - Implement the necessary Rust / Refal source files.
-   - Verify code using targeted checks: `cargo check --quiet` and `cargo test -p <crate> -- <test_name>`.
-   - If compiler errors or test failures occur, diagnose and fix them immediately without human intervention.
+**The Refal-5 compiler is a subsystem, not the target.** "100% completion" means
+the four layers, per `docs/TURCHIN-ECOSYSTEM-CONFORMANCE.md`. The compiler's own
+figure and the project's figure are different numbers, and the README publishes
+only the second.
 
-3. **Incremental Checkpointing**:
-   - Once a milestone's unit tests pass, immediately commit to git with a clear, descriptive message (`git commit -am "feat(...) ..."`).
-   - Update `REFAL_PROGRESS_ASSESSMENT.md` and `README.md` to reflect the newly verified progress.
-   - Immediately proceed to the next milestone in the roadmap without pausing.
+## Where the state lives
 
----
+| Question | File |
+|---|---|
+| What do I work on next? | `docs/PROGRESS.md` — its `NEXT ACTION` is the authoritative ordered list |
+| What does 100% mean? | `docs/TURCHIN-ECOSYSTEM-CONFORMANCE.md` (`E-1 … E-26`) |
+| What is the completion figure, and its method? | `README.md` §Project status, and `PLAN.md` §5 |
+| What has shipped? | `CHANGELOG.md` |
+| Why is it built this way? | `docs/TURCHIN-OBJECTIVES.md` (`T-1 … T-12`) |
 
-## Token Discipline & Execution Efficiency (Mandatory)
+## Execution protocol
 
-To maximize the productivity of every agent turn and prevent premature daily quota exhaustion:
+1. **Read `docs/PROGRESS.md`'s `NEXT ACTION` first.** It is corrected in the same
+   commit as the work, so it is never stale by more than one commit.
+2. **Implement and verify.** `cargo check --quiet` for routine work; a targeted
+   `cargo test -p <crate> -- <name>` for a change; the full suite only at a
+   milestone. The full suite takes roughly 35 minutes and **must** run as
+   `cargo test --all -j 2 -- --test-threads=1` — run in parallel, the four tests
+   that compile the compiler with the Refal-authored compiler exhaust memory and
+   abort with an allocation failure, which reads like a semantic regression and
+   is not one.
+3. **Commit conventionally** (`feat:`, `fix:`, `perf:`, `refactor:`, `test:`,
+   `docs:`) and push directly to `main`. No branches, no PRs.
+4. **Update `docs/PROGRESS.md` and `README.md` in the same commit as the work.**
 
-1. **Targeted Compiler Checks**:
-   - Always run `cargo check --quiet` for routine syntax and type verification.
-   - Never dump unbuffered, thousands-of-lines compiler warnings into the context.
+**Ask before plan-level changes; do not ask about execution.** Fixing a defect,
+running a gate, and committing are autonomous. Changing the roadmap, adding a
+crate, renaming the repository, or altering the completion accounting is a
+decision and needs the Chief Architect's approval first.
 
-2. **Targeted Testing**:
-   - Run specific tests: `cargo test -p <crate> -- <test_name>` instead of the entire test suite on every intermediate edit.
-   - Only run the full workspace test suite when an entire major workstream is completed.
-   - Avoid `--nocapture` unless debugging a single, isolated failing test.
+## Reporting rules
 
-3. **Pruned File Reading**:
-   - Inspect specific line ranges rather than loading entire multi-thousand line files into memory.
-   - Use `git diff` with specific file paths rather than unbounded workspace diffs.
+Every status claim is backed by a test. No milestone is marked complete before its
+conformance rows are green. No completion figure is raised without a gate that
+demonstrates the work, and a new workstream carries zero credit until a gate
+behind it is green. One figure, one method, from one table — never a second
+percentage for the same question.
+
+## Token discipline
+
+- `cargo check --quiet`; never dump thousands of warnings into context.
+- Targeted tests over the full suite on every edit.
+- Read specific line ranges rather than whole files; `git diff <path>` rather than
+  an unbounded workspace diff.
