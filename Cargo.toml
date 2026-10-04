@@ -13,7 +13,7 @@ resolver = "2"
 version = "0.10.0"
 edition = "2024"
 license = "MIT"
-repository = "https://github.com/Abhinav-Rust/REFAL-5-COMPILER"
+repository = "https://github.com/Abhinav-Rust/REFAL-SUPERSYSTEM"
 authors = ["Abhinav"]
 
 [workspace.lints.rust]

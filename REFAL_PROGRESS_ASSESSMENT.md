@@ -1,7 +1,18 @@
+> [!WARNING]
+> **Superseded — historical snapshot, not status.** This assessment was written on
+> 17 August 2026 against `main` at `2bed507`. It reports **~20%** and measures a
+> **compiler-only** target. Both are out of date. The compiler is now finished and
+> self-hosting, the target is the four-layer supersystem, and the current figure —
+> with its method and its uncertainty — is in the
+> [README](README.md#project-status). Keep this file for the record; do not read it
+> as the state of the project. The rows it marks as "not implemented on `main`" —
+> graph of states, Refal residualization, the compiler written in Refal, verified
+> self-hosting — have all since been implemented and gated.
+
 # Refal-5 Compiler Completion Assessment
 
 **Assessment date:** 17 August 2026  
-**Repository:** `Abhinav-Rust/REFAL-5-COMPILER`  
+**Repository:** `Abhinav-Rust/REFAL-SUPERSYSTEM` (named `REFAL-5-COMPILER` at the time of writing)  
 **Default branch audited:** `main` at commit `2bed507`  
 **Additional branch audited:** `stage0-seed-compiler-12681467640618495855` at commit `1c0efc1`
 
@@ -111,10 +122,10 @@ If the question is narrowed specifically to the three defining properties—**co
 
 ## References
 
-[1]: https://github.com/Abhinav-Rust/REFAL-5-COMPILER/blob/main/README.md "Repository README and project status"
-[2]: https://github.com/Abhinav-Rust/REFAL-5-COMPILER/blob/main/docs/PLAN.md "Approved implementation plan and weighted completion accounting"
-[3]: https://github.com/Abhinav-Rust/REFAL-5-COMPILER/blob/main/docs/FRONTEND-COVERAGE.md "Classic Refal-5 frontend coverage matrix"
-[4]: https://github.com/Abhinav-Rust/REFAL-5-COMPILER/blob/main/crates/refal-cli/src/main.rs "Default-branch CLI command surface"
-[5]: https://github.com/Abhinav-Rust/REFAL-5-COMPILER/blob/main/crates/refal-core/src/lib.rs "Default-branch core representation and formatter"
-[6]: https://github.com/Abhinav-Rust/REFAL-5-COMPILER/blob/main/crates/refal-runtime/src/interpreter.rs "Default-branch interpreter and builtin dispatch"
-[7]: https://github.com/Abhinav-Rust/REFAL-5-COMPILER/tree/stage0-seed-compiler-12681467640618495855 "Non-default stage0 seed-compiler branch"
+[1]: https://github.com/Abhinav-Rust/REFAL-SUPERSYSTEM/blob/main/README.md "Repository README and project status"
+[2]: https://github.com/Abhinav-Rust/REFAL-SUPERSYSTEM/blob/main/docs/PLAN.md "Approved implementation plan and weighted completion accounting"
+[3]: https://github.com/Abhinav-Rust/REFAL-SUPERSYSTEM/blob/main/docs/FRONTEND-COVERAGE.md "Classic Refal-5 frontend coverage matrix"
+[4]: https://github.com/Abhinav-Rust/REFAL-SUPERSYSTEM/blob/main/crates/refal-cli/src/main.rs "Default-branch CLI command surface"
+[5]: https://github.com/Abhinav-Rust/REFAL-SUPERSYSTEM/blob/main/crates/refal-core/src/lib.rs "Default-branch core representation and formatter"
+[6]: https://github.com/Abhinav-Rust/REFAL-SUPERSYSTEM/blob/main/crates/refal-runtime/src/interpreter.rs "Default-branch interpreter and builtin dispatch"
+[7]: https://github.com/Abhinav-Rust/REFAL-SUPERSYSTEM/tree/stage0-seed-compiler-12681467640618495855 "Non-default stage0 seed-compiler branch"
