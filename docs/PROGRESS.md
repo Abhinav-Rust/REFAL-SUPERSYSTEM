@@ -387,7 +387,7 @@ a test rather than to a runnable fixture.
 
 ### Done — the front end's clause-by-clause conformance corpus
 
-Milestone 2's exit criterion was "positive and negative golden fixtures cover
+The front end's exit criterion was "positive and negative golden fixtures cover
 every lexical and grammar category in scope, each traceable to the clause of the
 reference it exercises". The fixtures existed and were broad; the *traceability*
 did not. It does now.
@@ -844,7 +844,7 @@ shapes it was still deducting for are closed and measured. What remains
 concentrated is *release*: the compiler's speed on very large inputs, §6.4's
 `unknown` values, §4.4's perfection-by-transformation, and a full Classic
 conformance claim for the runtime and the builtin library. The figure agrees with the
-milestone table, which is the point: counting ticks and reading the percentage
+workstream table, which is the point: counting ticks and reading the percentage
 should reach the same conclusion.
 
 **What this session moved, and why only two rows.** The graph-of-states row

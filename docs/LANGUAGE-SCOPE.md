@@ -4,7 +4,7 @@ The first target is Classic Refal-5 semantics.
 
 The compiler should prefer correctness over breadth. A small feature with exact behavior is more valuable than a large feature that only works on demos.
 
-## Milestone 2 Scope
+## Front-end scope
 
 - Functions and `$ENTRY`.
 - Sentences with pattern, optional conditions, and result.
@@ -23,7 +23,7 @@ The compiler should prefer correctness over breadth. A small feature with exact 
 Detailed completion status is tracked in
 [`FRONTEND-COVERAGE.md`](FRONTEND-COVERAGE.md).
 
-## Later Milestones
+## Later work
 
 - Full built-in function set.
 - Include/module workflow.

@@ -1,11 +1,11 @@
-# Milestone 3 Semantic Audit
+# Semantic Audit
 
-This audit records the completion check for Milestone 3 against `LANGUAGE-SCOPE.md`, the
+This audit records the completion check for the semantic checker against `LANGUAGE-SCOPE.md`, the
 frontend coverage contract, and the bootstrap runtime behaviour available at this stage.
 
-## Status: COMPLETE for the milestone gate
+## Status: complete for its gate
 
-An earlier revision of this document concluded that Milestone 3 was complete, and that the
+An earlier revision of this document concluded that the semantic checker was complete, and that the
 checker "rejects every known program shape that would otherwise contradict the parser
 contract". That conclusion was wrong on two counts, found by audit against the normative
 reference on 2026-08-05:
@@ -21,12 +21,12 @@ reference on 2026-08-05:
 
 Both are fixed in `641ffc0`, and both gaps this section used to name as still open are
 now closed: sentence-ending blocks are parsed, checked and evaluated in **both** positions
-(`4112268`), so issue #13 is done. The milestone's gate — "validate entry points,
+(`4112268`), so issue #13 is done. Its gate — "validate entry points,
 declarations, calls, bindings, variable kinds, and condition legality before execution" —
 is therefore green, and this document records it as **Complete**.
 
-What remains outside this milestone is not a checker rule. It is the clause-by-clause
-traceable conformance corpus, which is tracked as Milestone 2's open gate.
+What remains outside the checker is not a checker rule. It is the clause-by-clause
+traceable conformance corpus, which is tracked as the front end's open gate.
 
 ## Audited Scope
 
