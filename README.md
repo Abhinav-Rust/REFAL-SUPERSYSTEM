@@ -234,7 +234,7 @@ compiler's own number as the project's would misdescribe what this repository is
 | L0 · Refal machine / runtime | 13.65 | 13.51 | 0.14 | block sentences carrying conditions take the recursive path |
 | **L1 · Reflection engine** | **9.00** | **9.00** | **0.00** | closed — the service is exposed as `refal reflect`, with four shape gates |
 | L2 · Graph of states / emission | 5.95 | 5.25 | 0.70 | §4.4's other half — perfection by transformation |
-| Tier 1 static verification | 10.50 | 8.75 | 1.75 | the guarantee is deliberately narrow: no termination analysis |
+| Tier 1 static verification | 10.50 | 8.75 | 1.75 | no *total* termination analysis — and totality is the only thing Theorem 5.1 forbids; the target is a **sound, incomplete, certificate-carrying** analysis (see below) |
 | L2/L4 · Compiler implemented in Refal | 17.85 | 16.80 | 1.05 | not yet fast on very large inputs |
 | L4 · Verified self-hosting fixpoint | 9.10 | 8.05 | 1.05 | the fixpoint holds on the corpus and the compiler's own source, not on arbitrary programs |
 | **L3 · Meta-prover** | **13.00** | **11.00** | **2.00** | the entry, the driving, Turchin's `'True'` criterion, and the *relational* half are built and gated — an equation over free variables is decided by folding a branch to a renaming of the claim. What is withheld is the *general* relation (an arbitrary relation rather than equality) and a proof needing generalisation beyond the loop edge; of SCP4's three named theorems, associativity of `Append` is gated and a tree reversal and a sorting equality are not. A soundness defect — a truncated walk could refute — was found and fixed in an earlier session; this session found and fixed a defect the ground matcher and the Refal-authored compiler both carried, which also repaired `refal compile` for a bracket-pattern callee |
@@ -596,6 +596,37 @@ language is never modified — only the diagnostics differ.**
 > *recognition impossible*, a builtin domain error, or a dead sentence is
 > reachable. It does not and cannot prove absence of logic errors or
 > non-termination — see Turchin 1980, §5.8, Theorem 5.1.
+
+### What Theorem 5.1 does and does not forbid — and what 2026 changes about it
+
+The theorem is a **computability** bound, not a technology bound, and it is not
+overturned by better hardware, better tooling or machine learning. Turchin proves
+it by modelling formal arithmetic in Refal and reducing to Church's theorem, so
+it is the same class of statement as the undecidability of the halting problem.
+The live confirmation is that the Termination Competition still runs every year
+as a **semi-decision** benchmark: tools compete on *how many* instances they
+settle, never on settling all of them.
+
+What the theorem forbids is a **universal decision procedure**. It does not
+forbid a *sound, incomplete* analysis that proves what it can and names what it
+cannot — and that distinction was a 1980-practicality gap, not a 1980
+impossibility. What 2026 makes practical:
+
+| | 1980 | 2026 |
+|---|---|---|
+| Feasibility of a walk | a hand argument | an SMT query (Z3, cvc5) over the arithmetic, array and bit-vector fragments |
+| Termination of a clause set | informal | size-change termination, ranking-function synthesis, the termination provers |
+| Trusting the answer | the tool's word | a **checkable certificate** — a proof assistant, or a machine-checkable ranking-function witness |
+| The walks that cannot be settled | silence | an explicit, minimal **`unproven` set** |
+
+So the target is not lowered; it is **sharpened**. The credit withheld in the
+Tier-1 row is not for a capability that cannot exist — it is for a **sound,
+incomplete, certificate-carrying feasibility analysis**: one that proves what it
+can, emits a witness a third party can check, and names the walks it could not
+settle rather than staying silent about them. That is achievable today, it is
+strictly more than "no termination analysis", and it is the honest modern reading
+of §5.8. **The target remains 100% of the four layers**; the row states what the
+remaining credit is *for*, not that it is unreachable.
 
 ## Reporting rules
 

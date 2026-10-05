@@ -30,6 +30,29 @@
   `docs/PROGRESS.md` (`NEXT ACTION`), and `README.md` (the ordered work list) were
   reordered to match the measurement.
 
+**The "100%" definition was corrected, not lowered — Theorem 5.1 is a computability bound.**
+
+- **Asked whether Turchin's 1980 §5.8 Theorem 5.1 could be a limitation of 1980
+  technology rather than a permanent bound.** It cannot. The theorem is proved by
+  modelling formal arithmetic in Refal and reducing to Church's theorem, so it is
+  in the same class as the undecidability of the halting problem; better
+  hardware, better tooling and machine learning do not move a computability
+  bound. The live confirmation is the Termination Competition, still run annually
+  as a *semi-decision* benchmark.
+- **But the row was mis-described, and that is fixed.** What the theorem forbids
+  is a *universal decision procedure*, not a *sound, incomplete* one. The Tier-1
+  row withholds credit for "no termination analysis", which reads as an
+  impossible capability; it is in fact withholding a **sound, incomplete,
+  certificate-carrying feasibility analysis** — prove what you can, emit a
+  checkable witness, and localise the rest as an explicit `unproven` set — which
+  SMT solvers, size-change/ranking-function termination provers and proof
+  assistants make practical in 2026 and did not in 1980.
+- **Consequence: the target stays 100% of the four layers.** No row is
+  reclassified as unattainable, and **no figure moved**. `README.md` gains a
+  "What Theorem 5.1 does and does not forbid" section,
+  `TURCHIN-ECOSYSTEM-CONFORMANCE.md` gains §8, and `PROGRESS.md` restates the
+  definition of done.
+
 **The meta-prover decides equations now — and building it found a matcher defect that made the driver's residues wrong.**
 
 - **Layer 3's relational half exists: `refal prove <file> --equiv <Left> <Right>`.**

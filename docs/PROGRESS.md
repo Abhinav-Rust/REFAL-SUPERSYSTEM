@@ -30,6 +30,20 @@ The conformance oracle is **Turchin's own body of work, CS and philosophical
 alike** — see [`TURCHIN-OBJECTIVES.md`](TURCHIN-OBJECTIVES.md), which binds each
 objective to a gate. Not another Refal implementation.
 
+**What 100% means, restated 2026-10-05.** 100% is all four layers with every row
+green — and **no row is unreachable by proof.** Theorem 5.1 (1980 §5.8) is a
+*computability* bound, proved by reducing formal arithmetic in Refal to Church's
+theorem, so it is not overturned by any advance in hardware, tooling or machine
+learning; the Termination Competition still runs as a *semi-decision* benchmark
+for exactly that reason. What it forbids is a **universal decision procedure**,
+not a *sound, incomplete* one. The Tier-1 row therefore withholds credit for a
+**sound, incomplete, certificate-carrying feasibility analysis** — prove what you
+can, emit a witness a third party can check, and name the walks you could not
+settle — which is achievable today and strictly stronger than "no termination
+analysis". The figure is unchanged; the target is sharpened rather than lowered.
+See `README.md` §"What Theorem 5.1 does and does not forbid" and
+`TURCHIN-ECOSYSTEM-CONFORMANCE.md` §8.
+
 ## Live state
 
 | | |
