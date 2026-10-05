@@ -2140,7 +2140,8 @@ projection found a dead dedup test and a cursor where a source belongs.
    at all — a run-length encoder drops the run's symbols — which is a property of
    the program rather than of the synthesizer, and is why `examples/invert-list-encoder.ref`
    encodes losslessly.
-3. **The 2nd and 3rd projections as artifacts (E-14).** The 1st is `refal
+3. **The 2nd and 3rd projections as artifacts (E-14) — deferred behind item 5
+   until the partition can enter a constructor.** The 1st is `refal
    metasystem`: it drives the entry — an interpreter applied to a *known* program
    — residualises, and requires the residue to be sound and measurably cheaper.
    The 2nd and 3rd leave the program or the source *unknown*, so what comes out is
@@ -2164,10 +2165,54 @@ projection found a dead dedup test and a cursor where a source belongs.
    partitions it, and the residue may be large; measure on the smallest
    interpreter in the corpus before choosing the entry, and let the number pick
    between `<Int e.Program e.Input>` and a narrower configuration.
+
+   **Measured, 2026-10-05 — and the measurement says the 2nd projection is
+   blocked on E-11, not on the command.** Entering `<Run e.Program e.Input>` with
+   both free does not produce a compiler, and the reason is in the driver's
+   partition rather than in the projection.
+
+   - `DriveContext::split_configuration` partitions **only when exactly one
+     argument is a free expression variable** (`let [position] = positions…`),
+     so with `e.Program` and `e.Input` both free it returns `None` and the call
+     stays residual. Relaxing that guard is not enough on its own, and it was
+     tried: with the program component named explicitly, the walk still does not
+     converge, for the next reason.
+   - **The partition is a *sequence* partition, and an object program is a
+     bracket.** For `Run { (End) e.In = …; }`, the bracket branch of the
+     partition is `(e.B1) e.T1`; the next blocked split then chooses `e.T1` —
+     the *tail* — and partitions that, and never enters the bracket `(e.B1)`.
+     Measured on `Go { e.X = <F e.X>; } F { (A) = 'a'; (B) = 'b'; }` at
+     `--steps 120`: **32 split functions**, each sentence one term longer than
+     the last (`(e.B1) s.H2 … s.H16 e.T16`), and neither `(A)` nor `(B)` ever
+     decided. The residue is unbounded; only the budget truncates it, and what
+     the budget leaves decides nothing.
+
+   **What this means for the order.** The 2nd projection needs the partition to
+   *enter a constructor*, which is the two-level stack configuration SCP4 names —
+   **row E-11**. The 3rd projection is downstream of the 2nd. So **E-11 now
+   leads E-14**, and the projections are item 5 below rather than item 3. The
+   projection command itself is not the hard part and should not be attempted
+   first; a command that drives `<Int e.Program e.Input>` today emits a residue
+   whose entry body reads `e.Program` unbound, which is a wrong program, not a
+   compiler.
+
+   **Second finding, left open.** The unbounded residue above is reachable from
+   an ordinary program — `Go { e.X = <F e.X>; } F { (e.B) = e.B; }` — and it is a
+   defect rather than a boundary: the residue grows without deciding anything.
+   It is the same partition gap seen from the compiler's side. It is *not* fixed
+   in this session because the fix and its Refal-authored counterpart in
+   `examples/compiler.ref` must land together, as the ground-matcher fix did,
+   and that pair is the E-11 work item.
 4. **§4.4's other half — perfection by transformation (E-7).** Turchin's own two
    examples on p. 115. The last named gap in the graph-of-states row.
-5. **Negative information and stack configurations (E-11).** SCP4's propagation
-   engines, which no example currently reaches.
+5. **Negative information and stack configurations (E-11) — now the leading
+   item.** SCP4's propagation engines, which no example currently reaches, and
+   **the partition that can enter a constructor**, which is what the 2nd
+   projection needs (see the measurement under item 3). The compiler-side defect
+   the same measurement found — a free argument handed to a bracket-pattern
+   callee produces an unbounded residue — is part of this work, and its gate is
+   the first thing to write. Note the mirror: whatever changes here changes
+   `examples/compiler.ref` in the same commit.
 6. **The compiler's speed on very large inputs.** The last named gap in the
    compiler-in-Refal row. `scripts/perf.sh` measures it; `CleanG` and the checker
    are linear now, and what is left is the constant.

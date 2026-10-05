@@ -329,11 +329,27 @@ The ordered work list lives in
    driving the forward definition against a known output (Glück & Turchin, ISSAC
    '90): `refal invert` emits the inverse as a checked program whose patterns are
    the forward function's outputs, and the gate round-trips the emitted inverse.
-4. **The 2nd and 3rd projections as artifacts (E-14)** — emit a standalone compiler
-   and a compiler generator.
-5. **§4.4's other half (E-7)**, **SCP4 propagation (E-11)**, **the compiler's speed
-   on very large inputs**, **the self-hosting fixpoint over an arbitrary program**,
-   and **metavariable stratification (E-17)**.
+4. **SCP4 propagation and stack configurations (E-11)** — including the
+   partition that can *enter a constructor*. This now leads the projections,
+   because the measurement below says it must: the 2nd projection partitions the
+   object program, the object program is a bracket, and the driver's partition
+   splits the tail and never enters the bracket.
+5. **The 2nd and 3rd projections as artifacts (E-14)** — emit a standalone
+   compiler and a compiler generator; downstream of item 4.
+6. **§4.4's other half (E-7)**, **the compiler's speed on very large inputs**,
+   **the self-hosting fixpoint over an arbitrary program**, and **metavariable
+   stratification (E-17)**.
+
+**Measured 2026-10-05 — the projections are downstream of the partition.** The
+2nd projection is `S(<Int e.Program e.Input>)` with **both** free, so the driver
+must partition the *program* while the *data* stays open. It cannot: it
+partitions only a single top-level sequence variable, and an object program is a
+bracket, so the partition splits the *tail* instead of entering the bracket.
+Measured on `Go { e.X = <F e.X>; } F { (A) = 'a'; (B) = 'b'; }` at `--steps 120`,
+the residue is **32 split functions**, each sentence one term longer than the
+last, and neither `(A)` nor `(B)` is ever decided — unbounded, and only the
+budget truncates it. So E-11 precedes E-14; the two rows were listed as
+independent and are not.
 
 **The knowledge network of the Principia Cybernetica Project is not on this list
 and is not a fifth layer.** It is the social context the program is for — a
