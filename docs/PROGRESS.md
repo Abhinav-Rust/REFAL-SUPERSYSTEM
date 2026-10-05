@@ -2227,6 +2227,43 @@ projection found a dead dedup test and a cursor where a source belongs.
    callee produces an unbounded residue — is part of this work, and its gate is
    the first thing to write. Note the mirror: whatever changes here changes
    `examples/compiler.ref` in the same commit.
+
+   ### E-11: the design space, mapped (2026-10-05)
+
+   Four candidate fixes were each tried or reasoned through, and each fails. They
+   are recorded so the next session starts from the map rather than the wall.
+
+   1. **Relax the single-variable guard.** `split_configuration` refuses to
+      partition when more than one argument is a free expression variable.
+      Relaxing it lets the projection's entry drive at all — but the residue comes
+      out with `e.Program` unbound in the entry body, a wrong program rather than
+      a compiler. Insufficient alone, and *not* shippable.
+   2. **Prefer the leftmost free variable *inside* a bracket.** This does enter
+      the constructor, but it regresses: after `(e.B1)` is partitioned into
+      `(s.H2 e.T2)`, the next blocked split takes `e.T2`, and so on. It
+      terminates only if the partition also knows the callee demands **exactly
+      one term** at that position.
+   3. **Partition by component-plus-free-tail.** Correct in spirit, but a free
+      expression variable can place the component anywhere: for
+      `<Run e.Program e.Input>`, `e.Program = (End) (In)` is legal, because the
+      callee's `(End) e.In` absorbs `(In)` into `e.In`. A partition by single-term
+      shapes misses that case and the residue is *wrong*, not merely coarse.
+   4. **Stop splitting when no progress is possible.** Sound, terminating, and the
+      right *shape* — but the "no progress" test must separate a regression
+      (Split2's input is an instance of Split1's) from a legitimate descent, and
+      `compiler.ref`'s own `Dispatch` hits the same shape while making real
+      progress. A homeomorphic guard placed there changes the compiler's residues
+      and turns the differential gates red.
+
+   **The conclusion.** The partition has to be **pattern-driven**: partition the
+   component by the shapes the callee's *sentence patterns* require at that
+   position, leave the complement to fail where the source fails, and put the
+   split's own configurations under the whistle. That is Turchin's driving step
+   together with **negative information** — the other half of E-11 — and it is
+   one design rather than four patches. It is also the first concrete instance of
+   the *sound, incomplete, certificate-carrying* analysis the Tier-1 row asks
+   for: the partition proves what it can and leaves a residual call where it
+   cannot, which is exactly the "localise what you cannot settle" half.
 6. **The compiler's speed on very large inputs.** The last named gap in the
    compiler-in-Refal row. `scripts/perf.sh` measures it; `CleanG` and the checker
    are linear now, and what is left is the constant.
