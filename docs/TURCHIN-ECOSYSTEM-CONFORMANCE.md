@@ -174,7 +174,7 @@ repository is green for the general case.
 | **E-16** | **Self-application is achieved by construction, not by luck**: binding-time stratification, bounded homeomorphic whistles over the structural skeleton only, and two-stage folding | 1995 *A Self-Applicable Supercompiler* (CCNY TR 95-010); 1996 *A Self-Applicable Supercompiler* (Dagstuhl) | `T-10`: C1 = C2 = C3 byte-identical over the full grammar; `the_refal_driver_reaches_a_fixpoint_on_the_compiler_itself` | ✅ Closed — the report's measured claims (12–25× faster compilation through the generated compiler; 20–50× target speedups) are historical results on a Sun SPARCstation and are **not** re-published as this repository's figures |
 | **E-17** | **Metavariables are stratified**: a variable of level *k* ranges over expressions of level *k−1*, so object substitutions cannot be confused with meta bindings | 1995 *Metavariables: Their Implementation and Use in Program Transformation* | `T-8` gives §6.4's unknown a **level** — `Up` raises it, `Dn` lowers it | 🔶 Partial — the runtime has the level-carrying unknown, which is the object-level half. What is missing is the *transformer's own* stratified variable system, the level indices on the meta-program's variables that the 1995 report introduces to make self-application tractable |
 | **E-18** | **Control asymmetry**: the compiler observes and transforms; it never silently modifies what it observes | *Dialogue*; Principia Cybernetica `CONTROL` | `T-12`: `refal differential` | ✅ Closed |
-| **E-19** | **The honest limit is published**, not papered over: "There exists no algorithm which could transform any graph of states into an equivalent perfect graph" | 1980 §5.8, Theorem 5.1 | `T-11`: README and PLAN state it | ✅ Closed |
+| **E-19** | **The honest limit is published**, not papered over: "There exists no algorithm which could transform any graph of states into an equivalent perfect graph" | 1980 §5.8, Theorem 5.1 | `T-11`: README and PLAN state it; §8 below states what the theorem forbids (a universal decision procedure) and what it does not (a sound, incomplete, certificate-carrying analysis) | ✅ Closed |
 
 ### Cross-cutting — the theory that says what a layer is
 
@@ -355,3 +355,36 @@ reflection engine, a supercompiler, a meta-prover, and a self-application that
 emits a compiler and a compiler generator — with every row above carrying a green
 gate. There is no fifth layer; the knowledge network is the social context the
 program is for, and it is named as the boundary rather than claimed.**
+
+---
+
+## 8. The honest limit, and what it does not forbid
+
+Theorem 5.1 of the 1980 monograph — *"There exists no algorithm which could
+transform any graph of states into an equivalent perfect graph"* — is a
+**computability** bound. Turchin proves it by modelling formal arithmetic in
+Refal and reducing to Church's theorem, which places it in the same class as the
+undecidability of the halting problem. **It is therefore not a technology bound,
+and no advance in hardware, tooling or machine learning overturns it.** The live
+confirmation is the Termination Competition, which still runs annually as a
+*semi-decision* benchmark: tools are ranked by how many instances they settle,
+never by settling all of them.
+
+What the theorem forbids is a **universal decision procedure**. It does not
+forbid a *sound, incomplete* analysis — and the difference between "cannot be
+decided universally" and "cannot be decided usefully" was a 1980-practicality
+gap rather than an impossibility. What changed by 2026:
+
+| | 1980 | 2026 |
+|---|---|---|
+| Feasibility of a walk | a hand argument | an SMT query (Z3, cvc5) over the decidable arithmetic / array / bit-vector fragments |
+| Termination of a clause set | informal | size-change termination, ranking-function synthesis, the termination provers |
+| Trusting the answer | the tool's word | a **checkable certificate** — a proof assistant, or a machine-checkable ranking-function witness |
+| The walks that cannot be settled | silence | an explicit, minimal **`unproven` set** |
+
+The consequence for this document is that **no row is reclassified as
+unattainable.** The Tier-1 row withholds credit for a *total* termination
+analysis, and totality is the one thing the theorem forbids; what it asks for
+instead — a sound, incomplete, certificate-carrying analysis that localises what
+it cannot settle — is achievable, and is strictly stronger than the current
+published guarantee. **100% stays 100% of the four layers.**
