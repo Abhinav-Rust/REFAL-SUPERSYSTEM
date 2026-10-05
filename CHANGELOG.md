@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+**The self-application emits a working compiler, and the gate runs it.**
+
+- **`the_self_applied_compiler_compiles_every_example_the_compiler_accepts`.** E-14
+  recorded that the projections were "reachable — the compiler is self-applicable
+  and the fixpoint is gated — but neither is exposed as a command that emits a
+  compiler or a compiler generator, and neither has its own gate". The command was
+  `refal compile`; this is the gate. `refal compile examples/compiler.ref`
+  specialises the Refal-authored supercompiler with respect to **itself**, its
+  argument left open, so what comes out is a standalone compiler. The gate does
+  **not** inspect the artifact — a residue that re-prints its input is also a
+  program — it **runs** it: every example the compiler accepts is fed to the
+  artifact and its output must equal `refal compile`'s. 480 s, corpus-wide.
+- **The structural reason the 2nd projection proper is still open, measured.**
+  What the self-application emits is a **compiler**, not a **generator**.
+  `compiler.ref`'s `Dispatch` takes one argument — the program to compile — so
+  specialising it with respect to an *interpreter* yields the **compiled
+  interpreter**: a program that interprets, not one that emits code. `mix(mix,
+  int)` needs the supercompiler to take (interpreter, program) as **two slots**,
+  which this interface cannot express. That is a restructuring of `compiler.ref`,
+  not a new driver mode, and it is the remaining item.
+- **Figure: ~88.5% → ~89%.** E-14's credit moves 2.00 → 2.50: the self-application
+  now emits a compiler *and* is behaviourally gated, which is the half of the row
+  the gate text named. What is still withheld is the generator.
+
 **The partition that can enter a constructor is built — and the 2nd projection was measured to be a different construction.**
 
 - **`refal project2 <interpreter.ref> <Function>`.** Specialise with respect to an
