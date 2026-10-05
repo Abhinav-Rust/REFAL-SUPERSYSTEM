@@ -48,8 +48,8 @@ See `README.md` §"What Theorem 5.1 does and does not forbid" and
 
 | | |
 |---|---|
-| Honest completion | **~89%** (supersystem completeness — one method, one table, in `README.md`) |
-| Tests | 377 (67 core + 165 CLI integration + 145 across the other four crates), 0 clippy, fmt clean |
+| Honest completion | **~90%** (supersystem completeness — one method, one table, in `README.md`) |
+| Tests | 378 (67 core + 166 CLI integration + 145 across the other four crates), 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
 
