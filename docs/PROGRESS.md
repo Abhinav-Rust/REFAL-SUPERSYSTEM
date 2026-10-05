@@ -48,8 +48,8 @@ See `README.md` §"What Theorem 5.1 does and does not forbid" and
 
 | | |
 |---|---|
-| Honest completion | **~89%** (supersystem completeness — one method, one table, in `README.md`) |
-| Tests | 375 (67 core + 163 CLI integration + 145 across the other four crates), 0 clippy, fmt clean |
+| Honest completion | **~88.5%** (supersystem completeness — one method, one table, in `README.md`) |
+| Tests | 376 (67 core + 164 CLI integration + 145 across the other four crates), 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
 
@@ -2158,22 +2158,24 @@ projection found a dead dedup test and a cursor where a source belongs.
    at all — a run-length encoder drops the run's symbols — which is a property of
    the program rather than of the synthesizer, and is why `examples/invert-list-encoder.ref`
    encodes losslessly.
-3. **The projections as artifacts (E-14) — the 2nd is built, the 3rd is not.**
-   **Built 2026-10-05:** `refal project2 <interpreter.ref> <Function>` enters the
-   interpreter with the object program and its data as separate unknowns, drives
-   with `SplitStrategy::Pattern` (E-11), and prints the residual as a checked
-   program. Gates: `the_projection_partition_enters_a_constructor_and_decides_the_branches`
-   and `a_bare_variable_at_the_split_position_is_declined_rather_than_looped` in
-   `refal-core`, and `the_second_projection_emits_a_compiler_that_decides_its_branches`
-   in `refal-cli`, all on `examples/projection-bracket-callee.ref`. **Withheld:**
-   the 3rd projection, and the 2nd's *completeness* — `refal project2
-   examples/metasystem-unroll.ref Run` closes in 6 splits and still reaches `Run`
-   on branches whose sub-program cannot be partitioned, so the artifact there is a
-   partially specialised interpreter rather than a compiler. The 1st is `refal
-   metasystem`: it drives the entry — an interpreter applied to a *known* program
-   — residualises, and requires the residue to be sound and measurably cheaper.
-   The 2nd and 3rd leave the program or the source *unknown*, so what comes out is
-   an artifact rather than an instance of one.
+3. **The projections as artifacts (E-14) — the 2nd emits an artifact, and the
+   artifact is not a compiler.** `refal project2 <interpreter.ref> <Function>`
+   enters the interpreter with the object program and its data as separate
+   unknowns, drives with `SplitStrategy::Pattern` (E-11), and prints the residual
+   as a checked program. **Measured on `examples/metasystem-unroll.ref`'s `Run`:
+   2 splits, 14 steps, walk closed, and neither `Run` nor `Times` is defined in
+   the artifact** — the interpreter is *eliminated*. **But the residue is
+   structurally the interpreter**: `Split1` ≡ `Run` and `Split2` ≡ `Times`, once
+   the partition enters the counter's bracket contents and a split is identified
+   by the sentences it emits rather than by the configuration that asked for it.
+   That is not a defect of the implementation; it is what driving gives. **With
+   the object program unknown there is nothing static to exploit**, so driving an
+   interpreter with its program open returns the interpreter, and Futamura's 2nd
+   projection is `mix(mix, int)` — the *supercompiler* specialised with respect to
+   the interpreter. **That is the open item, and it is a different construction
+   from this one.** The 3rd is downstream of it. The 1st is `refal metasystem`:
+   it drives the entry — an interpreter applied to a *known* program — and the
+   residue there really is specialised, because the program is known.
 
    - **2nd — a standalone compiler.** Turchin 1980 (Aarhus): specialise the
      supercompiler with respect to an *interpreter*, and the residue is a compiler

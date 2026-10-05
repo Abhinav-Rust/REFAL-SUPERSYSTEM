@@ -281,8 +281,10 @@ fn print_usage() {
     eprintln!("  invert     Synthesise the inverse of a function by driving its forward");
     eprintln!("             definition (Gluck & Turchin, ISSAC 90)");
     eprintln!("             refal invert <file.ref> <Function> [--steps N]");
-    eprintln!("  project2   The 2nd projection: specialise an interpreter with the object");
-    eprintln!("             program left open and emit the artifact (Turchin 1980, Aarhus)");
+    eprintln!("  project2   Drive an interpreter with its object program LEFT OPEN and emit");
+    eprintln!("             the residual (Turchin 1980, Aarhus). The interpreter is");
+    eprintln!("             eliminated, but the residue is structurally the interpreter:");
+    eprintln!("             with the program unknown there is nothing static to exploit");
     eprintln!("             refal project2 <interpreter.ref> <Function> [--steps N]");
     eprintln!("  analyze    Report bounded Tier 1 reachability, terminals, and SCCs");
     eprintln!("  overlap    Report conservative sentence-pattern compatibility pairs");

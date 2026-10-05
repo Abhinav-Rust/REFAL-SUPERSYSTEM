@@ -653,6 +653,7 @@ pub fn drive_ground(
         max_steps,
         proof_entry: false,
         split_strategy: SplitStrategy::Sequence,
+        pattern_splits: Vec::new(),
     };
     let output = context.invoke(&function, input)?;
     Ok(DriveReport {
@@ -835,6 +836,7 @@ fn drive_symbolic_inner_with_split(
         max_steps,
         proof_entry,
         split_strategy,
+        pattern_splits: Vec::new(),
     };
     let residual = match context.invoke_symbolic(&function, &input)? {
         SymbolicInvoke::Reduced(output) => output,
@@ -1449,6 +1451,18 @@ struct DriveContext<'a> {
     /// the sequence partition; a projection uses the pattern partition so it can
     /// enter a constructor. See [`SplitStrategy`].
     split_strategy: SplitStrategy,
+    /// The branches each *pattern* split would emit, by split name.
+    ///
+    /// A pattern split is identified by the sentences it produces, not by the
+    /// configuration that asked for it. `Times` called with a variable count
+    /// (`t.Count`) and with a bracket count (`(e.Rest)`) produce the **same**
+    /// sentences — the callee's own patterns — so they are one function. Without
+    /// this, each recursion emits a near-duplicate split, the chain never folds,
+    /// and the interpreter stays reachable from the residue. The list is kept
+    /// separately from [`SplitFunction::sentences`] because those are filled only
+    /// after the branches have been driven, and a recurrence inside a branch has
+    /// to find the split *before* that.
+    pattern_splits: Vec<(String, Vec<Vec<CoreTerm>>)>,
 }
 
 impl<'a> DriveContext<'a> {
@@ -2006,7 +2020,30 @@ impl<'a> DriveContext<'a> {
         function: &str,
         input: &[CoreTerm],
     ) -> Result<Option<Vec<CoreTerm>>, DriveError> {
-        let Some(position) = input.iter().position(is_pattern_split_variable) else {
+        // The split target: the leftmost component that is a pattern-split
+        // variable, **or a bracket whose contents are exactly one**. The second
+        // case is what lets the partition enter a constructor whose *contents*
+        // the callee discriminates. `<Times (e.Rest) t.P e.In>` is the case that
+        // matters: its first argument is a bracket, not a variable, so the
+        // variable-only rule would take `t.P` at position 1 and decline (the
+        // callee's component there is a bare variable) -- leaving `Times`
+        // residual. Splitting the *contents* of `(e.Rest)` into the shapes
+        // `Times`' own patterns demand (`()` and `('*' e.Rest)`) is what folds
+        // `Times` into a recursive sentence of the residue instead.
+        let target = input.iter().enumerate().find_map(|(index, term)| {
+            if is_pattern_split_variable(term) {
+                return Some(index);
+            }
+            match &term.kind {
+                CoreTermKind::Bracket(content)
+                    if content.len() == 1 && is_pattern_split_variable(&content[0]) =>
+                {
+                    Some(index)
+                }
+                _ => None,
+            }
+        });
+        let Some(position) = target else {
             return Ok(None);
         };
         if !self
@@ -2049,6 +2086,23 @@ impl<'a> DriveContext<'a> {
             return Ok(None);
         }
 
+        // A split is identified by the **sentences it emits**, not by the
+        // configuration that asked for it. `Times` called with a variable count
+        // and with a bracket count emit the same sentences -- the callee's own
+        // patterns -- so they are one function. Emitting both gives a chain of
+        // near-duplicates that never folds and leaves the interpreter reachable
+        // from the residue; this is what makes the recursion fold.
+        if let Some((name, _)) = self.pattern_splits.iter().find(|(_, existing)| {
+            existing.len() == branches.len()
+                && existing
+                    .iter()
+                    .zip(&branches)
+                    .all(|(existing, branch)| term_sequences_same_kind(existing, branch))
+        }) {
+            let name = name.clone();
+            return Ok(Some(vec![call_term(&name, input)]));
+        }
+
         let canonical = canonical_configuration(input);
         if let Some(existing) = self.splits.iter().find(|split| {
             split.function.eq_ignore_ascii_case(function) && split.canonical_input == canonical
@@ -2059,6 +2113,7 @@ impl<'a> DriveContext<'a> {
 
         let index = self.splits.len() + 1;
         let name = format!("Split{index}");
+        self.pattern_splits.push((name.clone(), branches.clone()));
         self.splits.push(SplitFunction {
             name: name.clone(),
             function: function.to_string(),
@@ -6674,30 +6729,34 @@ fn symbolic_variable(name: &str) -> CoreTerm {
     }
 }
 
-/// The **2nd projection** (Turchin 1980, Aarhus; Futamura 1971): specialise the
-/// supercompiler with respect to an *interpreter*, leaving the object program
-/// open, so what comes out is a compiler rather than one program compiled.
+/// Drive an interpreter with its object program **left open** (Turchin 1980,
+/// Aarhus; the construction Futamura's 2nd projection is usually stated as).
 ///
-/// # Why this is the 2nd projection and not the 1st
+/// # What this emits, measured
 ///
-/// The 1st projection (`refal metasystem`) enters `<Int (P) (e.D)>` with the
-/// object program `P` **known**: driving watches the interpreter run on that one
-/// program and the residue is that program translated out of metacode. The 2nd
-/// projection enters `<Int e.Program e.Input>` with **both free**. The object
-/// program is now a variable, so the driver cannot watch it run; it must
-/// partition the *program space itself* and make every partition a sentence of
-/// the residue. What is emitted is therefore not an instance of a compiler but
-/// the compiler: a program that accepts any object program of the language the
-/// interpreter interprets.
+/// The residue is **interpreter-free but structurally the interpreter**. On
+/// `examples/metasystem-unroll.ref`'s `Run` it is two splits and fourteen steps,
+/// and neither `Run` nor `Times` is defined in the artifact — the interpreter is
+/// *eliminated* — yet `Split1` ≡ `Run` and `Split2` ≡ `Times`. That is not an
+/// implementation defect: **with the object program unknown there is nothing
+/// static to exploit**, so driving an interpreter with its program open returns
+/// the interpreter. The 1st projection — `refal metasystem` — is different
+/// precisely because its program is *known*, and its residue really is
+/// specialised.
 ///
-/// # The partition, and the honest limit
+/// Futamura's 2nd projection proper is `mix(mix, int)` — the **supercompiler**
+/// specialised with respect to the interpreter — which is a different
+/// construction and is not built here. This function is honest about being the
+/// measurement that shows why.
+///
+/// # The partition, and why it is not the compiler's
 ///
 /// The partition used is [`SplitStrategy::Pattern`] — the callee's own sentence
-/// patterns — because the compiler's sequence partition cannot enter a
-/// constructor and produces an unbounded residue on a bracket-pattern callee.
+/// patterns, which can enter a constructor and fold — because the compiler's
+/// sequence partition produces an unbounded residue on a bracket-pattern callee.
 /// Where the callee's patterns cannot name the component the walk declines and
-/// leaves a residual call; that is sound, and the report's `complete` flag says
-/// whether the budget truncated the walk.
+/// leaves a residual call; that is sound, and `complete` says whether the budget
+/// truncated the walk.
 pub fn project_compiler(
     program: &CoreProgram,
     graph: &StateGraph,
