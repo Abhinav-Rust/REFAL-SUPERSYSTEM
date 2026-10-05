@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+**Presentation: the repository front page now shows its status instead of stating it.**
+
+- **`docs/images/status-{light,dark}.svg`** — a status dashboard for the README:
+  seven workstreams, each bar being that row's credit as a share of its own
+  weight, so the bars are comparable and the headline is the weighted total
+  (~90%). Rows at or above 90% are teal and the partial ones amber, so L3 and L4
+  read as the work in progress at a glance.
+- **The headline is now a claim rather than a description.**
+  *"A compiler that compiles itself. A prover that decides by supercompilation."*
+  — both of which are gated and were verified this session.
+- **The GitHub About panel is no longer one flat sentence.** New description and
+  18 topics, so the sidebar carries chips rather than prose.
+
 **Fixed: CI went red on the 2nd-projection commit, and the cause was a genuine Tier-1 proof.**
 
 - **`strict_mode_has_no_false_positives_on_the_corpus` failed on `d9903ee`.** The
