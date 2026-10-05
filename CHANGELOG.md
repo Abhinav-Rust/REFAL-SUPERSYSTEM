@@ -2,6 +2,51 @@
 
 ## Unreleased
 
+**The meta-prover decides equations now — and building it found a matcher defect that made the driver's residues wrong.**
+
+- **Layer 3's relational half exists: `refal prove <file> --equiv <Left> <Right>`.**
+  It takes two functions that each return one side of a claim over the same free
+  variables and decides whether they are equal for every input. Both sides are
+  driven together, the longest shared prefix cancels (an expression is a sequence)
+  and a shared bracket cancels (a bracket is a constructor), a blocking variable is
+  split into Turchin's three exhaustive cases (`[]`, `s.H e.T`, `(e.B) e.T`), and a
+  branch whose sides have reduced to a renaming of an enclosing claim is closed by
+  that claim — Turchin's loop edge (1979 §2, "Cycle Recognition & Folding") read at
+  the level of an equation. `Proved` requires every leaf to be reflexive or folded;
+  a ground mismatch is a refutation with its witness; an unfinished walk is
+  incomplete. **Associativity of `Append` — SCP4 1999 §4's first named theorem — is
+  now proved**, and so is right identity; a deliberately false equation is refuted
+  with the two disagreeing ground values.
+- **Six gates, and the CLI gate requires the proof to use both closing rules.**
+  Three in `refal-core` (a recursive identity is proved and the proof uses both
+  reflexivity and folding; a false equation is refuted with its witness; a claim
+  naming a missing function is an error rather than a verdict) and three in
+  `refal-cli`, which run the command end to end and require the exit status to
+  carry the verdict. A report that only ever says `proved` proves nothing about
+  which rule ran, so the gate asserts the fold appears.
+- **A real defect in the ground matcher, found by the fold test and recorded
+  rather than fixed.** `ground_term_matches` recurses into a nested bracket with a
+  *fresh local* bindings map and discards it, so a variable bound inside the
+  bracket never reaches the caller. `F { (e.B) = e.B; }` matches `()` and then
+  returns an unbound `e.B`: measured, `refal drive` fails with `ground driver does
+  not support unbound residual variables` and `refal compile` emits a program that
+  does not lex. The fix — thread the caller's map through — is written and
+  measured, but it changes the residues the *driver* produces and the
+  Refal-authored compiler reproduces them independently, so the two have to land in
+  one change; the fix is therefore deferred, and the prover drives through
+  `match_shape_pattern`, which threads bindings correctly. See `docs/PROGRESS.md`.
+- **And with the corrected matcher the §4.4 strategy short circuit stops holding,
+  so it must be re-measured when the matcher is fixed.** Measured on the
+  growing-accumulator fixture at budget 13, the compilative end finished inside its
+  budget and produced `ResidueCost { residual_work: 31, size: 58 }` while the
+  interpretive end produced `{ residual_work: 19, size: 35 }` — smaller on both
+  counts, and skipped. The short circuit is left in place while the matcher fix is
+  deferred; `an_end_that_finished_inside_its_budget_is_never_beaten` is the test
+  that will notice.
+- **Two new fixtures.** `examples/equiv-append-assoc.ref` (associativity, proved;
+  and a false variant, refuted) and `examples/equiv-append-right-id.ref` (right
+  identity, proved).
+
 **The prover no longer refutes a claim its budget cut short.** A soundness defect:
 an unfinished walk could report a true theorem as `refuted`, because the `'False'`
 it fell through to was a genuine reduction and no check on the terminal nodes could

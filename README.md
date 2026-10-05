@@ -20,11 +20,13 @@
 > The compiler — layers 0 and 2, plus most of layer 4 — is finished and gated: it
 > compiles its own source, drives rather than re-prints, and passes a differential
 > oracle on every program in the corpus. **Layer 1 is now a service** (`refal
-> reflect` returns the machine's active configuration as data) and **function
-> inversion is built** (`refal invert` synthesises `f⁻¹` by driving `f`), but
-> **layer 3 (the meta-prover) is only half-built** — it decides a predicate against
-> Turchin's `'True'` criterion, and its *relational* half, proving two functions
-> equivalent, is named as the next work rather than implied to be done.
+> reflect` returns the machine's active configuration as data), **function
+> inversion is built** (`refal invert` synthesises `f⁻¹` by driving `f`), and
+> **layer 3 now decides equations as well as predicates**: `refal prove --equiv`
+> proves associativity of `Append` and right identity by folding a branch to a
+> renaming of the claim — Turchin's loop edge. What remains of layer 3 is the
+> *general* relational form: an arbitrary relation between two functions, and a
+> proof that needs generalisation beyond the loop edge.
 > [What 100% means ↓](#what-100-means)
 
 ---
@@ -99,7 +101,7 @@ whether the transformation meant what it claimed.
 | **L0** | Refal-5 machine | Runs Refal: pattern matching, term splicing, arithmetic, I/O. The state is one flat view field held as a rope of shared arenas, so a variable binds a *range* of it rather than a copy | ✅ Built |
 | **L1** | Reflection engine | Freezes an expression as inert data, inspects it with ordinary pattern matching, and thaws it back. Constructs symbolic execution graphs | ✅ Built — `refal reflect` returns the machine's active configuration as data through a public API |
 | **L2** | Supercompiler core | Drives a configuration into a graph of states, whistles on divergence, generalizes least-generally, folds loops, and emits a residual program | ✅ Built |
-| **L3** | Meta-prover | Accepts assertions or relational functions and verifies equivalence and invariants by complete tree reduction | 🔶 Entry and criterion built — `refal prove` drives a named predicate and reports `proved` / `refuted` / `incomplete` by Turchin's `'True'` criterion; equivalence claims are not yet accepted |
+| **L3** | Meta-prover | Accepts assertions or relational functions and verifies equivalence and invariants by complete tree reduction | 🔶 Predicates and equations built — `refal prove` drives a named predicate to Turchin's `'True'` criterion, and `refal prove --equiv` decides an equation over free variables by folding a branch whose sides have reduced to a renaming of the claim. An arbitrary relation, and proofs needing generalisation beyond the loop edge, are not yet accepted |
 | **L4** | Self-application | The engine applied to itself: a compiler that compiles its own source, and a generator that emits a compiler | 🔶 Fixpoint closed; projections are not artifacts |
 
 ## Why it exists
@@ -209,13 +211,13 @@ matching both precise and expressive.
 | **Tier 1 static analysis** | ✅ Complete for its published guarantee with zero false positives across the corpus: dead sentences, recognition-impossible reachability, builtin domain errors, and a format lattice that describes a bracket's contents recursively |
 | **Compiler written in Refal** | ✅ A real Refal-authored lexer, parser, checker and emitter over the full Classic grammar; the transforming half — `GRAPH`, `RESIDUALIZE`, `DRIVE`, `DRIVE-SYMBOLIC`, `RESIDUALIZE-DRIVEN` — byte-identical to its Rust counterpart over the corpus, **and the last of them is the compiler's default path** |
 | **Self-hosting** | ✅ C1 = C2 = C3 byte-identical over the full grammar at 12,599 bytes, every generation checked; `refal compile examples/compiler.ref` emits the driven residue, so the self-application is a supercompilation rather than a re-print |
-| **Meta-prover** | 🔶 Layer 3, partial — `refal prove` drives a predicate to Turchin's single terminal node `'True'`, and reports a counterexample with its witness. An equation over **free** variables is not proved: associativity of `Append` needs induction over list structure, and `examples/prove-append-reach.ref` publishes exactly that boundary |
+| **Meta-prover** | 🔶 Layer 3, partial — `refal prove` drives a predicate to Turchin's single terminal node `'True'` and reports a counterexample with its witness; `refal prove --equiv` decides an **equation** between two reductions over free variables by folding a branch whose sides have reduced to a renaming of the claim (Turchin's loop edge, 1979 §2). Associativity of `Append` and right identity are proved; a false equation is refuted with its witness. The predicate form still reports `refuted` for `examples/prove-append-reach.ref`, which is the measured boundary of the `'True'` criterion. The general relation, and a proof needing generalisation beyond the loop edge, are not yet accepted |
 | **Reflection service** | ✅ `refal reflect` freezes the entry configuration and returns it as terms, with addressable successors and an explicit completeness verdict |
 | **Function inversion** | ✅ `refal invert` drives the forward definition under an inverse configuration and emits the synthesised inverse; the round-trip gate runs `<Inverse <F x>> ≡ x` over the emitted program |
 
 ## Project status
 
-### Honest completion: ~85%
+### Honest completion: ~88%
 
 This figure measures **the whole supersystem** — all four layers — not the compiler
 alone. The compiler is finished; the supersystem is not, and publishing the
@@ -235,11 +237,11 @@ compiler's own number as the project's would misdescribe what this repository is
 | Tier 1 static verification | 10.50 | 8.75 | 1.75 | the guarantee is deliberately narrow: no termination analysis |
 | L2/L4 · Compiler implemented in Refal | 17.85 | 16.80 | 1.05 | not yet fast on very large inputs |
 | L4 · Verified self-hosting fixpoint | 9.10 | 8.05 | 1.05 | the fixpoint holds on the corpus and the compiler's own source, not on arbitrary programs |
-| **L3 · Meta-prover** | **13.00** | **6.50** | **6.50** | the entry, the driving, and Turchin's `'True'` criterion are built and gated; a claim over free variables needs induction the driver does not perform, and the general relational form (two functions and a relation) is not accepted. A soundness defect — a truncated walk could refute — was found and fixed this session |
+| **L3 · Meta-prover** | **13.00** | **11.00** | **2.00** | the entry, the driving, Turchin's `'True'` criterion, and the *relational* half are built and gated — an equation over free variables is decided by folding a branch to a renaming of the claim. What is withheld is the *general* relation (an arbitrary relation rather than equality) and a proof needing generalisation beyond the loop edge; of SCP4's three named theorems, associativity of `Append` is gated and a tree reversal and a sorting equality are not. A soundness defect — a truncated walk could refute — was found and fixed in an earlier session; this session found a defect in the ground matcher, recorded rather than fixed because the fix and the Refal-authored compiler must land together |
 | L4 · Projections as artifacts | 5.00 | 1.50 | 3.50 | the 1st projection is a command with a gate; the 2nd and 3rd emit no artifact |
 | **L2 · Function inversion** | **3.00** | **3.00** | **0.00** | closed — `refal invert` drives the forward definition and emits the synthesised inverse, round-tripped in a gate |
 | Conformance / release evidence | 2.80 | 2.66 | 0.14 | three file-backed I/O clauses bind to the runtime's own test rather than a fixture |
-| **Total** | **100.00** | **~85** | **~15** | |
+| **Total** | **100.00** | **~88** | **~12** | |
 
 **The figure's precision is bounded by its inputs, which are judgments.** A
 defensible re-weighting moves it by **±0.5 points**; one credit judgment moves it
@@ -247,10 +249,12 @@ by **±0.9**. So it is published to one decimal at most, and it is not a
 fine-grained progress instrument.
 
 **A row carries zero credit until a gate behind it is green.** L3 was at 0.00 until
-`refal prove` reduced a predicate to `True` on a real fixture; it now holds half
-its weight, because the criterion and the entry exist and the *relational* half —
-proving two functions equivalent over all inputs — does not. Adding weighted rows
-for work not begun is how a completion figure becomes flattery.
+`refal prove` reduced a predicate to `True` on a real fixture, then at half its
+weight while the *relational* half — proving two functions equivalent over all
+inputs — was missing. That half now exists and is gated, so the row holds most of
+its weight; what it withholds is the general relation and a proof that needs more
+than the loop edge. Adding weighted rows for work not begun is how a completion
+figure becomes flattery.
 
 ### The gate ledger
 
@@ -278,6 +282,22 @@ emitted inverse back into the source and round-trips it). A **soundness defect i
 unfinished walk could report a claim as `refuted`, and the verdict is now a
 property of the claim rather than of `--steps`.
 
+**This session: the relational half of E-12/E-13** — `refal prove --equiv` decides
+an equation between two reductions over free variables, proving associativity of
+`Append` and right identity by folding a branch to a renaming of the claim, and
+refuting a false equation with a witness. **Two defects were found while building
+it, and both are recorded rather than fixed.** The ground matcher drops a variable
+bound inside a nested bracket, so `F { (e.B) = e.B; }` matches `()` and returns an
+unbound `e.B`: `refal drive` fails with `unbound residual variables` and `refal
+compile` emits a program that does not lex. The one-line fix is written and
+measured, but it changes the residues the *driver* produces and the Refal-authored
+compiler reproduces them independently, so fixing it means fixing both together —
+and with the corrected matcher the §4.4 strategy short circuit stops holding (at
+budget 13 the compilative end, having finished inside its budget, is beaten by the
+interpretive end on both cost axes), so it must be re-measured too. The prover,
+which needs correct bindings, drives through the shape matcher, which threads them.
+Both defects are written up in [`docs/PROGRESS.md`](docs/PROGRESS.md).
+
 ## What 100% means
 
 The four layers of the 1991 supersystem, with every row carrying a green gate:
@@ -297,13 +317,14 @@ The ordered work list lives in
    public API, so the layers above are written against reflection rather than
    against the driver's internals. It went first because the prover's own layer
    membership depends on it.
-2. **The meta-prover (E-12, E-13)** — layer 3, **in progress.** A predicate is
-   driven and the graph reported against Turchin's single terminal node `True`.
-   What remains is a claim over free variables, which needs **induction over
-   structure** (generalisation and folding, 1980 §4.6) that the driver does not
-   perform, and the general relational form: a claim naming two functions and a
-   relation, accepted as such rather than written by hand as a predicate. The
-   boundary is measured and published in `examples/prove-append-reach.ref`.
+2. ~~**The meta-prover (E-12, E-13)**~~ — **done for predicates and equations.**
+   A predicate is driven and the graph reported against Turchin's single terminal
+   node `'True'`; an equation between two reductions over free variables is decided
+   by folding a branch whose sides have reduced to a renaming of the claim
+   (Turchin's loop edge, 1979 §2). Associativity of `Append` is *proved*, not
+   asserted. What remains is the *general* relation and a proof that needs
+   generalisation beyond the loop edge; the predicate form's boundary is still
+   published in `examples/prove-append-reach.ref`.
 3. ~~**Function inversion (E-15)**~~ — **done.** Synthesise `f⁻¹` from `f` by
    driving the forward definition against a known output (Glück & Turchin, ISSAC
    '90): `refal invert` emits the inverse as a checked program whose patterns are
@@ -474,6 +495,19 @@ cargo run -p refal -- formats examples/hello.ref
 # T-9: drive an interpreter over a known object program and emit the residue,
 # refusing to claim a transition unless it is sound and measurably cheaper
 cargo run -p refal -- metasystem examples/metasystem-unroll.ref
+
+# L3: prove a predicate by complete tree reduction (Turchin 1986 6) -- the graph
+# must reduce to the single terminal node 'True'.
+cargo run -p refal -- prove examples/prove-predicate-true.ref Marked
+
+# L3: prove an *equation* between two reductions over free variables. Both sides
+# are driven together, a shared prefix and a shared bracket cancel, and a branch
+# whose sides have reduced to a renaming of the claim is closed by the claim
+# itself -- Turchin's loop edge (1979 2) read at the level of an equation.
+# Associativity of `Append`, which SCP4 1999 4 names first, is proved; the
+# `Wrong-*` pair in the same file is refuted with its witness and exits 1.
+cargo run -p refal -- prove examples/equiv-append-assoc.ref --equiv Assoc-Left Assoc-Right
+cargo run -p refal -- prove examples/equiv-append-right-id.ref --equiv Right-Id-Left Right-Id-Right
 
 # L2: synthesise the inverse of a function by driving its forward definition
 # (Gluck & Turchin, ISSAC '90). The emitted program is the inverse: its patterns

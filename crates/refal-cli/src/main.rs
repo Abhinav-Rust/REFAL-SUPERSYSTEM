@@ -274,6 +274,9 @@ fn print_usage() {
     eprintln!("             [--steps N]");
     eprintln!("  prove      Prove a predicate by complete tree reduction (Turchin 1986 6)");
     eprintln!("             refal prove <file.ref> <Predicate> [--steps N]");
+    eprintln!("             refal prove <file.ref> --equiv <Left> <Right> [--steps N]");
+    eprintln!("                        prove two functions equal over free variables, by");
+    eprintln!("                        folding a branch that reduces to the claim itself");
     eprintln!("  invert     Synthesise the inverse of a function by driving its forward");
     eprintln!("             definition (Gluck & Turchin, ISSAC 90)");
     eprintln!("             refal invert <file.ref> <Function> [--steps N]");
@@ -489,6 +492,10 @@ fn analyze_program(program: &refal_ast::Program, args: &[String]) {
 /// symbolically reduced, the predicate's role is invisible from there, and the
 /// residue is the source re-printed.
 fn prove_program(program: &refal_ast::Program, args: &[String]) {
+    if args.first().map(String::as_str) == Some("--equiv") {
+        prove_equivalence_command(program, &args[1..]);
+        return;
+    }
     let Some(predicate) = args.first() else {
         eprintln!("{PROVE_USAGE}");
         process::exit(2);
@@ -518,6 +525,50 @@ fn prove_program(program: &refal_ast::Program, args: &[String]) {
     // The exit status carries the verdict, so a script can gate on it: 0 for a
     // proof, 1 for a refutation, 2 for an unfinished attempt. A prover whose
     // status is always 0 cannot be used as a gate.
+    match report.verdict {
+        refal_core::ProofVerdict::Proved => {}
+        refal_core::ProofVerdict::Refuted { .. } => process::exit(1),
+        refal_core::ProofVerdict::Incomplete { .. } | refal_core::ProofVerdict::Open => {
+            process::exit(2);
+        }
+    }
+}
+
+/// Prove two functions equal for every input.
+///
+/// The relational half of layer 3 (E-12, E-13). `refal prove <file> <Predicate>`
+/// decides a predicate against Turchin's `'True'` criterion; this mode decides an
+/// *equation* between two reductions over free variables, which is how the corpus
+/// states associativity of `Append`, a sorting equality, and a tree reversal. The
+/// two sides are driven together, a shared prefix cancels, and a branch whose
+/// sides have reduced to a renaming of the claim is closed by the induction
+/// hypothesis -- Turchin's loop edge.
+fn prove_equivalence_command(program: &refal_ast::Program, args: &[String]) {
+    let (left, right, rest) = match args {
+        [left, right, rest @ ..] => (left, right, rest),
+        _ => {
+            eprintln!("{EQUIV_USAGE}");
+            process::exit(2);
+        }
+    };
+    let options = match drive_options(rest) {
+        Ok(options) => options,
+        Err(usage) => {
+            eprintln!("{usage}");
+            process::exit(2);
+        }
+    };
+    let core = refal_core::lower_program(program);
+    let report = match refal_core::prove_equivalence(&core, left, right, options.max_steps) {
+        Ok(report) => report,
+        Err(error) => {
+            eprintln!("equivalence error: {error}");
+            process::exit(1);
+        }
+    };
+    print!("{}", refal_core::format_equivalence_report(&report));
+    // The exit status carries the verdict, exactly as the predicate mode's does:
+    // 0 for a proof, 1 for a refutation, 2 for an unfinished attempt.
     match report.verdict {
         refal_core::ProofVerdict::Proved => {}
         refal_core::ProofVerdict::Refuted { .. } => process::exit(1),
@@ -682,6 +733,7 @@ struct DriveOptions {
 const DRIVE_USAGE: &str = "Usage: refal <drive-symbolic|residualize-driven> <file.ref> [--steps N]      [--strategy search|compilative|interpretive] [--configurations] [--neighborhoods]";
 
 const PROVE_USAGE: &str = "Usage: refal prove <file.ref> <Predicate> [--steps N] [--strategy search|compilative|interpretive]";
+const EQUIV_USAGE: &str = "Usage: refal prove <file.ref> --equiv <Left> <Right> [--steps N]";
 const INVERT_USAGE: &str = "Usage: refal invert <file.ref> <Function> [--steps N] [--strategy search|compilative|interpretive]";
 
 fn drive_options(args: &[String]) -> Result<DriveOptions, String> {

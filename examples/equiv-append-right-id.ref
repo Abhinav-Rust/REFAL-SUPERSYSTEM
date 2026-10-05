@@ -1,0 +1,43 @@
+/* Right identity of list concatenation, as an equivalence claim.
+
+   `Append(X, ()) = (X)` for every list `X`. This is the smallest claim that
+   needs induction rather than reduction: `<Append (e.X) ()>` cannot reduce while
+   `e.X` is free, so the prover splits `e.X`, reduces, and closes the recursive
+   branch by folding to the claim itself -- the induction hypothesis, which is
+   Turchin's loop edge (1979 2) read at the level of an equation.
+
+   Lists are bracketed so that the empty list is `()`, a term, rather than the
+   empty expression: the flat representation makes a one-element list and an
+   empty one indistinguishable to the callee's pattern, which turns the theorem
+   into one about argument arity rather than about lists.
+
+   `Append` returns the bracketed concatenation; `Append-Contents` is its bare
+   counterpart, used to splice the recursion's result inside a bracket. */
+
+$EXTERN Prout;
+
+$ENTRY Go {
+  e.Input = <Prout <Append (e.Input) ()>>;
+}
+
+/* The claim: appending the empty list on the right changes nothing. */
+Right-Id-Left {
+  (e.X) = <Append (e.X) ()>;
+}
+
+Right-Id-Right {
+  (e.X) = (e.X);
+}
+
+/* <Append (A) (B)> = the bracketed list A ++ B. It delegates to
+   `Append-Contents`, whose result is bare, so the claim normalises to exactly the
+   shape its own unfolded form takes and the induction hypothesis can fold. */
+Append {
+  (e.A) (e.B) = (<Append-Contents (e.A) (e.B)>);
+}
+
+/* <Append-Contents (A) (B)> = the bare concatenation A ++ B. */
+Append-Contents {
+  () (e.B) = e.B;
+  (t.H e.T) (e.B) = t.H <Append-Contents (e.T) (e.B)>;
+}

@@ -128,6 +128,12 @@ fn prove_file(path: &str, predicate: &str, args: &[&str]) -> std::process::Outpu
     command.output().expect("run refal binary")
 }
 
+fn prove_equivalence_file(path: &str, left: &str, right: &str) -> std::process::Output {
+    let mut command = Command::new(refal_bin());
+    command.args(["prove", &workspace_path(path), "--equiv", left, right]);
+    command.output().expect("run refal binary")
+}
+
 fn invert_file(path: &str, function: &str, args: &[&str]) -> std::process::Output {
     let mut command = Command::new(refal_bin());
     command.args(["invert", &workspace_path(path), function]);
@@ -7119,5 +7125,92 @@ fn every_builtin_clause_has_a_traceable_fixture() {
     assert!(
         !runs.is_empty() && !fails.is_empty(),
         "a corpus with no running and no failing row proves nothing"
+    );
+}
+
+/// The relational half of the prover (E-12, E-13): an equation between two
+/// reductions over free variables, proved by folding.
+///
+/// `refal prove <file> <Predicate>` decides a predicate against Turchin's
+/// `'True'` criterion. `refal prove <file> --equiv <Left> <Right>` decides an
+/// *equation* -- how the corpus states associativity of `Append` -- by driving
+/// both sides together and closing a branch whose sides have reduced to a
+/// renaming of the claim. This gate requires the proof to use both closing rules,
+/// because a report that only ever says `proved` proves nothing about which rule
+/// ran.
+#[test]
+fn the_prover_proves_an_equation_by_folding_to_the_claim() {
+    let output = prove_equivalence_file(
+        "examples/equiv-append-assoc.ref",
+        "Assoc-Left",
+        "Assoc-Right",
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "associativity of Append should be proved\nstdout:\n{stdout}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        stdout.contains("equivalence: Assoc-Left = Assoc-Right"),
+        "the report names the claim:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("  verdict: proved\n"),
+        "the verdict is a proof:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("folded ("),
+        "the proof closes the recursive branch by the loop edge:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("reflexive ("),
+        "and the base branch by reflexivity:\n{stdout}"
+    );
+}
+
+/// A recursive identity over a bracketed list is proved too, so the gate is not
+/// about one fixture's shape.
+#[test]
+fn the_prover_proves_a_recursive_list_identity() {
+    let output = prove_equivalence_file(
+        "examples/equiv-append-right-id.ref",
+        "Right-Id-Left",
+        "Right-Id-Right",
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "Append(X, ()) = (X) should be proved\nstdout:\n{stdout}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        stdout.contains("  verdict: proved\n"),
+        "the verdict is a proof:\n{stdout}"
+    );
+}
+
+/// A false equation is refuted, and the exit status carries the verdict so a
+/// script can gate on it. A prover that only ever said `proved` would pass the
+/// first two gates and this one would catch it.
+#[test]
+fn the_prover_refutes_a_false_equation_and_its_status_says_so() {
+    let output = prove_equivalence_file(
+        "examples/equiv-append-assoc.ref",
+        "Wrong-Left",
+        "Wrong-Right",
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        !output.status.success(),
+        "a refutation must not exit zero:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("  verdict: refuted ("),
+        "the verdict is a refutation:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("'a'") && stdout.contains("'b'"),
+        "the witness names both disagreeing values:\n{stdout}"
     );
 }
