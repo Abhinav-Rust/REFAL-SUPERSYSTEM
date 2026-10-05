@@ -5611,25 +5611,34 @@ fn the_search_is_the_default_and_each_end_stays_selectable() {
 }
 
 /// T-4, Turchin 1988 p. 538. The strategy search is not decoration: on this
-/// program one end of the axis produces **no program at all**. `Accum` grows
-/// its accumulator by one term per step, so no configuration recurs exactly,
-/// the compilative whistle never fires, and the budget runs out. The
-/// interpretive end terminates for Turchin's own reason -- finitely many
-/// first-order neighborhoods -- and emits a residue.
+/// program the two ends of the axis produce *different* residues, and the
+/// search keeps the smaller.
+///
+/// `Accum` moves each term of its argument into an accumulator one at a time, so
+/// the accumulator grows and the compilative whistle fires late; the interpretive
+/// end folds on a recurring first-order neighborhood (Turchin 1988 §4) and emits
+/// the smaller residue.
 ///
 /// This is the non-vacuity gate for the search: without it, "the search keeps
 /// the better end" would be true of a corpus on which both ends always agree,
-/// which is a statement about the corpus and not about the search.
+/// which is a statement about the corpus and not about the search. It was called
+/// `the_search_keeps_the_end_that_produces_a_residue_at_all` and asserted the
+/// stronger claim that the compilative end produced *no residue* here. That claim
+/// was an artifact: the failure it observed was the ground matcher's
+/// nested-bracket defect (`ground driver does not support unbound residual
+/// variables`), not a property of the axis. With the defect fixed both ends
+/// produce a residue, and the search's choice is a measurement rather than a
+/// rescue.
 #[test]
-fn the_search_keeps_the_end_that_produces_a_residue_at_all() {
+fn the_search_keeps_the_smaller_end() {
     let compilative = residualize_driven_file(
         "examples/driven-strategy-search.ref",
         &["--strategy", "compilative"],
     );
     assert!(
-        !compilative.status.success(),
-        "the compilative end is expected to produce no residue here, and it did:\n{}",
-        String::from_utf8_lossy(&compilative.stdout)
+        compilative.status.success(),
+        "the compilative end produces a residue:\n{}",
+        String::from_utf8_lossy(&compilative.stderr)
     );
 
     let interpretive = residualize_driven_file(
@@ -5647,11 +5656,11 @@ fn the_search_keeps_the_end_that_produces_a_residue_at_all() {
     let searched_stdout = String::from_utf8_lossy(&searched.stdout).to_string();
     assert!(
         searched_stdout.contains("strategy: interpretive"),
-        "the search must keep the only end that produced a residue:\n{searched_stdout}"
+        "the search must keep the smaller end:\n{searched_stdout}"
     );
     assert!(
-        searched_stdout.contains("strategy-other: compilative produced no residue"),
-        "and it must report the end that produced none:\n{searched_stdout}"
+        searched_stdout.contains("strategy-other: compilative residual-work"),
+        "and it must report what the other end cost:\n{searched_stdout}"
     );
     assert_eq!(
         driven_residue(&searched_stdout),
@@ -5745,12 +5754,12 @@ fn the_searched_end_is_no_worse_than_either_fixed_end() {
                 panic!("the chosen end must report a cost:\n{searched_stdout}");
             };
 
-            // The short circuit. Its *premise* — that an end which finished
-            // inside its budget cannot be beaten by one whose rule only folds
-            // earlier — is verified where it can be measured directly, in
-            // `refal-core`'s `an_end_that_finished_inside_its_budget_is_never_beaten`.
-            // What this sweep checks is the reporting contract.
-            if other.contains("not run (the compilative end finished inside its budget)") {
+            // The short circuit. Its premise — that an end which left no
+            // residual work cannot be beaten — is verified where it can be
+            // measured directly, in `refal-core`'s
+            // `an_end_that_leaves_no_residual_work_is_never_beaten`. What this
+            // sweep checks is the reporting contract.
+            if other.contains("not run (the compilative end left no residual work)") {
                 assert!(
                     chosen.starts_with("compilative"),
                     "{name} at {budget}: only the compilative end may short-circuit:\n{searched_stdout}"

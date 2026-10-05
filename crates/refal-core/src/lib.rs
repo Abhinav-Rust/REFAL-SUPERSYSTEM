@@ -993,7 +993,7 @@ impl EndOutcome {
             }
             EndOutcome::Failed => "produced no residue".to_string(),
             EndOutcome::Skipped => {
-                "not run (the compilative end finished inside its budget)".to_string()
+                "not run (the compilative end left no residual work)".to_string()
             }
         }
     }
@@ -2395,7 +2395,7 @@ fn match_symbolic_term(
     if contains_undecided_term(input) {
         return SymbolicMatch::Unknown;
     }
-    if ground_term_matches(pattern, input) {
+    if ground_term_matches(pattern, input, bindings) {
         SymbolicMatch::Yes
     } else {
         SymbolicMatch::No
@@ -2521,7 +2521,7 @@ fn match_ground_pattern(
             return false;
         }
 
-        if input_index >= input.len() || !ground_term_matches(term, &input[input_index]) {
+        if input_index >= input.len() || !ground_term_matches(term, &input[input_index], bindings) {
             return false;
         }
         match_from(pattern, input, pattern_index + 1, input_index + 1, bindings)
@@ -2530,31 +2530,26 @@ fn match_ground_pattern(
     match_from(pattern, input, 0, 0, bindings)
 }
 
-fn ground_term_matches(pattern: &CoreTerm, input: &CoreTerm) -> bool {
+fn ground_term_matches(
+    pattern: &CoreTerm,
+    input: &CoreTerm,
+    bindings: &mut HashMap<String, Vec<CoreTerm>>,
+) -> bool {
     match (&pattern.kind, &input.kind) {
         (CoreTermKind::Char(left), CoreTermKind::Char(right)) => left == right,
         (CoreTermKind::Identifier(left), CoreTermKind::Identifier(right)) => {
             left.eq_ignore_ascii_case(right)
         }
         (CoreTermKind::Number(left), CoreTermKind::Number(right)) => left == right,
-        // KNOWN DEFECT, recorded rather than papered over: this recurses with a
-        // *fresh local* bindings map and drops it, so a variable bound inside a
-        // nested bracket never reaches the caller. `F { (e.B) = e.B; }` matches
-        // `()` and then returns an unbound `e.B`, which is why `refal drive`
-        // reports `ground driver does not support unbound residual variables` and
-        // `refal compile` emits a program that does not lex.
-        //
-        // Threading the caller's map through fixes it, but it also changes the
-        // residues the *driver* produces, and the Refal-authored compiler in
-        // `examples/compiler.ref` reproduces those residues independently -- so
-        // the fix and the second implementation have to land together or the
-        // Refal-vs-Rust differential goes red on six gates. That is a larger
-        // change than this session carries, so the fix is deferred and recorded in
-        // `docs/PROGRESS.md`; the equivalence prover, which needs correct
-        // bindings, drives through `match_shape_pattern`, which threads them.
+        // A bracket pattern may contain variables, and a variable bound inside
+        // one has to reach the caller's map. This once built a *fresh* local map
+        // and dropped it, so `F { (e.B) = e.B; }` matched `()` and then returned
+        // an unbound `e.B` -- the match said yes while the substitution had
+        // nothing to substitute. `examples/compiler.ref`'s `DvGround` carried the
+        // identical defect, because it mirrors this function, so the two are
+        // fixed together: thread the caller's map through both.
         (CoreTermKind::Bracket(left), CoreTermKind::Bracket(right)) => {
-            let mut bindings = HashMap::new();
-            match_ground_pattern(left, right, &mut bindings)
+            match_ground_pattern(left, right, bindings)
         }
         _ => false,
     }
@@ -3988,32 +3983,30 @@ pub fn residualize_entry_graph(
 /// A `Search` run drives both ends, measures each residue with [`residue_cost`],
 /// and keeps the smaller.
 ///
-/// # The short circuit is a proof, not a heuristic
+/// # The short circuit, and the one it replaced
 ///
-/// The interpretive rule only ever folds **earlier** than the compilative one —
-/// it fires on a first-order neighborhood recurrence, which the compilative
-/// rule does not catch — so the configurations it expands are a subset of the
-/// ones the compilative end expands, and a call the compilative end drove is
-/// either driven or folded by the interpretive end. The interpretive residue
-/// therefore retains at least as much undriven work, and **cannot** be the
-/// better of the two.
+/// The interpretive end is skipped only when the compilative end's residue has
+/// **zero residual work** — no call left for run time to make. Nothing is cheaper
+/// than zero, so no other end can beat it, and the second pass would be wasted.
 ///
-/// That argument needs the compilative end to have finished expanding. A run
-/// that stopped short of its budget stopped for that reason and no other, so
-/// the second pass is skipped. A run that *exhausted* its budget may have been
-/// cut off mid-expansion, and then the interpretive end can win — which is the
-/// whole point of the search, and the case
-/// `examples/driven-strategy-search.ref` exercises.
+/// An earlier revision skipped the interpretive end whenever the compilative end
+/// merely *finished inside its budget*, on the argument that the interpretive rule
+/// only folds earlier and so "cannot produce a more driven residue". **That
+/// argument is false**, and the short circuit was wrong with it: folding earlier
+/// leaves *more* of the program recursive and therefore *less* unrolled, which is
+/// a *smaller* residue, not a larger one. The argument confused "retains undriven
+/// work" with the cost metric. Measured on the growing-accumulator fixture at
+/// budget 13, the compilative end finished inside its budget and produced
+/// `ResidueCost { residual_work: 31, size: 58 }`, while the interpretive end
+/// produced `{ residual_work: 19, size: 35 }` — smaller on both counts, and
+/// skipped by the old rule.
 ///
-/// *A note for the next session.* This argument is a claim about the corpus, and
-/// it is checked by `an_end_that_finished_inside_its_budget_is_never_beaten`. It
-/// was falsified once — measured on the growing-accumulator fixture at budget 13
-/// the interpretive end was smaller on both cost axes — but only while the ground
-/// matcher's nested-bracket defect (see `ground_term_matches`) was being
-/// corrected, and the matcher correction was reverted because it also changed the
-/// residues the Refal-authored compiler reproduces. The premise holds again with
-/// the matcher as it is; when the matcher is fixed, this short circuit must be
-/// re-measured, and `docs/PROGRESS.md` records that.
+/// The defect that made this visible was in the ground matcher, which dropped a
+/// variable bound inside a nested bracket (see [`ground_term_matches`]); the
+/// Refal-authored compiler in `examples/compiler.ref` carried the identical defect
+/// in `DvGround`, and both were corrected together. `compiler.ref`'s
+/// `DsRdSearch2C` carries this same zero-residual-work rule, because the two
+/// implementations must agree byte for byte.
 pub fn residualize_entry_graph_with_strategy(
     program: &CoreProgram,
     graph: &StateGraph,
@@ -4031,13 +4024,13 @@ pub fn residualize_entry_graph_with_strategy(
         Err(_) => EndOutcome::Failed,
     };
 
-    // The compilative end is provably optimal when it finished inside its
-    // budget, and it is trivially so when it did no residual work at all.
-    let finished_inside_budget = compilative
+    // Nothing is cheaper than a residue with no residual work, so this end cannot
+    // be beaten and the second pass would be wasted. Anything else is compared.
+    let leaves_no_residual_work = compilative
         .as_ref()
-        .map(|residual| residual.report.steps < max_steps)
+        .map(|residual| residue_cost(&residual.program).residual_work == 0)
         .unwrap_or(false);
-    if finished_inside_budget {
+    if leaves_no_residual_work {
         return compilative.map(|mut residual| {
             residual.strategy_choice = Some(StrategyChoice {
                 chosen: DriveStrategy::Compilative,
@@ -6038,14 +6031,7 @@ impl<'a> EquivalenceProver<'a> {
         {
             for sentence in &definition.sentences {
                 let mut bindings: HashMap<String, Vec<CoreTerm>> = HashMap::new();
-                // The *shape* matcher, not `match_symbolic_pattern`. The latter
-                // routes a ground input through `match_ground_pattern`, whose
-                // nested-bracket arm drops the variables it binds (see
-                // `ground_term_matches`); the shape matcher threads the caller's
-                // map through every level, so a variable bound inside a bracket
-                // reaches the substitution. A prover that substituted an unbound
-                // variable would fold a claim it never proved.
-                match match_shape_pattern(&sentence.pattern, input, &mut bindings) {
+                match match_symbolic_pattern(&sentence.pattern, input, &mut bindings) {
                     SymbolicMatch::No => continue,
                     SymbolicMatch::Unknown => {
                         if blocked.is_none() {
@@ -6093,7 +6079,7 @@ impl<'a> EquivalenceProver<'a> {
         for condition in conditions {
             let value = substitute_terms(&condition.result, bindings);
             let (value, _) = self.reduce_into(&value)?;
-            match match_shape_pattern(&condition.pattern, &value, bindings) {
+            match match_symbolic_pattern(&condition.pattern, &value, bindings) {
                 SymbolicMatch::Yes => {}
                 SymbolicMatch::No => return Ok(SymbolicMatch::No),
                 SymbolicMatch::Unknown => return Ok(SymbolicMatch::Unknown),
@@ -9765,6 +9751,23 @@ mod tests {
         }
     }
 
+    /// A program with no call left for run time to make.
+    ///
+    /// Its residue has zero residual work, which is the one case where the
+    /// compilative end cannot be beaten and the search may skip the interpretive
+    /// pass. Without a fixture of this shape the short circuit is never
+    /// exercised, and a rule nothing tests is a rule nothing checks.
+    fn fully_specialised() -> CoreProgram {
+        CoreProgram {
+            declarations: vec![],
+            functions: vec![core_function(
+                "Go",
+                Visibility::Entry,
+                vec![core_sentence(vec![], vec![core_char('x')])],
+            )],
+        }
+    }
+
     /// A program whose recursion terminates, so the compilative end finishes.
     fn finite_recursion() -> CoreProgram {
         CoreProgram {
@@ -9795,22 +9798,26 @@ mod tests {
 
     /// §4.4's short circuit, checked rather than assumed.
     ///
-    /// The search skips the interpretive end when the compilative end finished
-    /// inside its budget, on the argument that a rule which only folds earlier
-    /// cannot produce a more driven residue. This test is the argument's
-    /// premise: for every budget at which the compilative end finished, the
+    /// The search skips the interpretive end when the compilative residue leaves
+    /// **zero residual work** — nothing is cheaper than zero. This test is that
+    /// premise: for every budget at which the compilative end left no work, the
     /// interpretive end is run anyway and required to be no better.
     ///
-    /// Budgets are chosen so both regimes are covered: small ones cut the
-    /// compilative end off (where the search must compare), large ones let it
-    /// finish (where the short circuit applies).
+    /// It also pins the rule it replaced. An earlier revision skipped the
+    /// interpretive end whenever the compilative end merely *finished inside its
+    /// budget*, and that rule is unsound: folding earlier leaves *less* unrolled
+    /// code, so the interpretive end can be strictly smaller. The final assertion
+    /// requires the interpretive end to win somewhere, which is exactly what the
+    /// old rule got wrong — and what makes searching worth doing.
     #[test]
-    fn an_end_that_finished_inside_its_budget_is_never_beaten() {
-        let mut checked = 0usize;
-        let mut cut_off = 0usize;
+    fn an_end_that_leaves_no_residual_work_is_never_beaten() {
+        let mut skipped = 0usize;
+        let mut compared = 0usize;
+        let mut interpretive_wins = 0usize;
         for (label, program) in [
             ("growing accumulator", growing_accumulator()),
             ("finite recursion", finite_recursion()),
+            ("fully specialised", fully_specialised()),
         ] {
             let graph = clean_unreachable_states(&build_seed_graph(&program));
             for budget in [2usize, 3, 5, 8, 13, 21, 40, 10_000] {
@@ -9823,12 +9830,7 @@ mod tests {
                 let Ok(compilative) = compilative else {
                     continue;
                 };
-                if compilative.report.steps >= budget {
-                    // The premise does not apply here; this is the case the
-                    // search has to run both ends for.
-                    cut_off += 1;
-                    continue;
-                }
+                let compilative_cost = residue_cost(&compilative.program);
                 let interpretive = residualize_entry_graph_with_strategy(
                     &program,
                     &graph,
@@ -9838,23 +9840,36 @@ mod tests {
                 let interpretive_cost = interpretive
                     .ok()
                     .map(|residual| residue_cost(&residual.program));
-                let compilative_cost = residue_cost(&compilative.program);
-                assert!(
-                    interpretive_cost.is_none_or(|cost| compilative_cost <= cost),
-                    "{label} at budget {budget}: an end that finished inside its budget was \
-                     beaten by the end the search skips -- {compilative_cost:?} against \
-                     {interpretive_cost:?}"
-                );
-                checked += 1;
+                if compilative_cost.residual_work == 0 {
+                    // The short circuit applies here; nothing can be cheaper.
+                    assert!(
+                        interpretive_cost.is_none_or(|cost| compilative_cost <= cost),
+                        "{label} at budget {budget}: an end that left no residual work was \
+                         beaten by the end the search skips -- {compilative_cost:?} against \
+                         {interpretive_cost:?}"
+                    );
+                    skipped += 1;
+                } else {
+                    compared += 1;
+                    if interpretive_cost.is_some_and(|cost| cost < compilative_cost) {
+                        interpretive_wins += 1;
+                    }
+                }
             }
         }
         assert!(
-            checked >= 6,
-            "the premise must be exercised across the budgets, not once: {checked}"
+            skipped >= 1,
+            "the short circuit must actually fire somewhere, or it is untested: {skipped}"
         );
         assert!(
-            cut_off >= 3,
-            "and so must the regime where the compilative end is cut off: {cut_off}"
+            compared >= 1,
+            "and the regime where the search must compare must be exercised: {compared}"
+        );
+        assert!(
+            interpretive_wins >= 1,
+            "the interpretive end must win somewhere -- that is what the removed budget-based \
+             short circuit got wrong, and searching is indistinguishable from skipping it \
+             otherwise: {interpretive_wins}"
         );
     }
 

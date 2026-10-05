@@ -24,25 +24,38 @@
   `refal-cli`, which run the command end to end and require the exit status to
   carry the verdict. A report that only ever says `proved` proves nothing about
   which rule ran, so the gate asserts the fold appears.
-- **A real defect in the ground matcher, found by the fold test and recorded
-  rather than fixed.** `ground_term_matches` recurses into a nested bracket with a
-  *fresh local* bindings map and discards it, so a variable bound inside the
-  bracket never reaches the caller. `F { (e.B) = e.B; }` matches `()` and then
-  returns an unbound `e.B`: measured, `refal drive` fails with `ground driver does
-  not support unbound residual variables` and `refal compile` emits a program that
-  does not lex. The fix — thread the caller's map through — is written and
-  measured, but it changes the residues the *driver* produces and the
-  Refal-authored compiler reproduces them independently, so the two have to land in
-  one change; the fix is therefore deferred, and the prover drives through
-  `match_shape_pattern`, which threads bindings correctly. See `docs/PROGRESS.md`.
-- **And with the corrected matcher the §4.4 strategy short circuit stops holding,
-  so it must be re-measured when the matcher is fixed.** Measured on the
-  growing-accumulator fixture at budget 13, the compilative end finished inside its
-  budget and produced `ResidueCost { residual_work: 31, size: 58 }` while the
-  interpretive end produced `{ residual_work: 19, size: 35 }` — smaller on both
-  counts, and skipped. The short circuit is left in place while the matcher fix is
-  deferred; `an_end_that_finished_inside_its_budget_is_never_beaten` is the test
-  that will notice.
+- **A real defect in the ground matcher, found by the fold test and fixed on both
+  sides.** `ground_term_matches` recursed into a nested bracket with a *fresh
+  local* bindings map and discarded it, so `F { (e.B) = e.B; }` matched `()` and
+  then returned an unbound `e.B`: `refal drive` failed with `ground driver does not
+  support unbound residual variables` and `refal compile` emitted a program that
+  does not lex. The Refal-authored compiler's `DvGround` carried the *identical*
+  defect — the two mirror each other — so the fix is a pair: `ground_term_matches`
+  threads the caller's map through, and `DvGround` now takes and returns the
+  bindings, with `DvMatchLit2`/`DvMatchLit3` and `DsMSTerm` threading them. The
+  boolean shim `DvMatched` is deleted. This also repairs `refal compile` for a
+  bracket-pattern callee, which was the same defect seen from the command line.
+- **The §4.4 strategy short circuit is corrected, because the matcher fix
+  falsified its premise.** The search skipped the interpretive end whenever the
+  compilative end finished inside its budget, on the argument that folding earlier
+  "cannot produce a more driven residue". Measured on the growing-accumulator
+  fixture at budget 13, the compilative end finished inside its budget and produced
+  `ResidueCost { residual_work: 31, size: 58 }` while the interpretive end produced
+  `{ residual_work: 19, size: 35 }` — smaller on both counts, and skipped. Folding
+  earlier leaves *less* unrolled code, so the argument was simply wrong. Both
+  implementations now skip only at **zero residual work**, in
+  `residualize_entry_graph_with_strategy` and in `compiler.ref`'s `DsRdSearch2C`,
+  and the report line reads `not run (the compilative end left no residual work)`.
+  `an_end_that_finished_inside_its_budget_is_never_beaten` becomes
+  `an_end_that_leaves_no_residual_work_is_never_beaten`, which requires the short
+  circuit to fire (a new `fully_specialised` fixture), requires the search to
+  compare elsewhere, and requires the interpretive end to win at least once.
+- **One gate was an artifact of the matcher defect.**
+  `the_search_keeps_the_end_that_produces_a_residue_at_all` asserted the
+  compilative end produced *no residue* on `examples/driven-strategy-search.ref`;
+  that failure was the matcher defect, not a property of the axis. With it fixed
+  both ends produce a residue and the search keeps the smaller, so the test is
+  `the_search_keeps_the_smaller_end` and the fixture's header says so.
 - **Two new fixtures.** `examples/equiv-append-assoc.ref` (associativity, proved;
   and a false variant, refuted) and `examples/equiv-append-right-id.ref` (right
   identity, proved).
