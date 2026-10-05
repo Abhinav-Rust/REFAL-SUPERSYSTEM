@@ -2245,6 +2245,48 @@ projection found a dead dedup test and a cursor where a source belongs.
    splicing function — tens of lines, not a threading — and it is the route to
    try before the threading.
 
+   ### E-14: the derivation attempted, and where it stops (2026-10-05)
+
+   The derivation is `S(S, int)`: drive the **compiler** with the interpreter
+   pinned and the program open, so the residue *is* the generator rather than a
+   program that applies the driver. The configuration was built by baking the
+   interpreter into a copy of `compiler.ref` as a literal character list and
+   replacing the entry with
+
+   ```refal
+   $ENTRY Go { e.Program = <Dispatch ('SPECIALISE') <Interp> e.Program>; }
+   ```
+
+   **That configuration works as a program** — run on
+   `(Seq (Lit 'h' (Lit 'i' (End))) (In))` it emits
+   `e.Input = 'h' 'i' e.Input;`, the same target `refal metasystem` gives.
+   **Driving it with the program open does not yet give the generator.** The
+   residue is 101 KB in **7 steps**, and its entry is
+   `<Dispatch ('SPECIALISE') (<the interpreter, inlined>) e.Input>`. Two things
+   are visible in that one line:
+
+   - **The interpreter literal *is* specialised into the artifact** — the driver
+     evaluated `<Interp>` at drive time and baked its value into the residue.
+     That half of the derivation works.
+   - **`Dispatch` stays residual**, because its pattern
+     `('SPECIALISE') (e.Interpreter) (e.Program)` requires the program to be a
+     **bracket**, and the open variable is not one.
+
+   So the derivation needs the program passed as a bracket **and a partition that
+   can enter it** — which is E-11's remaining half. `SplitStrategy::Pattern`
+   exists and can enter a constructor, but it is wired into `project2` only;
+   `residualize-driven` still drives with the sequence partition. **The 1.50 stays
+   withheld**, and this is now a two-line change plus one long drive rather than a
+   research question.
+
+   **Two Classic-Refal facts this cost, worth not rediscovering.** (1) There is
+   **no newline escape and no quote escape** in a char literal, so a source file
+   cannot be embedded as a character list unless it is flattened to one line —
+   the parser *does* accept a whole program on one line — and split at its
+   apostrophes with `<Chr 39>` spliced back in. (2) Flattening puts a leading `*`
+   comment on the same line as the program and comments the whole thing out;
+   strip comment lines first.
+
    - **2nd — a standalone compiler.** Turchin 1980 (Aarhus): specialise the
      supercompiler with respect to an *interpreter*, and the residue is a compiler
      for the language that interpreter interprets. Concretely, enter at
