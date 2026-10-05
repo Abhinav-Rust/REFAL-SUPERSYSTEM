@@ -42,15 +42,16 @@
   branches whose sub-program cannot be partitioned. E-11's negative information
   and explicit stack configuration are still open. **Figure: ~88% → ~89%.**
 - **A documentation defect found while moving the figure: the repository published
-  three tables for one question.** `PROGRESS.md` carried a stale second table
-  (eight rows at 8.5 / 6.0 / 19.5 …) that had already been superseded — the
-  `README.md` row-by-row `What is missing` text is written against the twelve-row
-  table — and it has been removed. `PLAN.md` §5 carries a third, differently
-  weighted table totalling ~91% while stating that it and the README publish "the
-  same number from the same table", which is false of the file as it stands; that
-  claim is withdrawn and the discrepancy is flagged rather than resolved, because
-  choosing the authoritative weighting is a plan-level decision. **The published
-  figure is the README's.**
+  three tables for one question — and it is now fixed.** `PROGRESS.md` carried a
+  stale second table (eight rows at 8.5 / 6.0 / 19.5 …), already superseded, and
+  it has been removed. `PLAN.md` §5 carried a third, differently weighted table
+  totalling ~91% while stating that it and the README published "the same number
+  from the same table" — false of the file as it stood. **The README's twelve-row
+  table is authoritative** (it is the granularity the conformance rows and the
+  row-by-row `What is missing` text are written against, and `PROGRESS.md`
+  already deferred to it); `PLAN.md` §5 now publishes **no figure**, keeping its
+  prose as a plain list of what each workstream still lacks. One figure, one
+  table, one method.
 
 **The 2nd projection was measured before it was built, and the measurement moved it behind the partition.**
 

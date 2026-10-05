@@ -1082,15 +1082,14 @@ forbids. It was stale — the row-by-row `What is missing` text in `README.md` i
 written against the twelve-row table — and it has been removed rather than
 updated, because two tables is the defect and not the drift between them.
 
-**Open, and flagged rather than fixed: `docs/PLAN.md` §5 carries a third one.**
-Its table weights the same eight workstreams at 8.5 / 6.0 / 19.5 / 8.5 / 15.0 /
-25.5 / 13.0 / 4.0 and totals **~91%**, where `README.md` weights twelve rows and
-totals **~89%**. PLAN §5 also states that "the README and this file now publish
-the same number from the same table", which is not true of the file as it stands.
-Its prose cells are the repository's fullest record of what each workstream still
-lacks, so the table has **not** been rewritten here: which weighting is
-authoritative is a plan-level decision and belongs to the Chief Architect.
-Until it is made, the published figure is the README's.
+**`docs/PLAN.md` §5 carried a third one, and it is now resolved.** It weighted the
+same workstreams at 8.5 / 6.0 / 19.5 / 8.5 / 15.0 / 25.5 / 13.0 / 4.0, totalled
+**~91%**, and claimed to publish the same number as the README. **The README's
+twelve-row table is the authoritative one** — it is the granularity the
+conformance rows and the row-by-row `What is missing` text are written against,
+and this file already deferred to it. PLAN §5 now publishes **no figure**: its
+prose is kept as a plain list of what each workstream still lacks, with the
+weights and credits removed. One figure, one table, one method.
 
 The two heaviest rows — the Refal compiler and the self-hosting fixpoint that
 depends on it — hold 38.5 of the 100 points. The runtime has left the deducted
