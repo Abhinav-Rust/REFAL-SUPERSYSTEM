@@ -2227,6 +2227,24 @@ projection found a dead dedup test and a cursor where a source belongs.
    and only then add `('SPECIALISE') (e.Interpreter) (e.Program)` to `Dispatch`.
    **It is one change, and it lands whole.**
 
+   **A cheaper route, found while scoping it, and the one to try first.** The
+   threading exists only to get a *known term* to `DsRdArgs`. It does not have to
+   travel through the driver at all: it can travel through the **source**. Give
+   the interpreter fixture an entry with a marker in it —
+
+   ```refal
+   $ENTRY Go { e.In = <Run (MARKER) e.In>; }
+   ```
+
+   — and let `DsSpecialise (e.Interpreter) (e.Program)` **lex both**, splice the
+   program's tokens (obtained as `Lex (EmitTerms (e.Program))`, both of which
+   already exist in `compiler.ref`) in place of the `MARKER` token, and call
+   `DsRdRun` on the spliced source. Nothing on the driver's ten-function chain is
+   touched, so **the default path is untouched by construction** and the six
+   differential gates cannot go red. It is a new `Dispatch` sentence plus a
+   splicing function — tens of lines, not a threading — and it is the route to
+   try before the threading.
+
    - **2nd — a standalone compiler.** Turchin 1980 (Aarhus): specialise the
      supercompiler with respect to an *interpreter*, and the residue is a compiler
      for the language that interpreter interprets. Concretely, enter at
