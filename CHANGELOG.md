@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+**The 2nd projection emits target code — the program travels through the source, not the driver.**
+
+- **`refal run examples/compiler.ref SPECIALISE "<template>" "<program>"` (E-14).**
+  Specialise the supercompiler with respect to an *interpreter*, the object program
+  open, so what comes back is the **target program** rather than a value. On the
+  metacoded-language interpreter the target for
+  `(Times ('*' '*' '*') (Seq (Lit 'a' (End)) (In)))` is
+  `e.Input = 'a' e.Input 'a' e.Input 'a' e.Input;` — **identical to the 1st
+  projection's residue for the same program.**
+- **The design that made it safe.** The object program travels through the
+  **source** and not through the driver. The interpreter carries a token where its
+  program belongs (`Go { e.In = <Run MARKER e.In>; }`), and `DsSpecialise` lexes
+  both, splices the program's tokens in place of the marker, and drives the
+  spliced source. Nothing on the driver's ten-function chain (`DsRdRun2` through
+  `DsRdArgs`) is touched, so the compiler's default path is unchanged **by
+  construction** — confirmed by `compile_command_compiles_the_compiler_itself`
+  (377 s) and the corpus sweep (73 s).
+- **Three defects found building it, all fixed.** `(<Lex …>)` is rejected — a call
+  may not be bracketed in place, so the token list is bracketed by a function that
+  returns a bracket term; a missing `>` on `LexSource`; and the identifier token's
+  word is a bracket of **char literals**, not `SYM` terms, so the marker predicate
+  matched nothing and the splice silently did nothing.
+- **The gate runs the artifact, it does not read it.**
+  `the_generator_emits_target_code_that_runs` feeds the emitted target three
+  inputs and requires its output to equal `examples/metasystem-unroll.ref`'s —
+  the same interpreter with the same object program hardcoded, so the reference is
+  independent. Fixture: `examples/specialise-template.ref`.
+- **Figure: ~89% → ~90%.** E-14's credit 2.50 → 3.50. What is withheld is the
+  *derivation*: this is an authored mode that applies the driver, not a residue of
+  specialising the supercompiler (`S(S, int)`).
+
 **The self-application emits a working compiler, and the gate runs it.**
 
 - **`the_self_applied_compiler_compiles_every_example_the_compiler_accepts`.** E-14

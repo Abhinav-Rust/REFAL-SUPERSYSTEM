@@ -88,8 +88,65 @@ Dispatch {
     <Prout <DsRdRunAt 'I' e.Source>>;
   ('NORMALIZE') (e.Source) =
     <Normalize <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>;
+  ('SPECIALISE') (e.Interpreter) (e.Program) =
+    <Prout <DsSpecialise (e.Interpreter) (e.Program)>>;
   (e.Mode) (e.Source) = <Prout 'unknown mode: ' e.Mode>;
   (e.Source) = <Compile <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>;
+}
+
+* ---- The 2nd projection (E-14) -------------------------------------------
+*
+* Specialise the supercompiler with respect to an *interpreter*, leaving the
+* object program open, so the residue emits code rather than computing a value.
+*
+* The object program travels through the SOURCE and not through the driver. The
+* interpreter carries a token where its program belongs -- `Go { e.In = <Run
+* MARKER e.In>; }` -- and that token is spliced out for the program's own tokens
+* before the source is parsed. Nothing on the driver's chain (DsRdRun2 through
+* DsRdArgs, ten functions shared with the compiler's default path) is touched,
+* so the default path is untouched by construction and the Refal-vs-Rust
+* differential gates cannot be disturbed by this mode.
+*
+* `refal run examples/compiler.ref SPECIALISE "<template>" "<program>"` is the
+* projection; the artifact is the target program it prints.
+DsSpecialise {
+  (e.Interpreter) (e.Program) =
+    <DsRdRun2 <Parse
+      <Splice <Bracket1 <LexSource e.Program>> <Bracket1 <LexSource e.Interpreter>>>>>;
+}
+
+* `Lex` returns a spread token sequence and a call may not be bracketed in place,
+* so the token list is bracketed by a function that returns a bracket term.
+LexSource {
+  e.Source = <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>;
+}
+
+Bracket1 {
+  e.X = (e.X);
+}
+
+* Replace the MARKER token in the template with the program's tokens.
+Splice {
+  (e.Program) (e.Template) = <SpliceL (e.Program) (e.Template)>;
+}
+
+SpliceL {
+  (e.Program) () = ;
+  (e.Program) ((Ident e.Name) e.Rest) =
+    <SpliceOne (e.Program) (e.Name) (e.Rest)>;
+  (e.Program) (t.Token e.Rest) = t.Token <SpliceL (e.Program) (e.Rest)>;
+}
+
+SpliceOne {
+  (e.Program) (e.Name) (e.Rest), <IsMarker (e.Name)> : '1' =
+    e.Program <SpliceL (e.Program) (e.Rest)>;
+  (e.Program) (e.Name) (e.Rest) =
+    (Ident e.Name) <SpliceL (e.Program) (e.Rest)>;
+}
+
+IsMarker {
+  ('M' 'A' 'R' 'K' 'E' 'R') = '1';
+  e.Other = ;
 }
 
 * Compilation *is* driving a configuration into a graph of states (1980 4.2),

@@ -1,0 +1,36 @@
+* E-14: the 2nd projection's template.
+*
+* This is the tiny metacoded-language interpreter of `metasystem-unroll.ref`,
+* with its object program replaced by the token MARKER. `DsSpecialise` in
+* `examples/compiler.ref` lexes this template and the program, splices the
+* program's tokens in place of MARKER, and drives the result -- so the object
+* program travels through the *source* rather than through the driver, and
+* nothing on the driver's own chain is touched.
+*
+* `refal run examples/compiler.ref SPECIALISE "<this file>" "(Times ...)"`
+* therefore emits the target program for the program given, which is the 2nd
+* projection: the residue emits code.
+*
+* Object language (Turchin 1980 1.3):
+*   (End)                 contribute nothing more
+*   (In)                  contribute the rest of the input
+*   (Lit c (P))           contribute the symbol c, then run P
+*   (Seq (P) (Q))         run P, then run Q
+*   (Times (Count) (P))   run P once for each mark in Count
+
+$ENTRY Go {
+  e.In = <Run MARKER e.In>;
+}
+
+Run {
+  (End) e.In = ;
+  (In) e.In = e.In;
+  (Lit s.C t.P) e.In = s.C <Run t.P e.In>;
+  (Seq t.P t.Q) e.In = <Run t.P e.In> <Run t.Q e.In>;
+  (Times t.Count t.P) e.In = <Times t.Count t.P e.In>;
+}
+
+Times {
+  () t.P e.In = ;
+  ('*' e.Rest) t.P e.In = <Run t.P e.In> <Times (e.Rest) t.P e.In>;
+}

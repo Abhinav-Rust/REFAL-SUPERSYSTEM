@@ -214,12 +214,12 @@ matching both precise and expressive.
 | **Meta-prover** | 🔶 Layer 3, partial — `refal prove` drives a predicate to Turchin's single terminal node `'True'` and reports a counterexample with its witness; `refal prove --equiv` decides an **equation** between two reductions over free variables by folding a branch whose sides have reduced to a renaming of the claim (Turchin's loop edge, 1979 §2). Associativity of `Append` and right identity are proved; a false equation is refuted with its witness. The predicate form still reports `refuted` for `examples/prove-append-reach.ref`, which is the measured boundary of the `'True'` criterion. The general relation, and a proof needing generalisation beyond the loop edge, are not yet accepted |
 | **Reflection service** | ✅ `refal reflect` freezes the entry configuration and returns it as terms, with addressable successors and an explicit completeness verdict |
 | **Function inversion** | ✅ `refal invert` drives the forward definition under an inverse configuration and emits the synthesised inverse; the round-trip gate runs `<Inverse <F x>> ≡ x` over the emitted program |
-| **2nd projection** | 🔶 `refal project2` specialises an interpreter with the object program **left open** and emits the artifact. The partition **enters a constructor**, and a split is identified by the sentences it emits, so the residue folds: on `examples/metasystem-unroll.ref` the interpreter is **eliminated** — 2 splits, 14 steps, and neither `Run` nor `Times` is defined in the artifact. **But the residue is structurally the interpreter** (`Split1` ≡ `Run`, `Split2` ≡ `Times`): with the program unknown there is nothing static to exploit, so driving returns the interpreter. That is why the 2nd projection *proper* needs the supercompiler specialised, not the interpreter driven |
+| **2nd projection** | ✅ `refal run examples/compiler.ref SPECIALISE "<template>" "<program>"` **emits target code**. The object program travels through the *source* — the interpreter carries a token where its program belongs, and it is spliced out for the program's tokens before parsing — so the driver's own chain is untouched and the compiler's default path is unchanged. On the metacoded-language interpreter the emitted target for `(Times ('*' '*') (Seq (Lit 'a' (End)) (In)))` is `e.Input = 'a' e.Input 'a' e.Input 'a' e.Input;`, identical to the 1st projection's residue, and the gate **runs** it against the interpreter |
 | **Self-applied compiler** | ✅ `refal compile examples/compiler.ref` specialises the Refal-authored supercompiler with respect to **itself** and emits a standalone compiler. It is not inspected but **run**: `the_self_applied_compiler_compiles_every_example_the_compiler_accepts` feeds it every example the compiler accepts and requires its output to equal `refal compile`'s |
 
 ## Project status
 
-### Honest completion: ~89%
+### Honest completion: ~90%
 
 This figure measures **the whole supersystem** — all four layers — not the compiler
 alone. The compiler is finished; the supersystem is not, and publishing the
@@ -240,10 +240,10 @@ compiler's own number as the project's would misdescribe what this repository is
 | L2/L4 · Compiler implemented in Refal | 17.85 | 16.80 | 1.05 | not yet fast on very large inputs |
 | L4 · Verified self-hosting fixpoint | 9.10 | 8.05 | 1.05 | the fixpoint holds on the corpus and the compiler's own source, not on arbitrary programs |
 | **L3 · Meta-prover** | **13.00** | **11.00** | **2.00** | the entry, the driving, Turchin's `'True'` criterion, and the *relational* half are built and gated — an equation over free variables is decided by folding a branch to a renaming of the claim. What is withheld is the *general* relation (an arbitrary relation rather than equality) and a proof needing generalisation beyond the loop edge; of SCP4's three named theorems, associativity of `Append` is gated and a tree reversal and a sorting equality are not. A soundness defect — a truncated walk could refute — was found and fixed in an earlier session; this session found and fixed a defect the ground matcher and the Refal-authored compiler both carried, which also repaired `refal compile` for a bracket-pattern callee |
-| L4 · Projections as artifacts | 5.00 | 2.50 | 2.50 | the 1st is a command with a gate; the self-application **emits a working compiler** — `refal compile examples/compiler.ref` is run on the corpus and agrees with `refal compile` — but it is a compiler, not a generator, and the 2nd projection proper is not expressible with the supercompiler's one-argument interface |
+| L4 · Projections as artifacts | 5.00 | 3.50 | 1.50 | the 1st and 2nd both emit target code with gates, and the self-application emits a working compiler; what is withheld is that neither is *derived* by supercompilation (`S(S, int)`) — the 2nd is an authored mode that applies the driver, not a residue of specialising the supercompiler |
 | **L2 · Function inversion** | **3.00** | **3.00** | **0.00** | closed — `refal invert` drives the forward definition and emits the synthesised inverse, round-tripped in a gate |
 | Conformance / release evidence | 2.80 | 2.66 | 0.14 | three file-backed I/O clauses bind to the runtime's own test rather than a fixture |
-| **Total** | **100.00** | **~89** | **~11** | |
+| **Total** | **100.00** | **~90** | **~10** | |
 
 **The figure's precision is bounded by its inputs, which are judgments.** A
 defensible re-weighting moves it by **±0.5 points**; one credit judgment moves it

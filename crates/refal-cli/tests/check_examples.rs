@@ -7384,3 +7384,68 @@ fn the_self_applied_compiler_compiles_every_example_the_compiler_accepts() {
         "the gate must compare a corpus, not one file (compared {compared})"
     );
 }
+
+/// The 2nd projection emits **code**, and the gate *runs* the code it emits.
+///
+/// `refal run examples/compiler.ref SPECIALISE "<template>" "<program>"` splices
+/// the program's tokens into the interpreter template and drives the result, so
+/// what comes back is the target program for that object program rather than a
+/// value. The program travels through the *source* and not through the driver, so
+/// nothing on the driver's ten-function chain is touched; the compiler's own
+/// default path is therefore unchanged, which
+/// `compile_command_compiles_the_compiler_itself` and the corpus differential
+/// gates independently confirm.
+///
+/// The gate does not read the emitted text and call it agreement — a residue that
+/// re-printed the interpreter would also be text. It **runs** the target:
+/// `examples/metasystem-unroll.ref` is the same interpreter with the same object
+/// program hardcoded, so its output is an independent reference.
+#[test]
+fn the_generator_emits_target_code_that_runs() {
+    let template = fs::read_to_string(workspace_path("examples/specialise-template.ref"))
+        .expect("read the template");
+    let program = "(Times ('*' '*' '*') (Seq (Lit 'a' (End)) (In)))";
+    let output = Command::new(refal_bin())
+        .args([
+            "run",
+            &workspace_path("examples/compiler.ref"),
+            "SPECIALISE",
+            &template,
+            program,
+        ])
+        .output()
+        .expect("run refal binary");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "the projection must run:\n{stdout}"
+    );
+    let artifact = stdout
+        .split_once("$ENTRY Go {")
+        .map(|(_, rest)| format!("$ENTRY Go {{{rest}"))
+        .expect("the driver's report is followed by the emitted program");
+    assert!(
+        artifact.contains("e.Input = 'a' e.Input 'a' e.Input 'a' e.Input;"),
+        "the object program's loop is unrolled into the target:\n{artifact}"
+    );
+    let artifact_path = std::env::temp_dir().join("refal-specialised-target.ref");
+    fs::write(&artifact_path, &artifact).expect("write the target");
+
+    for input in ["abc", "zzz", "a"] {
+        let reference = run_file("examples/metasystem-unroll.ref", &[input]);
+        let generated = Command::new(refal_bin())
+            .args(["run", artifact_path.to_str().expect("utf-8 path"), input])
+            .output()
+            .expect("run refal binary");
+        assert!(
+            generated.status.success(),
+            "the target must run on {input:?}:\n{}",
+            String::from_utf8_lossy(&generated.stderr)
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&reference.stdout),
+            String::from_utf8_lossy(&generated.stdout),
+            "the target disagreed with the interpreter on {input:?}"
+        );
+    }
+}
