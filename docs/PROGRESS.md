@@ -2196,6 +2196,37 @@ projection found a dead dedup test and a cursor where a source belongs.
    **two slots**, which this interface cannot express. That is the open item, and
    it is a restructuring of `compiler.ref`, not a new driver mode.
 
+   ### E-14: the generator's change point, located (2026-10-05)
+
+   The two-slot interface is **`DsRdArgs`** (`examples/compiler.ref:2278`), which
+   decides what the entry is driven with:
+
+   ```refal
+   DsRdArgs {
+     (e.States) s.E, <DsEntryClosed (e.States) s.E> : '1' = ();
+     (e.States) s.E = ((VAR 'e' 'Input'));
+   }
+   ```
+
+   It is hardcoded to **one free variable**. The 2nd projection needs
+   `((VAR 'e' 'Program') (VAR 'e' 'Input'))` with the *program* component pinned
+   to a known term — which means a **known term must reach `DsRdArgs`**, and it
+   has to be threaded from the new `Dispatch` sentence through
+   `DsRdRun2 → DsRdSearch → DsRdSearch2 → DsRdSearch2C → DsRdAt → DsRdSelect →
+   DsRdTop → DsRdTop2 → DsRdGo → DsRdArgs` — **ten functions**, every one of them
+   shared with the compiler's default path.
+
+   **Why that is the risk, stated exactly.** Every function on that chain is
+   exercised by the compiler's own default path, whose residues must stay
+   **byte-identical** to the Rust oracle (`compile_command_compiles_the_compiler_itself`,
+   `the_refal_driver_reaches_a_fixpoint_on_the_compiler_itself`). A partial
+   threading is precisely the change that turns the six Refal-vs-Rust
+   differential gates red, which is what the ground-matcher fix cost last session.
+   So the work is: thread a *default-empty* pinned argument through all ten, prove
+   the default path's residues are unchanged by the existing byte-equality gate,
+   and only then add `('SPECIALISE') (e.Interpreter) (e.Program)` to `Dispatch`.
+   **It is one change, and it lands whole.**
+
    - **2nd — a standalone compiler.** Turchin 1980 (Aarhus): specialise the
      supercompiler with respect to an *interpreter*, and the residue is a compiler
      for the language that interpreter interprets. Concretely, enter at
