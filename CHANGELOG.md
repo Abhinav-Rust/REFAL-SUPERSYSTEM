@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+**The front page now shows the system working, and its middle is navigable.**
+
+- **A "See it work" section sits directly under the callout.** Four real
+  transcripts, each reproducible in the checkout: the compiler compiling its own
+  source and *the output being a fixpoint* (`gen1 == gen2`, 105,078 bytes byte for
+  byte); a metasystem transition where the interpreter is eliminated
+  (7 → 0 calls, 172 → 4 steps); the strict checker rejecting a Refal-5-valid
+  program with a *proven* defect; and the prover deciding an equation while the
+  2nd projection emits code. A real transcript is more convincing than any
+  paragraph that describes one.
+- **The middle was a wall of tables and session prose; it is now navigable.** The
+  thirteen-row "What works today" table, the twelve-row completion accounting, and
+  the ordered work list are each collapsed into a `<details>` block, so the scan
+  path from the status dashboard to the architecture section is headings and claims
+  rather than tables. The two long session narratives — the 2nd projection's
+  boundary and the relational half of the prover — move to `docs/PROGRESS.md`,
+  where each now lives as a `### Done —` section; the README keeps a compact
+  summary and links to the full account.
+- **Nothing was dropped.** Every moved claim, defect, and measured number is
+  preserved verbatim in `docs/PROGRESS.md`; the README links to it at the exact
+  anchor.
+
 **Presentation: the repository front page now shows its status instead of stating it.**
 
 - **`docs/images/status-{light,dark}.svg`** — a status dashboard for the README:

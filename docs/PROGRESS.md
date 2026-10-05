@@ -72,6 +72,48 @@ corpus gate is green at `cases: 71`, `positive: 31`, `check-failure: 6`,
 `runtime-failure: 1`, `residual: 33`, `cleaned-sentences: 1`, and
 `clippy --all-targets -D warnings` and `cargo fmt --check` are clean.
 
+### Done — the 2nd projection, and the partition it needed (E-11, E-14)
+
+**`refal project2 <interpreter.ref> <Function>` drives an interpreter with its
+object program *left open* and emits the artifact.** E-11's partition — the one
+that can **enter a constructor** — is built as `SplitStrategy::Pattern`: it
+partitions a configuration component by the *callee's own sentence patterns*,
+where the compiler's sequence partition can only peel terms. It is used by the
+projections only, so the compiler's default path and the Refal-authored
+counterpart in `examples/compiler.ref` are untouched and every differential gate
+stays green.
+
+**Measured, and the measurement is the point.** On
+`examples/projection-bracket-callee.ref` the sequence partition produced **32
+split functions** deciding neither `(A)` nor `(B)` — each sentence one term longer
+than the last, unbounded, truncated only by the budget. The pattern partition
+closes the same fixture in **one split and three steps** and decides both branches,
+with the interpreter gone from the artifact. On `examples/metasystem-unroll.ref`'s
+`Run` the same partition eliminates the interpreter entirely: 2 splits, 14 steps,
+and neither `Run` nor `Times` is defined in the artifact.
+
+**Two defects were found building it, and both are gated.** The partition's first
+version emitted a branch equal to the configuration itself
+(`Split7 { (e.Rest) t.P e.In = <Split7 (e.Rest) t.P e.In>; }`, an infinite
+self-loop); the decline guard was `is_expression_variable` when it should have been
+`is_pattern_split_variable` — a bare `t.` or `e.` component at the split position
+must be *declined* rather than branched on. Second, a duplicate split (`Split6` ≡
+`Split4`) blocked folding until a split was identified by the **sentences it emits**
+rather than by the configuration that asked for it.
+
+**What is withheld, and it is more than was expected: a *generator*.** The
+self-application now emits a working compiler and is gated behaviourally rather
+than by inspection. But what it emits is a **compiler**, not a generator:
+`compiler.ref`'s `Dispatch` takes one argument — the program to compile — so
+specialising it with respect to an *interpreter* yields the **compiled
+interpreter**, a program that interprets, not a program that emits code.
+`mix(mix, int)` needs the supercompiler to take `(interpreter, program)` as two
+slots, which this interface cannot express; and the residue the 2nd command does
+emit is interpreter-free but **structurally the interpreter** (`Split1` ≡ `Run`,
+`Split2` ≡ `Times`), because with the object program unknown there is nothing
+static to exploit. The full boundary is in `NEXT ACTION` item 3, and the design
+space in the map below.
+
 ### Done — the relational half of the meta-prover (E-12, E-13)
 
 **Layer 3 accepts an equation now, not only a predicate.** `refal prove

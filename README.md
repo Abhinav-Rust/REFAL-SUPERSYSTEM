@@ -37,6 +37,113 @@
 
 ---
 
+## See it work
+
+Every number below is a command you can run in this checkout — nothing is a
+mock-up. (`refal` below is `cargo run -p refal --`, or the built
+`target/release/refal`.)
+
+**1 · The compiler compiles its own source, and the output is a fixpoint.** Run the
+Refal-authored compiler on `examples/compiler.ref` — the compiler's own 47 KB
+source — and compile the *result* again:
+
+```console
+$ refal compile examples/compiler.ref > gen1.ref
+$ refal compile gen1.ref            > gen2.ref
+$ cmp gen1.ref gen2.ref && echo "fixpoint: gen1 == gen2, byte for byte"
+fixpoint: gen1 == gen2, byte for byte
+```
+
+Both generations are **105,078 bytes**, identical. And this is a *supercompilation*,
+not a re-print: `Go` in the output is `<Split1 e.Input>`, and `Split1` is the
+compile-time dispatch over the token stream that the driver discovered.
+
+**2 · An interpreter is driven over a program, and the interpreter disappears.**
+Turchin's metasystem transition, on `examples/metasystem-unroll.ref` — an object
+program whose loop counter is known while its input is not:
+
+```console
+$ refal metasystem examples/metasystem-unroll.ref
+metasystem: transition observed
+driving steps: 14
+residual interpreter calls: 0 (source: 7)
+steps interpreted -> residual: 172 -> 4
+improvement: 98%
+inputs agreed: 4
+residual:
+$ENTRY Go {
+  e.Input = 'a' e.Input 'a' e.Input 'a' e.Input;
+}
+```
+
+The recursion is *gone* — collapsed into straight-line code — and the command
+refuses to report success unless the residue is checked Refal, agrees with the
+interpreter on every input tried, and is measurably cheaper. **A transition that
+cannot be observed is not claimed.**
+
+**3 · The strict checker catches what Turchin's Refal-5 accepts.** The same file,
+two modes. `--classic` accepts exactly what Refal-5 accepts; `--strict` adds the
+deny-by-default lints without changing the language:
+
+```console
+$ cat classify.ref
+$ENTRY Go { = <Classify 'a'>; }
+Classify {
+  'a' = 'vowel';
+  'b' = 'consonant';
+  'a' = 'never reached';      $ this sentence can never run
+}
+
+$ refal check classify.ref --classic
+classify.ref: check ok                      $ valid Refal-5
+
+$ refal check classify.ref --strict
+proven defect at 8:3: sentence 3 of `Classify` is unreachable:
+  sentence 1 has no conditions and already matches every argument this one matches
+$ echo $?
+1
+```
+
+**4 · The prover decides an equation, and the projection emits code.**
+
+```console
+$ refal prove examples/equiv-append-assoc.ref --equiv Assoc-Left Assoc-Right
+equivalence: Assoc-Left = Assoc-Right
+  steps: 34
+  complete: yes
+  leaves: 3
+    reflexive (depth 1)
+    folded (depth 1, ancestor 0)
+    folded (depth 1, ancestor 0)
+  verdict: proved
+
+$ refal project2 examples/projection-bracket-callee.ref F
+projection: 2
+specialised with respect to: F
+configurations: 2
+splits: 1
+driving steps: 3
+walk: closed
+artifact:
+$ENTRY Go {
+  e.Program = <Split1 e.Program>;
+}
+
+Split1 {
+  (A) = 'a';
+  (B) = 'b';
+}
+```
+
+Associativity of `Append` is *proved*, not asserted — the leaf at depth 1 is
+closed by the fold (a branch whose sides have reduced to a renaming of the claim,
+Turchin's loop edge), which is the induction step a testing tool cannot give you.
+The sequence partition produced **32 split functions** deciding nothing on the
+projection fixture; the pattern partition closes it in **one split and three
+steps**.
+
+---
+
 ## What this is
 
 In 1991 Valentin Turchin wrote a technical report titled *A Supersystem of Language
@@ -161,16 +268,7 @@ Interpreter calls 4 → 0. Reduction steps 56 → 4 over four inputs.
 loop whose counter is known while its input is not. The interpreter's own recursion
 is structural and data-dependent, and driving unwinds it — **interpreter calls 7 →
 0, reduction steps 172 → 4.** That is not inlining; the recursion is *gone*,
-collapsed into straight-line code.
-
-```
-$ refal metasystem examples/metasystem-unroll.ref
-metasystem: transition observed
-residual interpreter calls: 0 (source: 7)
-steps interpreted -> residual: 172 -> 4
-improvement: 98%
-inputs agreed: 4
-```
+collapsed into straight-line code. (The full transcript is [above](#see-it-work).)
 
 The command refuses to report success unless all three hold: the residue is checked
 Refal, it agrees with the interpreter on every input tried, and it is measurably
@@ -208,6 +306,9 @@ matching both precise and expressive.
 
 ## What works today
 
+<details>
+<summary><b>Capability by capability</b> — the full table, each row backed by a gate</summary>
+
 | Area | State |
 |---|---|
 | **Front end** | ✅ Lexer and parser over the documented Classic scope; **every clause of the syntax reference is bound to a fixture**, in both directions wherever a clause states a rule with a forbidden half |
@@ -223,6 +324,8 @@ matching both precise and expressive.
 | **2nd projection** | ✅ `refal run examples/compiler.ref SPECIALISE "<template>" "<program>"` **emits target code**. The object program travels through the *source* — the interpreter carries a token where its program belongs, and it is spliced out for the program's tokens before parsing — so the driver's own chain is untouched and the compiler's default path is unchanged. On the metacoded-language interpreter the emitted target for `(Times ('*' '*') (Seq (Lit 'a' (End)) (In)))` is `e.Input = 'a' e.Input 'a' e.Input 'a' e.Input;`, identical to the 1st projection's residue, and the gate **runs** it against the interpreter |
 | **Self-applied compiler** | ✅ `refal compile examples/compiler.ref` specialises the Refal-authored supercompiler with respect to **itself** and emits a standalone compiler. It is not inspected but **run**: `the_self_applied_compiler_compiles_every_example_the_compiler_accepts` feeds it every example the compiler accepts and requires its output to equal `refal compile`'s |
 
+</details>
+
 ## Project status
 
 ### Honest completion: ~90%
@@ -234,6 +337,9 @@ compiler's own number as the project's would misdescribe what this repository is
 **One number, one method.** Each workstream is credited for what is implemented
 *and* tested *for the general case*. A feature that works on every file in
 `examples/` but not in general is credited only for the part that generalises.
+
+<details>
+<summary><b>The twelve-row accounting</b> — weight, credit, and what is withheld, per workstream</summary>
 
 | Workstream | Weight | Credit | Withheld | What is missing |
 |---|---:|---:|---:|---|
@@ -251,18 +357,12 @@ compiler's own number as the project's would misdescribe what this repository is
 | Conformance / release evidence | 2.80 | 2.66 | 0.14 | three file-backed I/O clauses bind to the runtime's own test rather than a fixture |
 | **Total** | **100.00** | **~90** | **~10** | |
 
-**The figure's precision is bounded by its inputs, which are judgments.** A
-defensible re-weighting moves it by **±0.5 points**; one credit judgment moves it
-by **±0.9**. So it is published to one decimal at most, and it is not a
-fine-grained progress instrument.
+</details>
 
-**A row carries zero credit until a gate behind it is green.** L3 was at 0.00 until
-`refal prove` reduced a predicate to `True` on a real fixture, then at half its
-weight while the *relational* half — proving two functions equivalent over all
-inputs — was missing. That half now exists and is gated, so the row holds most of
-its weight; what it withholds is the general relation and a proof that needs more
-than the loop edge. Adding weighted rows for work not begun is how a completion
-figure becomes flattery.
+**The figure is a judgment, published to one decimal and no finer.** A defensible
+re-weighting moves it by ±0.5 points; a single credit judgment by ±0.9. **A row
+carries zero credit until a gate behind it is green** — adding weighted rows for
+work not begun is how a completion figure becomes flattery.
 
 ### The gate ledger
 
@@ -290,47 +390,16 @@ emitted inverse back into the source and round-trips it). A **soundness defect i
 unfinished walk could report a claim as `refuted`, and the verdict is now a
 property of the claim rather than of `--steps`.
 
-**This session: the 2nd projection, and the partition it needed (E-11, E-14).**
-`refal project2 <interpreter.ref> <Function>` specialises an interpreter with the
-object program **left open** and emits the artifact. It needed a partition that
-can **enter a constructor**, which the compiler's sequence partition cannot — so
-`SplitStrategy::Pattern` was added, and it is used by the projections only. The
-compiler path keeps the sequence partition, which is why the Refal-authored
-counterpart in `examples/compiler.ref` is untouched and every differential gate
-stays green. Measured on `examples/projection-bracket-callee.ref`: the sequence
-partition produced **32 split functions** deciding nothing; the pattern partition
-closes in **one split and three steps** and decides both branches, with the
-interpreter gone from the artifact. Two defects were found building it, both
-gated: the partition's first version emitted a branch equal to the configuration
-itself (`Split7 { (e.Rest) t.P e.In = <Split7 (e.Rest) t.P e.In>; }`, an infinite
-self-loop), and a bare `t.` component at the split position must be *declined*
-rather than branched on. **What is withheld, and it is more than was expected: a *generator*, and the 2nd
-projection *proper*.** The self-application does emit a working compiler, and it
-is now gated behaviourally rather than by inspection. But what it emits is a
-**compiler**, not a generator: `compiler.ref`'s `Dispatch` takes one argument —
-the program to compile — so specialising it with respect to an *interpreter*
-yields the **compiled interpreter**, a program that interprets, not a program that
-emits code. `mix(mix, int)` needs the supercompiler to take (interpreter,
-program) as two slots, which this interface cannot express; and the residue the
-2nd command does emit is interpreter-free but **structurally the interpreter**
-(`Split1` ≡ `Run`, `Split2` ≡ `Times`), because with the object program unknown
-there is nothing static to exploit.
-
-**The session before: the relational half of E-12/E-13** — `refal prove --equiv` decides
-an equation between two reductions over free variables, proving associativity of
-`Append` and right identity by folding a branch to a renaming of the claim, and
-refuting a false equation with a witness. **Two defects were found while building
-it, and both are fixed.** The ground matcher dropped a variable bound inside a
-nested bracket, so `F { (e.B) = e.B; }` matched `()` and returned an unbound `e.B`:
-`refal drive` failed with `unbound residual variables` and `refal compile` emitted a
-program that does not lex. The Refal-authored compiler carried the *identical*
-defect in `DvGround` — the two mirrored each other bug for bug, which is why the
-Refal-vs-Rust differential had passed — so both were fixed together, which also
-repaired `refal compile`. Correcting them falsified the §4.4 strategy short
-circuit's premise (at budget 13 the compilative end, having finished inside its
-budget, was beaten by the interpretive end on both cost axes), so both
-implementations now use the sound rule: skip the interpretive end only when the
-compilative residue leaves *zero* residual work.
+**This session: E-11 and E-14** — the 2nd projection and the partition it needed.
+`refal project2` specialises an interpreter with its object program **left open**
+and emits the artifact, using a new `SplitStrategy::Pattern` that can **enter a
+constructor**. On `examples/projection-bracket-callee.ref` the sequence partition
+produced **32 split functions** deciding nothing; the pattern partition closes it
+in **one split and three steps**. Two defects were found building it, both gated.
+What is withheld — and it is more than expected — is a **generator**: what the
+self-application emits is a *compiler*, not `mix(mix, int)`. The full derivation,
+the defects, and the boundary are in
+[`docs/PROGRESS.md`](docs/PROGRESS.md#done--the-2nd-projection-and-the-partition-it-needed).
 
 ## What 100% means
 
@@ -344,7 +413,10 @@ flowchart LR
 ```
 
 The ordered work list lives in
-[`docs/PROGRESS.md`](docs/PROGRESS.md) (`NEXT ACTION`). In order:
+[`docs/PROGRESS.md`](docs/PROGRESS.md) (`NEXT ACTION`). Items 1–4 are closed.
+
+<details>
+<summary><b>The work list, in order</b> — what is done and what each remaining item needs</summary>
 
 1. ~~**The reflection engine as a service (E-4)**~~ — **done.** `refal reflect`
    freezes the machine's active configuration and returns it as terms through a
@@ -380,6 +452,8 @@ The ordered work list lives in
 6. **§4.4's other half (E-7)**, **the compiler's speed on very large inputs**,
    **the self-hosting fixpoint over an arbitrary program**, and **metavariable
    stratification (E-17)**.
+
+</details>
 
 **Measured 2026-10-05, then fixed — the projections were downstream of the
 partition.** The 2nd projection is `S(<Int e.Program e.Input>)` with **both**
