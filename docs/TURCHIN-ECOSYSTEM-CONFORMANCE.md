@@ -169,7 +169,7 @@ repository is green for the general case.
 
 | # | Objective | Source | Gate | Status |
 |---|---|---|---|---|
-| **E-14** | **The three projections.** 1st: specialise an interpreter to a known program. 2nd: specialise the supercompiler with respect to an interpreter, yielding a standalone compiler. 3rd: specialise the supercompiler with respect to itself, yielding a compiler generator | 1980 *Semantics Definitions in Refal and Automatic Production of Compilers* (Aarhus) | `T-9` is the 1st projection. `T-10` and the driven fixpoint are the self-application the 2nd and 3rd need | 🔶 Partial — the 1st projection is a command with a gate. The 2nd and 3rd are *reachable* — the compiler is self-applicable and the fixpoint is gated — but neither is exposed as a command that emits a compiler or a compiler generator, and neither has its own gate. The lineage demonstrates the mechanism; the product does not yet deliver the artifact |
+| **E-14** | **The three projections.** 1st: specialise an interpreter to a known program. 2nd: specialise the supercompiler with respect to an interpreter, yielding a standalone compiler. 3rd: specialise the supercompiler with respect to itself, yielding a compiler generator | 1980 *Semantics Definitions in Refal and Automatic Production of Compilers* (Aarhus) | `T-9` is the 1st projection. `T-10` and the driven fixpoint are the self-application the 2nd and 3rd need | 🔶 Partial — the 1st projection is a command with a gate. The 2nd and 3rd are *reachable* — the compiler is self-applicable and the fixpoint is gated — but neither is exposed as a command that emits a compiler or a compiler generator, and neither has its own gate. The lineage demonstrates the mechanism; the product does not yet deliver the artifact. **The 2nd projection is blocked on E-11, and that dependency was measured on 2026-10-05.** The 2nd projection is `S(<Int e.Program e.Input>)` with **both** free: the driver must partition the *program* while the *data* stays open. `DriveContext::split_configuration` partitions only when exactly one argument is a free expression variable, and it partitions it as a *sequence* (`[]` / `s.H e.T` / `(e.B) e.T`). For an interpreter whose patterns require a bracket — `Run { (End) e.In = …; }` — the bracket branch is `(e.B1) e.T1`, and the next blocked split partitions `e.T1`, the *tail*, never the bracket `(e.B1)`. Measured on `Go { e.X = <F e.X>; } F { (A) = 'a'; (B) = 'b'; }` at `--steps 120`: 32 split functions, each sentence one term longer than the last (`(e.B1) s.H2 … s.H16 e.T16`), and neither `(A)` nor `(B)` ever decided. The residue is unbounded and only the budget truncates it. A projection needs the partition to *enter a constructor*, which is the two-level stack configuration SCP4 names — row E-11. The 3rd projection is downstream of the 2nd |
 | **E-15** | **Function inversion**: given a program computing `y = f(x)`, synthesise `x = f⁻¹(y)` by driving the *forward* definition with an unknown input and constraining it by the known structure of the output. Turchin's own framing is that the metasystem operates bilaterally — "information flows backward from outputs to inputs just as easily as forward" — where object-level computation is unidirectional | 1990 *Application of Metasystem Transition to Function Inversion and Transformation* (Glück & Turchin, ISSAC '90); 1968 *A Meta-Algorithmic Language* §5; 1993 *Program Transformation with MSTs* §4 | `refal invert <file.ref> <Function> [--steps N] [--strategy ...]` — drives the forward function under an inverse configuration (input free, output known) and emits the synthesised inverse as a checked Core Refal program; four `refal-core` gates and two `refal-cli` gates | ✅ Closed — the artifact exists. `invert_function` / `invert_function_with_strategy` re-point the graph at the named function, drive it with a free expression variable, and read the inverse off each reached configuration as a *pair*: the configuration is `(state, input)`, the state's result is the output that input produces, and reversing the pair is a sentence of the inverse — so the inverse's patterns are the forward function's **outputs**. `examples/invert-list-encoder.ref`'s `Wrap` synthesises `Wrap-Inverse`, which the round-trip gate splices into the forward source and runs, requiring `<Wrap-Inverse <Wrap x>> ≡ x`. A forward function that *loses* information (a run-length encoder) has no inverse, which is a property of the program and why this row's fixture is lossless. Finding this row exposed a latent defect in `clean_unreachable_states`, which indexed `states[id.0]` on a graph `semantic_clean_driven_graph` had already filtered; fixed and gated |
 | **E-16** | **Self-application is achieved by construction, not by luck**: binding-time stratification, bounded homeomorphic whistles over the structural skeleton only, and two-stage folding | 1995 *A Self-Applicable Supercompiler* (CCNY TR 95-010); 1996 *A Self-Applicable Supercompiler* (Dagstuhl) | `T-10`: C1 = C2 = C3 byte-identical over the full grammar; `the_refal_driver_reaches_a_fixpoint_on_the_compiler_itself` | ✅ Closed — the report's measured claims (12–25× faster compilation through the generated compiler; 20–50× target speedups) are historical results on a Sun SPARCstation and are **not** re-published as this repository's figures |
 | **E-17** | **Metavariables are stratified**: a variable of level *k* ranges over expressions of level *k−1*, so object substitutions cannot be confused with meta bindings | 1995 *Metavariables: Their Implementation and Use in Program Transformation* | `T-8` gives §6.4's unknown a **level** — `Up` raises it, `Dn` lowers it | 🔶 Partial — the runtime has the level-carrying unknown, which is the object-level half. What is missing is the *transformer's own* stratified variable system, the level indices on the meta-program's variables that the 1995 report introduces to make self-application tractable |
@@ -297,14 +297,22 @@ the answer to "what does 100% mean". The order is by what unblocks what.
    *general* relational form — an arbitrary relation between two functions, and a
    proof that needs generalisation beyond the loop edge — and the other two named
    theorems (a tree reversal, a sorting equality) are not yet gated.
-2. **The 2nd and 3rd projections as artifacts (E-14).** Emit a standalone
+2. **Negative information and stack configurations (E-11).** SCP4's propagation
+   engines, which no example currently reaches — **and the partition that can
+   enter a constructor.** This now leads the projections, because the projections
+   need it: the 2nd projection partitions the *object program* while its data
+   stays open, and the object program is a bracket, so the partition must descend
+   into a bracket. The driver partitions only a single top-level sequence
+   variable and never enters a constructor; measured on 2026-10-05, driving
+   `<F e.X>` for `F { (A) = 'a'; (B) = 'b'; }` produces an unbounded residue that
+   splits the *tail* and never decides `(A)`. See the E-14 row for the numbers.
+3. **The 2nd and 3rd projections as artifacts (E-14).** Emit a standalone
    compiler by specialising the supercompiler with respect to an interpreter, and
    a compiler generator by specialising it with respect to itself. The mechanism
-   is gated; the artifact is not.
-3. **§4.4's other half — perfection by transformation (E-7).** Turchin's own two
+   is gated; the artifact is not, **and the measurement above shows why: it is
+   downstream of item 2.**
+4. **§4.4's other half — perfection by transformation (E-7).** Turchin's own two
    examples on p. 115. The last named gap in the graph-of-states row.
-4. **Negative information and stack configurations (E-11).** SCP4's propagation
-   engines, which no example currently reaches.
 5. **Metavariable stratification in the transformer (E-17).** The 1995 report's
    level indices, on top of §6.4's level-carrying unknown.
 6. **Function inversion (E-15).** Named by Glück and Turchin, ISSAC '90: an
@@ -313,13 +321,30 @@ the answer to "what does 100% mean". The order is by what unblocks what.
 7. **The compiler's speed on very large inputs.** The last named gap in the
    compiler-in-Refal row.
 
-**Closed since this list was written:** the reflection engine as a service (E-4)
-and the meta-prover's entry and criterion (the first half of E-12/E-13).
-9. **The self-hosting fixpoint over an arbitrary program**, rather than over the
-   corpus and the compiler's own source.
+**Closed since this list was written:** the reflection engine as a service (E-4),
+the meta-prover's entry and criterion (the first half of E-12/E-13), the
+relational half of E-12/E-13, and function inversion (E-15). The self-hosting
+fixpoint over an arbitrary program is still item 8.
 
-Items 1, 2 and 7 are the ones this read added. Items 3, 8 and 9 were already the
-`NEXT ACTION`. Items 4, 5 and 6 are named behaviours of components that exist.
+**Reordered on 2026-10-05.** The projections (E-14) moved *behind* stack
+configurations (E-11), because the measurement recorded in the E-14 row shows the
+2nd projection's partition has to enter a constructor and the driver's does not.
+The two rows were listed as independent; they are not.
+
+**A second finding from the same measurement, left open.** The residue the driver
+emits when it cannot decide a bracket argument is not merely incomplete — it is
+*unbounded*. Each split peels one more symbol off the tail and never enters the
+bracket, so the step budget is the only thing that stops it, and what the budget
+leaves behind is a program that decides nothing. It is reachable whenever a
+program hands a free expression to a callee whose pattern requires a bracket
+(`Go { e.X = <F e.X>; } F { (e.B) = e.B; }`). This is the partition gap seen from
+the compiler's side, and it is the same work item 2 has to close; it is recorded
+here rather than fixed because the fix and its Refal-authored counterpart in
+`examples/compiler.ref` must land together, as the ground-matcher fix did.
+
+Items 1, 2 and 7 of the original list are the ones the complete read added; items
+3, 8 and 9 were already the `NEXT ACTION`; items 4, 5 and 6 are named behaviours
+of components that exist.
 
 ---
 

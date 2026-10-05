@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+**The 2nd projection was measured before it was built, and the measurement moved it behind the partition.**
+
+- **Finding: E-14's 2nd and 3rd projections are downstream of E-11, not
+  independent of it.** The 2nd projection is `S(<Int e.Program e.Input>)` with
+  **both** free, so the driver must partition the *object program* while the data
+  stays open. `DriveContext::split_configuration` partitions only when exactly one
+  argument is a free expression variable, and it partitions it as a *sequence*
+  (`[]` / `s.H e.T` / `(e.B) e.T`). An object program is a **bracket**, so the
+  bracket branch is `(e.B1) e.T1` and the next blocked split partitions `e.T1` —
+  the *tail* — and never enters the bracket. Measured on
+  `Go { e.X = <F e.X>; } F { (A) = 'a'; (B) = 'b'; }` at `--steps 120`: **32
+  split functions**, each sentence one term longer than the last
+  (`(e.B1) s.H2 … s.H16 e.T16`), and neither `(A)` nor `(B)` is ever decided. The
+  residue is unbounded and only the budget truncates it. A projection needs the
+  partition to enter a constructor — the two-level stack configuration SCP4 names
+  — so **E-11 now precedes E-14** and the 3rd projection is downstream of the 2nd.
+- **A second finding from the same measurement, recorded and left open.** That
+  unbounded residue is reachable from an ordinary program
+  (`Go { e.X = <F e.X>; } F { (e.B) = e.B; }`) and is a defect rather than a
+  boundary: it grows without deciding anything. It is the same partition gap seen
+  from the compiler's side. It is not fixed here because the fix and its
+  Refal-authored counterpart in `examples/compiler.ref` must land in one commit,
+  as the ground-matcher fix did, and that pair is the E-11 work item.
+- **No completion figure moved.** No gate was closed, so the published figure is
+  unchanged; `docs/TURCHIN-ECOSYSTEM-CONFORMANCE.md` (E-14 row and §6),
+  `docs/PROGRESS.md` (`NEXT ACTION`), and `README.md` (the ordered work list) were
+  reordered to match the measurement.
+
 **The meta-prover decides equations now — and building it found a matcher defect that made the driver's residues wrong.**
 
 - **Layer 3's relational half exists: `refal prove <file> --equiv <Left> <Right>`.**
