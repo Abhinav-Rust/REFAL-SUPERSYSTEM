@@ -48,8 +48,8 @@ See `README.md` §"What Theorem 5.1 does and does not forbid" and
 
 | | |
 |---|---|
-| Honest completion | **~88.5%** (supersystem completeness — one method, one table, in `README.md`) |
-| Tests | 376 (67 core + 164 CLI integration + 145 across the other four crates), 0 clippy, fmt clean |
+| Honest completion | **~89%** (supersystem completeness — one method, one table, in `README.md`) |
+| Tests | 377 (67 core + 165 CLI integration + 145 across the other four crates), 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
 
@@ -2173,9 +2173,28 @@ projection found a dead dedup test and a cursor where a source belongs.
    interpreter with its program open returns the interpreter, and Futamura's 2nd
    projection is `mix(mix, int)` — the *supercompiler* specialised with respect to
    the interpreter. **That is the open item, and it is a different construction
-   from this one.** The 3rd is downstream of it. The 1st is `refal metasystem`:
+   from this one.**    The 3rd is downstream of it. The 1st is `refal metasystem`:
    it drives the entry — an interpreter applied to a *known* program — and the
    residue there really is specialised, because the program is known.
+
+   **Done 2026-10-05 — the self-application emits a working compiler, and it is
+   gated by running it.** `refal compile examples/compiler.ref` specialises the
+   Refal-authored supercompiler with respect to **itself**, its argument left
+   open, and what comes out is a standalone compiler rather than one program
+   compiled. `the_self_applied_compiler_compiles_every_example_the_compiler_accepts`
+   (480 s) does not inspect the artifact — a residue that re-prints its input is
+   also a program — it **runs** it: every example the compiler accepts is fed to
+   the artifact and its output must equal `refal compile`'s. That is the gate
+   E-14 asked for in the words "emit the residue, check it as Refal, and require
+   it to agree with the existing `refal compile` on every example".
+
+   **What that does not give, and the structural reason.** It is a **compiler**,
+   not a **generator**. `compiler.ref`'s `Dispatch` takes one argument — the
+   program to compile — so specialising it with respect to an *interpreter* yields
+   the **compiled interpreter**: a program that interprets, not one that emits
+   code. `mix(mix, int)` needs the supercompiler to take (interpreter, program) as
+   **two slots**, which this interface cannot express. That is the open item, and
+   it is a restructuring of `compiler.ref`, not a new driver mode.
 
    - **2nd — a standalone compiler.** Turchin 1980 (Aarhus): specialise the
      supercompiler with respect to an *interpreter*, and the residue is a compiler

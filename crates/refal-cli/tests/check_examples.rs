@@ -7303,3 +7303,84 @@ fn the_projection_eliminates_the_interpreter_and_enters_constructor_contents() {
         "each recursion is a self-call of the residue:\n{stdout}"
     );
 }
+
+/// The self-application emits a **working compiler**, and the gate *runs* it.
+///
+/// `refal compile examples/compiler.ref` specialises the Refal-authored
+/// supercompiler with respect to itself, its argument left open, so what comes
+/// out is a standalone compiler rather than one program compiled. E-14 records
+/// that this was "reachable — the compiler is self-applicable and the fixpoint is
+/// gated — but neither is exposed as a command that emits a compiler or a
+/// compiler generator, and neither has its own gate". The command was
+/// `refal compile`; this is the gate.
+///
+/// Inspecting the artifact would prove nothing — a residue that re-prints its
+/// input is also a program. So the gate **runs** it: every example the compiler
+/// accepts is fed to the artifact, and its output must equal `refal compile`'s.
+/// That is the standard `refal differential --compiled` holds the compiler to,
+/// applied to the compiler's own self-application.
+#[test]
+fn the_self_applied_compiler_compiles_every_example_the_compiler_accepts() {
+    let artifact = Command::new(refal_bin())
+        .args(["compile", &workspace_path("examples/compiler.ref")])
+        .output()
+        .expect("run refal binary");
+    assert!(
+        artifact.status.success(),
+        "the self-application must emit an artifact:\n{}",
+        String::from_utf8_lossy(&artifact.stderr)
+    );
+    let artifact_source = String::from_utf8(artifact.stdout).expect("utf-8 artifact");
+    assert!(
+        artifact_source.len() > 10_000,
+        "the artifact is a program, not a stub ({} bytes)",
+        artifact_source.len()
+    );
+    let artifact_path = std::env::temp_dir().join("refal-self-applied-compiler.ref");
+    fs::write(&artifact_path, &artifact_source).expect("write the artifact");
+
+    let mut compared = 0;
+    for entry in fs::read_dir(workspace_path("examples")).expect("read examples") {
+        let path = entry.expect("dir entry").path();
+        if path.extension().and_then(|extension| extension.to_str()) != Some("ref") {
+            continue;
+        }
+        let source = match fs::read_to_string(&path) {
+            Ok(source) => source,
+            Err(_) => continue,
+        };
+        // A command line caps at 32 KB, and an example the compiler rejects is
+        // not one the artifact has to reproduce.
+        if source.len() > 24_000 {
+            continue;
+        }
+        let direct = Command::new(refal_bin())
+            .args(["compile", path.to_str().expect("utf-8 path")])
+            .output()
+            .expect("run refal binary");
+        if !direct.status.success() {
+            continue;
+        }
+        let applied = Command::new(refal_bin())
+            .args(["run", artifact_path.to_str().expect("utf-8 path"), &source])
+            .output()
+            .expect("run refal binary");
+        assert!(
+            applied.status.success(),
+            "the artifact failed on {}:\n{}",
+            path.display(),
+            String::from_utf8_lossy(&applied.stderr)
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&direct.stdout),
+            String::from_utf8_lossy(&applied.stdout),
+            "the artifact disagreed with `refal compile` on {}",
+            path.display()
+        );
+        compared += 1;
+    }
+    assert!(
+        compared >= 10,
+        "the gate must compare a corpus, not one file (compared {compared})"
+    );
+}

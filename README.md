@@ -102,7 +102,7 @@ whether the transformation meant what it claimed.
 | **L1** | Reflection engine | Freezes an expression as inert data, inspects it with ordinary pattern matching, and thaws it back. Constructs symbolic execution graphs | ✅ Built — `refal reflect` returns the machine's active configuration as data through a public API |
 | **L2** | Supercompiler core | Drives a configuration into a graph of states, whistles on divergence, generalizes least-generally, folds loops, and emits a residual program | ✅ Built |
 | **L3** | Meta-prover | Accepts assertions or relational functions and verifies equivalence and invariants by complete tree reduction | 🔶 Predicates and equations built — `refal prove` drives a named predicate to Turchin's `'True'` criterion, and `refal prove --equiv` decides an equation over free variables by folding a branch whose sides have reduced to a renaming of the claim. An arbitrary relation, and proofs needing generalisation beyond the loop edge, are not yet accepted |
-| **L4** | Self-application | The engine applied to itself: a compiler that compiles its own source, and a generator that emits a compiler | 🔶 Fixpoint closed; `refal project2` drives an interpreter with its program open and eliminates it, but the residue is structurally the interpreter — the 2nd projection *proper* is open |
+| **L4** | Self-application | The engine applied to itself: a compiler that compiles its own source, and a generator that emits a compiler | 🔶 Fixpoint closed, and the self-application **emits a working compiler** (run on the corpus, agrees with `refal compile`); `refal project2` drives an interpreter with its program open and eliminates it, but the residue is structurally the interpreter |
 
 ## Why it exists
 
@@ -214,11 +214,12 @@ matching both precise and expressive.
 | **Meta-prover** | 🔶 Layer 3, partial — `refal prove` drives a predicate to Turchin's single terminal node `'True'` and reports a counterexample with its witness; `refal prove --equiv` decides an **equation** between two reductions over free variables by folding a branch whose sides have reduced to a renaming of the claim (Turchin's loop edge, 1979 §2). Associativity of `Append` and right identity are proved; a false equation is refuted with its witness. The predicate form still reports `refuted` for `examples/prove-append-reach.ref`, which is the measured boundary of the `'True'` criterion. The general relation, and a proof needing generalisation beyond the loop edge, are not yet accepted |
 | **Reflection service** | ✅ `refal reflect` freezes the entry configuration and returns it as terms, with addressable successors and an explicit completeness verdict |
 | **Function inversion** | ✅ `refal invert` drives the forward definition under an inverse configuration and emits the synthesised inverse; the round-trip gate runs `<Inverse <F x>> ≡ x` over the emitted program |
-| **2nd projection** | 🔶 `refal project2` specialises an interpreter with the object program **left open** and emits the artifact. The partition **enters a constructor**, and a split is identified by the sentences it emits, so the residue folds: on `examples/metasystem-unroll.ref` the interpreter is **eliminated** — 2 splits, 14 steps, and neither `Run` nor `Times` is defined in the artifact. **But the residue is structurally the interpreter** (`Split1` ≡ `Run`, `Split2` ≡ `Times`): with the program unknown there is nothing static to exploit, so driving returns the interpreter. That is why the 2nd projection *proper* — a program that emits code — needs the supercompiler specialised, not the interpreter driven, and it is still open |
+| **2nd projection** | 🔶 `refal project2` specialises an interpreter with the object program **left open** and emits the artifact. The partition **enters a constructor**, and a split is identified by the sentences it emits, so the residue folds: on `examples/metasystem-unroll.ref` the interpreter is **eliminated** — 2 splits, 14 steps, and neither `Run` nor `Times` is defined in the artifact. **But the residue is structurally the interpreter** (`Split1` ≡ `Run`, `Split2` ≡ `Times`): with the program unknown there is nothing static to exploit, so driving returns the interpreter. That is why the 2nd projection *proper* needs the supercompiler specialised, not the interpreter driven |
+| **Self-applied compiler** | ✅ `refal compile examples/compiler.ref` specialises the Refal-authored supercompiler with respect to **itself** and emits a standalone compiler. It is not inspected but **run**: `the_self_applied_compiler_compiles_every_example_the_compiler_accepts` feeds it every example the compiler accepts and requires its output to equal `refal compile`'s |
 
 ## Project status
 
-### Honest completion: ~88.5%
+### Honest completion: ~89%
 
 This figure measures **the whole supersystem** — all four layers — not the compiler
 alone. The compiler is finished; the supersystem is not, and publishing the
@@ -239,10 +240,10 @@ compiler's own number as the project's would misdescribe what this repository is
 | L2/L4 · Compiler implemented in Refal | 17.85 | 16.80 | 1.05 | not yet fast on very large inputs |
 | L4 · Verified self-hosting fixpoint | 9.10 | 8.05 | 1.05 | the fixpoint holds on the corpus and the compiler's own source, not on arbitrary programs |
 | **L3 · Meta-prover** | **13.00** | **11.00** | **2.00** | the entry, the driving, Turchin's `'True'` criterion, and the *relational* half are built and gated — an equation over free variables is decided by folding a branch to a renaming of the claim. What is withheld is the *general* relation (an arbitrary relation rather than equality) and a proof needing generalisation beyond the loop edge; of SCP4's three named theorems, associativity of `Append` is gated and a tree reversal and a sorting equality are not. A soundness defect — a truncated walk could refute — was found and fixed in an earlier session; this session found and fixed a defect the ground matcher and the Refal-authored compiler both carried, which also repaired `refal compile` for a bracket-pattern callee |
-| L4 · Projections as artifacts | 5.00 | 2.00 | 3.00 | the 1st is a command with a gate; the 2nd is a command whose artifact is the *driven interpreter* — interpreter-free but structurally the interpreter — which is not a compiler that emits code; the 3rd emits no artifact |
+| L4 · Projections as artifacts | 5.00 | 2.50 | 2.50 | the 1st is a command with a gate; the self-application **emits a working compiler** — `refal compile examples/compiler.ref` is run on the corpus and agrees with `refal compile` — but it is a compiler, not a generator, and the 2nd projection proper is not expressible with the supercompiler's one-argument interface |
 | **L2 · Function inversion** | **3.00** | **3.00** | **0.00** | closed — `refal invert` drives the forward definition and emits the synthesised inverse, round-tripped in a gate |
 | Conformance / release evidence | 2.80 | 2.66 | 0.14 | three file-backed I/O clauses bind to the runtime's own test rather than a fixture |
-| **Total** | **100.00** | **~88.5** | **~11.5** | |
+| **Total** | **100.00** | **~89** | **~11** | |
 
 **The figure's precision is bounded by its inputs, which are judgments.** A
 defensible re-weighting moves it by **±0.5 points**; one credit judgment moves it
@@ -297,15 +298,17 @@ interpreter gone from the artifact. Two defects were found building it, both
 gated: the partition's first version emitted a branch equal to the configuration
 itself (`Split7 { (e.Rest) t.P e.In = <Split7 (e.Rest) t.P e.In>; }`, an infinite
 self-loop), and a bare `t.` component at the split position must be *declined*
-rather than branched on. **What is withheld, and it is more than was expected: the 2nd projection
-*proper*, and the 3rd.** The residue the 2nd emits is interpreter-free but
-**structurally the interpreter** — `Split1` ≡ `Run` and `Split2` ≡ `Times`, once
-the partition enters the counter's bracket contents and a split is identified by
-the sentences it emits rather than by the configuration that asked for it. With
-the object program unknown there is nothing static to exploit, so driving an
-interpreter with its program open returns the interpreter. Futamura's 2nd
-projection is `mix(mix, int)` — the *supercompiler* specialised — and that is the
-open item.
+rather than branched on. **What is withheld, and it is more than was expected: a *generator*, and the 2nd
+projection *proper*.** The self-application does emit a working compiler, and it
+is now gated behaviourally rather than by inspection. But what it emits is a
+**compiler**, not a generator: `compiler.ref`'s `Dispatch` takes one argument —
+the program to compile — so specialising it with respect to an *interpreter*
+yields the **compiled interpreter**, a program that interprets, not a program that
+emits code. `mix(mix, int)` needs the supercompiler to take (interpreter,
+program) as two slots, which this interface cannot express; and the residue the
+2nd command does emit is interpreter-free but **structurally the interpreter**
+(`Split1` ≡ `Run`, `Split2` ≡ `Times`), because with the object program unknown
+there is nothing static to exploit.
 
 **The session before: the relational half of E-12/E-13** — `refal prove --equiv` decides
 an equation between two reductions over free variables, proving associativity of
@@ -362,11 +365,12 @@ The ordered work list lives in
    its residues and the Refal-authored counterpart must stay byte-identical.
    Still open: **negative information** (`e.X ≠ 'A' …`) and an explicit two-level
    stack configuration.
-5. **The projections as artifacts (E-14)** — `refal project2` exists and the
-   partition it needed is built, but its artifact is the *driven interpreter*
-   (interpreter-free, structurally the interpreter), not a compiler. The 2nd
-   projection *proper* is `mix(mix, int)` — the **supercompiler** specialised with
-   respect to the interpreter, not the interpreter driven. The 3rd is downstream.
+5. **The projections as artifacts (E-14)** — the self-application now **emits a
+   working compiler** and is gated by *running* it on the corpus; `refal project2`
+   exists and the partition it needed is built, but its artifact is the *driven
+   interpreter* (interpreter-free, structurally the interpreter). What remains is
+   a **generator**, and it needs the supercompiler to take (interpreter, program)
+   as two slots — `compiler.ref`'s `Dispatch` takes one.
 6. **§4.4's other half (E-7)**, **the compiler's speed on very large inputs**,
    **the self-hosting fixpoint over an arbitrary program**, and **metavariable
    stratification (E-17)**.
