@@ -2,14 +2,14 @@
 
 ## Unreleased
 
-**The 2nd projection is built — and it needed a partition that can enter a constructor.**
+**The partition that can enter a constructor is built — and the 2nd projection was measured to be a different construction.**
 
-- **`refal project2 <interpreter.ref> <Function>` (E-14).** The 2nd Futamura
-  projection, in Turchin's 1980 Aarhus setting: specialise the supercompiler with
-  respect to an *interpreter*, leaving the object program **open**, so what comes
-  out is a compiler rather than one program compiled. It re-points the graph at
-  the interpreter, enters with the program and its data as separate unknowns,
-  drives, and prints the residual as a checked program.
+- **`refal project2 <interpreter.ref> <Function>`.** Specialise with respect to an
+  interpreter, leaving the object program **open** (Turchin 1980, Aarhus). It
+  re-points the graph at the interpreter, enters with the program and its data as
+  separate unknowns, drives, and prints the residual as a checked program. **The
+  artifact is interpreter-free but structurally the interpreter** — see the
+  withheld bullet below.
 - **`SplitStrategy::Pattern` (E-11).** The partition the projection needs. The
   compiler's sequence partition (`[]` / `s.H e.T` / `(e.B) e.T`) cannot decide a
   bracket-pattern callee: on `Go { e.X = <F e.X>; } F { (A) = 'a'; (B) = 'b'; }`
@@ -26,21 +26,37 @@
   `examples/compiler.ref` needed no edit. Verified: `the_refal_driver_reaches_a_fixpoint_on_the_compiler_itself`
   (580 s) and `refal_authored_emitter_matches_lower_across_the_whole_corpus` both
   green, and the full `refal-core` suite at 67/67.
-- **Two defects found building the partition, both gated.** The first version
-  branched on a bare variable at the split position and emitted
-  `Split7 { (e.Rest) t.P e.In = <Split7 (e.Rest) t.P e.In>; }` — an infinite
-  self-loop; and a bare `t.` component must be declined rather than branched on.
-  `a_bare_variable_at_the_split_position_is_declined_rather_than_looped` is the
-  gate for both.
+- **It enters a constructor's *contents*, and it folds.** `<Times (e.Rest) t.P
+  e.In>` recurses on a *bracket* count, so the split target has to be the contents
+  of `(e.Rest)` rather than the `t.P` beside it; and a split is identified by the
+  **sentences it emits**, not by the configuration that asked for it, so the split
+  a `t.` count produces and the split a bracket count produces are one function.
+  Together these **eliminate the interpreter**: `refal project2
+  examples/metasystem-unroll.ref Run` emits 2 splits and 14 steps, and neither
+  `Run` nor `Times` is defined in the artifact — down from 6 splits with both
+  retained.
+- **Three defects found building it, all gated.** The first version branched on a
+  bare variable at the split position and emitted `Split7 { (e.Rest) t.P e.In =
+  <Split7 (e.Rest) t.P e.In>; }` — an infinite self-loop; a bare `t.` component
+  must be *declined* rather than branched on; and without split identity the
+  residue became a chain of near-duplicates that still reached `Run`.
 - **Gates.** `refal-core`: `the_projection_partition_enters_a_constructor_and_decides_the_branches`
   and `a_bare_variable_at_the_split_position_is_declined_rather_than_looped`.
-  `refal-cli`: `the_second_projection_emits_a_compiler_that_decides_its_branches`.
-  Fixture: `examples/projection-bracket-callee.ref`.
-- **What is withheld.** The 3rd projection, and the 2nd's *completeness*: on a
-  recursive interpreter (`examples/metasystem-unroll.ref`'s `Run`) the artifact is
-  a partially specialised interpreter — 6 splits, and `Run` is still reached on
-  branches whose sub-program cannot be partitioned. E-11's negative information
-  and explicit stack configuration are still open. **Figure: ~88% → ~89%.**
+  `refal-cli`: `the_second_projection_emits_a_compiler_that_decides_its_branches`
+  and `the_projection_eliminates_the_interpreter_and_enters_constructor_contents`.
+  Fixtures: `examples/projection-bracket-callee.ref` and
+  `examples/metasystem-unroll.ref`.
+- **What is withheld — and it is the whole of the 2nd projection.** The residue is
+  interpreter-free but **structurally the interpreter**: `Split1` ≡ `Run` and
+  `Split2` ≡ `Times`. That is not an implementation defect; **with the object
+  program unknown there is nothing static to exploit, so driving an interpreter
+  with its program open returns the interpreter.** Futamura's 2nd projection is
+  `mix(mix, int)` — the *supercompiler* specialised with respect to the
+  interpreter — a different construction, not built. The 3rd is downstream of it.
+  E-11's negative information and explicit stack configuration are still open.
+  **Figure: ~88% → ~88.5%**, and E-14's credit is corrected from 2.50 to **2.00**:
+  the row is "projections as *artifacts*", the command exists with gates, but its
+  artifact is the driven interpreter and not a compiler.
 - **A documentation defect found while moving the figure: the repository published
   three tables for one question — and it is now fixed.** `PROGRESS.md` carried a
   stale second table (eight rows at 8.5 / 6.0 / 19.5 …), already superseded, and

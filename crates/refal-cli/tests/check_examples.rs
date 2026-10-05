@@ -7259,3 +7259,47 @@ fn the_second_projection_emits_a_compiler_that_decides_its_branches() {
         "the artifact decides (A) and (B) outright:\n{stdout}"
     );
 }
+
+/// The pattern partition enters a **constructor's contents**, and a split is
+/// identified by the sentences it emits — so the interpreter is eliminated.
+///
+/// Two things have to hold together, and each is why the other alone is not
+/// enough. `Times { ('*' e.Rest) t.P e.In = <Run t.P e.In> <Times (e.Rest) t.P
+/// e.In>; }` recurses on a *bracket* count, so the split target has to be the
+/// contents of `(e.Rest)` rather than the `t.P` beside it. And `Run`'s own
+/// recursion is on a `t.` sub-program, so the split that a `t.` count produces
+/// and the split that a bracket count produces have to be recognised as **one
+/// function** — they emit the same sentences — or the residue becomes a chain of
+/// near-duplicates that still reaches `Run`.
+///
+/// Measured on `examples/metasystem-unroll.ref`: with the variable-only rule the
+/// residue had 6 splits and retained `Run` and `Times`; with both, **2 splits,
+/// 14 steps, and neither function is defined in the artifact**.
+#[test]
+fn the_projection_eliminates_the_interpreter_and_enters_constructor_contents() {
+    let output = Command::new(refal_bin())
+        .args([
+            "project2",
+            &workspace_path("examples/metasystem-unroll.ref"),
+            "Run",
+        ])
+        .output()
+        .expect("run refal binary");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "a closed projection exits zero:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("splits: 2"),
+        "the recursion folds to two functions, not a chain of near-duplicates:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("\nRun {") && !stdout.contains("\nTimes {"),
+        "the interpreter must not be defined in the artifact:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("<Split1 t.P e.In>") && stdout.contains("<Split2 (e.Rest) t.P e.In>"),
+        "each recursion is a self-call of the residue:\n{stdout}"
+    );
+}
