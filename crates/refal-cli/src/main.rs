@@ -123,6 +123,7 @@ fn main() {
         "reflect" => reflect_program(&program, &input_args),
         "prove" => prove_program(&program, &input_args),
         "invert" => invert_program(&program, &input_args),
+        "project2" => project_compiler_command(&program, &input_args),
         "analyze" => analyze_program(&program, &input_args),
         "formats" => formats_program(&program, &input_args),
         "overlap" => overlap_program(&program, &input_args),
@@ -280,6 +281,9 @@ fn print_usage() {
     eprintln!("  invert     Synthesise the inverse of a function by driving its forward");
     eprintln!("             definition (Gluck & Turchin, ISSAC 90)");
     eprintln!("             refal invert <file.ref> <Function> [--steps N]");
+    eprintln!("  project2   The 2nd projection: specialise an interpreter with the object");
+    eprintln!("             program left open and emit the artifact (Turchin 1980, Aarhus)");
+    eprintln!("             refal project2 <interpreter.ref> <Function> [--steps N]");
     eprintln!("  analyze    Report bounded Tier 1 reachability, terminals, and SCCs");
     eprintln!("  overlap    Report conservative sentence-pattern compatibility pairs");
     eprintln!("  formats    Report inferred function formats (argument -> result)");
@@ -628,6 +632,53 @@ fn invert_program(program: &refal_ast::Program, args: &[String]) {
     }
 }
 
+/// The 2nd projection (Turchin 1980, Aarhus; Futamura 1971): specialise the
+/// supercompiler with respect to an interpreter, leaving the object program
+/// open, and emit the resulting standalone compiler.
+///
+/// The command's whole point is that the *artifact is printed*: what leaves this
+/// process is a Refal program, checked, that accepts any object program of the
+/// language the interpreter interprets. A projection whose product is described
+/// rather than emitted is the gap E-14 records, so the report prints the program
+/// last and the exit status carries whether the walk closed (0) or the budget
+/// truncated it (2).
+fn project_compiler_command(program: &refal_ast::Program, args: &[String]) {
+    let Some(function) = args.first() else {
+        eprintln!("{PROJECT2_USAGE}");
+        process::exit(2);
+    };
+    let options = match drive_options(&args[1..]) {
+        Ok(options) => options,
+        Err(usage) => {
+            eprintln!("{usage}");
+            process::exit(2);
+        }
+    };
+    let core = refal_core::lower_program(program);
+    let graph = refal_core::clean_unreachable_states(&refal_core::build_seed_graph(&core));
+    let report = match refal_core::project_compiler(
+        &core,
+        &graph,
+        function,
+        options.max_steps,
+        options.strategy,
+    ) {
+        Ok(report) => report,
+        Err(error) => {
+            eprintln!("projection error: {error}");
+            process::exit(1);
+        }
+    };
+    let program_text = refal_core::format_program(&report.program);
+    print!(
+        "{}",
+        refal_core::format_projection_report(&report, &program_text)
+    );
+    if !report.complete {
+        process::exit(2);
+    }
+}
+
 /// Freeze the entry configuration and inspect it.
 ///
 /// This is layer 1 of the 1991 supersystem as a *service*: the machine's active
@@ -735,6 +786,7 @@ const DRIVE_USAGE: &str = "Usage: refal <drive-symbolic|residualize-driven> <fil
 const PROVE_USAGE: &str = "Usage: refal prove <file.ref> <Predicate> [--steps N] [--strategy search|compilative|interpretive]";
 const EQUIV_USAGE: &str = "Usage: refal prove <file.ref> --equiv <Left> <Right> [--steps N]";
 const INVERT_USAGE: &str = "Usage: refal invert <file.ref> <Function> [--steps N] [--strategy search|compilative|interpretive]";
+const PROJECT2_USAGE: &str = "Usage: refal project2 <interpreter.ref> <Function> [--steps N] [--strategy search|compilative|interpretive]";
 
 fn drive_options(args: &[String]) -> Result<DriveOptions, String> {
     let mut options = DriveOptions {
