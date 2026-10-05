@@ -1,0 +1,27 @@
+* E-14: the 2nd projection's partition gate.
+*
+* `F`'s patterns demand a bracket, and `Go` hands it a free expression. The
+* compiler's sequence partition (`[]` / `s.H e.T` / `(e.B) e.T`) cannot enter
+* the constructor here: it splits the *tail* and the residue grows one term per
+* split -- 32 split functions at `--steps 120`, with neither `(A)` nor `(B)`
+* decided.
+*
+* The projection's pattern partition takes `F`'s own patterns, so
+* `refal project2 examples/projection-bracket-callee.ref F` closes the walk in
+* one split and decides both branches:
+*
+*   Split1 { (A) = 'a'; (B) = 'b'; }
+*
+* This is the smallest program that separates the two partitions, which is why
+* it is the gate rather than a larger one. It is also the first instance of the
+* certificate-carrying analysis `README.md` describes: the partition proves what
+* it can and leaves a residual call where it cannot.
+
+$ENTRY Go {
+  e.X = <F e.X>;
+}
+
+F {
+  (A) = 'a';
+  (B) = 'b';
+}

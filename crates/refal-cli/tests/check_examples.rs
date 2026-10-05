@@ -7223,3 +7223,39 @@ fn the_prover_refutes_a_false_equation_and_its_status_says_so() {
         "the witness names both disagreeing values:\n{stdout}"
     );
 }
+
+/// The 2nd projection (E-14) emits a compiler, and its partition enters a
+/// constructor.
+///
+/// `F` demands a bracket and `Go` hands it a free expression. The compiler's
+/// sequence partition splits the tail here and the residue grows without
+/// bound; the projection's pattern partition takes `F`'s own patterns, so the
+/// walk closes in one split and the artifact decides `(A)` and `(B)`.
+#[test]
+fn the_second_projection_emits_a_compiler_that_decides_its_branches() {
+    let output = Command::new(refal_bin())
+        .args([
+            "project2",
+            &workspace_path("examples/projection-bracket-callee.ref"),
+            "F",
+        ])
+        .output()
+        .expect("run refal binary");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "a closed projection exits zero:/n{stdout}"
+    );
+    assert!(
+        stdout.contains("projection: 2") && stdout.contains("walk: closed"),
+        "the report names the projection and its walk:/n{stdout}"
+    );
+    assert!(
+        stdout.contains("splits: 1"),
+        "one split, not the sequence partition's unbounded chain:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("(A) = 'a'") && stdout.contains("(B) = 'b'"),
+        "the artifact decides (A) and (B) outright:\n{stdout}"
+    );
+}

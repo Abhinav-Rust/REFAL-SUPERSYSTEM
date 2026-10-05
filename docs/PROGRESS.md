@@ -48,8 +48,8 @@ See `README.md` §"What Theorem 5.1 does and does not forbid" and
 
 | | |
 |---|---|
-| Honest completion | **~88%** (supersystem completeness — one method, one table, in `README.md`) |
-| Tests | 372 (65 core + 162 CLI integration + 145 across the other four crates), 0 clippy, fmt clean |
+| Honest completion | **~89%** (supersystem completeness — one method, one table, in `README.md`) |
+| Tests | 375 (67 core + 163 CLI integration + 145 across the other four crates), 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
 
@@ -1067,25 +1067,30 @@ needs no build lock and runs alongside a suite.
 
 ### Workstream credit
 
-**One number, one method: ~89%.** Each workstream is credited for what is
+**One number, one method.** Each workstream is credited for what is
 implemented *and* tested *for the general case* — not for the corpus, and not for
 effort spent. This replaced three figures that used to be published side by side
 (an effort-weighted ~88%, an evidence-weighted ~81%, a gate-only ~78%) and
 disagreed by ten points; the effort-weighted method is retired, because it
 measured how much of a plan had been executed rather than how much of a product
-exists. `README.md` and `PLAN.md` section 5 publish the same table.
+exists.
 
-| Workstream | Weight | Credit |
-|---|---:|---:|
-| Bootstrap frontend | 8.5% | 8.0 |
-| Bootstrap semantics | 6.0% | 4.5 |
-| Refal machine / runtime | 19.5% | 19.0 |
-| Graph of states / Refal emission | 8.5% | 7.5 |
-| Static verification (Tier 1) | 15.0% | 12.5 |
-| Compiler implemented in Refal | 25.5% | 24.0 |
-| Verified self-hosting fixpoint | 13.0% | 11.5 |
-| Conformance / release evidence | 4.0% | 3.0 |
-| **Total** | **100%** | **~89%** |
+**The table is published once, in `README.md` §Project status.** A second,
+differently-weighted table used to sit here (eight rows at 8.5 / 6.0 / 19.5 …)
+and gave the same question a second answer, which is the one thing the method
+forbids. It was stale — the row-by-row `What is missing` text in `README.md` is
+written against the twelve-row table — and it has been removed rather than
+updated, because two tables is the defect and not the drift between them.
+
+**Open, and flagged rather than fixed: `docs/PLAN.md` §5 carries a third one.**
+Its table weights the same eight workstreams at 8.5 / 6.0 / 19.5 / 8.5 / 15.0 /
+25.5 / 13.0 / 4.0 and totals **~91%**, where `README.md` weights twelve rows and
+totals **~89%**. PLAN §5 also states that "the README and this file now publish
+the same number from the same table", which is not true of the file as it stands.
+Its prose cells are the repository's fullest record of what each workstream still
+lacks, so the table has **not** been rewritten here: which weighting is
+authoritative is a plan-level decision and belongs to the Chief Architect.
+Until it is made, the published figure is the README's.
 
 The two heaviest rows — the Refal compiler and the self-hosting fixpoint that
 depends on it — hold 38.5 of the 100 points. The runtime has left the deducted
@@ -2154,8 +2159,18 @@ projection found a dead dedup test and a cursor where a source belongs.
    at all — a run-length encoder drops the run's symbols — which is a property of
    the program rather than of the synthesizer, and is why `examples/invert-list-encoder.ref`
    encodes losslessly.
-3. **The 2nd and 3rd projections as artifacts (E-14) — deferred behind item 5
-   until the partition can enter a constructor.** The 1st is `refal
+3. **The projections as artifacts (E-14) — the 2nd is built, the 3rd is not.**
+   **Built 2026-10-05:** `refal project2 <interpreter.ref> <Function>` enters the
+   interpreter with the object program and its data as separate unknowns, drives
+   with `SplitStrategy::Pattern` (E-11), and prints the residual as a checked
+   program. Gates: `the_projection_partition_enters_a_constructor_and_decides_the_branches`
+   and `a_bare_variable_at_the_split_position_is_declined_rather_than_looped` in
+   `refal-core`, and `the_second_projection_emits_a_compiler_that_decides_its_branches`
+   in `refal-cli`, all on `examples/projection-bracket-callee.ref`. **Withheld:**
+   the 3rd projection, and the 2nd's *completeness* — `refal project2
+   examples/metasystem-unroll.ref Run` closes in 6 splits and still reaches `Run`
+   on branches whose sub-program cannot be partitioned, so the artifact there is a
+   partially specialised interpreter rather than a compiler. The 1st is `refal
    metasystem`: it drives the entry — an interpreter applied to a *known* program
    — residualises, and requires the residue to be sound and measurably cheaper.
    The 2nd and 3rd leave the program or the source *unknown*, so what comes out is
@@ -2219,14 +2234,17 @@ projection found a dead dedup test and a cursor where a source belongs.
    and that pair is the E-11 work item.
 4. **§4.4's other half — perfection by transformation (E-7).** Turchin's own two
    examples on p. 115. The last named gap in the graph-of-states row.
-5. **Negative information and stack configurations (E-11) — now the leading
-   item.** SCP4's propagation engines, which no example currently reaches, and
-   **the partition that can enter a constructor**, which is what the 2nd
-   projection needs (see the measurement under item 3). The compiler-side defect
-   the same measurement found — a free argument handed to a bracket-pattern
-   callee produces an unbounded residue — is part of this work, and its gate is
-   the first thing to write. Note the mirror: whatever changes here changes
-   `examples/compiler.ref` in the same commit.
+5. **Negative information and stack configurations (E-11).** **The partition
+   that can enter a constructor is built** (`SplitStrategy::Pattern`, used by the
+   projections; see item 3 and the design-space map below). **What remains:**
+   *negative* information (`e.X ≠ 'A' …`) is not carried at all; the compiler
+   path still uses the sequence partition, deliberately, so its residues and the
+   Refal-authored counterpart in `examples/compiler.ref` stay byte-identical —
+   which means the compiler-side defect the measurement found (a free argument
+   handed to a bracket-pattern callee produces an unbounded residue) is still
+   live on the compiler path, and fixing it means changing both sides in one
+   commit, as the ground-matcher fix did; and no explicit two-level stack
+   configuration is built.
 
    ### E-11: the design space, mapped (2026-10-05)
 
@@ -2264,6 +2282,17 @@ projection found a dead dedup test and a cursor where a source belongs.
    the *sound, incomplete, certificate-carrying* analysis the Tier-1 row asks
    for: the partition proves what it can and leaves a residual call where it
    cannot, which is exactly the "localise what you cannot settle" half.
+
+   **Built 2026-10-05, as `SplitStrategy::Pattern`.** The partition takes the
+   callee's own pattern terms from the split position onward, verbatim, so the
+   branch matches outright; it handles `e.` and `t.` components; and it
+   *declines* — leaving a residual call — where the callee's component at that
+   position is a bare variable. That decline is not an optimisation, it is
+   load-bearing: the first version branched on the bare variable and emitted
+   `Split7 { (e.Rest) t.P e.In = <Split7 (e.Rest) t.P e.In>; }`, an infinite
+   self-loop, which is now gated. It is used by the projections **only** — the
+   compiler keeps the sequence partition so its residues, and the Refal-authored
+   counterpart, stay byte-identical.
 6. **The compiler's speed on very large inputs.** The last named gap in the
    compiler-in-Refal row. `scripts/perf.sh` measures it; `CleanG` and the checker
    are linear now, and what is left is the constant.

@@ -652,6 +652,7 @@ pub fn drive_ground(
         steps: 0,
         max_steps,
         proof_entry: false,
+        split_strategy: SplitStrategy::Sequence,
     };
     let output = context.invoke(&function, input)?;
     Ok(DriveReport {
@@ -753,12 +754,57 @@ pub fn drive_symbolic_proof_entry_with_strategy(
     drive_symbolic_inner(graph, input, max_steps, strategy, true)
 }
 
+/// Drive a graph with the **pattern partition** ([`SplitStrategy::Pattern`]).
+///
+/// This is the projection's entry into the driver: it enters a named function
+/// with a *multi-component* free configuration and partitions a chosen component
+/// by the callee's own pattern shapes, so the partition can enter a constructor.
+/// The compiler keeps the sequence partition; see [`SplitStrategy`] for why the
+/// two cannot be the same partition.
+pub fn drive_symbolic_pattern_entry(
+    graph: &StateGraph,
+    input: Vec<CoreTerm>,
+    max_steps: usize,
+    strategy: DriveStrategy,
+) -> Result<SymbolicDriveReport, DriveError> {
+    drive_symbolic_inner_with_split(
+        graph,
+        input,
+        max_steps,
+        strategy,
+        true,
+        SplitStrategy::Pattern,
+    )
+}
+
 fn drive_symbolic_inner(
     graph: &StateGraph,
     input: Vec<CoreTerm>,
     max_steps: usize,
     strategy: DriveStrategy,
     proof_entry: bool,
+) -> Result<SymbolicDriveReport, DriveError> {
+    drive_symbolic_inner_with_split(
+        graph,
+        input,
+        max_steps,
+        strategy,
+        proof_entry,
+        SplitStrategy::Sequence,
+    )
+}
+
+/// [`drive_symbolic_inner`] with an explicit partition strategy.
+///
+/// `SplitStrategy::Pattern` is what lets the 2nd projection partition the object
+/// program while its data stays open; see [`SplitStrategy`].
+fn drive_symbolic_inner_with_split(
+    graph: &StateGraph,
+    input: Vec<CoreTerm>,
+    max_steps: usize,
+    strategy: DriveStrategy,
+    proof_entry: bool,
+    split_strategy: SplitStrategy,
 ) -> Result<SymbolicDriveReport, DriveError> {
     // A driving pass has no residue to compare, so `Search` resolves to the
     // finer end here rather than running twice.
@@ -788,6 +834,7 @@ fn drive_symbolic_inner(
         steps: 0,
         max_steps,
         proof_entry,
+        split_strategy,
     };
     let residual = match context.invoke_symbolic(&function, &input)? {
         SymbolicInvoke::Reduced(output) => output,
@@ -1042,6 +1089,53 @@ struct CompletedConfiguration {
     /// The argument as it was actually written, kept so a reuse can rename the
     /// stored residue to the current argument's variable names.
     input: Vec<CoreTerm>,
+}
+
+/// How a blocked configuration's argument is partitioned into cases.
+///
+/// The two partitions answer two different questions, and the choice is a
+/// property of the *caller*, not of the program: a compiler emits a residue and
+/// a projection emits a compiler, and they need different partitions of the same
+/// blocked configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SplitStrategy {
+    /// The compiler's partition, and the default:
+    ///
+    /// ```text
+    /// e.X   is   []   or   s.H e.T   or   (e.B) e.T
+    /// ```
+    ///
+    /// Every expression is exactly one of those three, so the partition is
+    /// exhaustive and pairwise disjoint and no value is lost. It is the right
+    /// partition for a program whose entry is `F { e.X = ...; }`, because the
+    /// residue has to keep that entry shape.
+    #[default]
+    Sequence,
+    /// The projection's partition: the component is partitioned by the shapes
+    /// the **callee's own sentence patterns** require at that position, so the
+    /// partition can *enter a constructor*.
+    ///
+    /// The sequence partition cannot decide a bracket-pattern callee. For
+    /// `Run { (End) e.In = ...; }` the bracket branch is `(e.B1) e.T1`; the next
+    /// blocked split takes `e.T1`, the tail, and never enters `(e.B1)` — the
+    /// residue grows one term per split and only the budget stops it (measured:
+    /// 32 split functions on `F { (A) = 'a'; (B) = 'b'; }` at `--steps 120`,
+    /// with neither `(A)` nor `(B)` decided). This partition instead takes
+    /// `(End) e.In` — the callee's own pattern — as the branch, so the branch
+    /// matches outright.
+    ///
+    /// It is deliberately **incomplete**: where the callee's patterns cannot
+    /// name the component (a bare `e.` variable at the split position, or a
+    /// sentence whose pattern is shorter than the position), it declines and the
+    /// call stays residual. That is the "localise what you cannot settle" half
+    /// of the certificate-carrying analysis described in `README.md`
+    /// ("What Theorem 5.1 does and does not forbid"): a residual call is sound,
+    /// and it is strictly better than an unbounded residue that decides nothing.
+    ///
+    /// Only the projections use it. The compiler keeps [`SplitStrategy::Sequence`]
+    /// so its residues — and therefore the Refal-authored counterpart in
+    /// `examples/compiler.ref` — are byte-identical.
+    Pattern,
 }
 
 /// The most case splits one driving pass will generate.
@@ -1351,6 +1445,10 @@ struct DriveContext<'a> {
     /// change of meaning. The two callers want opposite residues from the same
     /// entry, so the choice is declared rather than guessed.
     proof_entry: bool,
+    /// How a blocked configuration's argument is partitioned. The compiler uses
+    /// the sequence partition; a projection uses the pattern partition so it can
+    /// enter a constructor. See [`SplitStrategy`].
+    split_strategy: SplitStrategy,
 }
 
 impl<'a> DriveContext<'a> {
@@ -1753,6 +1851,9 @@ impl<'a> DriveContext<'a> {
         function: &str,
         input: &[CoreTerm],
     ) -> Result<Option<Vec<CoreTerm>>, DriveError> {
+        if self.split_strategy == SplitStrategy::Pattern {
+            return self.pattern_split_configuration(function, input);
+        }
         // Only a single top-level expression variable is partitioned. Splitting
         // one of several would leave the others undecided and grow the residue
         // without making progress, so it is not attempted.
@@ -1858,6 +1959,119 @@ impl<'a> DriveContext<'a> {
             // e.X starts with a bracket.
             with_replaced(input, position, vec![bracket, tail]),
         ];
+
+        let mut sentences = Vec::new();
+        let mut drive_error = None;
+        for branch in branches {
+            let body = match self.invoke_symbolic(function, &branch) {
+                Ok(SymbolicInvoke::Reduced(reduced)) => reduced,
+                Ok(SymbolicInvoke::Residual) | Ok(SymbolicInvoke::Fails) => {
+                    vec![call_term(function, &branch)]
+                }
+                Err(error) => {
+                    drive_error = Some(error);
+                    break;
+                }
+            };
+            sentences.push(CoreSentence {
+                pattern: branch,
+                conditions: Vec::new(),
+                result: body,
+                span: empty_span(),
+            });
+        }
+        self.active_path.pop();
+        if let Some(error) = drive_error {
+            return Err(error);
+        }
+        self.splits[index - 1].sentences = sentences;
+        Ok(Some(vec![call_term(&name, input)]))
+    }
+
+    /// The projection's partition. See [`SplitStrategy::Pattern`].
+    ///
+    /// The component at the leftmost free expression variable is partitioned by
+    /// the **callee's own sentence patterns** at that position, taken verbatim
+    /// from the pattern's `position`-th term onward. A trailing `e.` variable in
+    /// the pattern absorbs whatever followed the component in the caller, so the
+    /// caller's remaining terms are bound rather than lost.
+    ///
+    /// It declines — leaving the call residual, which is sound and finite —
+    /// wherever the callee's patterns cannot name the component: a sentence whose
+    /// pattern is shorter than the position, or a bare `e.` variable there. That
+    /// incompleteness is deliberate; it is the "localise what you cannot settle"
+    /// half of the certificate-carrying analysis in `README.md`.
+    fn pattern_split_configuration(
+        &mut self,
+        function: &str,
+        input: &[CoreTerm],
+    ) -> Result<Option<Vec<CoreTerm>>, DriveError> {
+        let Some(position) = input.iter().position(is_pattern_split_variable) else {
+            return Ok(None);
+        };
+        if !self
+            .graph
+            .states
+            .iter()
+            .any(|state| state.function.eq_ignore_ascii_case(function))
+        {
+            return Ok(None);
+        }
+
+        let mut branches: Vec<Vec<CoreTerm>> = Vec::new();
+        for state in self
+            .graph
+            .states
+            .iter()
+            .filter(|state| state.function.eq_ignore_ascii_case(function))
+        {
+            let Some(component) = state.pattern.get(position) else {
+                return Ok(None);
+            };
+            // A bare `e.` or `t.` variable at the split position names no shape
+            // to branch on. Emitting it anyway produces a branch equal to the
+            // configuration itself -- `Split7 { (e.Rest) t.P e.In = <Split7
+            // (e.Rest) t.P e.In>; }`, an infinite self-loop -- so the walk
+            // declines and the call stays residual.
+            if is_pattern_split_variable(component) {
+                return Ok(None);
+            }
+            let mut branch = input[..position].to_vec();
+            branch.extend(state.pattern[position..].iter().cloned());
+            if !branches
+                .iter()
+                .any(|existing| term_sequences_same_kind(existing, &branch))
+            {
+                branches.push(branch);
+            }
+        }
+        if branches.is_empty() || self.splits.len() >= MAX_SPLITS {
+            return Ok(None);
+        }
+
+        let canonical = canonical_configuration(input);
+        if let Some(existing) = self.splits.iter().find(|split| {
+            split.function.eq_ignore_ascii_case(function) && split.canonical_input == canonical
+        }) {
+            let name = existing.name.clone();
+            return Ok(Some(vec![call_term(&name, input)]));
+        }
+
+        let index = self.splits.len() + 1;
+        let name = format!("Split{index}");
+        self.splits.push(SplitFunction {
+            name: name.clone(),
+            function: function.to_string(),
+            canonical_input: canonical.clone(),
+            sentences: Vec::new(),
+        });
+        self.active_path.push(ActiveConfiguration {
+            function: function.to_ascii_lowercase(),
+            neighborhood: canonical_configuration(&neighborhood_of(input, 1).pattern),
+            input: input.to_vec(),
+            canonical,
+            split: Some(name.clone()),
+        });
 
         let mut sentences = Vec::new();
         let mut drive_error = None;
@@ -2409,6 +2623,23 @@ fn is_expression_variable(term: &CoreTerm) -> bool {
         term.kind,
         CoreTermKind::Variable {
             kind: VariableKind::Expression,
+            ..
+        }
+    )
+}
+
+/// Whether a term is a variable the **pattern partition** can split: an `e.` or
+/// `t.` variable.
+///
+/// Both stand for a whole sub-term of the callee's pattern — `e.` for a
+/// sequence, `t.` for a single term — so a component of the callee's pattern can
+/// be substituted for either. An `s.` variable stands for one symbol and is left
+/// alone: a partition by symbol would not enter anything.
+fn is_pattern_split_variable(term: &CoreTerm) -> bool {
+    matches!(
+        term.kind,
+        CoreTermKind::Variable {
+            kind: VariableKind::Expression | VariableKind::Term,
             ..
         }
     )
@@ -3355,6 +3586,29 @@ pub fn residualize_symbolic_program(
     program: &CoreProgram,
     report: &SymbolicDriveReport,
 ) -> CoreProgram {
+    // The residue has to accept whatever the entry accepts. A `Go { = ...; }`
+    // takes no arguments, and giving it an `e.Input` pattern would widen the
+    // program's interface: the residue would then answer calls the original
+    // could not. Preserving a closed entry's empty pattern keeps the two
+    // programs interchangeable, which is the whole point of the gate.
+    let pattern = if entry_accepts_no_arguments(program) {
+        Vec::new()
+    } else {
+        vec![input_expression_variable()]
+    };
+    residualize_symbolic_program_with_pattern(program, report, pattern)
+}
+
+/// [`residualize_symbolic_program`] with an explicit entry pattern.
+///
+/// A **projection** enters with more than one free component — the object
+/// program and its data — so the artifact's entry has to bind both, where the
+/// compiler's entry binds one expression variable.
+pub fn residualize_symbolic_program_with_pattern(
+    program: &CoreProgram,
+    report: &SymbolicDriveReport,
+    pattern: Vec<CoreTerm>,
+) -> CoreProgram {
     let entry = program
         .functions
         .iter()
@@ -3380,22 +3634,11 @@ pub fn residualize_symbolic_program(
         .find(|function| function.visibility == Visibility::Entry)
         .map(|function| function.visibility)
         .unwrap_or(Visibility::Entry);
-    // The residue has to accept whatever the entry accepts. A `Go { = ...; }`
-    // takes no arguments, and giving it an `e.Input` pattern would widen the
-    // program's interface: the residue would then answer calls the original
-    // could not. Preserving a closed entry's empty pattern keeps the two
-    // programs interchangeable, which is the whole point of the gate.
-    let pattern = if entry_accepts_no_arguments(program) {
-        Vec::new()
-    } else {
-        vec![CoreTerm {
-            kind: CoreTermKind::Variable {
-                kind: VariableKind::Expression,
-                name: "Input".to_string(),
-            },
-            span: Span { start: 0, end: 0 },
-        }]
-    };
+    // The residue has to accept whatever the entry accepts; the pattern was
+    // resolved by the caller. A case split is part of the residue, not
+    // scaffolding around it: the entry calls `Split1`, so `Split1` has to be
+    // defined. Its branches may reach further splits and further source
+    // functions, so everything the splits reach comes along too.
     let mut functions = vec![CoreFunction {
         name,
         visibility,
@@ -6102,6 +6345,19 @@ fn cancel_common_prefix(left: &mut Vec<CoreTerm>, right: &mut Vec<CoreTerm>) {
     right.drain(0..count);
 }
 
+/// Structural equality of two term sequences, ignoring source spans.
+///
+/// Used to deduplicate the branches a partition produces: two patterns that
+/// differ only in the names of their variables are the same case, and emitting
+/// both would count one value twice.
+fn term_sequences_same_kind(left: &[CoreTerm], right: &[CoreTerm]) -> bool {
+    left.len() == right.len()
+        && left
+            .iter()
+            .zip(right)
+            .all(|(left, right)| same_term_kind(&left.kind, &right.kind))
+}
+
 /// Structural equality of two term kinds, ignoring source spans.
 ///
 /// `CoreTerm` derives `PartialEq` over its `span` as well as its `kind`, and two
@@ -6381,6 +6637,129 @@ pub struct InversionReport {
     pub steps: usize,
     /// Whether the walk finished inside its budget.
     pub complete: bool,
+}
+
+/// The artifact of a Futamura/Turchin projection, with how the walk that produced
+/// it went.
+///
+/// A projection's product **is a program**, so the report carries the program
+/// rather than a description of one: a projection whose artifact is not emitted
+/// is a claim, not a deliverable. `complete` says whether the walk closed inside
+/// its budget, and a truncated walk's artifact covers only the cases driven.
+pub struct ProjectionReport {
+    /// 2 for the 2nd projection, 3 for the 3rd.
+    pub projection: u8,
+    /// The interpreter function the supercompiler was specialised with respect to.
+    pub entry: String,
+    /// The emitted artifact.
+    pub program: CoreProgram,
+    /// Configurations the driving walk reached.
+    pub configurations: usize,
+    /// Case splits the walk generated.
+    pub splits: usize,
+    /// Driving steps taken.
+    pub steps: usize,
+    /// Whether the walk finished inside its budget.
+    pub complete: bool,
+}
+
+/// An expression variable with a given name, for a multi-component entry.
+fn symbolic_variable(name: &str) -> CoreTerm {
+    CoreTerm {
+        kind: CoreTermKind::Variable {
+            kind: VariableKind::Expression,
+            name: name.to_string(),
+        },
+        span: Span { start: 0, end: 0 },
+    }
+}
+
+/// The **2nd projection** (Turchin 1980, Aarhus; Futamura 1971): specialise the
+/// supercompiler with respect to an *interpreter*, leaving the object program
+/// open, so what comes out is a compiler rather than one program compiled.
+///
+/// # Why this is the 2nd projection and not the 1st
+///
+/// The 1st projection (`refal metasystem`) enters `<Int (P) (e.D)>` with the
+/// object program `P` **known**: driving watches the interpreter run on that one
+/// program and the residue is that program translated out of metacode. The 2nd
+/// projection enters `<Int e.Program e.Input>` with **both free**. The object
+/// program is now a variable, so the driver cannot watch it run; it must
+/// partition the *program space itself* and make every partition a sentence of
+/// the residue. What is emitted is therefore not an instance of a compiler but
+/// the compiler: a program that accepts any object program of the language the
+/// interpreter interprets.
+///
+/// # The partition, and the honest limit
+///
+/// The partition used is [`SplitStrategy::Pattern`] — the callee's own sentence
+/// patterns — because the compiler's sequence partition cannot enter a
+/// constructor and produces an unbounded residue on a bracket-pattern callee.
+/// Where the callee's patterns cannot name the component the walk declines and
+/// leaves a residual call; that is sound, and the report's `complete` flag says
+/// whether the budget truncated the walk.
+pub fn project_compiler(
+    program: &CoreProgram,
+    graph: &StateGraph,
+    function: &str,
+    max_steps: usize,
+    strategy: DriveStrategy,
+) -> Result<ProjectionReport, DriveError> {
+    let entry_graph = predicate_entry_graph(graph, function)?;
+    // The interpreter's arity decides how many free components the projection
+    // enters with: a unary interpreter takes the object program alone, a binary
+    // one takes the program and its data as separate unknowns.
+    let arity = graph
+        .states
+        .iter()
+        .filter(|state| state.function.eq_ignore_ascii_case(function))
+        .map(|state| state.pattern.len())
+        .min()
+        .unwrap_or(1);
+    let mut input = vec![symbolic_variable("Program")];
+    if arity > 1 {
+        input.push(symbolic_variable("Input"));
+    }
+    let report = drive_symbolic_pattern_entry(&entry_graph, input.clone(), max_steps, strategy)?;
+    let complete = report.steps < max_steps;
+    let configurations = report.configurations.len();
+    let splits = report.split_functions.len();
+    let steps = report.steps;
+    let artifact = residualize_symbolic_program_with_pattern(program, &report, input);
+    Ok(ProjectionReport {
+        projection: 2,
+        entry: function.to_string(),
+        program: artifact,
+        configurations,
+        splits,
+        steps,
+        complete,
+    })
+}
+
+/// Render a projection report: the outcome, the walk, and the artifact itself.
+///
+/// The artifact is printed last and in full, because the artifact is the
+/// deliverable — a report that described a compiler without emitting one would
+/// be the exact failure E-14 records.
+pub fn format_projection_report(report: &ProjectionReport, program_text: &str) -> String {
+    let mut out = String::new();
+    out.push_str(&format!("projection: {}\n", report.projection));
+    out.push_str(&format!("specialised with respect to: {}\n", report.entry));
+    out.push_str(&format!("configurations: {}\n", report.configurations));
+    out.push_str(&format!("splits: {}\n", report.splits));
+    out.push_str(&format!("driving steps: {}\n", report.steps));
+    out.push_str(&format!(
+        "walk: {}\n",
+        if report.complete {
+            "closed"
+        } else {
+            "truncated (budget)"
+        }
+    ));
+    out.push_str("artifact:\n");
+    out.push_str(program_text);
+    out
 }
 
 /// Synthesise the inverse of `function` by driving its forward definition.
@@ -10045,5 +10424,159 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // The projections (layer 4, E-14).
+    //
+    // The 2nd projection partitions the *object program* while its data stays
+    // open, so the partition has to enter a constructor. The compiler's sequence
+    // partition cannot: it splits the tail and the residue grows one term per
+    // split. This fixture is the smallest program that shows the difference --
+    // `F { (A) = 'a'; (B) = 'b'; }` called as `<F e.X>`, whose callee demands a
+    // bracket.
+    // -----------------------------------------------------------------------
+
+    /// `Go { e.X = <F e.X>; }` and `F { (A) = 'a'; (B) = 'b'; }`.
+    fn projection_bracket_program() -> CoreProgram {
+        let variable = |name: &str, kind: VariableKind| CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind,
+                name: name.to_string(),
+            },
+            span: Span { start: 0, end: 0 },
+        };
+        let identifier = |name: &str| CoreTerm {
+            kind: CoreTermKind::Identifier(name.to_string()),
+            span: Span { start: 0, end: 0 },
+        };
+        let character = |symbol: char| CoreTerm {
+            kind: CoreTermKind::Char(symbol),
+            span: Span { start: 0, end: 0 },
+        };
+        let bracket = |content: Vec<CoreTerm>| CoreTerm {
+            kind: CoreTermKind::Bracket(content),
+            span: Span { start: 0, end: 0 },
+        };
+        let call = |name: &str, args: Vec<CoreTerm>| CoreTerm {
+            kind: CoreTermKind::Call {
+                name: name.to_string(),
+                args,
+            },
+            span: Span { start: 0, end: 0 },
+        };
+        let sentence = |pattern: Vec<CoreTerm>, result: Vec<CoreTerm>| CoreSentence {
+            pattern,
+            conditions: vec![],
+            result,
+            span: Span { start: 0, end: 0 },
+        };
+        CoreProgram {
+            declarations: vec![],
+            functions: vec![
+                CoreFunction {
+                    name: "Go".to_string(),
+                    visibility: Visibility::Entry,
+                    sentences: vec![sentence(
+                        vec![variable("X", VariableKind::Expression)],
+                        vec![call("F", vec![variable("X", VariableKind::Expression)])],
+                    )],
+                    span: Span { start: 0, end: 0 },
+                },
+                CoreFunction {
+                    name: "F".to_string(),
+                    visibility: Visibility::Local,
+                    sentences: vec![
+                        sentence(vec![bracket(vec![identifier("A")])], vec![character('a')]),
+                        sentence(vec![bracket(vec![identifier("B")])], vec![character('b')]),
+                    ],
+                    span: Span { start: 0, end: 0 },
+                },
+            ],
+        }
+    }
+
+    /// The 2nd projection's partition enters the constructor, so the walk closes
+    /// and the artifact decides `(A)` and `(B)` outright.
+    ///
+    /// The gate is on the *shape of the residue*, because that is what separates
+    /// this partition from the compiler's. The sequence partition leaves 32 split
+    /// functions on this same fixture at `--steps 120` and decides neither
+    /// branch; the pattern partition leaves one, and the one it leaves carries
+    /// `(A)` and `(B)` as patterns.
+    #[test]
+    fn the_projection_partition_enters_a_constructor_and_decides_the_branches() {
+        let program = projection_bracket_program();
+        let graph = clean_unreachable_states(&build_seed_graph(&program));
+        let report = project_compiler(&program, &graph, "F", 200, DriveStrategy::Compilative)
+            .expect("the projection drives");
+        assert!(report.complete, "the walk must close inside its budget");
+        assert_eq!(
+            report.splits, 1,
+            "one split, not the sequence partition's unbounded chain"
+        );
+        let split = report
+            .program
+            .functions
+            .iter()
+            .find(|function| function.name == "Split1")
+            .expect("the artifact carries the split it emits");
+        let heads = split
+            .sentences
+            .iter()
+            .filter_map(|sentence| match sentence.pattern.as_slice() {
+                [
+                    CoreTerm {
+                        kind: CoreTermKind::Bracket(content),
+                        ..
+                    },
+                ] => match content.as_slice() {
+                    [
+                        CoreTerm {
+                            kind: CoreTermKind::Identifier(name),
+                            ..
+                        },
+                    ] => Some(name.as_str()),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            heads,
+            vec!["A", "B"],
+            "the split decides (A) and (B) rather than peeling the tail"
+        );
+        // The interpreter must not be reachable from the artifact: every branch
+        // resolved, so `F` is not called at all.
+        assert!(
+            !report
+                .program
+                .functions
+                .iter()
+                .any(|function| function.name == "F"),
+            "the artefact must not retain the function the projection specialised away"
+        );
+    }
+
+    /// A callee whose pattern at the split position is a bare variable names no
+    /// shape to branch on, so the walk must *decline* rather than emit a branch
+    /// equal to the configuration itself -- which is an infinite self-loop.
+    #[test]
+    fn a_bare_variable_at_the_split_position_is_declined_rather_than_looped() {
+        let program = projection_bracket_program();
+        let graph = clean_unreachable_states(&build_seed_graph(&program));
+        // `Go`'s own pattern is `e.X`, so a partition of its argument has no
+        // shape to take; the call stays residual instead of looping.
+        let report = project_compiler(&program, &graph, "Go", 200, DriveStrategy::Compilative)
+            .expect("the projection drives");
+        for split in &report.program.functions {
+            for sentence in &split.sentences {
+                assert_ne!(
+                    sentence.pattern, sentence.result,
+                    "a split sentence may not be its own body (self-loop)"
+                );
+            }
+        }
     }
 }

@@ -102,7 +102,7 @@ whether the transformation meant what it claimed.
 | **L1** | Reflection engine | Freezes an expression as inert data, inspects it with ordinary pattern matching, and thaws it back. Constructs symbolic execution graphs | ✅ Built — `refal reflect` returns the machine's active configuration as data through a public API |
 | **L2** | Supercompiler core | Drives a configuration into a graph of states, whistles on divergence, generalizes least-generally, folds loops, and emits a residual program | ✅ Built |
 | **L3** | Meta-prover | Accepts assertions or relational functions and verifies equivalence and invariants by complete tree reduction | 🔶 Predicates and equations built — `refal prove` drives a named predicate to Turchin's `'True'` criterion, and `refal prove --equiv` decides an equation over free variables by folding a branch whose sides have reduced to a renaming of the claim. An arbitrary relation, and proofs needing generalisation beyond the loop edge, are not yet accepted |
-| **L4** | Self-application | The engine applied to itself: a compiler that compiles its own source, and a generator that emits a compiler | 🔶 Fixpoint closed; projections are not artifacts |
+| **L4** | Self-application | The engine applied to itself: a compiler that compiles its own source, and a generator that emits a compiler | 🔶 Fixpoint closed; the 2nd projection is now a command with a gate (`refal project2`) |
 
 ## Why it exists
 
@@ -214,10 +214,11 @@ matching both precise and expressive.
 | **Meta-prover** | 🔶 Layer 3, partial — `refal prove` drives a predicate to Turchin's single terminal node `'True'` and reports a counterexample with its witness; `refal prove --equiv` decides an **equation** between two reductions over free variables by folding a branch whose sides have reduced to a renaming of the claim (Turchin's loop edge, 1979 §2). Associativity of `Append` and right identity are proved; a false equation is refuted with its witness. The predicate form still reports `refuted` for `examples/prove-append-reach.ref`, which is the measured boundary of the `'True'` criterion. The general relation, and a proof needing generalisation beyond the loop edge, are not yet accepted |
 | **Reflection service** | ✅ `refal reflect` freezes the entry configuration and returns it as terms, with addressable successors and an explicit completeness verdict |
 | **Function inversion** | ✅ `refal invert` drives the forward definition under an inverse configuration and emits the synthesised inverse; the round-trip gate runs `<Inverse <F x>> ≡ x` over the emitted program |
+| **2nd projection** | 🔶 `refal project2` specialises an interpreter with the object program **left open** and emits the artifact. Its partition **enters a constructor**, so a bracket-pattern callee closes in one split where the compiler's sequence partition produced an unbounded residue (32 split functions, nothing decided). On a *recursive* interpreter the residue is a partially specialised interpreter rather than a compiler — the interpreter is still reached on branches whose sub-program cannot be partitioned |
 
 ## Project status
 
-### Honest completion: ~88%
+### Honest completion: ~89%
 
 This figure measures **the whole supersystem** — all four layers — not the compiler
 alone. The compiler is finished; the supersystem is not, and publishing the
@@ -238,10 +239,10 @@ compiler's own number as the project's would misdescribe what this repository is
 | L2/L4 · Compiler implemented in Refal | 17.85 | 16.80 | 1.05 | not yet fast on very large inputs |
 | L4 · Verified self-hosting fixpoint | 9.10 | 8.05 | 1.05 | the fixpoint holds on the corpus and the compiler's own source, not on arbitrary programs |
 | **L3 · Meta-prover** | **13.00** | **11.00** | **2.00** | the entry, the driving, Turchin's `'True'` criterion, and the *relational* half are built and gated — an equation over free variables is decided by folding a branch to a renaming of the claim. What is withheld is the *general* relation (an arbitrary relation rather than equality) and a proof needing generalisation beyond the loop edge; of SCP4's three named theorems, associativity of `Append` is gated and a tree reversal and a sorting equality are not. A soundness defect — a truncated walk could refute — was found and fixed in an earlier session; this session found and fixed a defect the ground matcher and the Refal-authored compiler both carried, which also repaired `refal compile` for a bracket-pattern callee |
-| L4 · Projections as artifacts | 5.00 | 1.50 | 3.50 | the 1st projection is a command with a gate; the 2nd and 3rd emit no artifact |
+| L4 · Projections as artifacts | 5.00 | 2.50 | 2.50 | the 1st and 2nd are commands with gates; the 3rd emits no artifact, and the 2nd's artifact is a compiler only where the interpreter's recursion is finite |
 | **L2 · Function inversion** | **3.00** | **3.00** | **0.00** | closed — `refal invert` drives the forward definition and emits the synthesised inverse, round-tripped in a gate |
 | Conformance / release evidence | 2.80 | 2.66 | 0.14 | three file-backed I/O clauses bind to the runtime's own test rather than a fixture |
-| **Total** | **100.00** | **~88** | **~12** | |
+| **Total** | **100.00** | **~89** | **~11** | |
 
 **The figure's precision is bounded by its inputs, which are judgments.** A
 defensible re-weighting moves it by **±0.5 points**; one credit judgment moves it
@@ -264,8 +265,8 @@ verified by a test rather than estimated.
 | | Count |
 |---|---:|
 | Ecosystem rows closed | **21** |
-| Partially closed | 2 |
-| Not started | 2 |
+| Partially closed | 3 |
+| Not started | 1 |
 | In scope | 25 |
 
 The rows are `E-1 … E-26` in
@@ -282,7 +283,26 @@ emitted inverse back into the source and round-trips it). A **soundness defect i
 unfinished walk could report a claim as `refuted`, and the verdict is now a
 property of the claim rather than of `--steps`.
 
-**This session: the relational half of E-12/E-13** — `refal prove --equiv` decides
+**This session: the 2nd projection, and the partition it needed (E-11, E-14).**
+`refal project2 <interpreter.ref> <Function>` specialises an interpreter with the
+object program **left open** and emits the artifact. It needed a partition that
+can **enter a constructor**, which the compiler's sequence partition cannot — so
+`SplitStrategy::Pattern` was added, and it is used by the projections only. The
+compiler path keeps the sequence partition, which is why the Refal-authored
+counterpart in `examples/compiler.ref` is untouched and every differential gate
+stays green. Measured on `examples/projection-bracket-callee.ref`: the sequence
+partition produced **32 split functions** deciding nothing; the pattern partition
+closes in **one split and three steps** and decides both branches, with the
+interpreter gone from the artifact. Two defects were found building it, both
+gated: the partition's first version emitted a branch equal to the configuration
+itself (`Split7 { (e.Rest) t.P e.In = <Split7 (e.Rest) t.P e.In>; }`, an infinite
+self-loop), and a bare `t.` component at the split position must be *declined*
+rather than branched on. **What is withheld:** the 3rd projection, and the 2nd's
+completeness on a *recursive* interpreter — `refal project2
+examples/metasystem-unroll.ref Run` closes in 6 splits and still reaches `Run` on
+branches whose sub-program cannot be partitioned.
+
+**The session before: the relational half of E-12/E-13** — `refal prove --equiv` decides
 an equation between two reductions over free variables, proving associativity of
 `Append` and right identity by folding a branch to a renaming of the claim, and
 refuting a false equation with a witness. **Two defects were found while building
@@ -329,27 +349,31 @@ The ordered work list lives in
    driving the forward definition against a known output (Glück & Turchin, ISSAC
    '90): `refal invert` emits the inverse as a checked program whose patterns are
    the forward function's outputs, and the gate round-trips the emitted inverse.
-4. **SCP4 propagation and stack configurations (E-11)** — including the
-   partition that can *enter a constructor*. This now leads the projections,
-   because the measurement below says it must: the 2nd projection partitions the
-   object program, the object program is a bracket, and the driver's partition
-   splits the tail and never enters the bracket.
-5. **The 2nd and 3rd projections as artifacts (E-14)** — emit a standalone
-   compiler and a compiler generator; downstream of item 4.
+4. ~~**The partition that can enter a constructor (E-11)**~~ — **built for the
+   projections.** `SplitStrategy::Pattern` partitions a configuration component
+   by the *callee's own sentence patterns*, so a bracket-pattern callee closes in
+   one split where the compiler's sequence partition produced an unbounded
+   residue. The compiler path deliberately keeps the sequence partition, because
+   its residues and the Refal-authored counterpart must stay byte-identical.
+   Still open: **negative information** (`e.X ≠ 'A' …`) and an explicit two-level
+   stack configuration.
+5. **The projections as artifacts (E-14)** — the 2nd is **built**
+   (`refal project2`); the 3rd, a compiler generator, is not. The 2nd's artifact
+   is a compiler where the interpreter's recursion is finite, and a partially
+   specialised interpreter where it is not.
 6. **§4.4's other half (E-7)**, **the compiler's speed on very large inputs**,
    **the self-hosting fixpoint over an arbitrary program**, and **metavariable
    stratification (E-17)**.
 
-**Measured 2026-10-05 — the projections are downstream of the partition.** The
-2nd projection is `S(<Int e.Program e.Input>)` with **both** free, so the driver
-must partition the *program* while the *data* stays open. It cannot: it
-partitions only a single top-level sequence variable, and an object program is a
-bracket, so the partition splits the *tail* instead of entering the bracket.
-Measured on `Go { e.X = <F e.X>; } F { (A) = 'a'; (B) = 'b'; }` at `--steps 120`,
-the residue is **32 split functions**, each sentence one term longer than the
-last, and neither `(A)` nor `(B)` is ever decided — unbounded, and only the
-budget truncates it. So E-11 precedes E-14; the two rows were listed as
-independent and are not.
+**Measured 2026-10-05, then fixed — the projections were downstream of the
+partition.** The 2nd projection is `S(<Int e.Program e.Input>)` with **both**
+free, so the driver must partition the *program* while the *data* stays open. The
+compiler's sequence partition could not: on `Go { e.X = <F e.X>; } F { (A) =
+'a'; (B) = 'b'; }` at `--steps 120` it produced **32 split functions**, each
+sentence one term longer than the last, deciding neither `(A)` nor `(B)` —
+unbounded, and only the budget truncated it. The pattern partition closes the
+same fixture in **one split and three steps** and decides both branches, with the
+interpreter not retained at all.
 
 **The knowledge network of the Principia Cybernetica Project is not on this list
 and is not a fifth layer.** It is the social context the program is for — a
@@ -399,7 +423,7 @@ Retrieve the primary sources the design is drawn from:
 ## Using the CLI
 
 <details>
-<summary><b>Full command reference</b> — 23 commands, one mode per layer capability</summary>
+<summary><b>Full command reference</b> — 24 commands, one mode per layer capability</summary>
 
 ```sh
 # Print command help
@@ -530,6 +554,13 @@ cargo run -p refal -- prove examples/equiv-append-right-id.ref --equiv Right-Id-
 # are the forward function's outputs. The round-trip gate splices it back into
 # the source and requires <Inverse <F x>> to return x.
 cargo run -p refal -- invert examples/invert-list-encoder.ref Wrap --strategy interpretive
+
+# L4: the 2nd projection (Futamura; Turchin 1980, Aarhus). Specialise the
+# supercompiler with respect to an *interpreter*, leaving the object program
+# open, so what comes out is a compiler rather than one program compiled. The
+# partition takes the callee's own sentence patterns, so it can enter a
+# constructor -- which is what a bracket-pattern callee needs.
+cargo run -p refal -- project2 examples/projection-bracket-callee.ref F
 
 # Run a .ref program with the bootstrap interpreter
 cargo run -p refal -- run examples/hello.ref

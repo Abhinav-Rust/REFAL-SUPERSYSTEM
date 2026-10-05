@@ -2,6 +2,56 @@
 
 ## Unreleased
 
+**The 2nd projection is built — and it needed a partition that can enter a constructor.**
+
+- **`refal project2 <interpreter.ref> <Function>` (E-14).** The 2nd Futamura
+  projection, in Turchin's 1980 Aarhus setting: specialise the supercompiler with
+  respect to an *interpreter*, leaving the object program **open**, so what comes
+  out is a compiler rather than one program compiled. It re-points the graph at
+  the interpreter, enters with the program and its data as separate unknowns,
+  drives, and prints the residual as a checked program.
+- **`SplitStrategy::Pattern` (E-11).** The partition the projection needs. The
+  compiler's sequence partition (`[]` / `s.H e.T` / `(e.B) e.T`) cannot decide a
+  bracket-pattern callee: on `Go { e.X = <F e.X>; } F { (A) = 'a'; (B) = 'b'; }`
+  it splits the *tail* and the residue grows one term per split — measured, **32
+  split functions at `--steps 120`** with neither `(A)` nor `(B)` decided,
+  unbounded, only the budget truncating it. The pattern partition takes the
+  callee's own sentence patterns at the split position, so the branch matches
+  outright: the same fixture closes in **one split and three steps** and decides
+  both branches, with the interpreter not retained at all. It handles `e.` and
+  `t.` components and *declines* — leaving a residual call, which is sound and
+  finite — where the callee's component is a bare variable.
+- **The compiler path is untouched, deliberately.** `SplitStrategy::Sequence`
+  remains the default, so every residue the compiler emits is unchanged and
+  `examples/compiler.ref` needed no edit. Verified: `the_refal_driver_reaches_a_fixpoint_on_the_compiler_itself`
+  (580 s) and `refal_authored_emitter_matches_lower_across_the_whole_corpus` both
+  green, and the full `refal-core` suite at 67/67.
+- **Two defects found building the partition, both gated.** The first version
+  branched on a bare variable at the split position and emitted
+  `Split7 { (e.Rest) t.P e.In = <Split7 (e.Rest) t.P e.In>; }` — an infinite
+  self-loop; and a bare `t.` component must be declined rather than branched on.
+  `a_bare_variable_at_the_split_position_is_declined_rather_than_looped` is the
+  gate for both.
+- **Gates.** `refal-core`: `the_projection_partition_enters_a_constructor_and_decides_the_branches`
+  and `a_bare_variable_at_the_split_position_is_declined_rather_than_looped`.
+  `refal-cli`: `the_second_projection_emits_a_compiler_that_decides_its_branches`.
+  Fixture: `examples/projection-bracket-callee.ref`.
+- **What is withheld.** The 3rd projection, and the 2nd's *completeness*: on a
+  recursive interpreter (`examples/metasystem-unroll.ref`'s `Run`) the artifact is
+  a partially specialised interpreter — 6 splits, and `Run` is still reached on
+  branches whose sub-program cannot be partitioned. E-11's negative information
+  and explicit stack configuration are still open. **Figure: ~88% → ~89%.**
+- **A documentation defect found while moving the figure: the repository published
+  three tables for one question.** `PROGRESS.md` carried a stale second table
+  (eight rows at 8.5 / 6.0 / 19.5 …) that had already been superseded — the
+  `README.md` row-by-row `What is missing` text is written against the twelve-row
+  table — and it has been removed. `PLAN.md` §5 carries a third, differently
+  weighted table totalling ~91% while stating that it and the README publish "the
+  same number from the same table", which is false of the file as it stands; that
+  claim is withdrawn and the discrepancy is flagged rather than resolved, because
+  choosing the authoritative weighting is a plan-level decision. **The published
+  figure is the README's.**
+
 **The 2nd projection was measured before it was built, and the measurement moved it behind the partition.**
 
 - **Finding: E-14's 2nd and 3rd projections are downstream of E-11, not

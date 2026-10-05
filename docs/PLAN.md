@@ -295,8 +295,17 @@ evidence-weighted ~81%, and a gate-only ~78% — and they disagreed by ten point
 Three answers to one question is not a measurement, and the flattering one was
 the one a reader met first. The effort-weighted method is retired: it measured
 how much of a *plan* had been executed, which is not what a reader of a project
-status is asking. The README and this file now publish the same number from the
-same table.
+status is asking.
+
+> **Superseded 2026-10-05.** The table below is a *different weighting* of the
+> same workstreams from the one `README.md` publishes — eight rows at 8.5 / 6.0 /
+> 19.5 / 8.5 / 15.0 / 25.5 / 13.0 / 4.0, totalling ~91%, against the README's
+> twelve rows totalling ~89%. An earlier revision of this paragraph claimed the
+> two files published "the same number from the same table"; that claim was false
+> and is withdrawn. The prose cells below are kept because they are the fullest
+> record of what each workstream still lacks, but **the published figure is the
+> README's**, and reconciling the two weightings is an open plan-level decision
+> for the Chief Architect (see `docs/PROGRESS.md` §Workstream credit).
 
 | Workstream | Weight | Credit | What the product is still missing |
 |---|---:|---:|---|
