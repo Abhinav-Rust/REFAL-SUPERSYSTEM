@@ -2141,9 +2141,29 @@ projection found a dead dedup test and a cursor where a source belongs.
    the program rather than of the synthesizer, and is why `examples/invert-list-encoder.ref`
    encodes losslessly.
 3. **The 2nd and 3rd projections as artifacts (E-14).** The 1st is `refal
-   metasystem`. The 2nd and 3rd are reachable — the compiler is self-applicable
-   and the fixpoint is gated — but neither emits a standalone compiler or a
-   compiler generator, and neither has its own gate.
+   metasystem`: it drives the entry — an interpreter applied to a *known* program
+   — residualises, and requires the residue to be sound and measurably cheaper.
+   The 2nd and 3rd leave the program or the source *unknown*, so what comes out is
+   an artifact rather than an instance of one.
+
+   - **2nd — a standalone compiler.** Turchin 1980 (Aarhus): specialise the
+     supercompiler with respect to an *interpreter*, and the residue is a compiler
+     for the language that interpreter interprets. Concretely, enter at
+     `<Int e.Program e.Input>` with **both** free, drive, and residualise; where
+     `refal metasystem` pins the program, this leaves it open. Gate: emit the
+     residue, check it as Refal, and require it to agree with the existing
+     `refal compile` on every example.
+   - **3rd — a compiler generator.** Specialise the supercompiler with respect to
+     *itself*, so the residue emits compilers. The raw material is already here —
+     `examples/compiler.ref` is a compiler written in Refal and `refal fixpoint`
+     shows C1 = C2 = C3 — so the missing piece is the *command* and its gate: the
+     emitted generator, applied to an interpreter, must reproduce the 2nd
+     projection's compiler.
+
+   **Measure before coding.** Driving with the program free means the driver
+   partitions it, and the residue may be large; measure on the smallest
+   interpreter in the corpus before choosing the entry, and let the number pick
+   between `<Int e.Program e.Input>` and a narrower configuration.
 4. **§4.4's other half — perfection by transformation (E-7).** Turchin's own two
    examples on p. 115. The last named gap in the graph-of-states row.
 5. **Negative information and stack configurations (E-11).** SCP4's propagation
