@@ -2713,6 +2713,11 @@ fn strict_mode_has_no_false_positives_on_the_corpus() {
             "deliberately divides by a literal zero, which the reference makes an error \
              and Tier 1 proves statically",
         ),
+        (
+            "specialise-template.ref",
+            "a template, not a program: its object-program placeholder is spliced out \
+             before use, so Tier 1 correctly proves the call always fails",
+        ),
     ];
 
     let mut names: Vec<String> = fs::read_dir(workspace_path("examples"))
