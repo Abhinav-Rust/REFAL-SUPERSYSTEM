@@ -237,7 +237,7 @@ compiler's own number as the project's would misdescribe what this repository is
 | Tier 1 static verification | 10.50 | 8.75 | 1.75 | the guarantee is deliberately narrow: no termination analysis |
 | L2/L4 · Compiler implemented in Refal | 17.85 | 16.80 | 1.05 | not yet fast on very large inputs |
 | L4 · Verified self-hosting fixpoint | 9.10 | 8.05 | 1.05 | the fixpoint holds on the corpus and the compiler's own source, not on arbitrary programs |
-| **L3 · Meta-prover** | **13.00** | **11.00** | **2.00** | the entry, the driving, Turchin's `'True'` criterion, and the *relational* half are built and gated — an equation over free variables is decided by folding a branch to a renaming of the claim. What is withheld is the *general* relation (an arbitrary relation rather than equality) and a proof needing generalisation beyond the loop edge; of SCP4's three named theorems, associativity of `Append` is gated and a tree reversal and a sorting equality are not. A soundness defect — a truncated walk could refute — was found and fixed in an earlier session; this session found a defect in the ground matcher, recorded rather than fixed because the fix and the Refal-authored compiler must land together |
+| **L3 · Meta-prover** | **13.00** | **11.00** | **2.00** | the entry, the driving, Turchin's `'True'` criterion, and the *relational* half are built and gated — an equation over free variables is decided by folding a branch to a renaming of the claim. What is withheld is the *general* relation (an arbitrary relation rather than equality) and a proof needing generalisation beyond the loop edge; of SCP4's three named theorems, associativity of `Append` is gated and a tree reversal and a sorting equality are not. A soundness defect — a truncated walk could refute — was found and fixed in an earlier session; this session found and fixed a defect the ground matcher and the Refal-authored compiler both carried, which also repaired `refal compile` for a bracket-pattern callee |
 | L4 · Projections as artifacts | 5.00 | 1.50 | 3.50 | the 1st projection is a command with a gate; the 2nd and 3rd emit no artifact |
 | **L2 · Function inversion** | **3.00** | **3.00** | **0.00** | closed — `refal invert` drives the forward definition and emits the synthesised inverse, round-tripped in a gate |
 | Conformance / release evidence | 2.80 | 2.66 | 0.14 | three file-backed I/O clauses bind to the runtime's own test rather than a fixture |
@@ -286,17 +286,17 @@ property of the claim rather than of `--steps`.
 an equation between two reductions over free variables, proving associativity of
 `Append` and right identity by folding a branch to a renaming of the claim, and
 refuting a false equation with a witness. **Two defects were found while building
-it, and both are recorded rather than fixed.** The ground matcher drops a variable
-bound inside a nested bracket, so `F { (e.B) = e.B; }` matches `()` and returns an
-unbound `e.B`: `refal drive` fails with `unbound residual variables` and `refal
-compile` emits a program that does not lex. The one-line fix is written and
-measured, but it changes the residues the *driver* produces and the Refal-authored
-compiler reproduces them independently, so fixing it means fixing both together —
-and with the corrected matcher the §4.4 strategy short circuit stops holding (at
-budget 13 the compilative end, having finished inside its budget, is beaten by the
-interpretive end on both cost axes), so it must be re-measured too. The prover,
-which needs correct bindings, drives through the shape matcher, which threads them.
-Both defects are written up in [`docs/PROGRESS.md`](docs/PROGRESS.md).
+it, and both are fixed.** The ground matcher dropped a variable bound inside a
+nested bracket, so `F { (e.B) = e.B; }` matched `()` and returned an unbound `e.B`:
+`refal drive` failed with `unbound residual variables` and `refal compile` emitted a
+program that does not lex. The Refal-authored compiler carried the *identical*
+defect in `DvGround` — the two mirrored each other bug for bug, which is why the
+Refal-vs-Rust differential had passed — so both were fixed together, which also
+repaired `refal compile`. Correcting them falsified the §4.4 strategy short
+circuit's premise (at budget 13 the compilative end, having finished inside its
+budget, was beaten by the interpretive end on both cost axes), so both
+implementations now use the sound rule: skip the interpretive end only when the
+compilative residue leaves *zero* residual work.
 
 ## What 100% means
 

@@ -1703,12 +1703,12 @@ DvMatchLit {
 DvMatchLit2 {
   (NONE) t.P (e.PRest) (e.B) = (NO);
   (SOME t.Q (e.IRest)) t.P (e.PRest) (e.B) =
-    <DvMatchLit3 <DvGround t.P t.Q> (e.PRest) (e.IRest) (e.B)>;
+    <DvMatchLit3 <DvGround t.P t.Q (e.B)> (e.PRest) (e.IRest)>;
 }
 
 DvMatchLit3 {
-  '1' (e.PRest) (e.IRest) (e.B) = <DvMatch (e.PRest) (e.IRest) (e.B)>;
-  (e.PRest) (e.IRest) (e.B) = (NO);
+  (OK (e.B2)) (e.PRest) (e.IRest) = <DvMatch (e.PRest) (e.IRest) (e.B2)>;
+  (NO) (e.PRest) (e.IRest) = (NO);
 }
 
 DvMatchVar {
@@ -1816,17 +1816,19 @@ DvVarAccept {
     <DvVarTryL (e.More) s.K (e.I) (e.PRest) (e.In) (e.B)>;
 }
 
+* A bracket pattern may contain variables, and a variable bound inside one has to
+* reach the caller, so this returns the updated bindings rather than a bare
+* yes/no. It once matched the bracket with a FRESH empty map and dropped what it
+* bound, so `F { (e.B) = e.B; }` matched `()` and then substituted an unbound
+* `e.B`. `refal_core`'s `ground_term_matches` carried the identical defect -- each
+* mirrors the other -- so the two are fixed together and the differential between
+* them stays byte-identical.
 DvGround {
-  (SYM s.A) (SYM s.B) = <SameChars (s.A) (s.B)>;
-  (ID e.A) (ID e.B) = <SameChars (<Upper e.A>) (<Upper e.B>)>;
-  (NUM e.A) (NUM e.B) = <SameChars (e.A) (e.B)>;
-  (BR e.A) (BR e.B) = <DvMatched <DvMatch (e.A) (e.B) ()>>;
-  t.X t.Y = ;
-}
-
-DvMatched {
-  (OK (e.B)) = '1';
-  (NO) = ;
+  (SYM s.A) (SYM s.B) (e.Bind), <SameChars (s.A) (s.B)> : '1' = (OK (e.Bind));
+  (ID e.A) (ID e.B) (e.Bind), <SameChars (<Upper e.A>) (<Upper e.B>)> : '1' = (OK (e.Bind));
+  (NUM e.A) (NUM e.B) (e.Bind), <SameChars (e.A) (e.B)> : '1' = (OK (e.Bind));
+  (BR e.X) (BR e.Y) (e.Bind) = <DvMatch (e.X) (e.Y) (e.Bind)>;
+  t.X t.Y (e.Bind) = (NO);
 }
 
 * ---- small list utilities
@@ -2061,16 +2063,20 @@ DsRdSearch2 {
   (e.M) (PROG e.Items) e.Other = e.Other;
 }
 
-* The short circuit. The driver's budget is 10000 and the counter only reaches
-* it by running out, so a counter below 10000 says the compilative end finished
-* expanding -- and an end that finished cannot be beaten by one whose rule only
-* ever folds earlier. See the Rust side's comment on
-* `residualize_entry_graph_with_strategy` for why that is a proof and not a
-* guess. The seeded budget mode starts the counter at `10000 - N`, so the same
-* comparison decides it there too, with no budget to thread.
+* The short circuit. A compilative residue with ZERO residual work leaves no call
+* for run time to make, and nothing is cheaper than zero, so no other end can beat
+* it and the interpretive pass is not run. Anything else is compared.
+*
+* This once skipped the interpretive end whenever the compilative end merely
+* finished inside its budget, on the argument that the interpretive rule only
+* folds earlier and so "cannot produce a more driven residue". That argument is
+* false -- folding earlier leaves more of the program recursive and therefore
+* less unrolled, which is a SMALLER residue -- and the rule is now the sound one.
+* See the Rust side's comment on `residualize_entry_graph_with_strategy` for the
+* measurement that settled it. The two implementations must agree byte for byte.
 DsRdSearch2C {
   (e.M) (PROG e.Items) (RD e.RepC (PROG e.C) s.StepsC) s.StepsC (s.WC s.SC),
-    <Compare s.StepsC 10000> : '-' =
+    <Compare s.WC 0> : '0' =
     (RD e.RepC (PROG e.C) s.StepsC 'C' s.WC s.SC (SKIPPED));
   (e.M) (PROG e.Items) (RD e.RepC (PROG e.C) s.StepsC) s.StepsC (s.WC s.SC) =
     <DsRdSearchI (e.M) (RD e.RepC (PROG e.C) s.StepsC) (SOME (s.WC s.SC))
@@ -2141,7 +2147,7 @@ DsOtherName {
 }
 
 DsOtherReport {
-  (SKIPPED) = "not run (the compilative end finished inside its budget)";
+  (SKIPPED) = "not run (the compilative end left no residual work)";
   (FAILED) = "produced no residue";
   (SOME (s.W s.S)) = "residual-work " s.W " size " s.S;
 }
@@ -3148,7 +3154,7 @@ DsMSTerm {
   t.P t.I (e.B), <DsShape t.P> : (BR), <DsShape t.I> : (SYM) = (NO);
   t.P t.I (e.B), <DsShape t.P> : (SYM), <DsShape t.I> : (BR) = (NO);
   t.P t.I (e.B), <DsHasUndecided t.I> : '1' = (UNK);
-  t.P t.I (e.B), <DvGround t.P t.I> : '1' = (YES (e.B));
+  t.P t.I (e.B), <DvGround t.P t.I (e.B)> : (OK (e.B2)) = (YES (e.B2));
   t.P t.I (e.B) = (NO);
 }
 

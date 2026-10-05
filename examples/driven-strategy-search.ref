@@ -1,18 +1,14 @@
 * T-4, Turchin 1988 p. 538: the compilation strategy is a CHOICE, and the
 * search is what makes the choice from measurement rather than from a rule.
 *
-* The two ends of the compilation-interpretation axis do not merely produce
-* different programs here. One of them produces NO program. `Accum` below
-* walks an unknown expression into an accumulator that grows by one term per
-* step, so no configuration of `Accum` recurs exactly: the compilative whistle
-* never fires, the step budget runs out, and that end reports
-*
-*   ground driver does not support unbound residual variables
-*
-* The interpretive end loops back on the first-order neighborhood instead
-* (Turchin 1988 section 4), which terminates for his reason rather than by
-* embedding -- there are finitely many first-order neighborhoods -- and emits
-* a residue.
+* The two ends of the compilation-interpretation axis produce different
+* programs here, and the search keeps the smaller. `Accum` below walks an
+* unknown expression into an accumulator that grows by one term per step, so no
+* configuration of `Accum` recurs exactly and the compilative whistle fires
+* late: its residue is the larger one. The interpretive end loops back on the
+* first-order neighborhood instead (Turchin 1988 section 4), which terminates
+* for his reason rather than by embedding -- there are finitely many
+* first-order neighborhoods -- and emits the smaller residue.
 *
 * `refal residualize-driven` therefore searches: it drives both ends, measures
 * each residue the same way, and keeps the smaller. The report says which end
@@ -20,6 +16,13 @@
 * asserted. `metasystem-unroll.ref` is the other direction: there the
 * compilative end reaches zero residual work and the interpretive end is not
 * even run.
+*
+* This file used to record something stronger -- that the compilative end
+* produced NO program at all, failing with `ground driver does not support
+* unbound residual variables`. That failure was the ground matcher's
+* nested-bracket defect rather than a property of the axis; with the defect
+* fixed both ends produce a residue, and the search's choice is a measurement
+* rather than a rescue.
 $ENTRY Go {
   e.X = <Accum () e.X>;
 }
