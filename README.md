@@ -6,12 +6,18 @@
   <img alt="REFAL-SUPERSYSTEM — four layers of cybernetic control over a single shared expression space" src="docs/images/hero-light.svg" width="100%">
 </picture>
 
-**A four-layer engine for meta-computation, built to Valentin Turchin's 1991 design.**
+**A compiler that compiles itself. A prover that decides by supercompilation.**
 
 [![CI](https://github.com/Abhinav-Rust/REFAL-SUPERSYSTEM/actions/workflows/ci.yml/badge.svg)](https://github.com/Abhinav-Rust/REFAL-SUPERSYSTEM/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE-MIT)
 [![Rust 2024](https://img.shields.io/badge/rust-2024_edition-orange.svg)](https://www.rust-lang.org/)
 [![Status](https://img.shields.io/badge/status-active_development-brightgreen.svg)](#project-status)
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/status-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/status-light.svg">
+  <img alt="Status: about 90% of the supersystem — L0, L1 and the Refal-authored compiler are near complete, L2 is close, and L3 and L4 are partial" src="docs/images/status-light.svg" width="100%">
+</picture>
 
 </div>
 
