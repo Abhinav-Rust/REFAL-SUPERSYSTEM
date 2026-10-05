@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+**Fixed: CI went red on the 2nd-projection commit, and the cause was a genuine Tier-1 proof.**
+
+- **`strict_mode_has_no_false_positives_on_the_corpus` failed on `d9903ee`.** The
+  new fixture `examples/specialise-template.ref` carries a placeholder where its
+  object program belongs, so `check --strict` reported
+  `proven defect at 22:10: <Run ...> always fails: Run accepts [([I ..]) ..], but
+  this call passes [I ..]`. That is a **true positive, not a false positive** —
+  the template really is not a sound program, and Tier 1 was right to prove it.
+  The corpus sweep simply had no way to know the file is a *template* rather than
+  an example.
+- **The fix follows the repository's existing convention.** `examples/` already
+  holds deliberately-unsound fixtures (`runtime-invalid-numb.ref` and friends),
+  and the sweep already excludes them by name through `known_defective`. The
+  template is added there with an honest reason — "a template, not a program: its
+  object-program placeholder is spliced out before use" — rather than weakening
+  the check or moving the file somewhere the docs would no longer point at.
+- **No behaviour changed.** The compiler is unchanged; one test's exclusion list
+  gained one entry. `strict_mode_has_no_false_positives_on_the_corpus` is green,
+  and it was the only failure in the run (165 passed, 1 failed).
+
 **The 2nd projection emits target code — the program travels through the source, not the driver.**
 
 - **`refal run examples/compiler.ref SPECIALISE "<template>" "<program>"` (E-14).**
