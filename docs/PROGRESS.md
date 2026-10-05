@@ -34,8 +34,8 @@ objective to a gate. Not another Refal implementation.
 
 | | |
 |---|---|
-| Honest completion | **~82%** (supersystem completeness — one method, one table, in `README.md`) |
-| Tests | 342 + 15 new, 0 clippy, fmt clean |
+| Honest completion | **~88%** (supersystem completeness — one method, one table, in `README.md`) |
+| Tests | 372 (65 core + 162 CLI integration + 145 across the other four crates), 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
 
@@ -57,6 +57,79 @@ Rust oracle at budgets 1, 2, 5 and 12. The T-4/T-6 differential
 corpus gate is green at `cases: 71`, `positive: 31`, `check-failure: 6`,
 `runtime-failure: 1`, `residual: 33`, `cleaned-sentences: 1`, and
 `clippy --all-targets -D warnings` and `cargo fmt --check` are clean.
+
+### Done — the relational half of the meta-prover (E-12, E-13)
+
+**Layer 3 accepts an equation now, not only a predicate.** `refal prove
+<file.ref> --equiv <Left> <Right>` takes two functions that each return one side
+of a claim over the same free variables and decides whether they are equal for
+every input. It is the form the corpus states its theorems in — SCP4 1999 §4 names
+associativity of `Append` first — and the predicate form cannot decide it: while
+the variables are free neither side reaches a ground value, so the walk falls
+through to the `'False'` arm and the criterion reports a refutation that is really
+a gap. `examples/prove-append-reach.ref` publishes exactly that boundary.
+
+**What closes it is the loop edge, read at the level of an equation.** Turchin
+(1979 §2, "Cycle Recognition & Folding"): when a newly generated node is an
+instance of an earlier node, driving along that branch stops and a loop edge is
+established back to the ancestor. Applied to an *equation*, that loop edge is the
+induction hypothesis: a branch whose two sides have reduced to a renaming of the
+claim itself is closed by the claim. The engine drives both sides with the same
+symbolic matcher the driver uses, cancels the longest shared prefix (an expression
+is a sequence) and a shared bracket (a bracket is a constructor), splits a
+blocking variable into Turchin's three exhaustive cases (`[]`, `s.H e.T`,
+`(e.B) e.T`), and folds a branch that has reduced to a renaming of an enclosing
+claim. `Proved` requires every leaf to be reflexive or folded; a ground mismatch
+is a refutation with its witness; an unfinished walk is incomplete.
+
+**Gates.** Three in `refal-core` — a recursive identity is proved and the proof
+*uses* both closing rules, a false equation is refuted with its witness, and a
+claim naming a missing function is an error rather than a verdict — and three in
+`refal-cli`, which run the command end to end and require the exit status to carry
+the verdict. Two fixtures: `examples/equiv-append-assoc.ref` (associativity of
+`Append`, proved; and a deliberately false variant, refuted) and
+`examples/equiv-append-right-id.ref` (right identity, proved). The CLI gate
+requires the proof to *use* the fold, because a report that only ever says
+`proved` proves nothing about which rule ran.
+
+**The defect this row found, and did not fix.** `ground_term_matches` recurses into
+a nested bracket with a *fresh local* bindings map and discards it, so a variable
+bound inside the bracket never reaches the caller. `F { (e.B) = e.B; }` matches `()`
+and then returns an unbound `e.B`: measured, `refal drive` fails with `ground driver
+does not support unbound residual variables` and `refal compile` emits a program
+that does not lex. It is the general shape this file records before — **an answer
+that is right while the binding that produced it is wrong** — and the prover's fold
+test is what exposed it.
+
+**Why it is recorded and not fixed here.** Threading the caller's map through is
+the fix, and it was written and measured: both commands above go green. But it also
+changes the residues the *driver* produces, and the Refal-authored compiler in
+`examples/compiler.ref` reproduces those residues independently — so the fix and the
+second implementation have to land in one change, or the Refal-vs-Rust differential
+goes red on six gates: `refal_authored_driver_matches_refal_drive`,
+`refal_authored_symbolic_driver_matches_refal_drive_symbolic`,
+`refal_authored_residualize_driven_matches_the_rust_oracle`,
+`the_refal_authored_compiler_matches_the_driven_residue_on_every_lowerable_example`
+(the residue of `prove-append-reach.ref` folds to `<Split1 e.T1>` where the Refal
+compiler folds to `<Append e.T1>`),
+`the_refal_authored_driven_residualizer_is_total_when_the_budget_runs_out`, and
+`the_search_keeps_the_end_that_produces_a_residue_at_all` (the compilative end
+stops failing and produces a residue). That is a larger change than this session
+carries safely, so the fix is reverted and recorded, and the prover — which needs
+correct bindings — drives through `match_shape_pattern`, which threads them. **The
+next session should fix the matcher and the Refal compiler together.**
+
+**And the same correction falsifies a "proof" that must then be re-measured.** With
+the corrected matcher the §4.4 strategy search's short circuit — it skips the
+interpretive end whenever the compilative end finished inside its budget, on the
+argument that folding earlier "cannot produce a more driven residue" — stopped
+holding: measured on the growing-accumulator fixture at budget 13, the compilative
+end finished inside its budget and produced `ResidueCost { residual_work: 31, size:
+58 }` while the interpretive end produced `{ residual_work: 19, size: 35 }`, smaller
+on both counts, and skipped. The short circuit is left in place because the matcher
+correction is deferred; **whoever fixes the matcher must re-measure it**, and
+`an_end_that_finished_inside_its_budget_is_never_beaten` is the test that will
+notice.
 
 ### Done — the meta-prover's entry and criterion (half of E-12/E-13)
 
@@ -1880,7 +1953,8 @@ Refal-authored compiler and a `Compile` that drives.
 
 ## NEXT ACTION
 
-**The meta-prover, then the projections as artifacts, then §4.4's other half.**
+**The projections as artifacts, then §4.4's other half, then the remaining
+relational forms.**
 
 **The order changed on 2026-09-27, and why it changed is the finding.** A complete
 read of Turchin's 80 primary works (all four of his domains, via the Chief
@@ -1934,7 +2008,14 @@ projection found a dead dedup test and a cursor where a source belongs.
 
 **What to do, in order.**
 
-0. **The meta-prover (E-12, E-13).** ~~Confirm the `'True'` criterion against the
+0. ~~**The meta-prover (E-12, E-13).**~~ **Closed, 2026-10-05** — the *relational*
+   half is built: `refal prove <file> --equiv <Left> <Right>` decides an equation
+   between two reductions over free variables by folding a branch whose sides have
+   reduced to a renaming of the claim. Associativity of `Append` and right identity
+   are proved, a false equation is refuted with a witness, and the row's remaining
+   gap is the *general* relation (an arbitrary relation rather than equality) and a
+   proof needing generalisation beyond the loop edge. See the section above. The
+   predicate half's history follows. ~~Confirm the `'True'` criterion against the
    primary of 1986 §6~~ — **confirmed, 2026-10-04.** §6 of *The Concept of a
    Supercompiler* states: "If a predicate function P(x) is supercompiled and its
    configuration graph reduces to the single terminal node `'True'`, this
@@ -2199,10 +2280,27 @@ Five pieces, in the order the output depends on them:
 The authoritative ordered list is `NEXT ACTION` above. Summarised, the named gaps
 are:
 
-- **The meta-prover (E-12, E-13)** — layer 3 of the supersystem, the largest
-  single gap — and **the reflection engine as a service (E-4)**, which the prover
-  must be written against. See
+- **The meta-prover's remaining forms (E-12, E-13)** — the relational half is
+  built (`refal prove --equiv`), so what is left is the *general* relation (an
+  arbitrary relation between two functions rather than equality) and a proof that
+  needs generalisation beyond the loop edge. See
   [`TURCHIN-ECOSYSTEM-CONFORMANCE.md`](TURCHIN-ECOSYSTEM-CONFORMANCE.md).
+- **Two defects found and not yet fixed.**
+  1. **The ground matcher drops a variable bound inside a nested bracket.**
+     `ground_term_matches` recurses with a fresh local map and discards it, so
+     `F { (e.B) = e.B; }` matches `()` and returns an unbound `e.B`: `refal drive`
+     fails with `ground driver does not support unbound residual variables` and
+     `refal compile` emits a program that does not lex. The one-line fix is written
+     and measured but reverted, because it changes the driver's residues and the
+     Refal-authored compiler reproduces them; see the section above. **Fix both
+     together, and re-measure the §4.4 short circuit afterwards.**
+  2. **The Refal-authored compiler emits a program that does not lex for a
+     bracket-pattern callee.** `refal compile` fails on
+     `Go { = <Prout <First (Hello)>>; } First { (e.B) = e.B; }` while the Rust
+     driver's residue (`$ENTRY Go { = <Prout Hello>; }`) is correct and lexes;
+     `First { e.B = e.B; }` — a bare variable — compiles. It is in
+     `examples/compiler.ref`, not in the Rust crates, and it may share a root cause
+     with (1).
 - **Function inversion (E-15)**, **the 2nd and 3rd projections as artifacts
   (E-14)**, **§4.4's other half — perfection by transformation (E-7)**, **negative
   information and stack configurations (E-11)**, and **metavariable

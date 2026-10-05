@@ -2537,6 +2537,21 @@ fn ground_term_matches(pattern: &CoreTerm, input: &CoreTerm) -> bool {
             left.eq_ignore_ascii_case(right)
         }
         (CoreTermKind::Number(left), CoreTermKind::Number(right)) => left == right,
+        // KNOWN DEFECT, recorded rather than papered over: this recurses with a
+        // *fresh local* bindings map and drops it, so a variable bound inside a
+        // nested bracket never reaches the caller. `F { (e.B) = e.B; }` matches
+        // `()` and then returns an unbound `e.B`, which is why `refal drive`
+        // reports `ground driver does not support unbound residual variables` and
+        // `refal compile` emits a program that does not lex.
+        //
+        // Threading the caller's map through fixes it, but it also changes the
+        // residues the *driver* produces, and the Refal-authored compiler in
+        // `examples/compiler.ref` reproduces those residues independently -- so
+        // the fix and the second implementation have to land together or the
+        // Refal-vs-Rust differential goes red on six gates. That is a larger
+        // change than this session carries, so the fix is deferred and recorded in
+        // `docs/PROGRESS.md`; the equivalence prover, which needs correct
+        // bindings, drives through `match_shape_pattern`, which threads them.
         (CoreTermKind::Bracket(left), CoreTermKind::Bracket(right)) => {
             let mut bindings = HashMap::new();
             match_ground_pattern(left, right, &mut bindings)
@@ -3989,6 +4004,16 @@ pub fn residualize_entry_graph(
 /// cut off mid-expansion, and then the interpretive end can win — which is the
 /// whole point of the search, and the case
 /// `examples/driven-strategy-search.ref` exercises.
+///
+/// *A note for the next session.* This argument is a claim about the corpus, and
+/// it is checked by `an_end_that_finished_inside_its_budget_is_never_beaten`. It
+/// was falsified once — measured on the growing-accumulator fixture at budget 13
+/// the interpretive end was smaller on both cost axes — but only while the ground
+/// matcher's nested-bracket defect (see `ground_term_matches`) was being
+/// corrected, and the matcher correction was reverted because it also changed the
+/// residues the Refal-authored compiler reproduces. The premise holds again with
+/// the matcher as it is; when the matcher is fixed, this short circuit must be
+/// re-measured, and `docs/PROGRESS.md` records that.
 pub fn residualize_entry_graph_with_strategy(
     program: &CoreProgram,
     graph: &StateGraph,
@@ -5572,6 +5597,760 @@ pub fn format_proof_report(report: &ProofReport) -> String {
             ProofVerdict::Open => "open (no terminal node reached)".to_string(),
         }
     ));
+    output
+}
+
+// ---------------------------------------------------------------------------
+// Equivalence proofs -- the relational half of layer 3 (E-12, E-13).
+//
+// Turchin's criterion (1986 §6) decides a *predicate*: a driven configuration
+// graph whose only terminal node is `'True'` proves `P(x)` for all `x`. The
+// corpus's theorem-shaped examples are not predicates, though -- SCP4 1999 §4
+// states associativity of `Append`, a sorting equality and a tree reversal as
+// *equations between two reductions over free variables*. An equation over free
+// variables is not decided by driving one predicate: while the variables are
+// unknown neither side reaches a ground value, so the walk falls through to the
+// `'False'` arm and the criterion reports a refutation that is really a gap.
+// `examples/prove-append-reach.ref` publishes exactly that boundary.
+//
+// What closes the gap is the loop edge the supercompiler already uses for
+// programs. Turchin (1979 §2, "Cycle Recognition & Folding"): *when a newly
+// generated node is found to be an instance of an earlier node (differing only
+// by variable renaming), driving along that branch is terminated and a loop edge
+// is established back to the ancestor.* Read at the level of an *equation*, that
+// loop edge is the induction hypothesis: a branch whose two sides have reduced
+// to a renaming of the claim itself is closed by the claim, provided the descent
+// that reached it was structural. This is the machinery PROGRESS.md names as
+// missing -- "generalisation and folding, Turchin's 1980 §4.6" -- applied to the
+// equation rather than to the program.
+//
+// The engine is deliberately small and self-contained: it reduces the two sides
+// with the same symbolic matcher the driver uses, cancels the longest common
+// prefix (an expression is a sequence, so an identical prefix cancels on both
+// sides), splits a blocking variable into Turchin's three exhaustive, pairwise
+// disjoint cases (`[]`, `s.H e.T`, `(e.B) e.T`), and folds a branch whose sides
+// have reduced to a renaming of an enclosing claim. `Proved` requires *every*
+// leaf to be reflexive or folded; a ground mismatch is a refutation with its
+// witness, and an unfinished walk is incomplete rather than proved.
+// ---------------------------------------------------------------------------
+
+/// How one branch of an equivalence proof closed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EquivalenceLeaf {
+    /// The two sides reduced to the same term sequence up to variable renaming:
+    /// reflexivity closes the branch.
+    Reflexive { depth: usize },
+    /// The two sides reduced to a renaming of an enclosing configuration, so the
+    /// branch is closed by the induction hypothesis -- Turchin's loop edge.
+    Folded { depth: usize, ancestor: usize },
+    /// The two sides reduced to ground terms that differ: a counterexample.
+    Refuted { left: String, right: String },
+    /// The branch neither closed nor refuted inside the budget.
+    Stuck { depth: usize },
+}
+
+/// The result of an equivalence proof, with the evidence behind the verdict.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EquivalenceReport {
+    pub left: String,
+    pub right: String,
+    pub verdict: ProofVerdict,
+    pub leaves: Vec<EquivalenceLeaf>,
+    pub steps: usize,
+    /// Whether the walk finished inside its budget.
+    pub complete: bool,
+}
+
+/// Prove two functions equal for every input.
+///
+/// `left` and `right` name functions that each take the same sequence of
+/// variables and return the two sides of the claim. The prover aligns the two
+/// argument lists, drives both sides together over the shared free variables,
+/// and applies the loop-edge criterion above.
+///
+/// The claim's two functions must each have exactly one sentence whose pattern
+/// is a sequence of variables, which is how the corpus states an equation
+/// (`Law { e.X e.Y e.Z = ...; }`). A function with several sentences is a case
+/// analysis rather than an expression, and the honest response is an error rather
+/// than a guess at which sentence was meant.
+pub fn prove_equivalence(
+    program: &CoreProgram,
+    left: &str,
+    right: &str,
+    max_steps: usize,
+) -> Result<EquivalenceReport, DriveError> {
+    let mut prover = EquivalenceProver {
+        program,
+        steps: 0,
+        max_steps,
+        splits: 0,
+    };
+    let (left_terms, right_terms) = prover.claim(left, right)?;
+    let mut ancestors: Vec<(Vec<CoreTerm>, Vec<CoreTerm>)> = Vec::new();
+    let mut leaves = Vec::new();
+    prover.prove_pair(&left_terms, &right_terms, &mut ancestors, &mut leaves, 0)?;
+    let complete = prover.steps < max_steps;
+    let verdict = if let Some(EquivalenceLeaf::Refuted { left, right }) = leaves
+        .iter()
+        .find(|leaf| matches!(leaf, EquivalenceLeaf::Refuted { .. }))
+    {
+        ProofVerdict::Refuted {
+            witness: format!("{left} != {right}"),
+        }
+    } else if leaves
+        .iter()
+        .any(|leaf| matches!(leaf, EquivalenceLeaf::Stuck { .. }))
+    {
+        if complete {
+            ProofVerdict::Open
+        } else {
+            ProofVerdict::Incomplete {
+                steps: prover.steps,
+            }
+        }
+    } else {
+        ProofVerdict::Proved
+    };
+    Ok(EquivalenceReport {
+        left: left.to_string(),
+        right: right.to_string(),
+        verdict,
+        leaves,
+        steps: prover.steps,
+        complete,
+    })
+}
+
+/// Render an equivalence proof for a person reading a terminal.
+pub fn format_equivalence_report(report: &EquivalenceReport) -> String {
+    let mut output = String::new();
+    output.push_str(&format!(
+        "equivalence: {} = {}\n",
+        report.left, report.right
+    ));
+    output.push_str(&format!("  steps: {}\n", report.steps));
+    output.push_str(&format!(
+        "  complete: {}\n",
+        if report.complete { "yes" } else { "no" }
+    ));
+    output.push_str(&format!("  leaves: {}\n", report.leaves.len()));
+    for leaf in &report.leaves {
+        let line = match leaf {
+            EquivalenceLeaf::Reflexive { depth } => format!("reflexive (depth {depth})"),
+            EquivalenceLeaf::Folded { depth, ancestor } => {
+                format!("folded (depth {depth}, ancestor {ancestor})")
+            }
+            EquivalenceLeaf::Refuted { left, right } => format!("refuted ({left} != {right})"),
+            EquivalenceLeaf::Stuck { depth } => format!("stuck (depth {depth})"),
+        };
+        output.push_str(&format!("    {line}\n"));
+    }
+    output.push_str(&format!(
+        "  verdict: {}\n",
+        match &report.verdict {
+            ProofVerdict::Proved => "proved".to_string(),
+            ProofVerdict::Refuted { witness } => format!("refuted ({witness})"),
+            ProofVerdict::Incomplete { steps } => {
+                format!("incomplete (budget spent after {steps} steps)")
+            }
+            ProofVerdict::Open => "open (a branch could not be decided)".to_string(),
+        }
+    ));
+    output
+}
+
+/// The maximum split depth before a branch is reported stuck.
+///
+/// The fold check terminates the walk wherever the claim recurs, so the depth is
+/// a safety net for a claim whose recursion is not a renaming of itself. It is
+/// generous because a legitimate proof descends one split per level of the
+/// structure it inducts over.
+const MAX_EQUIVALENCE_DEPTH: usize = 64;
+
+struct EquivalenceProver<'a> {
+    program: &'a CoreProgram,
+    steps: usize,
+    max_steps: usize,
+    splits: usize,
+}
+
+/// A term sequence reduced as far as it can go without splitting a variable.
+enum Reduced {
+    Terms(Vec<CoreTerm>),
+    /// The sequence could not be reduced further because a free variable blocks
+    /// a sentence decision; the name is that variable.
+    Blocked(Vec<CoreTerm>, String),
+}
+
+/// The outcome of trying to reduce one call.
+enum Invoked {
+    Reduced(Vec<CoreTerm>),
+    /// No sentence could be decided because a free variable blocks it.
+    Blocked(String),
+    /// No sentence matches at all: the call cannot succeed.
+    Stuck,
+}
+
+impl<'a> EquivalenceProver<'a> {
+    /// The two sides of the claim, over one shared set of free variables.
+    fn claim(
+        &mut self,
+        left: &str,
+        right: &str,
+    ) -> Result<(Vec<CoreTerm>, Vec<CoreTerm>), DriveError> {
+        let left_sentence = self.single_sentence(left)?;
+        let right_sentence = self.single_sentence(right)?;
+        // The two functions must take the same argument *pattern*, so both sides
+        // are expressions over the same free variables and a split applies to
+        // both. Requiring the pattern to be a bare variable sequence would rule
+        // out a claim over a bracketed list (`(e.X)`), which is how a list is
+        // written; requiring the patterns to match each other is the general
+        // condition.
+        if left_sentence.pattern.len() != right_sentence.pattern.len()
+            || !left_sentence
+                .pattern
+                .iter()
+                .zip(&right_sentence.pattern)
+                .all(|(left_arg, right_arg)| same_term_kind(&left_arg.kind, &right_arg.kind))
+        {
+            return Err(DriveError::Unsupported {
+                feature: "an equivalence claim whose two functions do not take the same argument pattern",
+            });
+        }
+        let left_terms = left_sentence.result.clone();
+        let right_terms = right_sentence.result.clone();
+        Ok((left_terms, right_terms))
+    }
+
+    fn single_sentence(&self, function: &str) -> Result<&'a CoreSentence, DriveError> {
+        let found = self
+            .program
+            .functions
+            .iter()
+            .find(|candidate| candidate.name.eq_ignore_ascii_case(function))
+            .ok_or_else(|| DriveError::NoMatchingSentence {
+                function: function.to_string(),
+            })?;
+        match found.sentences.as_slice() {
+            [sentence] => Ok(sentence),
+            _ => Err(DriveError::Unsupported {
+                feature: "an equivalence claim whose function is not a single sentence",
+            }),
+        }
+    }
+
+    /// Prove one branch, pushing its configuration so descendants can fold to it.
+    fn prove_pair(
+        &mut self,
+        left: &[CoreTerm],
+        right: &[CoreTerm],
+        ancestors: &mut Vec<(Vec<CoreTerm>, Vec<CoreTerm>)>,
+        leaves: &mut Vec<EquivalenceLeaf>,
+        depth: usize,
+    ) -> Result<(), DriveError> {
+        if depth >= MAX_EQUIVALENCE_DEPTH {
+            leaves.push(EquivalenceLeaf::Stuck { depth });
+            return Ok(());
+        }
+        let (mut left_terms, left_blocked) = match self.reduce(left)? {
+            Reduced::Terms(terms) => (terms, None),
+            Reduced::Blocked(terms, variable) => (terms, Some(variable)),
+        };
+        let (mut right_terms, right_blocked) = match self.reduce(right)? {
+            Reduced::Terms(terms) => (terms, None),
+            Reduced::Blocked(terms, variable) => (terms, Some(variable)),
+        };
+
+        // Two normalisations that preserve equality and make the claim's shape
+        // visible. An expression is a sequence, so a prefix the two sides share
+        // -- the same terms, including the same variable occurrences -- cancels:
+        // `s.H A` against `s.H B` is `A` against `B`, sound because the prefix is
+        // a fixed element of the free monoid. And a bracket is a constructor, so
+        // `(A)` against `(B)` is `A` against `B`. Without the second rule a claim
+        // stated over a bracketed list (`(e.X)`) never matches its own unfolded
+        // form, because the induction hypothesis is reached with the recursive
+        // call one bracket deeper than the claim's own head.
+        normalise_sides(&mut left_terms, &mut right_terms);
+
+        if sequences_alpha_equal(&left_terms, &right_terms) {
+            leaves.push(EquivalenceLeaf::Reflexive { depth });
+            return Ok(());
+        }
+        for (index, (ancestor_left, ancestor_right)) in ancestors.iter().enumerate() {
+            if pairs_alpha_equal(&left_terms, &right_terms, ancestor_left, ancestor_right) {
+                leaves.push(EquivalenceLeaf::Folded {
+                    depth,
+                    ancestor: index,
+                });
+                return Ok(());
+            }
+        }
+        if is_ground(&left_terms) && is_ground(&right_terms) {
+            leaves.push(EquivalenceLeaf::Refuted {
+                left: format_term_sequence(&left_terms),
+                right: format_term_sequence(&right_terms),
+            });
+            return Ok(());
+        }
+
+        let variable = left_blocked
+            .or(right_blocked)
+            .or_else(|| first_free_variable(&left_terms))
+            .or_else(|| first_free_variable(&right_terms));
+        let Some(variable) = variable else {
+            leaves.push(EquivalenceLeaf::Stuck { depth });
+            return Ok(());
+        };
+        if self.steps >= self.max_steps {
+            leaves.push(EquivalenceLeaf::Stuck { depth });
+            return Ok(());
+        }
+
+        ancestors.push((left_terms.clone(), right_terms.clone()));
+        for branch in self.partitions() {
+            let left_branch = substitute_variable(&left_terms, &variable, &branch);
+            let right_branch = substitute_variable(&right_terms, &variable, &branch);
+            self.prove_pair(&left_branch, &right_branch, ancestors, leaves, depth + 1)?;
+        }
+        ancestors.pop();
+        Ok(())
+    }
+
+    /// Turchin's exhaustive, pairwise disjoint partition of an expression.
+    fn partitions(&mut self) -> Vec<Vec<CoreTerm>> {
+        self.splits += 1;
+        self.steps += 1;
+        let index = self.splits;
+        let head = variable_term(VariableKind::Symbol, &format!("H{index}"));
+        let tail = variable_term(VariableKind::Expression, &format!("T{index}"));
+        let bracket = CoreTerm {
+            kind: CoreTermKind::Bracket(vec![variable_term(
+                VariableKind::Expression,
+                &format!("B{index}"),
+            )]),
+            span: empty_span(),
+        };
+        vec![Vec::new(), vec![head, tail.clone()], vec![bracket, tail]]
+    }
+
+    /// Reduce a term sequence as far as its sentences allow.
+    fn reduce(&mut self, terms: &[CoreTerm]) -> Result<Reduced, DriveError> {
+        let mut output: Vec<CoreTerm> = Vec::new();
+        let mut blocked: Option<String> = None;
+        for term in terms {
+            match &term.kind {
+                CoreTermKind::Variable { .. }
+                | CoreTermKind::Char(_)
+                | CoreTermKind::Identifier(_)
+                | CoreTermKind::Number(_)
+                | CoreTermKind::Block { .. } => output.push(term.clone()),
+                CoreTermKind::Bracket(inner) => {
+                    let (reduced, block) = self.reduce_into(inner)?;
+                    if blocked.is_none() {
+                        blocked = block;
+                    }
+                    output.push(CoreTerm {
+                        kind: CoreTermKind::Bracket(reduced),
+                        span: term.span,
+                    });
+                }
+                CoreTermKind::Call { name, args } => {
+                    // Arguments are evaluated before the call (call by value). A
+                    // block *inside a bracket* is not a reason to stop, though: a
+                    // bracket whose contents are still symbolic is a complete
+                    // value to the callee's pattern, which is what lets
+                    // `(<Append-Contents (e.X) (e.Y)>)` be matched as a bracket
+                    // while the inner call is undecided. Only `invoke` decides
+                    // whether the call can be selected, and it reports the
+                    // variable that blocks it when it cannot.
+                    let (arguments, argument_block) = self.reduce_into(args)?;
+                    if blocked.is_none() {
+                        blocked = argument_block;
+                    }
+                    match self.invoke(name, &arguments)? {
+                        Invoked::Reduced(result) => {
+                            let (reduced, block) = self.reduce_into(&result)?;
+                            if blocked.is_none() {
+                                blocked = block;
+                            }
+                            output.extend(reduced);
+                        }
+                        Invoked::Blocked(variable) => {
+                            if blocked.is_none() {
+                                blocked = Some(variable);
+                            }
+                            output.push(CoreTerm {
+                                kind: CoreTermKind::Call {
+                                    name: name.clone(),
+                                    args: arguments,
+                                },
+                                span: term.span,
+                            });
+                        }
+                        Invoked::Stuck => output.push(CoreTerm {
+                            kind: CoreTermKind::Call {
+                                name: name.clone(),
+                                args: arguments,
+                            },
+                            span: term.span,
+                        }),
+                    }
+                }
+            }
+        }
+        Ok(match blocked {
+            Some(variable) => Reduced::Blocked(output, variable),
+            None => Reduced::Terms(output),
+        })
+    }
+
+    fn reduce_into(
+        &mut self,
+        terms: &[CoreTerm],
+    ) -> Result<(Vec<CoreTerm>, Option<String>), DriveError> {
+        match self.reduce(terms)? {
+            Reduced::Terms(terms) => Ok((terms, None)),
+            Reduced::Blocked(terms, variable) => Ok((terms, Some(variable))),
+        }
+    }
+
+    /// Try to reduce one call by selecting a sentence.
+    ///
+    /// Refal tries a function's sentences in order, so a sentence may only be
+    /// committed to when *no earlier* sentence could also match. An earlier
+    /// sentence whose match is undecided therefore blocks the call rather than
+    /// letting a later sentence answer: committing would take the fall-through
+    /// arm on an argument where the first arm might have fired. This is the same
+    /// `unknown_before` rule the driver applies, and it is the difference between
+    /// a prover and a guesser.
+    fn invoke(&mut self, function: &str, input: &[CoreTerm]) -> Result<Invoked, DriveError> {
+        if self.steps >= self.max_steps {
+            return Ok(Invoked::Stuck);
+        }
+        self.steps += 1;
+        let mut unknown_before = false;
+        let mut blocked: Option<String> = None;
+        for definition in self
+            .program
+            .functions
+            .iter()
+            .filter(|definition| definition.name.eq_ignore_ascii_case(function))
+        {
+            for sentence in &definition.sentences {
+                let mut bindings: HashMap<String, Vec<CoreTerm>> = HashMap::new();
+                // The *shape* matcher, not `match_symbolic_pattern`. The latter
+                // routes a ground input through `match_ground_pattern`, whose
+                // nested-bracket arm drops the variables it binds (see
+                // `ground_term_matches`); the shape matcher threads the caller's
+                // map through every level, so a variable bound inside a bracket
+                // reaches the substitution. A prover that substituted an unbound
+                // variable would fold a claim it never proved.
+                match match_shape_pattern(&sentence.pattern, input, &mut bindings) {
+                    SymbolicMatch::No => continue,
+                    SymbolicMatch::Unknown => {
+                        if blocked.is_none() {
+                            blocked = first_free_variable(input);
+                        }
+                        unknown_before = true;
+                        continue;
+                    }
+                    SymbolicMatch::Yes => {}
+                }
+                match self.conditions_match(&sentence.conditions, &mut bindings)? {
+                    SymbolicMatch::No => continue,
+                    SymbolicMatch::Unknown => {
+                        if blocked.is_none() {
+                            blocked = first_free_variable(input);
+                        }
+                        unknown_before = true;
+                        continue;
+                    }
+                    SymbolicMatch::Yes => {}
+                }
+                if unknown_before {
+                    // An earlier sentence might also match, and only a split can
+                    // decide which. Committing here would be unsound.
+                    return Ok(match blocked {
+                        Some(variable) => Invoked::Blocked(variable),
+                        None => Invoked::Stuck,
+                    });
+                }
+                let result = substitute_terms(&sentence.result, &bindings);
+                return Ok(Invoked::Reduced(result));
+            }
+        }
+        Ok(match blocked {
+            Some(variable) => Invoked::Blocked(variable),
+            None => Invoked::Stuck,
+        })
+    }
+
+    fn conditions_match(
+        &mut self,
+        conditions: &[CoreCondition],
+        bindings: &mut HashMap<String, Vec<CoreTerm>>,
+    ) -> Result<SymbolicMatch, DriveError> {
+        for condition in conditions {
+            let value = substitute_terms(&condition.result, bindings);
+            let (value, _) = self.reduce_into(&value)?;
+            match match_shape_pattern(&condition.pattern, &value, bindings) {
+                SymbolicMatch::Yes => {}
+                SymbolicMatch::No => return Ok(SymbolicMatch::No),
+                SymbolicMatch::Unknown => return Ok(SymbolicMatch::Unknown),
+            }
+        }
+        Ok(SymbolicMatch::Yes)
+    }
+}
+
+/// Cancel the longest prefix of terms the two sequences share.
+fn cancel_common_prefix(left: &mut Vec<CoreTerm>, right: &mut Vec<CoreTerm>) {
+    let mut count = 0;
+    while count < left.len()
+        && count < right.len()
+        && same_term_kind(&left[count].kind, &right[count].kind)
+    {
+        count += 1;
+    }
+    left.drain(0..count);
+    right.drain(0..count);
+}
+
+/// Structural equality of two term kinds, ignoring source spans.
+///
+/// `CoreTerm` derives `PartialEq` over its `span` as well as its `kind`, and two
+/// occurrences of the same variable written in different places have different
+/// spans. Comparing the derived equality would therefore report `s.H A` and
+/// `s.H B` as sharing no prefix -- a silently wrong answer rather than a
+/// compile error -- so every structural comparison here goes through this.
+fn same_term_kind(left: &CoreTermKind, right: &CoreTermKind) -> bool {
+    match (left, right) {
+        (CoreTermKind::Char(left), CoreTermKind::Char(right)) => left == right,
+        (CoreTermKind::Identifier(left), CoreTermKind::Identifier(right)) => {
+            left.eq_ignore_ascii_case(right)
+        }
+        (CoreTermKind::Number(left), CoreTermKind::Number(right)) => left == right,
+        (
+            CoreTermKind::Variable {
+                kind: left_kind,
+                name: left_name,
+            },
+            CoreTermKind::Variable {
+                kind: right_kind,
+                name: right_name,
+            },
+        ) => left_kind == right_kind && left_name.eq_ignore_ascii_case(right_name),
+        (CoreTermKind::Bracket(left), CoreTermKind::Bracket(right)) => {
+            same_term_sequence(left, right)
+        }
+        (
+            CoreTermKind::Call {
+                name: left_name,
+                args: left_args,
+            },
+            CoreTermKind::Call {
+                name: right_name,
+                args: right_args,
+            },
+        ) => {
+            left_name.eq_ignore_ascii_case(right_name) && same_term_sequence(left_args, right_args)
+        }
+        // A block is a nested program rather than a structural term, and no
+        // claim in scope compares one, so the conservative answer is "not the
+        // same" rather than a deep comparison that would have to decide what a
+        // block's identity even is.
+        _ => false,
+    }
+}
+
+fn same_term_sequence(left: &[CoreTerm], right: &[CoreTerm]) -> bool {
+    left.len() == right.len()
+        && left
+            .iter()
+            .zip(right)
+            .all(|(left, right)| same_term_kind(&left.kind, &right.kind))
+}
+
+/// Apply every equality-preserving normalisation until the sides are stable.
+fn normalise_sides(left: &mut Vec<CoreTerm>, right: &mut Vec<CoreTerm>) {
+    loop {
+        let mut changed = false;
+        if left.len() == 1
+            && right.len() == 1
+            && let (CoreTermKind::Bracket(inner_left), CoreTermKind::Bracket(inner_right)) =
+                (&left[0].kind, &right[0].kind)
+        {
+            *left = inner_left.clone();
+            *right = inner_right.clone();
+            changed = true;
+        }
+        let before = (left.len(), right.len());
+        cancel_common_prefix(left, right);
+        if (left.len(), right.len()) != before {
+            changed = true;
+        }
+        if !changed {
+            break;
+        }
+    }
+}
+
+/// Whether two term sequences are equal up to a consistent renaming of variables.
+fn sequences_alpha_equal(left: &[CoreTerm], right: &[CoreTerm]) -> bool {
+    let mut forward = HashMap::new();
+    let mut backward = HashMap::new();
+    sequences_alpha_equal_with(left, right, &mut forward, &mut backward)
+}
+
+/// Whether two *pairs* of sequences are equal under one shared renaming.
+///
+/// The renaming is shared across both halves so a variable that names the same
+/// value on the left must name the same value on the right -- which is what makes
+/// this the fold test rather than two independent equality tests.
+fn pairs_alpha_equal(
+    left: &[CoreTerm],
+    right: &[CoreTerm],
+    ancestor_left: &[CoreTerm],
+    ancestor_right: &[CoreTerm],
+) -> bool {
+    let mut forward = HashMap::new();
+    let mut backward = HashMap::new();
+    sequences_alpha_equal_with(left, ancestor_left, &mut forward, &mut backward)
+        && sequences_alpha_equal_with(right, ancestor_right, &mut forward, &mut backward)
+}
+
+fn sequences_alpha_equal_with(
+    left: &[CoreTerm],
+    right: &[CoreTerm],
+    forward: &mut HashMap<String, String>,
+    backward: &mut HashMap<String, String>,
+) -> bool {
+    if left.len() != right.len() {
+        return false;
+    }
+    left.iter()
+        .zip(right)
+        .all(|(left, right)| terms_alpha_equal(left, right, forward, backward))
+}
+
+fn terms_alpha_equal(
+    left: &CoreTerm,
+    right: &CoreTerm,
+    forward: &mut HashMap<String, String>,
+    backward: &mut HashMap<String, String>,
+) -> bool {
+    match (&left.kind, &right.kind) {
+        (
+            CoreTermKind::Variable {
+                kind: left_kind,
+                name: left_name,
+            },
+            CoreTermKind::Variable {
+                kind: right_kind,
+                name: right_name,
+            },
+        ) => {
+            if left_kind != right_kind {
+                return false;
+            }
+            let left_name = left_name.to_ascii_lowercase();
+            let right_name = right_name.to_ascii_lowercase();
+            if let Some(mapped) = forward.get(&left_name)
+                && *mapped != right_name
+            {
+                return false;
+            }
+            if let Some(mapped) = backward.get(&right_name)
+                && *mapped != left_name
+            {
+                return false;
+            }
+            forward.insert(left_name.clone(), right_name.clone());
+            backward.insert(right_name, left_name);
+            true
+        }
+        (CoreTermKind::Bracket(left), CoreTermKind::Bracket(right)) => {
+            sequences_alpha_equal_with(left, right, forward, backward)
+        }
+        (
+            CoreTermKind::Call {
+                name: left_name,
+                args: left_args,
+            },
+            CoreTermKind::Call {
+                name: right_name,
+                args: right_args,
+            },
+        ) => {
+            left_name.eq_ignore_ascii_case(right_name)
+                && sequences_alpha_equal_with(left_args, right_args, forward, backward)
+        }
+        (CoreTermKind::Char(left), CoreTermKind::Char(right)) => left == right,
+        (CoreTermKind::Identifier(left), CoreTermKind::Identifier(right)) => {
+            left.eq_ignore_ascii_case(right)
+        }
+        (CoreTermKind::Number(left), CoreTermKind::Number(right)) => left == right,
+        _ => false,
+    }
+}
+
+/// The leftmost free variable in a term sequence, descending into brackets and
+/// calls. It is the variable a blocked sentence decision turns on.
+fn first_free_variable(terms: &[CoreTerm]) -> Option<String> {
+    for term in terms {
+        if let Some(name) = term_first_variable(term) {
+            return Some(name);
+        }
+    }
+    None
+}
+
+fn term_first_variable(term: &CoreTerm) -> Option<String> {
+    match &term.kind {
+        CoreTermKind::Variable { name, .. } => Some(name.clone()),
+        CoreTermKind::Bracket(inner) => first_free_variable(inner),
+        CoreTermKind::Call { args, .. } => first_free_variable(args),
+        _ => None,
+    }
+}
+
+/// Substitute a named variable's value into a term sequence, splicing it in.
+fn substitute_variable(terms: &[CoreTerm], name: &str, replacement: &[CoreTerm]) -> Vec<CoreTerm> {
+    let mut bindings: HashMap<String, Vec<CoreTerm>> = HashMap::new();
+    bindings.insert(name.to_ascii_lowercase(), replacement.to_vec());
+    substitute_terms(terms, &bindings)
+}
+
+/// Substitute a variable-to-terms map into a term sequence.
+///
+/// A variable the map does not mention is left in place rather than treated as
+/// an error: in a claim every unbound variable is free, and free is exactly what
+/// the walk is quantifier over.
+fn substitute_terms(
+    terms: &[CoreTerm],
+    bindings: &HashMap<String, Vec<CoreTerm>>,
+) -> Vec<CoreTerm> {
+    let mut output = Vec::new();
+    for term in terms {
+        match &term.kind {
+            CoreTermKind::Variable { name, .. } => match bindings.get(&name.to_ascii_lowercase()) {
+                Some(replacement) => output.extend(replacement.clone()),
+                None => output.push(term.clone()),
+            },
+            CoreTermKind::Bracket(inner) => output.push(CoreTerm {
+                kind: CoreTermKind::Bracket(substitute_terms(inner, bindings)),
+                span: term.span,
+            }),
+            CoreTermKind::Call { name, args } => output.push(CoreTerm {
+                kind: CoreTermKind::Call {
+                    name: name.clone(),
+                    args: substitute_terms(args, bindings),
+                },
+                span: term.span,
+            }),
+            _ => output.push(term.clone()),
+        }
+    }
     output
 }
 
@@ -9076,6 +9855,180 @@ mod tests {
         assert!(
             cut_off >= 3,
             "and so must the regime where the compilative end is cut off: {cut_off}"
+        );
+    }
+
+    /// The concatenation program the equivalence gates run against, plus two
+    /// claims: a true one and a false one.
+    ///
+    /// `Append` returns the bracketed concatenation and delegates to
+    /// `Append-Contents`, whose result is bare, so a claim over it normalises to
+    /// exactly the shape its own unfolded form takes and the fold can fire.
+    fn concatenation_program() -> CoreProgram {
+        let list = |name: &str| core_bracket(vec![core_var(VariableKind::Expression, name)]);
+        let append_contents = |tail: &str, rest: &str| {
+            core_call(
+                "Append-Contents",
+                vec![
+                    core_bracket(vec![core_var(VariableKind::Expression, tail)]),
+                    list(rest),
+                ],
+            )
+        };
+        CoreProgram {
+            declarations: vec![],
+            functions: vec![
+                core_function(
+                    "Append",
+                    Visibility::Local,
+                    vec![core_sentence(
+                        vec![list("A"), list("B")],
+                        vec![core_bracket(vec![core_call(
+                            "Append-Contents",
+                            vec![list("A"), list("B")],
+                        )])],
+                    )],
+                ),
+                core_function(
+                    "Append-Contents",
+                    Visibility::Local,
+                    vec![
+                        core_sentence(
+                            vec![core_bracket(vec![]), list("B")],
+                            vec![core_var(VariableKind::Expression, "B")],
+                        ),
+                        core_sentence(
+                            vec![
+                                core_bracket(vec![
+                                    core_var(VariableKind::Term, "H"),
+                                    core_var(VariableKind::Expression, "T"),
+                                ]),
+                                list("B"),
+                            ],
+                            vec![core_var(VariableKind::Term, "H"), append_contents("T", "B")],
+                        ),
+                    ],
+                ),
+                // Append(X, ()) = (X): true, and only closable by folding.
+                core_function(
+                    "Right-Id-Left",
+                    Visibility::Local,
+                    vec![core_sentence(
+                        vec![list("X")],
+                        vec![core_call("Append", vec![list("X"), core_bracket(vec![])])],
+                    )],
+                ),
+                core_function(
+                    "Right-Id-Right",
+                    Visibility::Local,
+                    vec![core_sentence(vec![list("X")], vec![list("X")])],
+                ),
+                // Append(X, ('a')) = Append(X, ('b')): false at X = ().
+                core_function(
+                    "Wrong-Left",
+                    Visibility::Local,
+                    vec![core_sentence(
+                        vec![list("X")],
+                        vec![core_call(
+                            "Append",
+                            vec![list("X"), core_bracket(vec![core_char('a')])],
+                        )],
+                    )],
+                ),
+                core_function(
+                    "Wrong-Right",
+                    Visibility::Local,
+                    vec![core_sentence(
+                        vec![list("X")],
+                        vec![core_call(
+                            "Append",
+                            vec![list("X"), core_bracket(vec![core_char('b')])],
+                        )],
+                    )],
+                ),
+            ],
+        }
+    }
+
+    /// A claim that holds only by induction is proved, and the proof uses both
+    /// closing rules.
+    ///
+    /// `Append(X, ()) = (X)` cannot be decided by reduction: while `X` is free
+    /// neither side reaches a ground value. The prover splits `X`, reduces, and
+    /// closes the recursive branch by folding the branch's sides to the claim
+    /// itself -- Turchin's loop edge. A prover that only reduced would report
+    /// `Open`; one that reported `Proved` without ever folding would be closing a
+    /// claim it never applied. The two leaf assertions pin both.
+    #[test]
+    fn a_recursive_identity_is_proved_by_folding_to_the_claim() {
+        let report = prove_equivalence(
+            &concatenation_program(),
+            "Right-Id-Left",
+            "Right-Id-Right",
+            10_000,
+        )
+        .expect("the claim names two functions that exist");
+        assert_eq!(report.verdict, ProofVerdict::Proved);
+        assert!(report.complete, "the walk must close inside its budget");
+        assert!(
+            report
+                .leaves
+                .iter()
+                .any(|leaf| matches!(leaf, EquivalenceLeaf::Reflexive { .. })),
+            "the empty-list branch closes by reflexivity: {:?}",
+            report.leaves
+        );
+        assert!(
+            report
+                .leaves
+                .iter()
+                .any(|leaf| matches!(leaf, EquivalenceLeaf::Folded { .. })),
+            "the recursive branch closes by folding to the claim: {:?}",
+            report.leaves
+        );
+    }
+
+    /// A false equation is refuted with the witness that refutes it.
+    ///
+    /// A prover that only ever said `proved` would be indistinguishable from one
+    /// that always says it. `Append(X, ('a')) = Append(X, ('b'))` is false, and
+    /// the empty first list reduces both sides to ground symbols that disagree.
+    #[test]
+    fn an_equation_that_is_false_is_refuted_with_a_witness() {
+        let report = prove_equivalence(
+            &concatenation_program(),
+            "Wrong-Left",
+            "Wrong-Right",
+            10_000,
+        )
+        .expect("the claim names two functions that exist");
+        match report.verdict {
+            ProofVerdict::Refuted { witness } => {
+                assert!(
+                    witness.contains("'a'"),
+                    "the witness names the left value: {witness}"
+                );
+                assert!(
+                    witness.contains("'b'"),
+                    "the witness names the right value: {witness}"
+                );
+            }
+            other => panic!("expected a refutation, got {other:?}"),
+        }
+    }
+
+    /// A claim naming a function the program does not define is an error, not a
+    /// verdict: a prover may not report `proved` for a claim it never read.
+    #[test]
+    fn an_equivalence_claim_naming_a_missing_function_is_an_error() {
+        assert!(
+            prove_equivalence(
+                &concatenation_program(),
+                "Missing",
+                "Right-Id-Right",
+                10_000
+            )
+            .is_err()
         );
     }
 }

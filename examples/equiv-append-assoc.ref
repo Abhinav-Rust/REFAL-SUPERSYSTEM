@@ -1,0 +1,64 @@
+/* Associativity of list concatenation, stated the way the corpus states its
+   theorems: as an equation between two reductions over three free lists.
+
+   SCP4 1999 4 names associativity of `Append` first among its theorem-shaped
+   examples, and Turchin's criterion (1986 6) says what proving one consists of:
+   "If a predicate function P(x) is supercompiled and its configuration graph
+   reduces to the single terminal node 'True', this constitutes an automated
+   mathematical proof that P(x) holds for all inputs x."
+
+   `Assoc-Left` and `Assoc-Right` are the two sides, each a function of the same
+   three free lists. The prover enters them together, drives both over the shared
+   variables, and closes every branch either by reflexivity or by folding a
+   branch whose sides have reduced to a renaming of the claim itself -- the
+   induction hypothesis, Turchin's loop edge (1979 2).
+
+   The proof descends on the first list:
+     X = ()          both sides reduce to <Append (e.Y) (e.Z)>      reflexive
+     X = (t.H e.T)   both sides become (t.H <the claim at e.T>)    folded
+
+   Lists are bracketed so the empty list is `()`, a term, rather than the empty
+   expression. `Append` returns the bracketed concatenation and `Append-Contents`
+   is its bare counterpart, which splices the recursion's result inside a
+   bracket. */
+
+$EXTERN Prout;
+
+$ENTRY Go {
+  e.Input = <Prout <Append (e.Input) ()>>;
+}
+
+/* The two sides of the associativity equation. */
+Assoc-Left {
+  (e.X) (e.Y) (e.Z) = <Append <Append (e.X) (e.Y)> (e.Z)>;
+}
+
+Assoc-Right {
+  (e.X) (e.Y) (e.Z) = <Append (e.X) <Append (e.Y) (e.Z)>>;
+}
+
+/* A claim that is *false*: appending `('a')` is not appending `('b')`. The empty
+   first list reduces both sides to a ground symbol and the two disagree, so the
+   prover must report a refutation rather than a proof. It is here so the gate can
+   require the prover to refute as well as to prove -- a prover that only ever
+   says `proved` is not a prover. */
+Wrong-Left {
+  (e.X) = <Append (e.X) ('a')>;
+}
+
+Wrong-Right {
+  (e.X) = <Append (e.X) ('b')>;
+}
+
+/* <Append (A) (B)> = the bracketed list A ++ B. It delegates to
+   `Append-Contents`, whose result is bare, so the claim normalises to exactly the
+   shape its own unfolded form takes and the induction hypothesis can fold. */
+Append {
+  (e.A) (e.B) = (<Append-Contents (e.A) (e.B)>);
+}
+
+/* <Append-Contents (A) (B)> = the bare concatenation A ++ B. */
+Append-Contents {
+  () (e.B) = e.B;
+  (t.H e.T) (e.B) = t.H <Append-Contents (e.T) (e.B)>;
+}
