@@ -6042,6 +6042,13 @@ pub enum EquivalenceLeaf {
     /// The two sides reduced to a renaming of an enclosing configuration, so the
     /// branch is closed by the induction hypothesis -- Turchin's loop edge.
     Folded { depth: usize, ancestor: usize },
+    /// The branch **grew** relative to an ancestor -- the ancestor embeds in it
+    /// but is not a renaming of it -- so closing it by the induction hypothesis
+    /// directly would not terminate. The branch is closed instead by proving the
+    /// *most specific generalisation* of the ancestor and the branch: Turchin's
+    /// whistle and generalisation (1980 §4.6, 1988), read at the level of an
+    /// equation. `ancestor` names the ancestor that was generalised.
+    Generalized { depth: usize, ancestor: usize },
     /// The two sides reduced to ground terms that differ: a counterexample.
     Refuted { left: String, right: String },
     /// The branch neither closed nor refuted inside the budget.
@@ -6138,6 +6145,9 @@ pub fn format_equivalence_report(report: &EquivalenceReport) -> String {
             EquivalenceLeaf::Reflexive { depth } => format!("reflexive (depth {depth})"),
             EquivalenceLeaf::Folded { depth, ancestor } => {
                 format!("folded (depth {depth}, ancestor {ancestor})")
+            }
+            EquivalenceLeaf::Generalized { depth, ancestor } => {
+                format!("generalised (depth {depth}, ancestor {ancestor})")
             }
             EquivalenceLeaf::Refuted { left, right } => format!("refuted ({left} != {right})"),
             EquivalenceLeaf::Stuck { depth } => format!("stuck (depth {depth})"),
@@ -6292,6 +6302,66 @@ impl<'a> EquivalenceProver<'a> {
             return Ok(());
         }
 
+        // The whistle, and generalisation (Turchin 1980 §4.6, 1988). The renaming
+        // fold above closes a branch that has come back to an ancestor; this
+        // closes one that has *grown* past an ancestor -- the ancestor embeds in
+        // it, so the descent is not structural and folding directly would not
+        // terminate. Turchin's rule is to generalise the two to their most
+        // specific common generalisation and carry on from there, and read at the
+        // level of an equation that means: prove the generalised claim, and close
+        // this branch as an instance of it.
+        //
+        // The generalised claim is *stronger* than this branch, so it must be
+        // proved before the branch may be closed. It is proved here, in line, and
+        // only a complete proof of it closes the branch; anything less is `Stuck`,
+        // which is the honest report -- a refutation of a stronger claim says
+        // nothing about this one.
+        if let Some(index) = whistle_ancestor(&left_terms, &right_terms, ancestors) {
+            let (ancestor_left, ancestor_right) = ancestors[index].clone();
+            let generalised_left = generalize_term_sequence(&ancestor_left, &left_terms);
+            let generalised_right = generalize_term_sequence(&ancestor_right, &right_terms);
+            // A generalisation that is only a renaming of the ancestor has
+            // generalised nothing: the branch is an *instance* of the ancestor,
+            // and Turchin's own driver answers that case by leaving the call
+            // residual rather than claiming it. So does this.
+            if pairs_alpha_equal(
+                &generalised_left,
+                &generalised_right,
+                &ancestor_left,
+                &ancestor_right,
+            ) {
+                leaves.push(EquivalenceLeaf::Stuck { depth });
+                return Ok(());
+            }
+            let mut inner_ancestors = ancestors[..=index].to_vec();
+            let mut inner_leaves = Vec::new();
+            self.prove_pair(
+                &generalised_left,
+                &generalised_right,
+                &mut inner_ancestors,
+                &mut inner_leaves,
+                depth + 1,
+            )?;
+            let closed = !inner_leaves.is_empty()
+                && inner_leaves.iter().all(|leaf| {
+                    matches!(
+                        leaf,
+                        EquivalenceLeaf::Reflexive { .. }
+                            | EquivalenceLeaf::Folded { .. }
+                            | EquivalenceLeaf::Generalized { .. }
+                    )
+                });
+            if closed {
+                leaves.push(EquivalenceLeaf::Generalized {
+                    depth,
+                    ancestor: index,
+                });
+            } else {
+                leaves.push(EquivalenceLeaf::Stuck { depth });
+            }
+            return Ok(());
+        }
+
         let variable = left_blocked
             .or(right_blocked)
             .or_else(|| first_free_variable(&left_terms))
@@ -6306,13 +6376,69 @@ impl<'a> EquivalenceProver<'a> {
         }
 
         ancestors.push((left_terms.clone(), right_terms.clone()));
-        for branch in self.partitions() {
+        for branch in self.branches_for(&variable, &left_terms, &right_terms) {
             let left_branch = substitute_variable(&left_terms, &variable, &branch);
             let right_branch = substitute_variable(&right_terms, &variable, &branch);
             self.prove_pair(&left_branch, &right_branch, ancestors, leaves, depth + 1)?;
         }
         ancestors.pop();
         Ok(())
+    }
+
+    /// The branches to case-split on.
+    ///
+    /// Turchin's own partition of an expression is the three-way
+    /// `[]` / `s.H e.T` / `(e.B) e.T`, and it is what the prover uses by default.
+    /// But when a side is blocked by a call whose **only** argument is the
+    /// blocked variable, the callee's own sentence patterns say which shapes are
+    /// possible -- and a shape the callee cannot accept is not a case of the
+    /// claim at all. Splitting by them keeps the walk on the callee's domain,
+    /// which is the difference between a proof and an ever-growing tree of
+    /// branches that can never reduce.
+    ///
+    /// This is [`SplitStrategy::Pattern`]'s rule, which the projections use, read
+    /// at the level of an equation: a claim over a partial function is a claim
+    /// about the domain that function accepts, and the callee's patterns are that
+    /// domain.
+    fn branches_for(
+        &mut self,
+        variable: &str,
+        left: &[CoreTerm],
+        right: &[CoreTerm],
+    ) -> Vec<Vec<CoreTerm>> {
+        if let Some(name) =
+            sole_argument_callee(left, variable).or_else(|| sole_argument_callee(right, variable))
+        {
+            let branches = self.callee_patterns(&name);
+            if branches.len() >= 2 {
+                return branches;
+            }
+        }
+        self.partitions()
+    }
+
+    /// The distinct, unconditional sentence patterns a function declares.
+    fn callee_patterns(&self, name: &str) -> Vec<Vec<CoreTerm>> {
+        let mut branches: Vec<Vec<CoreTerm>> = Vec::new();
+        for function in self
+            .program
+            .functions
+            .iter()
+            .filter(|function| function.name.eq_ignore_ascii_case(name))
+        {
+            for sentence in &function.sentences {
+                if !sentence.conditions.is_empty() {
+                    continue;
+                }
+                if !branches
+                    .iter()
+                    .any(|branch| term_sequences_same_kind(branch, &sentence.pattern))
+                {
+                    branches.push(sentence.pattern.clone());
+                }
+            }
+        }
+        branches
     }
 
     /// Turchin's exhaustive, pairwise disjoint partition of an expression.
@@ -6612,6 +6738,187 @@ fn sequences_alpha_equal(left: &[CoreTerm], right: &[CoreTerm]) -> bool {
 /// The renaming is shared across both halves so a variable that names the same
 /// value on the left must name the same value on the right -- which is what makes
 /// this the fold test rather than two independent equality tests.
+/// The ancestor pair the current pair has **grown past**, if any.
+///
+/// Turchin's whistle: an ancestor embeds in the current configuration but is not
+/// a renaming of it, so driving on would not terminate. The *last* such ancestor
+/// is returned, because the most recent one gives the tightest generalisation.
+///
+/// The pair must also **not be an instance** of the ancestor. A split's branch
+/// is always an instance of the configuration it came from -- that is what a
+/// split *is* -- and so is every step of a structural induction; firing there
+/// would generalise at the first split and prove nothing. What the whistle is
+/// for is a pair that has grown *without* being a substitution of the ancestor,
+/// which is the case folding cannot close.
+fn whistle_ancestor(
+    left: &[CoreTerm],
+    right: &[CoreTerm],
+    ancestors: &[(Vec<CoreTerm>, Vec<CoreTerm>)],
+) -> Option<usize> {
+    ancestors
+        .iter()
+        .enumerate()
+        .rev()
+        .find_map(|(index, (ancestor_left, ancestor_right))| {
+            (sequence_homeomorphic_embeds(ancestor_left, left)
+                && sequence_homeomorphic_embeds(ancestor_right, right)
+                && !pairs_instance_of(left, right, ancestor_left, ancestor_right))
+            .then_some(index)
+        })
+}
+
+/// A call in the sequence whose **only** argument is the blocked variable.
+///
+/// That is the shape in which a callee's own patterns are the domain of the
+/// blocked variable: `<Rev e.X>` with `Rev { (Leaf) = ..; (Node ..) = ..; }` says
+/// `e.X` is `(Leaf)` or `(Node ..)`, and nothing else.
+fn sole_argument_callee(terms: &[CoreTerm], variable: &str) -> Option<String> {
+    fn walk(term: &CoreTerm, variable: &str) -> Option<String> {
+        match &term.kind {
+            CoreTermKind::Call { name, args } => {
+                if let [
+                    CoreTerm {
+                        kind: CoreTermKind::Variable { name: argument, .. },
+                        ..
+                    },
+                ] = args.as_slice()
+                    && argument.eq_ignore_ascii_case(variable)
+                {
+                    return Some(name.clone());
+                }
+                args.iter().find_map(|arg| walk(arg, variable))
+            }
+            CoreTermKind::Bracket(inner) => inner.iter().find_map(|inner| walk(inner, variable)),
+            _ => None,
+        }
+    }
+    terms.iter().find_map(|term| walk(term, variable))
+}
+
+/// Whether the pair is an **instance** of the general pair: some substitution of
+/// the general pair's variables yields it, consistently across both sides.
+///
+/// The two sides share one binding map, so a variable that occurs on both sides
+/// has to bind the same terms -- which is what makes this a substitution of the
+/// *claim* rather than of each side separately.
+fn pairs_instance_of(
+    left: &[CoreTerm],
+    right: &[CoreTerm],
+    general_left: &[CoreTerm],
+    general_right: &[CoreTerm],
+) -> bool {
+    let mut bindings = HashMap::new();
+    sequence_is_instance_of(left, general_left, &mut bindings)
+        && sequence_is_instance_of(right, general_right, &mut bindings)
+}
+
+/// Whether `instance` is a substitution instance of `general`.
+///
+/// This is the prover's own matcher rather than [`match_symbolic_pattern`],
+/// because that one is deliberately three-valued: it reports `Unknown` for a
+/// call it has not evaluated, which is right for driving and useless here. The
+/// question here is purely structural -- "is this term the general term with its
+/// variables replaced" -- and a call is a constructor like any other.
+fn sequence_is_instance_of(
+    instance: &[CoreTerm],
+    general: &[CoreTerm],
+    bindings: &mut HashMap<String, Vec<CoreTerm>>,
+) -> bool {
+    fn go(
+        instance: &[CoreTerm],
+        general: &[CoreTerm],
+        general_index: usize,
+        instance_index: usize,
+        bindings: &mut HashMap<String, Vec<CoreTerm>>,
+    ) -> bool {
+        if general_index == general.len() {
+            return instance_index == instance.len();
+        }
+        let term = &general[general_index];
+        if let CoreTermKind::Variable { kind, name } = &term.kind {
+            let key = name.to_ascii_lowercase();
+            let (min, max) = match kind {
+                VariableKind::Expression => (instance_index, instance.len()),
+                _ => (instance_index + 1, (instance_index + 1).min(instance.len())),
+            };
+            if min > instance.len() {
+                return false;
+            }
+            for end in min..=max {
+                let slice = &instance[instance_index..end];
+                let valid = match kind {
+                    VariableKind::Expression => true,
+                    VariableKind::Term => slice.len() == 1,
+                    VariableKind::Symbol => {
+                        slice.len() == 1
+                            && matches!(
+                                slice[0].kind,
+                                CoreTermKind::Char(_)
+                                    | CoreTermKind::Number(_)
+                                    | CoreTermKind::Identifier(_)
+                            )
+                    }
+                };
+                if !valid {
+                    continue;
+                }
+                if let Some(previous) = bindings.get(&key) {
+                    if previous == slice && go(instance, general, general_index + 1, end, bindings)
+                    {
+                        return true;
+                    }
+                    continue;
+                }
+                bindings.insert(key.clone(), slice.to_vec());
+                if go(instance, general, general_index + 1, end, bindings) {
+                    return true;
+                }
+                bindings.remove(&key);
+            }
+            return false;
+        }
+        let Some(actual) = instance.get(instance_index) else {
+            return false;
+        };
+        let matched = match (&term.kind, &actual.kind) {
+            (CoreTermKind::Bracket(general_inner), CoreTermKind::Bracket(actual_inner)) => {
+                sequence_is_instance_of(actual_inner, general_inner, bindings)
+            }
+            (
+                CoreTermKind::Call {
+                    name: general_name,
+                    args: general_args,
+                },
+                CoreTermKind::Call {
+                    name: actual_name,
+                    args: actual_args,
+                },
+            ) if general_name.eq_ignore_ascii_case(actual_name) => {
+                sequence_is_instance_of(actual_args, general_args, bindings)
+            }
+            (CoreTermKind::Char(general_char), CoreTermKind::Char(actual_char)) => {
+                general_char == actual_char
+            }
+            (CoreTermKind::Identifier(general_id), CoreTermKind::Identifier(actual_id)) => {
+                general_id.eq_ignore_ascii_case(actual_id)
+            }
+            (CoreTermKind::Number(general_num), CoreTermKind::Number(actual_num)) => {
+                general_num == actual_num
+            }
+            _ => false,
+        };
+        matched
+            && go(
+                instance,
+                general,
+                general_index + 1,
+                instance_index + 1,
+                bindings,
+            )
+    }
+    go(instance, general, 0, 0, bindings)
+}
+
 fn pairs_alpha_equal(
     left: &[CoreTerm],
     right: &[CoreTerm],
@@ -7657,6 +7964,85 @@ mod tests {
             )
             .is_err(),
             "naming a function the program does not define is a usage error, not 'open'"
+        );
+    }
+
+    /// The whistle fires on genuine growth and stays quiet on a legitimate
+    /// induction step (E-12/E-13).
+    ///
+    /// A split's branch is *always* an instance of the configuration it came
+    /// from -- that is what a split is -- so a whistle that fired on embedding
+    /// alone would generalise at the first split and prove nothing. The
+    /// distinction is that an instance is a *substitution* of the claim, and
+    /// generalisation is for a pair that has grown without being one.
+    #[test]
+    fn the_whistle_fires_on_growth_and_not_on_an_instance() {
+        let variable = |name: &str, kind: VariableKind| CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind,
+                name: name.to_string(),
+            },
+            span: empty_span(),
+        };
+        let call = |name: &str, args: Vec<CoreTerm>| CoreTerm {
+            kind: CoreTermKind::Call {
+                name: name.to_string(),
+                args,
+            },
+            span: empty_span(),
+        };
+        let bracket = |content: Vec<CoreTerm>| CoreTerm {
+            kind: CoreTermKind::Bracket(content),
+            span: empty_span(),
+        };
+        let identifier = |name: &str| CoreTerm {
+            kind: CoreTermKind::Identifier(name.to_string()),
+            span: empty_span(),
+        };
+
+        // The claim `Rev(Rev(e.X)) = e.X`.
+        let claim_left = vec![call(
+            "Rev",
+            vec![call("Rev", vec![variable("X", VariableKind::Expression)])],
+        )];
+        let claim_right = vec![variable("X", VariableKind::Expression)];
+        let ancestors = vec![(claim_left.clone(), claim_right.clone())];
+
+        // `e.X := (Leaf)` is a substitution of the claim: an induction step, and
+        // the whistle must not fire on it.
+        let instance_left = vec![call(
+            "Rev",
+            vec![call("Rev", vec![bracket(vec![identifier("Leaf")])])],
+        )];
+        let instance_right = vec![bracket(vec![identifier("Leaf")])];
+        assert!(
+            pairs_instance_of(&instance_left, &instance_right, &claim_left, &claim_right),
+            "an instance must be recognised as one"
+        );
+        assert_eq!(
+            whistle_ancestor(&instance_left, &instance_right, &ancestors),
+            None,
+            "a legitimate induction step is not a whistle"
+        );
+
+        // A pair that has grown *past* the claim -- the ancestor embeds in it but
+        // is not a substitution of it -- is what the whistle is for.
+        let grown_left = vec![
+            call(
+                "Rev",
+                vec![call("Rev", vec![variable("X", VariableKind::Expression)])],
+            ),
+            identifier("Extra"),
+        ];
+        let grown_right = vec![variable("X", VariableKind::Expression), identifier("Extra")];
+        assert!(
+            !pairs_instance_of(&grown_left, &grown_right, &claim_left, &claim_right),
+            "a grown pair is not a substitution of the claim"
+        );
+        assert_eq!(
+            whistle_ancestor(&grown_left, &grown_right, &ancestors),
+            Some(0),
+            "the ancestor embeds in a grown pair, so the whistle fires"
         );
     }
 

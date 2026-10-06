@@ -7229,6 +7229,40 @@ fn the_prover_refutes_a_false_equation_and_its_status_says_so() {
     );
 }
 
+/// SCP4 1999 section 4's *second* named theorem, and the prover's measured
+/// boundary (E-12/E-13).
+///
+/// `Rev` reverses a binary tree; reversing twice is the identity. The prover
+/// terminates -- the walk closes rather than being truncated by its budget --
+/// and decides the `(Leaf)` branch by reflexivity. The `Node` branch is reported
+/// `open`, because unfolding it produces a pair with **two independent
+/// components** (`<Rev <Rev L>>` against `e.L`, and `<Rev <Rev R>>` against
+/// `e.R`) and the prover drives the pair as one sequence rather than as a
+/// conjunction of sub-goals, so the induction hypothesis is never reached.
+///
+/// The gate is on the *shape of the walk*, which is what the whistle and the
+/// callee-driven partition changed. Before them the same claim diverged --
+/// 12,315 leaves and no end at `--steps 20000` -- and the three-way partition
+/// generated two branches whose shapes `Rev` can never accept.
+#[test]
+fn the_tree_reversal_terminates_and_publishes_its_boundary() {
+    let output =
+        prove_equivalence_file("examples/equiv-tree-reversal.ref", "Rev-Left", "Rev-Right");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("  complete: yes"),
+        "the walk must close rather than be truncated by the budget:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("reflexive (depth 1)"),
+        "the (Leaf) branch is decided by reflexivity:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("verdict: open"),
+        "the Node branch is the published boundary, and open is the honest verdict:\n{stdout}"
+    );
+}
+
 /// The 2nd projection (E-14) emits a compiler, and its partition enters a
 /// constructor.
 ///

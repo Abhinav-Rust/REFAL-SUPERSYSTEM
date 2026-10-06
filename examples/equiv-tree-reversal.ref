@@ -1,0 +1,60 @@
+/* Correctness of binary tree reversals -- SCP4 1999 section 4's second named
+   theorem, and the fixture that exercises the prover's generalisation.
+
+   `1999_The_Supercompiler_SCP4_General_Outline.html` names three theorem-shaped
+   examples: "associativity of append, correctness of binary tree reversals,
+   equality of sorting algorithms". `examples/equiv-append-assoc.ref` carries the
+   first, and it is proved by folding a branch to a renaming of the claim --
+   Turchin's loop edge (1979 section 2). This file carries the second, and it is
+   the smallest statement that needs *generalisation* as well.
+
+   `Rev` reverses a binary tree: a `(Leaf)` is its own reverse, and a
+   `(Node L R)` reverses to `(Node <Rev R> <Rev L>)`. The claim is that reversing
+   twice is the identity, by structural induction:
+
+     t = (Leaf)          <Rev <Rev (Leaf)>>  reduces to (Leaf)         reflexive
+     t = (Node (e.L) (e.R))
+                         <Rev <Rev (Node L R)>> reduces to
+                         (Node <Rev <Rev L>> <Rev <Rev R>>)           by the
+                                                                     induction
+                                                                     hypothesis
+
+   **The boundary this file publishes.** The prover terminates on it -- 73 steps,
+   the walk closed -- and decides the `(Leaf)` branch by reflexivity, but the
+   `Node` branch is reported `open`. The reason is measured rather than guessed:
+   unfolding the `Node` case produces a pair with *two* independent components
+   (`<Rev <Rev L>>` against `e.L`, and `<Rev <Rev R>>` against `e.R`), and the
+   prover drives the pair as one sequence rather than as a conjunction of
+   sub-goals, so the induction hypothesis is never reached. That is the
+   generalisation this row still withholds: Turchin's generaliser must lift the
+   *pair*, not only each side, for the two components to fold independently.
+
+   The two things this fixture *does* gate are the whistle and the partition.
+   Without the whistle the walk diverges -- 12,315 leaves and no end at
+   `--steps 20000`. Without the callee-driven partition the split is Turchin's
+   three-way `[]` / `s.H e.T` / `(e.B) e.T`, and two of the three branches are
+   shapes `Rev` cannot accept, so they can never reduce. With both, the walk
+   closes and the first branch is decided. */
+
+$EXTERN Prout;
+
+$ENTRY Go {
+  e.Input = <Prout <Rev e.Input>>;
+}
+
+/* The two sides of the claim. */
+Rev-Left {
+  e.T = <Rev <Rev e.T>>;
+}
+
+Rev-Right {
+  e.T = e.T;
+}
+
+/* Reversing a binary tree. `Rev`'s own patterns are the domain of its argument,
+   which is what the prover's partition reads: a branch that is neither `(Leaf)`
+   nor `(Node (e.L) (e.R))` is not a tree, and is not a case of the claim. */
+Rev {
+  (Leaf) = (Leaf);
+  (Node (e.L) (e.R)) = (Node <Rev (e.R)> <Rev (e.L)>);
+}
