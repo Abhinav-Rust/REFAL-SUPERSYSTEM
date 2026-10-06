@@ -318,7 +318,7 @@ matching both precise and expressive.
 | **Front end** | ✅ Lexer and parser over the documented Classic scope; **every clause of the syntax reference is bound to a fixture**, in both directions wherever a clause states a rule with a forbidden half |
 | **Semantic checker** | ✅ Entry-point structure, duplicate detection, unresolved calls, calls in patterns, variable binding and kind consistency — each citing its clause |
 | **Refal machine** | ✅ **Clause-complete against the reference's builtin sections**; no fixed call-depth limit; the projecting matcher (§2.2); the view field in all three shapes; Chapter 6 metacode in full, including §6.4's `unknown` values |
-| **Graph of states** | ✅ `drive → clean → residualise` verified against the interpreter over the corpus; case splitting on a wholly unknown argument; §4.3 cleaning and the §4.5 verdict; generalization by common computation history; **the compilation strategy is searched**, not fixed |
+| **Graph of states** | ✅ `drive → clean → residualise` verified against the interpreter over the corpus; case splitting on a wholly unknown argument; §4.3 cleaning and the §4.5 verdict; generalization by common computation history; **the compilation strategy is searched**, not fixed; **driving a residue is a fixpoint** — a generated split is not re-partitioned, the residue's definitions are emitted in source order, and an arity test stops the sequence partition from peeling a bracket-pattern callee's tail without bound |
 | **Tier 1 static analysis** | ✅ Complete for its published guarantee with zero false positives across the corpus: dead sentences, recognition-impossible reachability, builtin domain errors, and a format lattice that describes a bracket's contents recursively |
 | **Compiler written in Refal** | ✅ A real Refal-authored lexer, parser, checker and emitter over the full Classic grammar; the transforming half — `GRAPH`, `RESIDUALIZE`, `DRIVE`, `DRIVE-SYMBOLIC`, `RESIDUALIZE-DRIVEN` — byte-identical to its Rust counterpart over the corpus, **and the last of them is the compiler's default path** |
 | **Self-hosting** | ✅ C1 = C2 = C3 byte-identical over the full grammar at 12,599 bytes, every generation checked; `refal compile examples/compiler.ref` emits the driven residue, so the self-application is a supercompilation rather than a re-print |
@@ -439,14 +439,23 @@ The ordered work list lives in
    driving the forward definition against a known output (Glück & Turchin, ISSAC
    '90): `refal invert` emits the inverse as a checked program whose patterns are
    the forward function's outputs, and the gate round-trips the emitted inverse.
-4. ~~**The partition that can enter a constructor (E-11)**~~ — **built for the
-   projections.** `SplitStrategy::Pattern` partitions a configuration component
-   by the *callee's own sentence patterns*, so a bracket-pattern callee closes in
-   one split where the compiler's sequence partition produced an unbounded
-   residue. The compiler path deliberately keeps the sequence partition, because
-   its residues and the Refal-authored counterpart must stay byte-identical.
-   Still open: **negative information** (`e.X ≠ 'A' …`) and an explicit two-level
-   stack configuration.
+4. ~~**The partition that can enter a constructor (E-11)**~~ — **built, and the
+   compiler-side defect it exposed is closed.** `SplitStrategy::Pattern`
+   partitions a configuration component by the *callee's own sentence patterns*,
+   so a bracket-pattern callee closes in one split. The compiler's sequence
+   partition could not decide such a callee, and the cause turned out to be the
+   **matcher** rather than the partition: it returned `Unknown` on the first
+   undecided term without applying the pattern's *arity*, so
+   `F { (A) = 'a'; (B) = 'b'; }` called as `<F e.X>` peeled the tail and grew
+   one term per split — 16 split functions at `--steps 120`, none deciding a
+   branch. An arity test now rejects that as a definite non-match, and the same
+   fixture closes in 2 splits. Closing it also fixed two defects behind it: a
+   generated `SplitN` was being re-partitioned into an infinite self-loop, and
+   the residue's retained definitions were emitted in call-graph order rather
+   than source order — so **driving a residue is now a fixpoint**, and driving
+   the compiler's own residue again is byte-identical in 2 steps. Still open:
+   **negative information** (`e.X ≠ 'A' …`) and an explicit two-level stack
+   configuration.
 5. **The projections as artifacts (E-14)** — the self-application now **emits a
    working compiler** and is gated by *running* it on the corpus; `refal project2`
    exists and the partition it needed is built, but its artifact is the *driven

@@ -2,6 +2,47 @@
 
 ## Unreleased
 
+**Driving a residue is now a fixpoint, and the compiler-path partition defect behind it is closed (E-11).**
+
+- **The unbounded residue had a located cause, and it was the matcher.** A pattern
+  with no top-level `e.` variable consumes exactly one input term per pattern
+  term, so an input of a different length can never match it — but the shape
+  matcher returned `Unknown` on the first undecided term and never applied the
+  pattern's *arity*. `F { (A) = 'a'; (B) = 'b'; }` called as `<F e.X>` therefore
+  split the tail and grew one term per split: **16 split functions at
+  `--steps 120`**, none of them deciding a branch. `term_sequence_arity` gives
+  each sequence a range and rejects the pair as a definite `No` when the two do
+  not overlap. The same fixture now closes in **2 splits**, bounded. The test is
+  *sound* and deliberately incomplete the other way: an input whose range
+  overlaps the pattern's stays undecided.
+- **A generated `SplitN` is no longer re-partitioned.** Driving a residue whose
+  entry calls a generated `Split1` re-split it, and a branch that stayed residual
+  emitted `call_term(function, ..)` — `Split1 { = <Split1>; }`, an infinite
+  self-loop, because the fresh split carries the callee's own name. The driver now
+  declines, leaving the call residual. The test is on the **name**, deliberately:
+  a source function whose patterns happen to *be* the partition (`Classify` in
+  `case-split.ref`) is still split, because replacing it with a generated `Split1`
+  is the point of compiling pattern matching. A shape-based test was tried first
+  and the corpus differential caught it declining `case-split.ref`.
+- **The residue is emitted in source order.** `retain_called_functions` emitted
+  retained definitions in call-graph discovery order, which was stable only while
+  every drive created fresh splits in creation order. The call graph decides
+  *which* definitions come along; the order is now a property of the program.
+- **Measured.** `refal residualize-driven examples/compiler.ref`, then driving
+  that residue again, is **byte-identical** — the second drive takes 2 steps and
+  changes nothing. Mirrored in `examples/compiler.ref`
+  (`DsGenerated`/`DsSplitDigits`/`DsAllDigits`, `DsRdOrder`/`DsRdOrderL`/
+  `DsRdKeepHas`) so the Refal-authored driver agrees byte for byte.
+- **Gates:** `the_sequence_partition_stops_on_a_bracket_pattern_callee`,
+  `the_arity_test_keeps_an_input_whose_range_overlaps`,
+  `a_generated_split_is_not_re_partitioned`,
+  `the_driven_residue_on_a_bracket_pattern_callee_is_bounded`,
+  `driving_a_residue_is_a_fixpoint`, plus the existing
+  `the_driven_compiler_is_a_fixpoint_of_the_driver` and
+  `the_refal_driver_reaches_a_fixpoint_on_the_compiler_itself`.
+- **Still open in E-11:** *negative* information (`e.X ≠ 'A' …`) and an explicit
+  two-level stack configuration.
+
 **The front page now shows the system working, and its middle is navigable.**
 
 - **A "See it work" section sits directly under the callout.** Four real

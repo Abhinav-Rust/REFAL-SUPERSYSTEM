@@ -49,7 +49,7 @@ See `README.md` §"What Theorem 5.1 does and does not forbid" and
 | | |
 |---|---|
 | Honest completion | **~90%** (supersystem completeness — one method, one table, in `README.md`) |
-| Tests | 378 (67 core + 166 CLI integration + 145 across the other four crates), 0 clippy, fmt clean |
+| Tests | 383 (70 core + 168 CLI integration + 145 across the other four crates), 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
 
@@ -2389,15 +2389,11 @@ projection found a dead dedup test and a cursor where a source belongs.
    examples on p. 115. The last named gap in the graph-of-states row.
 5. **Negative information and stack configurations (E-11).** **The partition
    that can enter a constructor is built** (`SplitStrategy::Pattern`, used by the
-   projections; see item 3 and the design-space map below). **What remains:**
-   *negative* information (`e.X ≠ 'A' …`) is not carried at all; the compiler
-   path still uses the sequence partition, deliberately, so its residues and the
-   Refal-authored counterpart in `examples/compiler.ref` stay byte-identical —
-   which means the compiler-side defect the measurement found (a free argument
-   handed to a bracket-pattern callee produces an unbounded residue) is still
-   live on the compiler path, and fixing it means changing both sides in one
-   commit, as the ground-matcher fix did; and no explicit two-level stack
-   configuration is built.
+   projections), **and the compiler-side defect it exposed is closed** — the
+   arity test, the generated-split decline and the source-order residue are all
+   built, gated, and mirrored in `examples/compiler.ref`; see the section below.
+   **What remains:** *negative* information (`e.X ≠ 'A' …`) is not carried at
+   all, and no explicit two-level stack configuration is built.
 
    ### E-11: the design space, mapped (2026-10-05)
 
@@ -2447,48 +2443,71 @@ projection found a dead dedup test and a cursor where a source belongs.
    compiler keeps the sequence partition so its residues, and the Refal-authored
    counterpart, stay byte-identical.
 
-   ### E-11: the arity test is sound, and it flips the strategy search (2026-10-06)
+   ### E-11: the partition, the arity test, and the fixpoint (2026-10-06)
 
-   **The defect is real and its cause is located.** The compiler-side unbounded
-   residue is not a partition defect but a **matcher** gap. `match_shape_pattern`
-   (`crates/refal-core/src/lib.rs`) descends into the first undecided term and
-   returns `Unknown` without ever applying the pattern's **arity**. A pattern with
-   no top-level `e.` variable consumes exactly one input term per pattern term, so
-   an input of a different length can never match it — but
+   **Three defects, one design, all closed.** The compiler-side unbounded residue
+   is not a partition defect but a **matcher** gap, and closing it exposed two
+   more defects behind it. All three are fixed in `refal-core` **and** the
+   Refal-authored counterpart in `examples/compiler.ref`, and gated.
+
+   **1. The arity test.** `match_shape_pattern` descends into the first undecided
+   term and returns `Unknown` without ever applying the pattern's **arity**. A
+   pattern with no top-level `e.` variable consumes exactly one input term per
+   pattern term, so an input of a different length can never match it -- but
    `F { (A) = 'a'; (B) = 'b'; }` called as `<F e.X>` reaches the branch
-   `(e.B1) s.H2 e.T2`, and `(A)` against `(e.B1)` is undecided, so the walk splits
-   the tail and grows one term per split: **16 split functions at `--steps 120`**
-   (measured; capped by `MAX_SPLITS`, so the true growth is unbounded), none of
-   them deciding `(A)` or `(B)`.
+   `(e.B1) s.H2 e.T2`, and `(A)` against `(e.B1)` is undecided, so the walk
+   split the tail and grew one term per split: **16 split functions at
+   `--steps 120`, none deciding a branch** (capped by `MAX_SPLITS`; the growth
+   itself is unbounded). `term_sequence_arity` gives each sequence a range --
+   the non-`e.` terms are its minimum, an `e.` variable makes it unbounded --
+   and rejects the pair as a definite `No` when the two ranges do not overlap.
+   The same fixture now closes in **2 splits**, bounded. It is a *sound*
+   rejection and deliberately incomplete in the other direction: an input whose
+   range overlaps the pattern's stays undecided (`the_arity_test_keeps_an_input_whose_range_overlaps`).
 
-   **The fix, built and verified, then reverted — and why.** A `term_sequence_arity`
-   test (each sequence has a range: the non-`e.` terms are its minimum, an `e.`
-   variable makes it unbounded) rejects the pair as a definite `No` when the two
-   ranges do not overlap. It is **sound** and it closes the defect: the same
-   fixture drops from 16 splits to 2, bounded. Applied to both the Rust matcher
-   (`match_at`) and the Refal-authored `DsMSAt` (with `DsMinLen`/`DsOpen`/
-   `DsCount`/`DsArityBad`), the whole corpus stays byte-identical — **44/44
-   Refal-authored differentials green, 69 `refal-core` tests green, the manifest
-   differential green** — so the two implementations still agree everywhere the
-   corpus reaches.
+   **2. The generated split is not re-partitioned.** Driving a residue whose
+   entry calls a generated `Split1` re-partitioned it, and a branch that stayed
+   residual emitted `call_term(function, ..)` -- `Split1 { = <Split1>; }`, an
+   infinite self-loop, because the fresh split carries the same name as the
+   callee. `is_generated_split` (name `Split` + digits, mirrored as
+   `DsGenerated`/`DsSplitDigits`/`DsAllDigits`) declines, leaving the call
+   residual. The test is on the **name** and not on the shape of the patterns,
+   deliberately: `Classify { = ..; s.H e.T = ..; (e.B) e.T = ..; }` also *is*
+   the partition, but replacing it with a generated `Split1` is the whole point
+   of compiling pattern matching and the residue then drops `Classify`. A
+   shape-based test was tried first and declined `case-split.ref`, which the
+   project wants split -- that is the differential that caught it.
 
-   **What it breaks, and why the fix cannot ship alone.** On the compiler's own
-   source it changes the **§4.4 strategy search**: `residual-work` moves from
-   `compilative 8773 / interpretive 8773` to `compilative 8577 / interpretive
-   8391`, and the *interpretive* end now wins where the compilative end did. That
-   residue is **not a fixpoint**, so `the_driven_compiler_is_a_fixpoint_of_the_driver`
-   and `the_refal_driver_reaches_a_fixpoint_on_the_compiler_itself` go red. The
-   arity test does not make either end worse; it makes both better and the
-   interpretive one better *still*, and the interpretive residue's non-idempotence
-   is a **pre-existing latent defect the fix exposes** rather than one it
-   introduces. Shipping two red gates is not acceptable, and narrowing them is not
-   an option, so the change was reverted whole and this is the handoff.
+   **3. The residue is emitted in source order.** `retain_called_functions`
+   emitted retained definitions in call-graph discovery order, which was stable
+   only while every drive created fresh splits in creation order. With (2), the
+   second drive creates none, and the retained set arrived in a walk order that
+   no longer matched the first drive. It now emits in the **source program's
+   order** -- the call graph decides *which* definitions come along, the order
+   must be a property of the program and not of the walk. Mirrored as
+   `DsRdOrder`/`DsRdOrderL`/`DsRdKeepHas` in `compiler.ref`.
 
-   **What lands next, as one change.** The arity test, **and** a fix that makes the
-   interpretive residue a fixpoint on the compiler (or a search that does not flip
-   when both ends improve). The measurement to beat is the pair above: the
-   compilative end at `8577` and the interpretive end at `8391`, with the two
-   fixpoint gates green.
+   **Measured.** `refal residualize-driven examples/compiler.ref`, then driving
+   that residue again — with the **Refal** driver as well as the Rust one — is
+   now **byte-identical**: the second drive takes **2 steps** and changes
+   nothing. The compiler's own residue stays on the interpretive end of the §4.4
+   search (`interpretive residual-work 8472 size 19210`, `compilative 8658 size
+   19266`), and the fixpoint holds there. The bracket-pattern fixture is
+   `2 splits` on the compiler path and a fixpoint, and the corpus differentials
+   stay byte-identical.
+
+   **Gates:** `the_sequence_partition_stops_on_a_bracket_pattern_callee`,
+   `the_arity_test_keeps_an_input_whose_range_overlaps`,
+   `a_generated_split_is_not_re_partitioned` (all `refal-core`),
+   `the_driven_residue_on_a_bracket_pattern_callee_is_bounded` and
+   `driving_a_residue_is_a_fixpoint` (`refal-cli`), plus the existing
+   `the_driven_compiler_is_a_fixpoint_of_the_driver` and
+   `the_refal_driver_reaches_a_fixpoint_on_the_compiler_itself`.
+
+   **What E-11 still withholds:** *negative* information (`e.X ≠ 'A' …`) is not
+   carried, and no explicit two-level stack configuration is built. The
+   compiler path and the projections now share the arity test and the generated
+   split decline.
 6. **The compiler's speed on very large inputs.** The last named gap in the
    compiler-in-Refal row. `scripts/perf.sh` measures it; `CleanG` and the checker
    are linear now, and what is left is the constant.

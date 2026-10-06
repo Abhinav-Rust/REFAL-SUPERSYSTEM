@@ -1901,6 +1901,14 @@ impl<'a> DriveContext<'a> {
         {
             return Ok(None);
         }
+        // A generated `SplitN` is the driver's own partition: re-partitioning
+        // it decides nothing, and the fresh split would share its name, so a
+        // residual branch would emit `Split1 { = <Split1>; }`. Declining leaves
+        // the call residual, which is sound and is what makes the driver a
+        // fixpoint on its own residue. See [`Self::is_generated_split`].
+        if Self::is_generated_split(function) {
+            return Ok(None);
+        }
         // The entry is only split when it accepts an arbitrary expression.
         // The residue's own pattern has to bind the variable its body uses,
         // and for a narrower entry -- `Go { (e.Text) = ...; }` -- the residue
@@ -2002,6 +2010,31 @@ impl<'a> DriveContext<'a> {
         Ok(Some(vec![call_term(&name, input)]))
     }
 
+    /// Whether `function` is a case split the driver itself generated.
+    ///
+    /// A generated `SplitN` **is** the driver's own output: its sentences are
+    /// already the exhaustive partition of the call it replaced, so
+    /// re-partitioning it decides nothing. That alone would only be wasteful,
+    /// but it is also unsound in shape: the fresh split carries the same name,
+    /// so a branch that stays residual emits `call_term(function, ..)` --
+    /// `Split1 { = <Split1>; }`, an infinite self-loop. Declining leaves the
+    /// call residual, which is sound, and it is what makes the driver a
+    /// fixpoint on its own residue.
+    ///
+    /// The test is on the **name**, deliberately, and not on the shape of the
+    /// patterns. A source function whose patterns happen to *be* the partition
+    /// -- `Classify { = ..; s.H e.T = ..; (e.B) e.T = ..; }` -- is still split,
+    /// because replacing it with a generated `Split1` is the whole point of
+    /// compiling pattern matching, and the residue then drops `Classify`
+    /// entirely. Only the driver's own generated names are left alone.
+    fn is_generated_split(function: &str) -> bool {
+        let lower = function.to_ascii_lowercase();
+        let Some(rest) = lower.strip_prefix("split") else {
+            return false;
+        };
+        !rest.is_empty() && rest.bytes().all(|byte| byte.is_ascii_digit())
+    }
+
     /// The projection's partition. See [`SplitStrategy::Pattern`].
     ///
     /// The component at the leftmost free expression variable is partitioned by
@@ -2020,6 +2053,12 @@ impl<'a> DriveContext<'a> {
         function: &str,
         input: &[CoreTerm],
     ) -> Result<Option<Vec<CoreTerm>>, DriveError> {
+        // A generated `SplitN` is the driver's own partition; see
+        // [`Self::is_generated_split`]. The projection path declines for the
+        // same reason the compiler path does.
+        if Self::is_generated_split(function) {
+            return Ok(None);
+        }
         // The split target: the leftmost component that is a pattern-split
         // variable, **or a bracket whose contents are exactly one**. The second
         // case is what lets the partition enter a constructor whose *contents*
@@ -2483,6 +2522,28 @@ fn match_shape_pattern(
             };
         }
 
+        // An arity the pattern cannot accept is a definite non-match, whatever
+        // its symbolic parts turn out to be. A pattern with no `e.` variable
+        // consumes exactly one input term per pattern term, so an input whose
+        // minimum is already longer than the pattern can never match it.
+        // Deciding this here is what stops a partition from peeling one more
+        // symbol per split and never entering the constructor it is trying to
+        // decide -- `F { (A) = 'a'; (B) = 'b'; }` called as `<F e.X>` grew
+        // sixteen split functions, none of them deciding a branch, because the
+        // matcher returned `Unknown` on the first undecided term and never
+        // noticed the argument was too long for the pattern to consume.
+        //
+        // Only the *too long* direction is tested. The *too short* direction is
+        // already a definite `No` one level down, where the matcher runs out of
+        // input, so testing it here would walk the input again for every
+        // undecided term and buy nothing.
+        if let Some(max) = term_sequence_arity(&pattern[pattern_index..]).1 {
+            let (input_min, _) = term_sequence_arity(&input[input_index..]);
+            if input_min > max {
+                return (SymbolicMatch::No, None);
+            }
+        }
+
         let pattern_term = &pattern[pattern_index];
         if let CoreTermKind::Variable { kind, name } = &pattern_term.kind {
             let key = name.to_ascii_lowercase();
@@ -2669,6 +2730,40 @@ fn match_symbolic_term(
     } else {
         SymbolicMatch::No
     }
+}
+
+/// The range of term counts a term sequence can stand for.
+///
+/// The lower bound counts the terms that must stand for at least one input
+/// term -- everything but a top-level `e.` variable, which can denote nothing.
+/// The upper bound is `None` when the sequence contains an `e.` variable (it
+/// can absorb an unbounded tail) and `Some(sequence.len())` otherwise, because
+/// then each term stands for exactly one input term.
+///
+/// The test is used as a **sound** rejection: when a pattern's range and an
+/// input's range do not overlap, no binding of the symbolic variables can make
+/// the pattern match, so the answer is a definite `No` rather than `Unknown`.
+/// It is deliberately incomplete in the other direction -- overlapping ranges
+/// prove nothing -- which is the "localise what you cannot settle" half of the
+/// certificate-carrying analysis described in `README.md`.
+fn term_sequence_arity(sequence: &[CoreTerm]) -> (usize, Option<usize>) {
+    let mut min_len = 0usize;
+    let mut unbounded = false;
+    for term in sequence {
+        if is_expression_variable(term) {
+            unbounded = true;
+        } else {
+            min_len += 1;
+        }
+    }
+    (
+        min_len,
+        if unbounded {
+            None
+        } else {
+            Some(sequence.len())
+        },
+    )
 }
 
 /// Whether a term is an expression variable, the only kind that can denote
@@ -3781,11 +3876,11 @@ fn retain_called_functions(
             .cloned()
             .collect();
     }
-    let mut retained = Vec::new();
     let mut seen = HashSet::new();
     // The residue's own entry is already defined by the caller; carrying the
     // source's copy as well would be a duplicate definition.
     seen.insert(entry_name.to_ascii_lowercase());
+    let mut retained = HashSet::new();
     let mut cursor = 0;
     while cursor < pending.len() {
         let name = pending[cursor].clone();
@@ -3800,6 +3895,7 @@ fn retain_called_functions(
         else {
             continue;
         };
+        retained.insert(function.name.to_ascii_lowercase());
         for sentence in &function.sentences {
             collect_call_names(&sentence.pattern, &mut pending);
             collect_call_names(&sentence.result, &mut pending);
@@ -3808,9 +3904,21 @@ fn retain_called_functions(
                 collect_call_names(&condition.pattern, &mut pending);
             }
         }
-        retained.push(function.clone());
     }
-    retained
+    // Emit in the **source program's own order**, not in discovery order. The
+    // call graph decides *which* definitions come along; the order must be a
+    // property of the program rather than of the walk, or driving a residue
+    // re-discovers the same functions in a different order and the residue is
+    // not a fixpoint. That is exactly what happened once the driver learned to
+    // leave its own `SplitN` alone: the second drive produced no new splits, so
+    // the retained definitions arrived in a walk order that no longer matched
+    // the first drive's creation order.
+    program
+        .functions
+        .iter()
+        .filter(|function| retained.contains(&function.name.to_ascii_lowercase()))
+        .cloned()
+        .collect()
 }
 
 /// Whether the entry function's first sentence takes no arguments.
@@ -10637,5 +10745,243 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// The compiler's sequence partition no longer grows without bound on a
+    /// bracket-pattern callee (E-11).
+    ///
+    /// `F { (A) = 'a'; (B) = 'b'; }` called as `<F e.X>` used to peel one more
+    /// symbol off the tail per split -- measured at sixteen split functions on
+    /// this fixture at `--steps 120`, each sentence one term longer than the
+    /// last and neither `(A)` nor `(B)` ever decided -- because the shape
+    /// matcher returned `Unknown` on the first undecided term and never noticed
+    /// the argument was too long for `F`'s fixed-arity pattern to consume.
+    ///
+    /// The arity test in `match_shape_pattern` decides that case as a definite
+    /// non-match, so the chain stops. The gate is on the *bound*, and the walk
+    /// must close inside its budget rather than be truncated by it -- a residue
+    /// that is finite and still calls `F` is equivalent to the source, which is
+    /// what the unbounded chain destroyed.
+    #[test]
+    fn the_sequence_partition_stops_on_a_bracket_pattern_callee() {
+        let program = projection_bracket_program();
+        let graph = clean_unreachable_states(&build_seed_graph(&program));
+        let report = drive_symbolic_with_strategy(
+            &graph,
+            vec![input_expression_variable()],
+            120,
+            DriveStrategy::Compilative,
+        )
+        .expect("the driver runs");
+        assert!(
+            report.steps < 120,
+            "the walk must close inside its budget rather than be truncated by it"
+        );
+        assert!(
+            report.split_functions.len() <= 2,
+            "the sequence partition must not peel the tail without bound; got {} split functions",
+            report.split_functions.len()
+        );
+        let residue = residualize_symbolic_program(&program, &report);
+        assert!(
+            residue.functions.iter().any(|f| f.name == "Go"),
+            "the residue is a program carrying its entry"
+        );
+    }
+
+    /// The arity test is a *sound* rejection, not an over-eager one: an input
+    /// whose arity range overlaps the pattern's must still be undecided rather
+    /// than rejected.
+    ///
+    /// `F { = 'empty'; e.Y = 'nonempty'; }` called as `<F e.X>` must still
+    /// decide both cases. A test that counted an `e.` variable in the *input* as
+    /// a consumed term would reject the input here and lose the partition.
+    #[test]
+    fn the_arity_test_keeps_an_input_whose_range_overlaps() {
+        let variable = |name: &str, kind: VariableKind| CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind,
+                name: name.to_string(),
+            },
+            span: Span { start: 0, end: 0 },
+        };
+        let character = |symbol: char| CoreTerm {
+            kind: CoreTermKind::Char(symbol),
+            span: Span { start: 0, end: 0 },
+        };
+        let call = |name: &str, args: Vec<CoreTerm>| CoreTerm {
+            kind: CoreTermKind::Call {
+                name: name.to_string(),
+                args,
+            },
+            span: Span { start: 0, end: 0 },
+        };
+        let sentence = |pattern: Vec<CoreTerm>, result: Vec<CoreTerm>| CoreSentence {
+            pattern,
+            conditions: vec![],
+            result,
+            span: Span { start: 0, end: 0 },
+        };
+        let program = CoreProgram {
+            declarations: vec![],
+            functions: vec![
+                CoreFunction {
+                    name: "Go".to_string(),
+                    visibility: Visibility::Entry,
+                    sentences: vec![sentence(
+                        vec![variable("X", VariableKind::Expression)],
+                        vec![call("F", vec![variable("X", VariableKind::Expression)])],
+                    )],
+                    span: Span { start: 0, end: 0 },
+                },
+                CoreFunction {
+                    name: "F".to_string(),
+                    visibility: Visibility::Local,
+                    sentences: vec![
+                        sentence(vec![], vec![character('e')]),
+                        sentence(
+                            vec![variable("Y", VariableKind::Expression)],
+                            vec![character('n')],
+                        ),
+                    ],
+                    span: Span { start: 0, end: 0 },
+                },
+            ],
+        };
+        let graph = clean_unreachable_states(&build_seed_graph(&program));
+        let report = drive_symbolic_with_strategy(
+            &graph,
+            vec![input_expression_variable()],
+            40,
+            DriveStrategy::Compilative,
+        )
+        .expect("the driver runs");
+        assert!(
+            !report.split_functions.is_empty(),
+            "the empty case and the non-empty case must still be partitioned"
+        );
+        let split = &report.split_functions[0];
+        assert!(
+            split.sentences.len() >= 2,
+            "the partition must still separate the empty case from a non-empty one"
+        );
+    }
+
+    /// A generated `SplitN` is the driver's own partition and is **not**
+    /// re-partitioned (E-11).
+    ///
+    /// `Split1 { = ..; s.H e.T = ..; (e.B) e.T = ..; }` is exactly the sequence
+    /// partition of its own argument, and it is also the name the driver would
+    /// give the fresh split -- so re-partitioning it produced
+    /// `Split1 { = <Split1>; }`, an infinite self-loop, and the residue stopped
+    /// being a fixpoint. Declining leaves `<Split1 e.Input>` residual, which is
+    /// sound.
+    #[test]
+    fn a_generated_split_is_not_re_partitioned() {
+        let variable = |name: &str, kind: VariableKind| CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind,
+                name: name.to_string(),
+            },
+            span: Span { start: 0, end: 0 },
+        };
+        let call = |name: &str, args: Vec<CoreTerm>| CoreTerm {
+            kind: CoreTermKind::Call {
+                name: name.to_string(),
+                args,
+            },
+            span: Span { start: 0, end: 0 },
+        };
+        let bracket = |content: Vec<CoreTerm>| CoreTerm {
+            kind: CoreTermKind::Bracket(content),
+            span: Span { start: 0, end: 0 },
+        };
+        let sentence = |pattern: Vec<CoreTerm>, result: Vec<CoreTerm>| CoreSentence {
+            pattern,
+            conditions: vec![],
+            result,
+            span: Span { start: 0, end: 0 },
+        };
+        // `Go { e.X = <Split1 e.X>; }` with `Split1` the generated partition.
+        let program = CoreProgram {
+            declarations: vec![],
+            functions: vec![
+                CoreFunction {
+                    name: "Go".to_string(),
+                    visibility: Visibility::Entry,
+                    sentences: vec![sentence(
+                        vec![variable("X", VariableKind::Expression)],
+                        vec![call(
+                            "Split1",
+                            vec![variable("X", VariableKind::Expression)],
+                        )],
+                    )],
+                    span: Span { start: 0, end: 0 },
+                },
+                CoreFunction {
+                    name: "Split1".to_string(),
+                    visibility: Visibility::Local,
+                    sentences: vec![
+                        sentence(vec![], vec![call("F", vec![])]),
+                        sentence(
+                            vec![
+                                variable("H", VariableKind::Symbol),
+                                variable("T", VariableKind::Expression),
+                            ],
+                            vec![call(
+                                "F",
+                                vec![
+                                    variable("H", VariableKind::Symbol),
+                                    variable("T", VariableKind::Expression),
+                                ],
+                            )],
+                        ),
+                        sentence(
+                            vec![
+                                bracket(vec![variable("B", VariableKind::Expression)]),
+                                variable("T", VariableKind::Expression),
+                            ],
+                            vec![call(
+                                "F",
+                                vec![
+                                    bracket(vec![variable("B", VariableKind::Expression)]),
+                                    variable("T", VariableKind::Expression),
+                                ],
+                            )],
+                        ),
+                    ],
+                    span: Span { start: 0, end: 0 },
+                },
+                CoreFunction {
+                    name: "F".to_string(),
+                    visibility: Visibility::Local,
+                    sentences: vec![sentence(
+                        vec![bracket(vec![variable("B", VariableKind::Expression)])],
+                        vec![variable("B", VariableKind::Expression)],
+                    )],
+                    span: Span { start: 0, end: 0 },
+                },
+            ],
+        };
+        let graph = clean_unreachable_states(&build_seed_graph(&program));
+        let report = drive_symbolic_with_strategy(
+            &graph,
+            vec![input_expression_variable()],
+            120,
+            DriveStrategy::Compilative,
+        )
+        .expect("the driver runs");
+        assert!(
+            report.split_functions.is_empty(),
+            "a generated split must not be re-partitioned; got {} split functions",
+            report.split_functions.len()
+        );
+        assert!(
+            matches!(report.residual.as_slice(), [term]
+                if matches!(&term.kind, CoreTermKind::Call { name, .. }
+                    if name.eq_ignore_ascii_case("Split1"))),
+            "the call to the generated split stays residual: {:?}",
+            format_term_sequence(&report.residual)
+        );
     }
 }

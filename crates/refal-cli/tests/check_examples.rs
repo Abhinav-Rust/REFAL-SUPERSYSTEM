@@ -7265,6 +7265,81 @@ fn the_second_projection_emits_a_compiler_that_decides_its_branches() {
     );
 }
 
+/// The compiler's sequence partition must not grow without bound on a
+/// bracket-pattern callee (E-11).
+///
+/// This is the same fixture the 2nd projection closes in one split. The
+/// compiler's sequence partition used to produce a chain of split functions --
+/// each sentence one term longer than the last, and neither `(A)` nor `(B)`
+/// ever decided -- that only the step budget truncated. The arity test in the
+/// shape matcher decides that case as a definite non-match, so the chain stops
+/// and the residue is finite: a residue that still calls `F` is equivalent to
+/// the source, which is what the unbounded chain destroyed.
+#[test]
+fn the_driven_residue_on_a_bracket_pattern_callee_is_bounded() {
+    let output = residualize_driven_file(
+        "examples/projection-bracket-callee.ref",
+        &["--steps", "120"],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "the driver runs:\n{stdout}");
+    let residue = driven_residue(&stdout);
+    let splits = residue
+        .lines()
+        .filter(|line| line.starts_with("Split") && line.ends_with('{'))
+        .count();
+    assert!(
+        splits <= 2,
+        "the sequence partition must not peel the tail without bound; got {splits} split functions:\n{residue}"
+    );
+    assert!(
+        splits >= 1,
+        "the argument is still partitioned rather than left whole:\n{residue}"
+    );
+}
+
+/// Driving a residue is a **fixpoint** (E-11).
+///
+/// The residue's entry calls a generated `Split1`, and `Split1`'s argument is
+/// still unknown, so a driver that re-partitioned it would emit a second
+/// generation -- and, because the fresh split carries the same name, a residual
+/// branch would emit `Split1 { = <Split1>; }`, an infinite self-loop. The
+/// driver leaves its own generated splits alone, and the retained definitions
+/// are emitted in the source program's order rather than the call graph's, so
+/// the second generation is byte-identical to the first.
+#[test]
+fn driving_a_residue_is_a_fixpoint() {
+    let first = residualize_driven_file(
+        "examples/projection-bracket-callee.ref",
+        &["--steps", "120"],
+    );
+    assert!(first.status.success(), "the first drive runs");
+    let c1 = driven_residue(&String::from_utf8_lossy(&first.stdout));
+    assert!(!c1.is_empty(), "the first drive emits a residue");
+
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock is after Unix epoch")
+        .as_nanos();
+    let path = std::env::temp_dir().join(format!("refal-residue-fixpoint-{unique}.ref"));
+    fs::write(&path, &c1).expect("write C1");
+
+    let second = Command::new(refal_bin())
+        .args(["residualize-driven"])
+        .arg(&path)
+        .args(["--steps", "120"])
+        .output()
+        .expect("drive the residue");
+    let _ = fs::remove_file(&path);
+    assert!(
+        second.status.success(),
+        "driving the residue runs:\n{}",
+        String::from_utf8_lossy(&second.stderr)
+    );
+    let c2 = driven_residue(&String::from_utf8_lossy(&second.stdout));
+    assert_eq!(c1, c2, "C1 and C2 must be byte-identical");
+}
+
 /// The pattern partition enters a **constructor's contents**, and a split is
 /// identified by the sentences it emits — so the interpreter is eliminated.
 ///
