@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+**The prover gained the whistle, generalisation, and a callee-driven partition (E-12/E-13).**
+
+- **The whistle and generalisation.** `whistle_ancestor` fires when an ancestor
+  *embeds* in the pair and the pair is **not an instance** of it — a split's
+  branch always is, so firing on embedding alone would generalise at the first
+  split and prove nothing. The generalised claim is proved **in line**, and only a
+  complete proof of it closes the branch: a refutation of a *stronger* claim says
+  nothing about this one, so anything less is `Stuck`. A generalisation that is
+  only a renaming is refused, which is what Turchin's own driver does with that
+  case (it leaves the call residual).
+- **`pairs_instance_of` / `sequence_is_instance_of`** — the prover's own
+  structural instance matcher, because `match_symbolic_pattern` is deliberately
+  three-valued and reports `Unknown` for a call it has not evaluated.
+- **The callee-driven partition.** `branches_for` splits by the **callee's own
+  sentence patterns** when a side is blocked by a call whose only argument is the
+  blocked variable — `SplitStrategy::Pattern`'s rule, which the projections use,
+  read at the level of an equation. The three-way `[]` / `s.H e.T` / `(e.B) e.T`
+  partition generated branches the callee can never accept, which can never
+  reduce.
+- **Measured.** `examples/equiv-tree-reversal.ref` — SCP4 1999 §4's *second*
+  named theorem, "correctness of binary tree reversals" — now **terminates**: 73
+  steps, `complete: yes`, the `(Leaf)` branch decided by reflexivity, where
+  before it diverged (12,315 leaves and no end at `--steps 20000`). The `Node`
+  branch is reported **`open`**, and the reason is located: unfolding it produces
+  a pair with two independent components and the prover drives the pair as one
+  sequence rather than as a conjunction of sub-goals, so the induction hypothesis
+  is never reached. Generalisation must lift the *pair*, not only each side.
+- **No regression.** Associativity of `Append` is still `proved`, the false
+  equation is still `refuted` with its witness, and
+  `the_prover_never_refutes_a_claim_its_budget_cut_short` stays green.
+- **Gates:** `the_whistle_fires_on_growth_and_not_on_an_instance` (`refal-core`),
+  `the_tree_reversal_terminates_and_publishes_its_boundary` (`refal-cli`).
+
 **Driving a residue is now a fixpoint, and the compiler-path partition defect behind it is closed (E-11).**
 
 - **The unbounded residue had a located cause, and it was the matcher.** A pattern

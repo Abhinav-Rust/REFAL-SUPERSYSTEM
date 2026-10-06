@@ -2671,21 +2671,48 @@ are:
   needs generalisation beyond the loop edge. See
   [`TURCHIN-ECOSYSTEM-CONFORMANCE.md`](TURCHIN-ECOSYSTEM-CONFORMANCE.md).
 
-  **Measured 2026-10-06 — the gap is structural, not budgetary.** SCP4 1999 §4's
-  other two named theorems are a *binary tree reversal* and an *equality of
-  sorting algorithms* (the primary names all three: "associativity of append,
-  correctness of binary tree reversals, equality of sorting algorithms"). The
-  first is exercised as `Reverse(Reverse x) = x` over a bracketed list, and the
-  prover runs but does not close it: `--steps 10000` leaves **6,137** leaves and
-  `--steps 200000` leaves **123,291**. The budget is not what stops it — the
-  **split explosion** is. The prover partitions the *first free variable* naively
-  and each branch spawns three, so the tree grows without reaching a leaf that
-  folds, and a `stuck (depth 1)` leaf shows a branch it cannot decide at all.
-  What closes it is the generalisation the *driver* already has
-  (`generalize_term_sequence` and the whistle) lifted to an *equation* — the same
-  machinery the loop-edge fold uses, extended from "an ancestor" to "the most
-  specific generalisation of the two sides". That, and the *general* relational
-  form, are the row's remaining work.
+  **Measured 2026-10-06 — the gap was structural, not budgetary, and it is now
+  located exactly.** SCP4 1999 §4's other two named theorems are a *binary tree
+  reversal* and an *equality of sorting algorithms* (the primary names all three:
+  "associativity of append, correctness of binary tree reversals, equality of
+  sorting algorithms"). The first is exercised as `Reverse(Reverse x) = x`, and
+  the prover ran but never closed it: **6,137** leaves at `--steps 10000` and
+  **123,291** at `--steps 200000`. The budget was not what stopped it — the
+  **split explosion** was.
+
+  **Two mechanisms were added, and both are gated.** (1) **The whistle and
+  generalisation** — `whistle_ancestor` fires when an ancestor *embeds* in the
+  pair and the pair is **not an instance** of it (a split's branch always is, so
+  firing on embedding alone would generalise at the first split and prove
+  nothing); `pairs_instance_of` / `sequence_is_instance_of` is the prover's own
+  structural matcher, because `match_symbolic_pattern` is deliberately
+  three-valued and reports `Unknown` for a call. The generalised claim is proved
+  **in line**, and only a complete proof of it closes the branch — a refutation
+  of a *stronger* claim says nothing about this one, so anything less is `Stuck`.
+  A generalisation that is only a renaming is refused, which is Turchin's own
+  answer for that case (the driver leaves the call residual). (2) **The
+  callee-driven partition** — `branches_for` splits by the **callee's own
+  sentence patterns** when a side is blocked by a call whose only argument is the
+  blocked variable. That is `SplitStrategy::Pattern`'s rule read at the level of
+  an equation: a claim over a partial function is a claim about the domain the
+  function accepts, and the callee's patterns *are* that domain. The three-way
+  `[]` / `s.H e.T` / `(e.B) e.T` partition generated two branches `Rev` can never
+  accept, which can never reduce.
+
+  **Where it lands, measured.** `examples/equiv-tree-reversal.ref` now
+  **terminates**: 73 steps, `complete: yes`, the `(Leaf)` branch decided by
+  reflexivity — where before it diverged (12,315 leaves, no end). The `Node`
+  branch is reported **`open`**, and that is the row's remaining work, located
+  precisely: unfolding the `Node` case produces a pair with **two independent
+  components** (`<Rev <Rev L>>` against `e.L`, and `<Rev <Rev R>>` against
+  `e.R`), and the prover drives the pair as one sequence rather than as a
+  conjunction of sub-goals, so the induction hypothesis is never reached.
+  Generalisation must lift the **pair**, not only each side. The associativity
+  proof is unaffected (`proved`), the false-equation refutation is unaffected
+  (`refuted ('a' != 'b')`), and the soundness gate
+  `the_prover_never_refutes_a_claim_its_budget_cut_short` stays green. The row's
+  other gap — the *general* relational form (an arbitrary relation rather than
+  equality) — is untouched.
 - ~~**Two defects found and not yet fixed.**~~ **Both fixed, in one change.** The
   ground matcher (`ground_term_matches`) and its Refal-authored counterpart
   (`DvGround` in `examples/compiler.ref`) both dropped a variable bound inside a
