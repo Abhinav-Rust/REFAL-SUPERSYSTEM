@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 430" width="1200" height="430" role="img" aria-labelledby="mst-title mst-desc">
+  <title id="mst-title">The metasystem transition — an interpreter is driven over a program and a specialised program comes out</title>
+  <desc id="mst-desc">Two panels. On the left, BEFORE: an object program is run by an interpreter, taking 7 interpreter calls and 172 reduction steps. On the right, AFTER: the interpreter has been driven away and what remains is a specialised residual program taking 0 interpreter calls and 4 reduction steps. An arrow labelled driving connects them.</desc>
+
+  <rect x="0.5" y="0.5" width="1199" height="429" rx="16" fill="#FFFFFF" stroke="#D0D7DE"/>
+
+  <text x="56" y="62" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="3.2" fill="#0F766E">THE ONE MOMENT THE WHOLE PROJECT EXISTS FOR</text>
+  <text x="56" y="104" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="30" font-weight="600" letter-spacing="-0.4" fill="#1F2328">The metasystem transition</text>
+  <text x="56" y="134" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#57606A">An interpreter is driven over a program — and what comes out is not a trace, it is a specialised program.</text>
+
+  <line x1="56" y1="158" x2="1144" y2="158" stroke="#D0D7DE" stroke-width="1"/>
+
+  <g font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+    <text x="96" y="196" font-size="11.5" font-weight="600" letter-spacing="2.2" fill="#9A3412">BEFORE &#183; INTERPRETING</text>
+    <text x="96" y="222" font-size="12.5" fill="#57606A">the program is data the interpreter reads, over and over</text>
+  </g>
+  <g fill="none">
+    <rect x="96" y="238" width="200" height="58" rx="12" fill="#FFF7ED" stroke="#FDBA74" stroke-width="1.5"/>
+    <rect x="336" y="238" width="200" height="58" rx="12" fill="#FFF7ED" stroke="#FDBA74" stroke-width="1.5"/>
+    <path d="M 296 267 C 316 267 316 267 336 267" stroke="#EA580C" stroke-width="1.6"/>
+    <path d="M 340 255 C 356 236 276 236 292 255" stroke="#EA580C" stroke-width="1.6" stroke-dasharray="4 4"/>
+  </g>
+  <g font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" text-anchor="middle">
+    <text x="196" y="264" font-size="14" font-weight="600" fill="#7C2D12">object program</text>
+    <text x="196" y="283" font-size="11.5" fill="#9A3412">the thing being run</text>
+    <text x="436" y="264" font-size="14" font-weight="600" fill="#7C2D12">interpreter</text>
+    <text x="436" y="283" font-size="11.5" fill="#9A3412">still needed at run time</text>
+  </g>
+  <g font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#7C2D12">
+    <text x="96" y="326">interpreter calls</text>
+    <text x="336" y="326" text-anchor="end" font-weight="600">7</text>
+    <text x="96" y="350">reduction steps</text>
+    <text x="336" y="350" text-anchor="end" font-weight="600">172</text>
+  </g>
+
+  <g>
+    <path d="M 566 267 L 626 267" stroke="#0F766E" stroke-width="2"/>
+    <path d="M 620 259 L 632 267 L 620 275 Z" fill="#0F766E"/>
+    <text x="596" y="244" text-anchor="middle" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="1.2" fill="#0F766E">DRIVING</text>
+    <text x="596" y="296" text-anchor="middle" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" fill="#57606A">unroll, decide,</text>
+    <text x="596" y="311" text-anchor="middle" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" fill="#57606A">collapse</text>
+  </g>
+
+  <g font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+    <text x="666" y="196" font-size="11.5" font-weight="600" letter-spacing="2.2" fill="#0F766E">AFTER &#183; COMPILED</text>
+    <text x="666" y="222" font-size="12.5" fill="#57606A">the interpreter is gone — only the answer it would have produced remains</text>
+  </g>
+  <g fill="none">
+    <rect x="666" y="238" width="438" height="58" rx="12" fill="#F0FDFA" stroke="#0D9488" stroke-width="1.5"/>
+  </g>
+  <g font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" text-anchor="middle">
+    <text x="885" y="264" font-size="14" font-weight="600" fill="#134E4A">residual program</text>
+    <text x="885" y="283" font-size="11.5" fill="#0F766E">straight-line code, no interpreter left</text>
+  </g>
+  <g font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#134E4A">
+    <text x="666" y="326">interpreter calls</text>
+    <text x="1104" y="326" text-anchor="end" font-weight="600">0</text>
+    <text x="666" y="350">reduction steps</text>
+    <text x="1104" y="350" text-anchor="end" font-weight="600">4</text>
+  </g>
+
+  <line x1="56" y1="378" x2="1144" y2="378" stroke="#D0D7DE" stroke-width="1"/>
+  <text x="56" y="404" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#57606A">A transition is not claimed unless it is observable: the residue must be checked Refal, must agree with the interpreter on every input tried, and must be measurably cheaper.</text>
+</svg>

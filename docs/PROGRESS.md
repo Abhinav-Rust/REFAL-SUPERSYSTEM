@@ -2446,6 +2446,49 @@ projection found a dead dedup test and a cursor where a source belongs.
    self-loop, which is now gated. It is used by the projections **only** — the
    compiler keeps the sequence partition so its residues, and the Refal-authored
    counterpart, stay byte-identical.
+
+   ### E-11: the arity test is sound, and it flips the strategy search (2026-10-06)
+
+   **The defect is real and its cause is located.** The compiler-side unbounded
+   residue is not a partition defect but a **matcher** gap. `match_shape_pattern`
+   (`crates/refal-core/src/lib.rs`) descends into the first undecided term and
+   returns `Unknown` without ever applying the pattern's **arity**. A pattern with
+   no top-level `e.` variable consumes exactly one input term per pattern term, so
+   an input of a different length can never match it — but
+   `F { (A) = 'a'; (B) = 'b'; }` called as `<F e.X>` reaches the branch
+   `(e.B1) s.H2 e.T2`, and `(A)` against `(e.B1)` is undecided, so the walk splits
+   the tail and grows one term per split: **16 split functions at `--steps 120`**
+   (measured; capped by `MAX_SPLITS`, so the true growth is unbounded), none of
+   them deciding `(A)` or `(B)`.
+
+   **The fix, built and verified, then reverted — and why.** A `term_sequence_arity`
+   test (each sequence has a range: the non-`e.` terms are its minimum, an `e.`
+   variable makes it unbounded) rejects the pair as a definite `No` when the two
+   ranges do not overlap. It is **sound** and it closes the defect: the same
+   fixture drops from 16 splits to 2, bounded. Applied to both the Rust matcher
+   (`match_at`) and the Refal-authored `DsMSAt` (with `DsMinLen`/`DsOpen`/
+   `DsCount`/`DsArityBad`), the whole corpus stays byte-identical — **44/44
+   Refal-authored differentials green, 69 `refal-core` tests green, the manifest
+   differential green** — so the two implementations still agree everywhere the
+   corpus reaches.
+
+   **What it breaks, and why the fix cannot ship alone.** On the compiler's own
+   source it changes the **§4.4 strategy search**: `residual-work` moves from
+   `compilative 8773 / interpretive 8773` to `compilative 8577 / interpretive
+   8391`, and the *interpretive* end now wins where the compilative end did. That
+   residue is **not a fixpoint**, so `the_driven_compiler_is_a_fixpoint_of_the_driver`
+   and `the_refal_driver_reaches_a_fixpoint_on_the_compiler_itself` go red. The
+   arity test does not make either end worse; it makes both better and the
+   interpretive one better *still*, and the interpretive residue's non-idempotence
+   is a **pre-existing latent defect the fix exposes** rather than one it
+   introduces. Shipping two red gates is not acceptable, and narrowing them is not
+   an option, so the change was reverted whole and this is the handoff.
+
+   **What lands next, as one change.** The arity test, **and** a fix that makes the
+   interpretive residue a fixpoint on the compiler (or a search that does not flip
+   when both ends improve). The measurement to beat is the pair above: the
+   compilative end at `8577` and the interpretive end at `8391`, with the two
+   fixpoint gates green.
 6. **The compiler's speed on very large inputs.** The last named gap in the
    compiler-in-Refal row. `scripts/perf.sh` measures it; `CleanG` and the checker
    are linear now, and what is left is the constant.
@@ -2608,6 +2651,22 @@ are:
   arbitrary relation between two functions rather than equality) and a proof that
   needs generalisation beyond the loop edge. See
   [`TURCHIN-ECOSYSTEM-CONFORMANCE.md`](TURCHIN-ECOSYSTEM-CONFORMANCE.md).
+
+  **Measured 2026-10-06 — the gap is structural, not budgetary.** SCP4 1999 §4's
+  other two named theorems are a *binary tree reversal* and an *equality of
+  sorting algorithms* (the primary names all three: "associativity of append,
+  correctness of binary tree reversals, equality of sorting algorithms"). The
+  first is exercised as `Reverse(Reverse x) = x` over a bracketed list, and the
+  prover runs but does not close it: `--steps 10000` leaves **6,137** leaves and
+  `--steps 200000` leaves **123,291**. The budget is not what stops it — the
+  **split explosion** is. The prover partitions the *first free variable* naively
+  and each branch spawns three, so the tree grows without reaching a leaf that
+  folds, and a `stuck (depth 1)` leaf shows a branch it cannot decide at all.
+  What closes it is the generalisation the *driver* already has
+  (`generalize_term_sequence` and the whistle) lifted to an *equation* — the same
+  machinery the loop-edge fold uses, extended from "an ancestor" to "the most
+  specific generalisation of the two sides". That, and the *general* relational
+  form, are the row's remaining work.
 - ~~**Two defects found and not yet fixed.**~~ **Both fixed, in one change.** The
   ground matcher (`ground_term_matches`) and its Refal-authored counterpart
   (`DvGround` in `examples/compiler.ref`) both dropped a variable bound inside a
