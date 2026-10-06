@@ -244,12 +244,16 @@ and what comes out is not a trace but a **specialised residual program**. Turchi
 called that step a metasystem transition, and it is the difference between an
 optimiser and a new level of control.
 
-```mermaid
-flowchart LR
-    OP["object program"] --> I["interpreter"]
-    I -->|"driven over its runs"| SC["supercompiler"]
-    SC -->|"emits"| RES["residual program<br/>zero interpreter calls left"]
-```
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/metasystem-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/metasystem-light.svg">
+  <img alt="The metasystem transition: an object program run by an interpreter takes 7 interpreter calls and 172 reduction steps; after driving, the residual program takes 0 interpreter calls and 4 reduction steps" src="docs/images/metasystem-light.svg" width="100%">
+</picture>
+
+</div>
+
 
 `examples/metasystem-fuse.ref` is a Refal interpreter for a tiny metacoded
 language, applied to one **known** object program and one **unknown** input.
