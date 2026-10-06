@@ -2562,8 +2562,31 @@ DsRdRetain {
 DsRdRetainRaw {
   (e.Items) (e.Fn) (e.Reachable), <DsRdActivates (e.Reachable)> : '1' =
     <DsRdAllBut (e.Items) (e.Fn)>;
+* Emit the retained definitions in the *source* order rather than in the order
+* the call graph happens to reach them, so the residue is a property of the
+* program and not of the walk -- which is what makes driving a residue a
+* fixpoint. Mirrors `retain_called_functions` in `refal-core`.
   (e.Items) (e.Fn) (e.Reachable) =
-    <DsRdBfs (e.Items) (e.Reachable) () (<DsRdUpper (e.Fn)>)>;
+    <DsRdOrder (e.Items) (<DsRdBfs (e.Items) (e.Reachable) () (<DsRdUpper (e.Fn)>)>) ()>;
+}
+
+DsRdOrder {
+  (e.Items) (e.Keep) (e.Acc) = <DsRdOrderL (e.Items) (e.Keep) (e.Acc)>;
+}
+
+DsRdOrderL {
+  () (e.Keep) (e.Acc) = e.Acc;
+  ((FUN (Ident e.N) (e.V) e.Sents) e.Rest) (e.Keep) (e.Acc),
+    <DsRdKeepHas (e.Keep) (<DsRdUpper (e.N)>)> : '1' =
+      <DsRdOrderL (e.Rest) (e.Keep) (e.Acc (FUN (Ident e.N) (e.V) e.Sents))>;
+  (t.X e.Rest) (e.Keep) (e.Acc) = <DsRdOrderL (e.Rest) (e.Keep) (e.Acc)>;
+}
+
+DsRdKeepHas {
+  () (e.Name) = ;
+  ((FUN (Ident e.N) (e.V) e.Sents) e.Rest) (e.Name),
+    <SameChars (<Upper e.N>) (e.Name)> : '1' = '1';
+  (t.X e.Rest) (e.Name) = <DsRdKeepHas (e.Rest) (e.Name)>;
 }
 
 * `Mu` and `Up` can apply a function whose *name* arrives as data: `Mu` reads
@@ -3124,10 +3147,53 @@ DsMatchShape {
 }
 
 DsMSAt {
+* An arity the pattern cannot accept is a definite non-match, whatever its
+* symbolic parts turn out to be. This mirrors `term_sequence_arity` in
+* `refal-core`, and it is what stops the sequence partition from peeling one
+* more symbol per split: without it, `F { (A) = 'a'; (B) = 'b'; }` called as
+* `<F e.X>` grew sixteen split functions, none of them deciding a branch,
+* because the matcher returned UNK on the first undecided term and never
+* noticed the argument was too long for the pattern to consume.
+  (e.Pat) (e.Ir) (e.B), <DsArityBad (e.Pat) (e.Ir)> : '1' = (NO);
   () (e.Ir) (e.B) = <DsMSEnd (e.Ir) (e.B)>;
   ((VAR 'e' e.N) e.Pr) (e.Ir) (e.B) = <DsMSExpr (e.N) (e.Pr) (e.Ir) (e.B)>;
   ((VAR s.K e.N) e.Pr) (e.Ir) (e.B) = <DsMSVar s.K (e.N) (e.Pr) (e.Ir) (e.B)>;
   (t.P e.Pr) (e.Ir) (e.B) = <DsMSLit t.P (e.Pr) (e.Ir) (e.B)>;
+}
+
+* The least number of terms a sequence must stand for: an `e.` variable may
+* denote nothing, every other term stands for exactly one. The sequence arrives
+* bracketed, so its first term is matched as `(VAR 'e' e.N)` -- one bracket, not
+* two; an extra pair here counts every `e.` variable as a term and makes the
+* arity test fire on inputs that can match.
+DsMinLen {
+  () = 0;
+  ((VAR 'e' e.N) e.Rest) = <DsMinLen (e.Rest)>;
+  (t.X e.Rest) = <Add 1 <DsMinLen (e.Rest)>>;
+}
+
+* Whether a sequence contains a top-level `e.` variable, i.e. can stand for an
+* unbounded number of terms.
+DsOpen {
+  () = ;
+  ((VAR 'e' e.N) e.Rest) = '1';
+  (t.X e.Rest) = <DsOpen (e.Rest)>;
+}
+
+DsCount {
+  () = 0;
+  (t.X e.Rest) = <Add 1 <DsCount (e.Rest)>>;
+}
+
+* The pattern cannot consume the input: a pattern with no `e.` variable
+* consumes exactly one input term per pattern term, so an input whose minimum is
+* already longer than the pattern can never match it. Only the *too long*
+* direction is tested -- the *too short* direction is already a definite `NO`
+* one level down, where the matcher runs out of input, so testing it here would
+* walk the input again for every undecided term and buy nothing.
+DsArityBad {
+  (e.Pat) (e.Ir), <DsOpen (e.Pat)> : , <Compare <DsMinLen (e.Ir)> <DsCount (e.Pat)>> : '+' = '1';
+  (e.Pat) (e.Ir) = ;
 }
 
 * An exhausted pattern with input left over is a definite no unless the tail is
@@ -3511,9 +3577,34 @@ DsBlkSymD {
 * residual instead, which is what the source does with it. This is the same
 * characterisability test the entering restrictions use, for the same reason.
 DsSplit {
+* A generated `SplitN` is the driver's own partition: re-partitioning it decides
+* nothing, and the fresh split would share its name, so a residual branch would
+* emit `Split1 { = <Split1>; }` -- an infinite self-loop. Declining leaves the
+* call residual, which is sound and is what makes the driver a fixpoint on its
+* own residue. Mirrors `DriveContext::is_generated_split` in `refal-core`.
+  (e.Ctx) (e.Fn) (e.In), <DsGenerated e.Fn> : '1' = (NONE (e.Ctx));
   (e.Ctx) (e.Fn) (e.In), <DsCharisable (e.In)> : '1' =
     <DsSplitPos (e.Ctx) (e.Fn) (e.In) <DsExprVarPos (e.In) 0 ()>>;
   (e.Ctx) (e.Fn) (e.In) = (NONE (e.Ctx));
+}
+
+* Whether a name is one the driver generates for a case split: `Split` followed
+* by one or more digits. `Split` alone and `SplitJoin` are source names and are
+* not declined.
+DsGenerated {
+  e.Name, <DsSplitDigits (<Upper e.Name>)> : '1' = '1';
+  e.Name = ;
+}
+
+DsSplitDigits {
+  ('S' 'P' 'L' 'I' 'T' s.D e.Rest), <IsDigit s.D> : '1' = <DsAllDigits (e.Rest)>;
+  (e.Name) = ;
+}
+
+DsAllDigits {
+  () = '1';
+  (s.D e.Rest), <IsDigit s.D> : '1' = <DsAllDigits (e.Rest)>;
+  (t.X e.Rest) = ;
 }
 
 DsCharisable {
