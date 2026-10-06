@@ -43,6 +43,16 @@ Every number below is a command you can run in this checkout — nothing is a
 mock-up. (`refal` below is `cargo run -p refal --`, or the built
 `target/release/refal`.)
 
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/fixpoint-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/fixpoint-light.svg">
+  <img alt="The compiler's own source is compiled to gen1.ref, then compiled again to gen2.ref; the two are identical byte for byte at 105,078 bytes." src="docs/images/fixpoint-light.svg" width="100%">
+</picture>
+
+</div>
+
 **1 · The compiler compiles its own source, and the output is a fixpoint.** Run the
 Refal-authored compiler on `examples/compiler.ref` — the compiler's own 47 KB
 source — and compile the *result* again:
@@ -193,19 +203,44 @@ part of the problem.
 
 ## The system in one picture
 
-```mermaid
-flowchart TB
-    L3["L3 — meta-prover<br/>assertions and equivalence, reduced to the terminal node True"]
-    L2["L2 — supercompiler core<br/>driving, whistle, generalization, folding"]
-    L1["L1 — reflection engine<br/>freeze, inspect, thaw, symbolic execution graphs"]
-    L0["L0 — Refal-5 machine<br/>pattern matching, term splicing, arithmetic, I/O"]
-    L3 --> L2 --> L1 --> L0
-```
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/layers-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/layers-light.svg">
+  <img alt="Four cards: L0 the Refal-5 machine runs Refal; L1 the reflection engine turns a running program into data; L2 the supercompiler core makes the program better; L3 the meta-prover checks the change meant what it claimed. A footer adds L4, self-application." src="docs/images/layers-light.svg" width="100%">
+</picture>
+
+</div>
 
 Each layer's *subject matter* is the layer below it. The machine runs programs;
 the reflection engine turns a running program into inspectable data; the
 supercompiler transforms that data into a better program; the meta-prover decides
 whether the transformation meant what it claimed.
+
+## How a program is compiled
+
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/pipeline-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/pipeline-light.svg">
+  <img alt="Five stages: the source file, lexing and parsing into a syntax tree, checking to refuse what cannot run, driving the configuration into a graph of states, and emitting a residual program." src="docs/images/pipeline-light.svg" width="100%">
+</picture>
+
+</div>
+
+## How the prover decides
+
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/prover-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/prover-light.svg">
+  <img alt="A claim is driven into a graph of states. Every leaf closing gives the verdict proved; a leaf that disagrees gives refuted with its witness; a budget that runs out gives incomplete, which is never reported as a proof." src="docs/images/prover-light.svg" width="100%">
+</picture>
+
+</div>
 
 ## What each layer does
 

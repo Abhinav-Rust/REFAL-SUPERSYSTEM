@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" width="1200" height="400" role="img" aria-labelledby="layers-title layers-desc">
+  <title id="layers-title">The four layers of the supersystem, and what each one does</title>
+  <desc id="layers-desc">Four cards in a row. L0, the Refal-5 machine, runs Refal programs. L1, the reflection engine, turns a running program into data. L2, the supercompiler core, makes the program better. L3, the meta-prover, checks that the change meant what it claimed. A footer notes that L4, self-application, applies the engine to itself.</desc>
+
+  <rect x="0.5" y="0.5" width="1199" height="399" rx="16" fill="#FFFFFF" stroke="#D0D7DE"/>
+
+  <text x="40" y="52" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="3.2" fill="#0F766E">ONE ENGINE, FOUR LAYERS</text>
+  <text x="40" y="90" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="-0.3" fill="#1F2328">Each layer&#8217;s subject is the layer below it</text>
+
+  <line x1="40" y1="112" x2="1160" y2="112" stroke="#D0D7DE" stroke-width="1"/>
+
+  <g>
+    <rect x="40" y="140" width="264" height="176" rx="14" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1.5"/>
+    <rect x="40" y="140" width="264" height="4" rx="2" fill="#0F766E"/>
+    <text x="64" y="176" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="1.6" fill="#0F766E">L0</text>
+    <text x="64" y="202" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#1F2328">Refal-5 machine</text>
+    <text x="64" y="234" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#0F766E">Runs Refal.</text>
+    <g font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#57606A">
+      <text x="64" y="262">pattern matching, term</text>
+      <text x="64" y="281">splicing, arithmetic, I/O</text>
+    </g>
+  </g>
+
+  <g>
+    <rect x="320" y="140" width="264" height="176" rx="14" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1.5"/>
+    <rect x="320" y="140" width="264" height="4" rx="2" fill="#0D9488"/>
+    <text x="344" y="176" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="1.6" fill="#0D9488">L1</text>
+    <text x="344" y="202" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#1F2328">Reflection engine</text>
+    <text x="344" y="234" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#0D9488">Turns a running</text>
+    <text x="344" y="252" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#0D9488">program into data.</text>
+    <g font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#57606A">
+      <text x="344" y="278">freeze, inspect, thaw;</text>
+      <text x="344" y="297">symbolic execution graphs</text>
+    </g>
+  </g>
+
+  <g>
+    <rect x="600" y="140" width="264" height="176" rx="14" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1.5"/>
+    <rect x="600" y="140" width="264" height="4" rx="2" fill="#14B8A6"/>
+    <text x="624" y="176" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="1.6" fill="#0F766E">L2</text>
+    <text x="624" y="202" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#1F2328">Supercompiler core</text>
+    <text x="624" y="234" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#0F766E">Makes the program</text>
+    <text x="624" y="252" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#0F766E">better.</text>
+    <g font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#57606A">
+      <text x="624" y="278">driving, whistle,</text>
+      <text x="624" y="297">generalization, folding</text>
+    </g>
+  </g>
+
+  <g>
+    <rect x="880" y="140" width="280" height="176" rx="14" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1.5"/>
+    <rect x="880" y="140" width="280" height="4" rx="2" fill="#2DD4BF"/>
+    <text x="904" y="176" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="1.6" fill="#0F766E">L3</text>
+    <text x="904" y="202" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#1F2328">Meta-prover</text>
+    <text x="904" y="234" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#0F766E">Checks the change</text>
+    <text x="904" y="252" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#0F766E">meant what it claimed.</text>
+    <g font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#57606A">
+      <text x="904" y="278">equations and predicates</text>
+      <text x="904" y="297">by complete tree reduction</text>
+    </g>
+  </g>
+
+  <g>
+    <rect x="40" y="336" width="1120" height="44" rx="12" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1.5"/>
+    <text x="64" y="364" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#134E4A">
+      <tspan font-weight="600" fill="#0F766E">L4 &#183; Self-application</tspan>
+      <tspan fill="#57606A"> &#8212; the engine applied to itself: a compiler that compiles its own source, and emits a working compiler</tspan>
+    </text>
+  </g>
+</svg>

@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+**The README gained a family of theme-aware diagrams.**
+
+- **`docs/images/layers-{light,dark}.svg`** — the four layers as four cards with
+  plain-language verbs ("Runs Refal.", "Turns a running program into data.",
+  "Makes the program better.", "Checks the change meant what it claimed."), plus
+  a footer band for L4. Replaces the Mermaid stack in "The system in one
+  picture".
+- **`docs/images/pipeline-{light,dark}.svg`** — a new "How a program is
+  compiled" section: source → lex/parse → check → **drive** → emit, with the
+  driving stage visually dominant, because that is the stage that makes it a
+  supercompiler rather than a printer.
+- **`docs/images/prover-{light,dark}.svg`** — a new "How the prover decides"
+  section: a claim is driven into a graph of states, and the three verdicts
+  (`proved`, `refuted` with its witness, `incomplete`) are laid out side by side,
+  so "an unfinished walk is never a proof" is visible rather than merely stated.
+- **`docs/images/fixpoint-{light,dark}.svg`** — the self-hosting fixpoint, at the
+  top of "See it work": the compiler's own source → `gen1.ref` → `gen2.ref`,
+  with the byte-identical verdict in a band.
+- All eight are theme-aware (`<picture>` with light and dark sources), drawn in
+  the repository's own palette, and every one carries a `<title>` and `<desc>`
+  so it is readable by a screen reader as well as by eye.
+
 **The prover gained the whistle, generalisation, and a callee-driven partition (E-12/E-13).**
 
 - **The whistle and generalisation.** `whistle_ancestor` fires when an ancestor

@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" width="1200" height="300" role="img" aria-labelledby="prove-title prove-desc">
+  <title id="prove-title">How the meta-prover decides a claim</title>
+  <desc id="prove-desc">A claim is driven into a graph of states. If every leaf closes the verdict is proved; if a leaf disagrees the verdict is refuted with its witness; if the budget runs out the verdict is incomplete and is never reported as a proof.</desc>
+
+  <rect x="0.5" y="0.5" width="1199" height="299" rx="16" fill="#0D1117" stroke="#30363D"/>
+
+  <text x="40" y="52" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="3.2" fill="#2DD4BF">THE META-PROVER</text>
+  <text x="40" y="90" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="-0.3" fill="#E6EDF3">A proof is a graph whose every leaf closes</text>
+
+  <line x1="40" y1="112" x2="1160" y2="112" stroke="#30363D" stroke-width="1"/>
+
+  <g>
+    <rect x="60" y="150" width="210" height="96" rx="12" fill="#161B22" stroke="#30363D" stroke-width="1.5"/>
+    <text x="165" y="182" text-anchor="middle" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" letter-spacing="1.6" fill="#8B949E">A CLAIM</text>
+    <text x="165" y="208" text-anchor="middle" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="600" fill="#E6EDF3">a predicate, or an</text>
+    <text x="165" y="226" text-anchor="middle" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="600" fill="#E6EDF3">equation over free vars</text>
+  </g>
+
+  <g stroke="#2DD4BF" stroke-width="1.8" fill="none">
+    <path d="M 278 198 L 312 198"/><path d="M 302 192 L 313 198 L 302 204"/>
+  </g>
+
+  <g>
+    <rect x="320" y="150" width="240" height="96" rx="12" fill="#0B1B19" stroke="#134E4A" stroke-width="1.5"/>
+    <text x="440" y="182" text-anchor="middle" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" letter-spacing="1.6" fill="#5EEAD4">DRIVE</text>
+    <text x="440" y="208" text-anchor="middle" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="600" fill="#E6EDF3">the graph of states</text>
+    <text x="440" y="228" text-anchor="middle" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#8B949E">each leaf closes, disagrees, or runs out</text>
+  </g>
+
+  <g stroke="#6E7681" stroke-width="1.5" fill="none">
+    <path d="M 568 198 C 594 198 596 148 620 148"/><path d="M 611 143 L 621 148 L 611 153"/>
+    <path d="M 568 198 L 620 200"/><path d="M 611 195 L 621 200 L 611 205"/>
+    <path d="M 568 198 C 594 198 596 252 620 252"/><path d="M 611 247 L 621 252 L 611 257"/>
+  </g>
+
+  <g>
+    <rect x="620" y="126" width="520" height="44" rx="10" fill="#062925" stroke="#0F766E" stroke-width="1.5"/>
+    <circle cx="646" cy="148" r="8" fill="#2DD4BF"/>
+    <path d="M 642 148 L 644.5 150.5 L 650 144" stroke="#0D1117" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="666" y="153" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#CCFBF1"><tspan font-weight="600" fill="#5EEAD4">PROVED</tspan><tspan fill="#8B949E">  &#8212; every leaf closed by reflexivity or by folding to the claim</tspan></text>
+  </g>
+
+  <g>
+    <rect x="620" y="178" width="520" height="44" rx="10" fill="#2A1607" stroke="#C2410C" stroke-width="1.5"/>
+    <circle cx="646" cy="200" r="8" fill="#FB923C"/>
+    <path d="M 643 197 L 649 203 M 649 197 L 643 203" stroke="#0D1117" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <text x="666" y="205" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#FED7AA"><tspan font-weight="600" fill="#FDBA74">REFUTED</tspan><tspan fill="#FDBA74">  &#8212; a leaf disagreed, and the witness is printed</tspan></text>
+  </g>
+
+  <g>
+    <rect x="620" y="230" width="520" height="44" rx="10" fill="#161B22" stroke="#30363D" stroke-width="1.5"/>
+    <circle cx="646" cy="252" r="8" fill="#6E7681"/>
+    <text x="666" y="257" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#8B949E"><tspan font-weight="600" fill="#B4B2A9">INCOMPLETE</tspan><tspan>  &#8212; the budget ran out, and that is never reported as a proof</tspan></text>
+  </g>
+</svg>
