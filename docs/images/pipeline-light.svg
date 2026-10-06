@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" width="1200" height="320" role="img" aria-labelledby="pipe-title pipe-desc">
+  <title id="pipe-title">How a Refal program is compiled: lex, parse, check, drive, emit</title>
+  <desc id="pipe-desc">Five stages left to right: the source file hello.ref, lexing and parsing into a syntax tree, checking to refuse what cannot run, driving the configuration into a graph of states, and emitting a residual program. The driving stage is highlighted, because it is what makes this a supercompiler rather than a printer.</desc>
+
+  <rect x="0.5" y="0.5" width="1199" height="319" rx="16" fill="#FFFFFF" stroke="#D0D7DE"/>
+
+  <text x="40" y="52" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="3.2" fill="#0F766E">THE COMPILER&#8217;S DEFAULT PATH</text>
+  <text x="40" y="90" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="-0.3" fill="#1F2328">It does not re-print the program. It <tspan fill="#0F766E">drives</tspan> it.</text>
+
+  <line x1="40" y1="112" x2="1160" y2="112" stroke="#D0D7DE" stroke-width="1"/>
+
+  <g>
+    <rect x="40" y="152" width="150" height="96" rx="12" fill="#F6F8FA" stroke="#D0D7DE" stroke-width="1.5"/>
+    <text x="115" y="184" text-anchor="middle" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" letter-spacing="1.6" fill="#57606A">SOURCE</text>
+    <text x="115" y="212" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="600" fill="#1F2328">hello.ref</text>
+    <text x="115" y="234" text-anchor="middle" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">Refal-5</text>
+  </g>
+
+  <g stroke="#9CA3AF" stroke-width="1.6" fill="none">
+    <path d="M 198 200 L 218 200"/><path d="M 212 195 L 219 200 L 212 205"/>
+    <path d="M 421 200 L 441 200"/><path d="M 435 195 L 442 200 L 435 205"/>
+    <path d="M 644 200 L 664 200"/><path d="M 658 195 L 665 200 L 658 205"/>
+    <path d="M 942 200 L 962 200"/><path d="M 956 195 L 963 200 L 956 205"/>
+  </g>
+
+  <g>
+    <rect x="228" y="152" width="185" height="96" rx="12" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1.5"/>
+    <text x="320" y="184" text-anchor="middle" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" letter-spacing="1.6" fill="#0D9488">LEX + PARSE</text>
+    <text x="320" y="210" text-anchor="middle" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="600" fill="#1F2328">tokens &#8594; tree</text>
+    <text x="320" y="232" text-anchor="middle" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">the whole Classic grammar</text>
+  </g>
+
+  <g>
+    <rect x="451" y="152" width="185" height="96" rx="12" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1.5"/>
+    <text x="543" y="184" text-anchor="middle" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" letter-spacing="1.6" fill="#0D9488">CHECK</text>
+    <text x="543" y="210" text-anchor="middle" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="600" fill="#1F2328">refuse the broken</text>
+    <text x="543" y="232" text-anchor="middle" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">a proven defect never ships</text>
+  </g>
+
+  <g>
+    <rect x="674" y="140" width="260" height="120" rx="14" fill="#0F766E" stroke="#0B5A54" stroke-width="1.5"/>
+    <text x="804" y="176" text-anchor="middle" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" letter-spacing="1.6" fill="#99F6E4">DRIVE</text>
+    <text x="804" y="204" text-anchor="middle" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14.5" font-weight="600" fill="#FFFFFF">the graph of states</text>
+    <text x="804" y="228" text-anchor="middle" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#CCFBF1">the dispatch moves from run time</text>
+    <text x="804" y="246" text-anchor="middle" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#CCFBF1">to drive time</text>
+  </g>
+
+  <g>
+    <rect x="972" y="152" width="185" height="96" rx="12" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1.5"/>
+    <text x="1064" y="184" text-anchor="middle" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" letter-spacing="1.6" fill="#0D9488">EMIT</text>
+    <text x="1064" y="210" text-anchor="middle" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="600" fill="#1F2328">a residual program</text>
+    <text x="1064" y="232" text-anchor="middle" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">which no longer calls the original</text>
+  </g>
+
+  <line x1="40" y1="284" x2="1160" y2="284" stroke="#D0D7DE" stroke-width="1"/>
+  <text x="40" y="306" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#57606A">A function that chose between sentences at run time is replaced by a generated <tspan font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#0F766E">Split</tspan> whose sentences are the exhaustive, pairwise-disjoint partition.</text>
+</svg>
