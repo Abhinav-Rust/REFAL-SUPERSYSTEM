@@ -278,7 +278,71 @@ def accounting(p):
     return wrap(p, 452, "How the completion figure is counted", "Twelve horizontal bars, one per workstream, filled in proportion to the credit earned out of its weight.", out)
 
 
-DIAGRAMS = [projections, conformance, timeline, anatomy, accounting]
+def wrap_lines(s, width):
+    lines, ln = [], ""
+    for word in s.split():
+        if len(ln) + len(word) + 1 > width:
+            lines.append(ln)
+            ln = word
+        else:
+            ln = (ln + " " + word).strip()
+    if ln:
+        lines.append(ln)
+    return lines
+
+
+# --------------------------------------------------------------------------
+# What each layer does -- the table, as a stack with a status per layer
+# --------------------------------------------------------------------------
+def layerstack(p):
+    p = dict(p, _h=680)
+    out = header(p, "WHAT EACH LAYER DOES", "One engine, four layers \u2014 each layer's subject is the layer below it")
+    out.append("  <defs>")
+    for tone in ("ok", "part"):
+        out.append(f'    <linearGradient id="g{tone}" x1="0" y1="0" x2="1" y2="0">')
+        out.append(f'      <stop offset="0" stop-color="{p[tone + "bg"]}"/>')
+        out.append(f'      <stop offset="0.55" stop-color="{p["cardbg"]}"/>')
+        out.append(f'    </linearGradient>')
+    out.append("  </defs>")
+    layers = [
+        ("L0", "Refal-5 machine",
+         "Runs Refal: pattern matching, term splicing, arithmetic and I/O. The state is one flat view field held as a rope of shared arenas, so a variable binds a range of it rather than a copy.",
+         "ok", "Built"),
+        ("L1", "Reflection engine",
+         "Freezes an expression as inert data, inspects it with ordinary pattern matching, and thaws it back. Constructs symbolic execution graphs.",
+         "ok", "Built"),
+        ("L2", "Supercompiler core",
+         "Drives a configuration into a graph of states, whistles on divergence, generalises least-generally, folds loops, and emits a residual program.",
+         "ok", "Built"),
+        ("L3", "Meta-prover",
+         "Accepts assertions or relational functions and decides equivalence by complete tree reduction: refal prove drives a predicate to Turchin's single terminal 'True'.",
+         "part", "Partial"),
+        ("L4", "Self-application",
+         "The engine applied to itself: a compiler that compiles its own source, and a generator that emits a compiler.",
+         "part", "Partial"),
+    ]
+    y, h, gap = 136, 88, 8
+    for tag, comp, desc, tone, status in layers:
+        out.append(f'  <rect x="40" y="{y}" width="1120" height="{h}" rx="14" fill="url(#g{tone})" stroke="{p["cardbd"]}" stroke-width="1.5"/>')
+        out.append(f'  <rect x="40" y="{y}" width="6" height="{h}" rx="3" fill="{p[tone]}"/>')
+        out.append(rect(64, y + 18, 52, 52, fill=p["bg"], stroke=p[tone + "bd"], rx=12, sw=1.5))
+        out.append(text(90, y + 50, tag, 18, p[tone], "600", anchor="middle", family=MONO))
+        out.append(text(136, y + 36, comp, 17, p["ink"], "600"))
+        for j, ln in enumerate(wrap_lines(desc, 96)[:2]):
+            out.append(text(136, y + 60 + j * 17, ln, 12.5, p["muted"]))
+        # status pill, and a capability bar that says "whole layer" vs "half open"
+        out.append(rect(980, y + 18, 160, 28, fill=p["bg"], stroke=p[tone + "bd"], rx=14, sw=1.5))
+        out.append(circle(1000, y + 32, 5, p[tone]))
+        out.append(text(1016, y + 37, status, 13, p[tone], "600"))
+        out.append(rect(980, y + 54, 160, 8, fill=p["track"], rx=4, sw=0))
+        frac = 1.0 if tone == "ok" else 0.7
+        out.append(rect(980, y + 54, max(160 * frac, 6), 8, fill=p[tone], rx=4, sw=0))
+        y += h + gap
+    out += footer(p, 620, h="Built means every behaviour of the layer carries a green gate; Partial means a named behaviour is still open. Statuses are those of docs/TURCHIN-ECOSYSTEM-CONFORMANCE.md.")
+    return wrap(p, 680, "What each layer does", "A stack of five layers, L0 to L4: the Refal-5 machine, the reflection engine and the supercompiler core are built; the meta-prover and self-application are partial.", out)
+
+
+DIAGRAMS = [projections, conformance, timeline, anatomy, accounting, layerstack]
 
 
 def main():
