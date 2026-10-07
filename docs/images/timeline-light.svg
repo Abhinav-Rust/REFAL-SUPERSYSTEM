@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" width="1200" height="400" role="img" aria-labelledby="t d">
+  <title id="t">Turchin's corpus on a timeline</title>
+  <desc id="d">A timeline from 1968 to 1999, marking the papers and the layer each one informs.</desc>
+  <rect x="0.5" y="0.5" width="1199" height="399" rx="16" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1"/>
+  <text x="40" y="52" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="3.2" fill="#0F766E">THE CORPUS</text>
+  <text x="40" y="90" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="-0.3" fill="#1F2328">Every layer is a reading of Turchin's own body of work</text>
+  <line x1="40" y1="112" x2="1160" y2="112" stroke="#D0D7DE" stroke-width="1"/>
+  <line x1="60" y1="232" x2="1140" y2="232" stroke="#D0D7DE" stroke-width="2"/>
+  <line x1="60.0" y1="224" x2="60.0" y2="240" stroke="#0D9488" stroke-width="2"/>
+  <circle cx="60.0" cy="232" r="6" fill="#0F766E"/>
+  <text x="60.0" y="212" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="12.5" font-weight="600" text-anchor="middle" fill="#1F2328">1968</text>
+  <text x="60.0" y="158" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" text-anchor="middle" fill="#57606A">Meta-Algorithmic</text>
+  <text x="60.0" y="174" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" text-anchor="middle" fill="#57606A">Language</text>
+  <rect x="40.0" y="132" width="40" height="18" rx="9" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1"/>
+  <text x="60.0" y="145" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="10.5" font-weight="600" text-anchor="middle" fill="#0F766E">L0</text>
+  <line x1="190.32258064516128" y1="224" x2="190.32258064516128" y2="240" stroke="#0D9488" stroke-width="2"/>
+  <circle cx="190.32258064516128" cy="232" r="6" fill="#0F766E"/>
+  <text x="190.32258064516128" y="262" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="12.5" font-weight="600" text-anchor="middle" fill="#1F2328">1972</text>
+  <text x="190.32258064516128" y="282" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" text-anchor="middle" fill="#57606A">A Compiler</text>
+  <text x="190.32258064516128" y="298" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" text-anchor="middle" fill="#57606A">for Refal</text>
+  <rect x="170.32258064516128" y="316" width="40" height="18" rx="9" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1"/>
+  <text x="190.32258064516128" y="329" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="10.5" font-weight="600" text-anchor="middle" fill="#0F766E">L2</text>
+  <line x1="418.3870967741936" y1="224" x2="418.3870967741936" y2="240" stroke="#0D9488" stroke-width="2"/>
+  <circle cx="418.3870967741936" cy="232" r="6" fill="#0F766E"/>
+  <text x="418.3870967741936" y="212" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="12.5" font-weight="600" text-anchor="middle" fill="#1F2328">1979</text>
+  <text x="418.3870967741936" y="158" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" text-anchor="middle" fill="#57606A">A Supercompiler</text>
+  <text x="418.3870967741936" y="174" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" text-anchor="middle" fill="#57606A">System</text>
+  <rect x="398.3870967741936" y="132" width="40" height="18" rx="9" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1"/>
+  <text x="418.3870967741936" y="145" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="10.5" font-weight="600" text-anchor="middle" fill="#0F766E">L2</text>
+  <line x1="450.96774193548384" y1="224" x2="450.96774193548384" y2="240" stroke="#0D9488" stroke-width="2"/>
+  <circle cx="450.96774193548384" cy="232" r="6" fill="#0F766E"/>
+  <text x="450.96774193548384" y="262" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="12.5" font-weight="600" text-anchor="middle" fill="#1F2328">1980</text>
+  <text x="450.96774193548384" y="282" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" text-anchor="middle" fill="#57606A">Aarhus —</text>
+  <text x="450.96774193548384" y="298" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" text-anchor="middle" fill="#57606A">Semantics Defs</text>
+  <rect x="430.96774193548384" y="316" width="40" height="18" rx="9" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1"/>
+  <text x="450.96774193548384" y="329" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="10.5" font-weight="600" text-anchor="middle" fill="#0F766E">L4</text>
+  <line x1="548.7096774193549" y1="224" x2="548.7096774193549" y2="240" stroke="#0D9488" stroke-width="2"/>
+  <circle cx="548.7096774193549" cy="232" r="6" fill="#0F766E"/>
+  <text x="548.7096774193549" y="212" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="12.5" font-weight="600" text-anchor="middle" fill="#1F2328">1983</text>
+  <text x="548.7096774193549" y="158" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" text-anchor="middle" fill="#57606A">Cyber. Foundation</text>
+  <text x="548.7096774193549" y="174" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" text-anchor="middle" fill="#57606A">of Mathematics</text>
+  <rect x="528.7096774193549" y="132" width="40" height="18" rx="9" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1"/>
+  <text x="548.7096774193549" y="145" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="10.5" font-weight="600" text-anchor="middle" fill="#0F766E">L3</text>
+  <line x1="646.4516129032259" y1="224" x2="646.4516129032259" y2="240" stroke="#0D9488" stroke-width="2"/>
+  <circle cx="646.4516129032259" cy="232" r="6" fill="#0F766E"/>
+  <text x="646.4516129032259" y="262" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="12.5" font-weight="600" text-anchor="middle" fill="#1F2328">1986</text>
+  <text x="646.4516129032259" y="282" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" text-anchor="middle" fill="#57606A">The Concept of</text>
+  <text x="646.4516129032259" y="298" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" text-anchor="middle" fill="#57606A">a Supercompiler</text>
+  <rect x="626.4516129032259" y="316" width="40" height="18" rx="9" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1"/>
+  <text x="646.4516129032259" y="329" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="10.5" font-weight="600" text-anchor="middle" fill="#0F766E">L2</text>
+  <line x1="776.7741935483872" y1="224" x2="776.7741935483872" y2="240" stroke="#0D9488" stroke-width="2"/>
+  <circle cx="776.7741935483872" cy="232" r="6" fill="#0F766E"/>
+  <text x="776.7741935483872" y="212" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="12.5" font-weight="600" text-anchor="middle" fill="#1F2328">1990</text>
+  <text x="776.7741935483872" y="158" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" text-anchor="middle" fill="#57606A">Manifesto;</text>
+  <text x="776.7741935483872" y="174" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" text-anchor="middle" fill="#57606A">Function Inversion</text>
+  <rect x="756.7741935483872" y="132" width="40" height="18" rx="9" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1"/>
+  <text x="776.7741935483872" y="145" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="10.5" font-weight="600" text-anchor="middle" fill="#0F766E">L2</text>
+  <line x1="809.3548387096774" y1="224" x2="809.3548387096774" y2="240" stroke="#0D9488" stroke-width="2"/>
+  <circle cx="809.3548387096774" cy="232" r="6" fill="#0F766E"/>
+  <text x="809.3548387096774" y="262" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="12.5" font-weight="600" text-anchor="middle" fill="#1F2328">1991</text>
+  <text x="809.3548387096774" y="282" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" text-anchor="middle" fill="#57606A">A Supersystem</text>
+  <text x="809.3548387096774" y="298" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" text-anchor="middle" fill="#57606A">of Language Refal</text>
+  <rect x="789.3548387096774" y="316" width="40" height="18" rx="9" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1"/>
+  <text x="809.3548387096774" y="329" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="10.5" font-weight="600" text-anchor="middle" fill="#0F766E">ALL</text>
+  <line x1="939.6774193548387" y1="224" x2="939.6774193548387" y2="240" stroke="#0D9488" stroke-width="2"/>
+  <circle cx="939.6774193548387" cy="232" r="6" fill="#0F766E"/>
+  <text x="939.6774193548387" y="212" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="12.5" font-weight="600" text-anchor="middle" fill="#1F2328">1995</text>
+  <text x="939.6774193548387" y="158" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" text-anchor="middle" fill="#57606A">Self-Applicable</text>
+  <text x="939.6774193548387" y="174" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" text-anchor="middle" fill="#57606A">Supercompiler</text>
+  <rect x="919.6774193548387" y="132" width="40" height="18" rx="9" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1"/>
+  <text x="939.6774193548387" y="145" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="10.5" font-weight="600" text-anchor="middle" fill="#0F766E">L4</text>
+  <line x1="1070.0" y1="224" x2="1070.0" y2="240" stroke="#0D9488" stroke-width="2"/>
+  <circle cx="1070.0" cy="232" r="6" fill="#0F766E"/>
+  <text x="1070.0" y="262" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="12.5" font-weight="600" text-anchor="middle" fill="#1F2328">1999</text>
+  <text x="1070.0" y="282" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" text-anchor="middle" fill="#57606A">SCP4 —</text>
+  <text x="1070.0" y="298" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" text-anchor="middle" fill="#57606A">General Outline</text>
+  <rect x="1050.0" y="316" width="40" height="18" rx="9" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1"/>
+  <text x="1070.0" y="329" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="10.5" font-weight="600" text-anchor="middle" fill="#0F766E">L2</text>
+  <rect x="40" y="344" width="1120" height="44" rx="12" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1.5"/>
+  <text x="64" y="372" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#134E4A">Eighty primary works, four domains; the layer each one informs is the citation the compiler carries for it.</text>
+</svg>

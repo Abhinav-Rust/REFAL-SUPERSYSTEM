@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" width="1200" height="400" role="img" aria-labelledby="t d">
+  <title id="t">The Futamura projections</title>
+  <desc id="d">Three cards: the first projection specialises an interpreter to a known program and is built; the second is partial; the third, a compiler generator, is not built.</desc>
+  <rect x="0.5" y="0.5" width="1199" height="399" rx="16" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1"/>
+  <text x="40" y="52" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="3.2" fill="#0F766E">THE FUTAMURA PROJECTIONS</text>
+  <text x="40" y="90" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="-0.3" fill="#1F2328">Specialise the engine, and a level appears</text>
+  <line x1="40" y1="112" x2="1160" y2="112" stroke="#D0D7DE" stroke-width="1"/>
+  <rect x="40" y="140" width="360" height="196" rx="14" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1.5"/>
+  <rect x="40" y="140" width="360" height="4" rx="2" fill="#0F766E"/>
+  <text x="64" y="176" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="1.4" fill="#0F766E">1st projection</text>
+  <text x="64" y="210" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="19" font-weight="600" fill="#1F2328">S(int, prog)</text>
+  <text x="64" y="236" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#57606A">↓  yields</text>
+  <text x="64" y="262" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#0F766E">a target program</text>
+  <circle cx="70" cy="288" r="5" fill="#0F766E"/>
+  <text x="84" y="293" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="600" fill="#0F766E">Built</text>
+  <text x="64" y="314" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">drives an interpreter over a known program;</text>
+  <text x="64" y="329" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">the interpreter disappears</text>
+  <rect x="420" y="140" width="360" height="196" rx="14" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1.5"/>
+  <rect x="420" y="140" width="360" height="4" rx="2" fill="#B45309"/>
+  <text x="444" y="176" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="1.4" fill="#B45309">2nd projection</text>
+  <text x="444" y="210" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="19" font-weight="600" fill="#1F2328">S(S, int)</text>
+  <text x="444" y="236" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#57606A">↓  yields</text>
+  <text x="444" y="262" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#B45309">a compiler</text>
+  <circle cx="450" cy="288" r="5" fill="#B45309"/>
+  <text x="464" y="293" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="600" fill="#B45309">Partial</text>
+  <text x="444" y="314" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">refal project2 emits the artifact, but it</text>
+  <text x="444" y="329" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">is the driven interpreter</text>
+  <rect x="800" y="140" width="360" height="196" rx="14" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1.5"/>
+  <rect x="800" y="140" width="360" height="4" rx="2" fill="#6E7781"/>
+  <text x="824" y="176" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="1.4" fill="#6E7781">3rd projection</text>
+  <text x="824" y="210" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="19" font-weight="600" fill="#1F2328">S(S, S)</text>
+  <text x="824" y="236" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#57606A">↓  yields</text>
+  <text x="824" y="262" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#6E7781">a compiler generator</text>
+  <circle cx="830" cy="288" r="5" fill="#6E7781"/>
+  <text x="844" y="293" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="600" fill="#6E7781">Not built</text>
+  <text x="824" y="314" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">downstream of the 2nd: the supercompiler</text>
+  <text x="824" y="329" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">specialised with respect to itself</text>
+  <rect x="40" y="352" width="1120" height="44" rx="12" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1.5"/>
+  <text x="64" y="380" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#134E4A">S is the supercompiler. Each projection specialises S with respect to one more argument — and each level it produces is a new kind of program.</text>
+</svg>

@@ -258,7 +258,18 @@ Refal was never just a pattern-matching language to its author. It was a
 *metaalgorithmic* language — the concrete apparatus for a self-referential control
 relationship he spent his life generalising, from the 1968 paper *Metaalgorithmic
 Language* through *The Phenomenon of Science* and back into computing as
-supercompilation.
+supercompilation. Every layer of this repository is a reading of one part of that
+corpus.
+
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/timeline-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/timeline-light.svg">
+  <img alt="A timeline of Turchin's work from 1968 to 1999: the Meta-Algorithmic Language (L0), a compiler for Refal (L2), a supercompiler system (L2), the Aarhus semantics definitions (L4), the Cybernetic Foundation of Mathematics (L3), The Concept of a Supercompiler (L2), the Cybernetic Manifesto and function inversion (L2), A Supersystem of Language Refal (all layers), the self-applicable supercompiler (L4), and the SCP4 outline (L2)" src="docs/images/timeline-light.svg" width="100%">
+</picture>
+
+</div>
 
 Two commitments follow, and they turn out to be the same commitment:
 
@@ -326,22 +337,23 @@ $ENTRY Go {
 }
 ```
 
-Pattern matching on a recursive function — reversing a sequence of symbols:
+A function is a set of `pattern = result` rules, and a variable carries its type
+in its prefix:
 
-```refal
-Reverse {
-  /* base case: empty expression */
-  =  ;
+<div align="center">
 
-  /* recursive case: peel the head, reverse the tail, append head at the end */
-  s.Head e.Rest = <Reverse e.Rest> s.Head;
-}
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/anatomy-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/anatomy-light.svg">
+  <img alt="A Reverse function in Refal, annotated: s. matches one symbol, e. matches zero or more terms, t. matches one term which may be a bracket, angle brackets are a call, and = separates the pattern from the result" src="docs/images/anatomy-light.svg" width="100%">
+</picture>
 
-Variables carry their type in the prefix: `s.` matches a single symbol, `e.` any
-expression (zero or more terms), `t.` a single term — which may itself be a
-bracketed structure. That typed variable system is what makes Refal's pattern
-matching both precise and expressive.
+</div>
+
+`s.` matches one symbol, `e.` any expression (zero or more terms), `t.` one term —
+which may itself be a bracket. That typed variable system is what makes Refal's
+pattern matching both precise and expressive, and what lets a program be **data**
+to another program.
 
 ## What works today
 
@@ -377,6 +389,16 @@ compiler's own number as the project's would misdescribe what this repository is
 *and* tested *for the general case*. A feature that works on every file in
 `examples/` but not in general is credited only for the part that generalises.
 
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/accounting-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/accounting-light.svg">
+  <img alt="Twelve weighted workstreams as bars filled in proportion to the credit earned: L1 reflection engine, function inversion and self-hosting are near their weight, while Tier 1 verification, the meta-prover and the projections as artifacts hold back the most" src="docs/images/accounting-light.svg" width="100%">
+</picture>
+
+</div>
+
 <details>
 <summary><b>The twelve-row accounting</b> — weight, credit, and what is withheld, per workstream</summary>
 
@@ -408,11 +430,22 @@ work not begun is how a completion figure becomes flattery.
 Fine-grained progress is a **count of closed gates**, because a gate is boolean and
 verified by a test rather than estimated.
 
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/conformance-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/conformance-light.svg">
+  <img alt="A grid of the twenty-six conformance rows E-1 to E-26: nineteen are closed, six are partial (E-7, E-11, E-12, E-13, E-14, E-17), and E-26 is out of scope" src="docs/images/conformance-light.svg" width="100%">
+</picture>
+
+</div>
+
 | | Count |
 |---|---:|
-| Ecosystem rows closed | **21** |
-| Partially closed | 3 |
-| Not started | 1 |
+| Ecosystem rows closed | **19** |
+| Partially closed | 6 |
+| Not started | 0 |
+| Out of scope | 1 |
 | In scope | 25 |
 
 The rows are `E-1 … E-26` in
@@ -420,16 +453,22 @@ The rows are `E-1 … E-26` in
 derived from a complete read of Turchin's 80 primary works across all four of his
 domains. That document is what defines "100%". `E-26` is the Principia Cybernetica
 knowledge network and is out of scope, which is why 26 rows make 25 in scope.
+**A row is Closed only when a gate is green for the *general* case**, which is why
+a row with a built half and an open half — E-7, E-11, E-12, E-13, E-14, E-17 —
+counts as Partial rather than Closed.
 
-**Closed since the last release: E-4** (the reflection engine as a service),
-**E-12** and **E-13** (the meta-prover — Turchin's `'True'` criterion, reached by
-`refal prove`), and **E-15** (function inversion — `refal invert` synthesises a
-function's inverse by driving its forward definition, and the gate splices the
-emitted inverse back into the source and round-trips it). A **soundness defect in the prover** was found and fixed in the same session: an
-unfinished walk could report a claim as `refuted`, and the verdict is now a
-property of the claim rather than of `--steps`.
+**Closed since the last release: E-4** (the reflection engine as a service) and
+**E-15** (function inversion — `refal invert` synthesises a function's inverse by
+driving its forward definition, and the gate splices the emitted inverse back into
+the source and round-trips it). **Advanced but still Partial: E-12/E-13** (the
+meta-prover — Turchin's `'True'` criterion and the *relational* half are built and
+gated; the general relation and proofs needing generalisation beyond the loop edge
+are not). A **soundness defect in the prover** was found and fixed in the same
+session: an unfinished walk could report a claim as `refuted`, and the verdict is
+now a property of the claim rather than of `--steps`.
 
-**This session: E-11 and E-14** — the 2nd projection and the partition it needed.
+**This session: E-11 and E-14** (both Partial) — the 2nd projection and the
+partition it needed.
 `refal project2` specialises an interpreter with its object program **left open**
 and emits the artifact, using a new `SplitStrategy::Pattern` that can **enter a
 constructor**. On `examples/projection-bracket-callee.ref` the sequence partition
@@ -450,6 +489,20 @@ flowchart LR
     B --> C["L4 · projections<br/>emit a compiler and a compiler generator"]
     C --> D["L2 · the named gaps<br/>§4.4, SCP4 propagation, inversion, speed"]
 ```
+
+The headline of layer 4 is the Futamura projections — specialising the engine until
+it becomes a compiler, then a compiler generator. The 1st is built and gated; the
+2nd emits an artifact; the 3rd is the open item.
+
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/projections-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/projections-light.svg">
+  <img alt="Three projections: the 1st, S(int, prog), is built; the 2nd, S(S, int), is partial; the 3rd, S(S, S), a compiler generator, is not built" src="docs/images/projections-light.svg" width="100%">
+</picture>
+
+</div>
 
 The ordered work list lives in
 [`docs/PROGRESS.md`](docs/PROGRESS.md) (`NEXT ACTION`). Items 1–4 are closed.
@@ -831,6 +884,7 @@ and a new workstream carries zero credit until a gate behind it is green.
 | [REFAL-FIRST-COMPLETION.md](docs/REFAL-FIRST-COMPLETION.md) | Self-hosting completion contract and scorecard |
 | [CLEANROOM.md](docs/CLEANROOM.md) | Clean-room authorship policy |
 | [CHANGELOG.md](CHANGELOG.md) | What has changed, release by release |
+| [scripts/gen-readme-diagrams.py](scripts/gen-readme-diagrams.py) | Regenerates the README's theme-aware SVG diagram family from one description |
 
 ## Contributing
 

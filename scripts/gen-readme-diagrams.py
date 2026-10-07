@@ -1,0 +1,299 @@
+#!/usr/bin/env python3
+"""Generate the theme-aware SVG diagram family the README embeds.
+
+Every diagram is emitted twice -- a light and a dark variant -- from one
+description, so the two themes cannot drift apart. GitHub renders each with
+`<picture>` and `prefers-color-scheme`, which is why there is no external asset
+and no font to load: the whole family is text, generated deterministically.
+
+Run:  python scripts/gen-readme-diagrams.py
+Writes: docs/images/<name>-light.svg and docs/images/<name>-dark.svg
+"""
+
+import os
+
+FONT = "ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
+MONO = "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace"
+
+LIGHT = dict(
+    bg="#FFFFFF", border="#D0D7DE", ink="#1F2328", muted="#57606A",
+    a1="#0F766E", a2="#0D9488", a3="#14B8A6", a4="#2DD4BF",
+    cardbg="#F6FEFC", cardbd="#CCE8E2",
+    fbg="#F0FDFA", fbd="#99F6E4", fink="#134E4A",
+    ok="#0F766E", okbg="#F0FDFA", okbd="#99F6E4",
+    part="#B45309", partbg="#FFFBEB", partbd="#FDE68A",
+    out="#6E7781", outbg="#F6F8FA", outbd="#D0D7DE",
+    track="#E6EDF3",
+)
+DARK = dict(
+    bg="#0D1117", border="#30363D", ink="#E6EDF3", muted="#8B949E",
+    a1="#0F766E", a2="#14B8A6", a3="#2DD4BF", a4="#5EEAD4",
+    cardbg="#0B1B19", cardbd="#134E4A",
+    fbg="#062925", fbd="#134E4A", fink="#99F6E4",
+    ok="#2DD4BF", okbg="#062925", okbd="#134E4A",
+    part="#F59E0B", partbg="#2B1D06", partbd="#7C4A03",
+    out="#8B949E", outbg="#161B22", outbd="#30363D",
+    track="#21262D",
+)
+
+
+def esc(s):
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def text(x, y, s, size=13, fill="ink", weight="400", family=FONT, spacing=None, anchor=None):
+    bits = [f'x="{x}"', f'y="{y}"', f'font-family="{family}"', f'font-size="{size}"']
+    if weight != "400":
+        bits.append(f'font-weight="{weight}"')
+    if spacing:
+        bits.append(f'letter-spacing="{spacing}"')
+    if anchor:
+        bits.append(f'text-anchor="{anchor}"')
+    bits.append(f'fill="{fill}"')
+    return f'  <text {" ".join(bits)}>{esc(s)}</text>'
+
+
+def rect(x, y, w, h, fill="none", stroke=None, rx=12, sw=1.5):
+    bits = [f'x="{x}"', f'y="{y}"', f'width="{w}"', f'height="{h}"', f'rx="{rx}"', f'fill="{fill}"']
+    if stroke:
+        bits.append(f'stroke="{stroke}"')
+        bits.append(f'stroke-width="{sw}"')
+    return f'  <rect {" ".join(bits)}/>'
+
+
+def line(x1, y1, x2, y2, stroke="border", sw=1):
+    return f'  <line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{stroke}" stroke-width="{sw}"/>'
+
+
+def circle(cx, cy, r, fill):
+    return f'  <circle cx="{cx}" cy="{cy}" r="{r}" fill="{fill}"/>'
+
+
+def header(p, eyebrow, title, w=1200, pad=40):
+    out = [rect(0.5, 0.5, w - 1, p["_h"] - 1, fill=p["bg"], stroke=p["border"], rx=16, sw=1)]
+    out.append(text(pad, 52, eyebrow, 12, p["a1"], "600", spacing="3.2"))
+    out.append(text(pad, 90, title, 24, p["ink"], "600", spacing="-0.3"))
+    out.append(line(pad, 112, w - pad, 112, p["border"]))
+    return out
+
+
+def footer(p, y, w=1200, pad=40, h=None, fill="fbg", stroke="fbd", ink="fink"):
+    out = [rect(pad, y, w - 2 * pad, 44, fill=p[fill], stroke=p[stroke], rx=12, sw=1.5)]
+    out.append(text(pad + 24, y + 28, h, 13, p[ink]))
+    return out
+
+
+def wrap(p, h, title, desc, body):
+    head = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 {h}" width="1200" height="{h}" role="img" aria-labelledby="t d">',
+        f'  <title id="t">{esc(title)}</title>',
+        f'  <desc id="d">{esc(desc)}</desc>',
+    ]
+    return "\n".join(head + body + ["</svg>", ""])
+
+
+# --------------------------------------------------------------------------
+# The Futamura projections (E-14): what is built, what is derived, what is open
+# --------------------------------------------------------------------------
+def projections(p):
+    p = dict(p, _h=400)
+    out = header(p, "THE FUTAMURA PROJECTIONS", "Specialise the engine, and a level appears")
+    cards = [
+        ("1st projection", "S(int, prog)", "a target program",
+         "ok", "Built", "drives an interpreter over a known program; the interpreter disappears"),
+        ("2nd projection", "S(S, int)", "a compiler",
+         "part", "Partial", "refal project2 emits the artifact, but it is the driven interpreter"),
+        ("3rd projection", "S(S, S)", "a compiler generator",
+         "out", "Not built", "downstream of the 2nd: the supercompiler specialised with respect to itself"),
+    ]
+    for i, (name, formula, result, tone, status, note) in enumerate(cards):
+        x = 40 + i * 380
+        out.append(rect(x, 140, 360, 196, fill=p["cardbg"], stroke=p["cardbd"], rx=14, sw=1.5))
+        out.append(rect(x, 140, 360, 4, fill=p[tone], rx=2))
+        out.append(text(x + 24, 176, name, 12, p[tone], "600", spacing="1.4"))
+        out.append(text(x + 24, 210, formula, 19, p["ink"], "600", family=MONO))
+        out.append(text(x + 24, 236, "\u2193  yields", 12.5, p["muted"]))
+        out.append(text(x + 24, 262, result, 15, p[tone], "600"))
+        out.append(circle(x + 30, 288, 5, p[tone]))
+        out.append(text(x + 44, 293, status, 12.5, p[tone], "600"))
+        # note, wrapped to two lines by hand
+        words, ln, lines = note.split(), "", []
+        for wd in words:
+            if len(ln) + len(wd) > 42:
+                lines.append(ln)
+                ln = wd
+            else:
+                ln = (ln + " " + wd).strip()
+        lines.append(ln)
+        for j, ln in enumerate(lines[:2]):
+            out.append(text(x + 24, 314 + j * 15, ln, 11.5, p["muted"]))
+    out += footer(p, 352, h="S is the supercompiler. Each projection specialises S with respect to one more argument \u2014 and each level it produces is a new kind of program.")
+    return wrap(p, 400, "The Futamura projections", "Three cards: the first projection specialises an interpreter to a known program and is built; the second is partial; the third, a compiler generator, is not built.", out)
+
+
+# --------------------------------------------------------------------------
+# The conformance matrix (E-1 .. E-26) as a grid
+# --------------------------------------------------------------------------
+def conformance(p):
+    p = dict(p, _h=360)
+    out = header(p, "THE CONFORMANCE MATRIX", "E-1 \u2026 E-26 \u2014 one row per named component or behaviour")
+    # statuses per docs/TURCHIN-ECOSYSTEM-CONFORMANCE.md
+    partial = {7, 11, 12, 13, 14, 17}
+    out_of_scope = {26}
+    cells = []
+    for n in range(1, 27):
+        if n in out_of_scope:
+            tone = "out"
+        elif n in partial:
+            tone = "part"
+        else:
+            tone = "ok"
+        cells.append((n, tone))
+    cw, gap = 78, 6
+    for idx, (n, tone) in enumerate(cells):
+        col, row = idx % 13, idx // 13
+        x = 40 + col * (cw + gap)
+        y = 150 + row * 62
+        out.append(rect(x, y, cw, 52, fill=p[tone + "bg"], stroke=p[tone + "bd"], rx=10, sw=1.5))
+        out.append(text(x + 12, y + 22, f"E-{n}", 12.5, p[tone], "600", family=MONO))
+        label = {"ok": "closed", "part": "partial", "out": "out"}[tone]
+        out.append(circle(x + 15, y + 39, 4, p[tone]))
+        out.append(text(x + 25, y + 43, label, 10.5, p["muted"]))
+    # legend
+    legend = [("ok", "Closed \u2014 a gate is green for the general case"),
+              ("part", "Partial \u2014 a named behaviour or half is open"),
+              ("out", "Out of scope \u2014 the social context, not a layer")]
+    x = 40
+    for tone, label in legend:
+        out.append(circle(x + 5, 292, 5, p[tone]))
+        out.append(text(x + 16, 296, label, 12, p["muted"]))
+        x += 30 + len(label) * 6.3
+    out += footer(p, 316, h="Statuses are those of docs/TURCHIN-ECOSYSTEM-CONFORMANCE.md, the document that defines \u201c100%\u201d.")
+    return wrap(p, 360, "The conformance matrix", "A grid of twenty-six cells, E-1 to E-26. Nineteen are closed, six are partial, and one, E-26, is out of scope.", out)
+
+
+# --------------------------------------------------------------------------
+# Turchin's corpus, 1968 .. 1999, mapped to the layers it informs
+# --------------------------------------------------------------------------
+def timeline(p):
+    p = dict(p, _h=400)
+    out = header(p, "THE CORPUS", "Every layer is a reading of Turchin's own body of work")
+    axis_y = 232
+    out.append(line(60, axis_y, 1140, axis_y, p["border"], 2))
+    marks = [
+        (1968, "Meta-Algorithmic\nLanguage", "L0", "up"),
+        (1972, "A Compiler\nfor Refal", "L2", "down"),
+        (1979, "A Supercompiler\nSystem", "L2", "up"),
+        (1980, "Aarhus \u2014\nSemantics Defs", "L4", "down"),
+        (1983, "Cyber. Foundation\nof Mathematics", "L3", "up"),
+        (1986, "The Concept of\na Supercompiler", "L2", "down"),
+        (1990, "Manifesto;\nFunction Inversion", "L2", "up"),
+        (1991, "A Supersystem\nof Language Refal", "ALL", "down"),
+        (1995, "Self-Applicable\nSupercompiler", "L4", "up"),
+        (1999, "SCP4 \u2014\nGeneral Outline", "L2", "down"),
+    ]
+    span = 1999 - 1968
+    for year, label, layer, side in marks:
+        x = 60 + (year - 1968) / span * 1010
+        out.append(line(x, axis_y - 8, x, axis_y + 8, p["a2"], 2))
+        out.append(circle(x, axis_y, 6, p["a1"]))
+        anchor = "middle"
+        if side == "up":
+            out.append(text(x, axis_y - 20, str(year), 12.5, p["ink"], "600", anchor=anchor, family=MONO))
+            for j, ln in enumerate(label.split("\n")):
+                out.append(text(x, axis_y - 74 + j * 16, ln, 11.5, p["muted"], anchor=anchor))
+            out.append(rect(x - 20, axis_y - 100, 40, 18, fill=p["okbg"], stroke=p["okbd"], rx=9, sw=1))
+            out.append(text(x, axis_y - 87, layer, 10.5, p["ok"], "600", anchor=anchor, family=MONO))
+        else:
+            out.append(text(x, axis_y + 30, str(year), 12.5, p["ink"], "600", anchor=anchor, family=MONO))
+            for j, ln in enumerate(label.split("\n")):
+                out.append(text(x, axis_y + 50 + j * 16, ln, 11.5, p["muted"], anchor=anchor))
+            out.append(rect(x - 20, axis_y + 84, 40, 18, fill=p["okbg"], stroke=p["okbd"], rx=9, sw=1))
+            out.append(text(x, axis_y + 97, layer, 10.5, p["ok"], "600", anchor=anchor, family=MONO))
+    out += footer(p, 344, h="Eighty primary works, four domains; the layer each one informs is the citation the compiler carries for it.")
+    return wrap(p, 400, "Turchin's corpus on a timeline", "A timeline from 1968 to 1999, marking the papers and the layer each one informs.", out)
+
+
+# --------------------------------------------------------------------------
+# Refal in one sentence: pattern = result
+# --------------------------------------------------------------------------
+def anatomy(p):
+    p = dict(p, _h=392)
+    out = header(p, "REFAL IN ONE SENTENCE", "A function is a set of  pattern = result  rules")
+    out.append(rect(40, 140, 640, 176, fill=p["cardbg"], stroke=p["cardbd"], rx=14, sw=1.5))
+    code = [
+        ("Reverse {", "ink", "600"),
+        ("  =  ;                                  ", "a1", "400"),
+        ("  s.Head e.Rest = <Reverse e.Rest> s.Head;", "ink", "400"),
+        ("}", "ink", "600"),
+    ]
+    for j, (ln, tone, w) in enumerate(code):
+        out.append(text(64, 182 + j * 30, ln, 14, p[tone], w, family=MONO))
+    # annotations on the right
+    notes = [
+        ("s.", "one symbol"),
+        ("e.", "zero or more terms"),
+        ("t.", "one term (may be a bracket)"),
+        ("< \u2026 >", "a call"),
+        ("=", "separates pattern from result"),
+    ]
+    for j, (sym, meaning) in enumerate(notes):
+        y = 158 + j * 34
+        out.append(rect(712, y, 66, 26, fill=p["okbg"], stroke=p["okbd"], rx=8, sw=1))
+        out.append(text(745, y + 18, sym, 13, p["ok"], "600", anchor="middle", family=MONO))
+        out.append(text(794, y + 18, meaning, 12.5, p["muted"]))
+    out += footer(p, 340, h="Variables carry their type in the prefix, and matching is structural: the pattern decides which sentence runs.")
+    return wrap(p, 392, "Refal in one sentence", "A Reverse function written in Refal, annotated with what each variable kind and the call brackets mean.", out)
+
+
+# --------------------------------------------------------------------------
+# How the completion figure is counted
+# --------------------------------------------------------------------------
+def accounting(p):
+    p = dict(p, _h=452)
+    out = header(p, "HOW THE FIGURE IS COUNTED", "Twelve workstreams, weighted \u2014 credit only behind a green gate")
+    rows = [
+        ("L0 \u00b7 frontend", 5.95, 5.60),
+        ("L0 \u00b7 semantics", 4.20, 3.15),
+        ("L0 \u00b7 machine / runtime", 13.65, 13.51),
+        ("L1 \u00b7 reflection engine", 9.00, 9.00),
+        ("L2 \u00b7 graph of states", 5.95, 5.25),
+        ("Tier 1 static verification", 10.50, 8.75),
+        ("L2/L4 \u00b7 compiler in Refal", 17.85, 16.80),
+        ("L4 \u00b7 self-hosting fixpoint", 9.10, 8.05),
+        ("L3 \u00b7 meta-prover", 13.00, 11.00),
+        ("L4 \u00b7 projections as artifacts", 5.00, 3.50),
+        ("L2 \u00b7 function inversion", 3.00, 3.00),
+        ("Conformance / release evidence", 2.80, 2.66),
+    ]
+    label_x, track_x, track_w = 40, 400, 640
+    for i, (name, weight, credit) in enumerate(rows):
+        y = 148 + i * 21
+        out.append(text(label_x, y + 4, name, 12, p["muted"]))
+        out.append(rect(track_x, y - 8, track_w, 14, fill=p["track"], rx=7, sw=0))
+        filled = track_w * credit / 100.0
+        out.append(rect(track_x, y - 8, max(filled, 3), 14, fill=p["a2"], rx=7, sw=0))
+        out.append(text(track_x + track_w + 12, y + 4, f"{credit:g} / {weight:g}", 11.5, p["ink"], "600", family=MONO))
+    out += footer(p, 396, h="One number, one method: ~90 of 100, from one table. A row carries zero credit until a gate behind it is green.")
+    return wrap(p, 452, "How the completion figure is counted", "Twelve horizontal bars, one per workstream, filled in proportion to the credit earned out of its weight.", out)
+
+
+DIAGRAMS = [projections, conformance, timeline, anatomy, accounting]
+
+
+def main():
+    here = os.path.dirname(os.path.abspath(__file__))
+    outdir = os.path.join(here, "..", "docs", "images")
+    os.makedirs(outdir, exist_ok=True)
+    for fn in DIAGRAMS:
+        name = fn.__name__
+        for theme, palette in (("light", LIGHT), ("dark", DARK)):
+            svg = fn(palette)
+            path = os.path.join(outdir, f"{name}-{theme}.svg")
+            with open(path, "w", encoding="utf-8", newline="\n") as fh:
+                fh.write(svg)
+            print("wrote", os.path.relpath(path))
+
+
+if __name__ == "__main__":
+    main()
