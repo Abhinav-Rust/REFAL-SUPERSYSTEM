@@ -1,9 +1,9 @@
 <svg viewBox="0 0 680 292" width="100%" xmlns="http://www.w3.org/2000/svg" role="img">
 <title>REFAL-SUPERSYSTEM status</title>
-<desc>Seven workstreams with their completion. The weighted total is about 90 percent.</desc>
+<desc>Seven workstreams with their completion. The weighted total is about 90.4 percent.</desc>
 <rect x="8" y="8" width="664" height="276" rx="16" fill="#1B1B1B" stroke="#444441" stroke-width="1"/>
 <text x="40" y="46" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="16" font-weight="500" fill="#F1EFE8">REFAL-SUPERSYSTEM</text>
-<text x="640" y="46" text-anchor="end" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="20" font-weight="500" fill="#5DCAA5">~90%</text>
+<text x="640" y="46" text-anchor="end" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="20" font-weight="500" fill="#5DCAA5">~90.4%</text>
 <text x="40" y="68" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="12" fill="#B4B2A9">four layers over one shared expression space · Turchin’s 1991 design</text>
 <text x="40" y="104" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="13" fill="#D3D1C7">L0 · Refal-5 machine</text>
 <rect x="310" y="95" width="270" height="9" rx="4.5" fill="#2C2C2A"/>
