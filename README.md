@@ -244,13 +244,22 @@ whether the transformation meant what it claimed.
 
 ## What each layer does
 
-| Layer | Component | What it does | Status |
-|---|---|---|---|
-| **L0** | Refal-5 machine | Runs Refal: pattern matching, term splicing, arithmetic, I/O. The state is one flat view field held as a rope of shared arenas, so a variable binds a *range* of it rather than a copy | ✅ Built |
-| **L1** | Reflection engine | Freezes an expression as inert data, inspects it with ordinary pattern matching, and thaws it back. Constructs symbolic execution graphs | ✅ Built — `refal reflect` returns the machine's active configuration as data through a public API |
-| **L2** | Supercompiler core | Drives a configuration into a graph of states, whistles on divergence, generalizes least-generally, folds loops, and emits a residual program | ✅ Built |
-| **L3** | Meta-prover | Accepts assertions or relational functions and verifies equivalence and invariants by complete tree reduction | 🔶 Predicates and equations built — `refal prove` drives a named predicate to Turchin's `'True'` criterion, and `refal prove --equiv` decides an equation over free variables by folding a branch whose sides have reduced to a renaming of the claim. An arbitrary relation, and proofs needing generalisation beyond the loop edge, are not yet accepted |
-| **L4** | Self-application | The engine applied to itself: a compiler that compiles its own source, and a generator that emits a compiler | 🔶 Fixpoint closed, and the self-application **emits a working compiler** (run on the corpus, agrees with `refal compile`); `refal project2` drives an interpreter with its program open and eliminates it, but the residue is structurally the interpreter |
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/layerstack-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/layerstack-light.svg">
+  <img alt="A stack of five layers with their status: L0 Refal-5 machine, L1 reflection engine and L2 supercompiler core are Built; L3 meta-prover and L4 self-application are Partial" src="docs/images/layerstack-light.svg" width="100%">
+</picture>
+
+</div>
+
+Each built layer is exercised by a command — `refal run` (L0), `refal reflect`
+(L1), `refal compile` (L2) — and each partial layer names its own gap: `refal
+prove` drives a predicate to Turchin's single terminal `'True'` and `refal prove
+--equiv` decides an equation (L3), while the self-application emits a working
+compiler but not yet a generator (L4). The full capability-by-capability table is
+under [What works today](#what-works-today).
 
 ## Why it exists
 
