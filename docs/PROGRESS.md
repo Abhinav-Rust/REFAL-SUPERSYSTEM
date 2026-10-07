@@ -2744,6 +2744,26 @@ are:
   facts are recorded so the next session does not re-derive them: a proof of the
   tree reversal needs the inner field split into the domain **and** the pair
   lifted, in that order.
+
+  **And a soundness defect in the *existing* prover was found in the same
+  investigation, and fixed.** The reasoning — the hypothesis may only be applied
+  inside the domain — applies to the prover as it already stood. With
+  `Rev { (Leaf) = (Leaf); (Node e.L e.R) = ...; }` (the **expression**-field form,
+  whose reduction *does* unfold), `refal prove --equiv Rev-Left Rev-Right`
+  reported **`proved`** for `Rev(Rev(T)) = T` — a claim the program does not
+  satisfy, because `Rev((Node Foo Foo))` has no sentence (measured: `refal run`
+  reports `no sentence matched in function Rev`). The prover had folded the
+  induction hypothesis at the field variable `e.L`, which a **callee-driven**
+  split introduced and which nothing established to be a tree. **Fixed** by
+  `pair_is_in_domain`: the hypothesis — the fold **and** the generalisation's
+  closing step — is applied only where the pair's free variables come from an
+  **exhaustive** partition (Turchin's `[]` / `s.H e.T` / `(e.B) e.T`) or are the
+  claim's own. The bracket-field statement (`equiv-tree-reversal.ref`) is
+  unchanged at `open`, `right-id` and associativity stay `proved`, the false
+  equation still refutes, and a new fixture `examples/equiv-partial-domain.ref`
+  plus the CLI gate `the_prover_never_proves_a_claim_that_is_false_outside_the_domain`
+  pin it. This is *why* the row is Partial and not Closed: the prover now refuses
+  what it cannot justify, but it still cannot **prove** the tree reversal.
 - ~~**Two defects found and not yet fixed.**~~ **Both fixed, in one change.** The
   ground matcher (`ground_term_matches`) and its Refal-authored counterpart
   (`DvGround` in `examples/compiler.ref`) both dropped a variable bound inside a

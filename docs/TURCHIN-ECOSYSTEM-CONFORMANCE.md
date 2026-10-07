@@ -303,7 +303,14 @@ the answer to "what does 100% mean". The order is by what unblocks what.
    variable not established to be in the callee's domain. What the row needs is
    **domain closure** of the partition under the callee's sub-bindings — SCP4's
    stack configuration — so the remaining half of E-12/E-13 and E-11 are one item.
-   See `PROGRESS.md`, "Measured 2026-10-07".
+   **A soundness defect in the prover itself was found and fixed in the same
+   investigation:** the induction hypothesis was being applied at a field variable
+   a *callee-driven* split introduced, which reported `proved` for the false claim
+   `Rev(Rev(T)) = T` under the expression-field `Rev`. `pair_is_in_domain` now
+   applies the hypothesis only at an exhaustive partition's variables or the
+   claim's own, and the gate is
+   `the_prover_never_proves_a_claim_that_is_false_outside_the_domain`. See
+   `PROGRESS.md`, "Measured 2026-10-07".
 2. **Negative information and stack configurations (E-11).** **The partition that
    can enter a constructor is built** (`SplitStrategy::Pattern`, projections
    only), which is what unblocked the 2nd projection. What remains is SCP4's
