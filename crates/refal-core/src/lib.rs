@@ -6091,6 +6091,8 @@ pub fn prove_equivalence(
         max_steps,
         splits: 0,
         in_domain: Vec::new(),
+        abstractions: Vec::new(),
+        abstract_next: 0,
     };
     let (left_terms, right_terms, claim_vars) = prover.claim(left, right)?;
     prover.in_domain = claim_vars;
@@ -6195,6 +6197,22 @@ struct EquivalenceProver<'a> {
     /// may lie outside the domain -- which proves a claim the program does not
     /// satisfy. See `pair_is_in_domain`.
     in_domain: Vec<String>,
+    /// Bracket-valued stuck calls abstracted to a fresh bracket, so a pattern
+    /// whose bracket field meets a **call** can still unfold.
+    ///
+    /// `<Rev (Node <Rev (e.R)> <Rev (e.L)>)>` cannot reduce: `Rev`'s pattern
+    /// `(Node (e.L') (e.R'))` needs the fields to be *brackets*, and they are
+    /// calls. But `Rev` returns a bracket for a bracket argument, so each field
+    /// *is* a bracket whose contents are unknown. Replacing it by a fresh
+    /// bracket `(c)` lets the pattern match; the result is then **expanded**
+    /// (`(c)` back to the call), which is what makes the double application come
+    /// out as `<Rev <Rev (e.R)>>` and fold to the claim. Keyed by the fresh
+    /// contents variable; the value is the term the bracket denotes. A `Vec` so
+    /// an abstraction made while trying a sentence that turns out not to match
+    /// can be rolled back by truncation.
+    abstractions: Vec<(String, CoreTerm)>,
+    /// The next fresh abstracted-contents variable index.
+    abstract_next: usize,
 }
 
 /// The two sides of a claim, and the claim's own variables -- which seed the
@@ -6318,7 +6336,14 @@ impl<'a> EquivalenceProver<'a> {
         // `T = (Node Foo Foo)`, where `Rev` has no sentence at all.
         if pair_is_in_domain(&left_terms, &right_terms, &self.in_domain) {
             for (index, (ancestor_left, ancestor_right)) in ancestors.iter().enumerate() {
-                if pairs_alpha_equal(&left_terms, &right_terms, ancestor_left, ancestor_right) {
+                // A **renaming** of the ancestor is the loop edge -- the same
+                // claim back again. An **instance** is the structural-induction
+                // step: `Rev(Rev((e.L))) = (e.L)` is the claim at `T = (e.L)`, a
+                // strict subterm of the case that produced it, and the hypothesis
+                // covers every instance of itself. Both are closed by the claim.
+                if pairs_alpha_equal(&left_terms, &right_terms, ancestor_left, ancestor_right)
+                    || pairs_instance_of(&left_terms, &right_terms, ancestor_left, ancestor_right)
+                {
                     leaves.push(EquivalenceLeaf::Folded {
                         depth,
                         ancestor: index,
@@ -6333,6 +6358,63 @@ impl<'a> EquivalenceProver<'a> {
                 right: format_term_sequence(&right_terms),
             });
             return Ok(());
+        }
+
+        // The pair as an aligned conjunction of sub-goals.
+        //
+        // A Refal expression is a word in the free monoid over terms, so two
+        // sequences of the **same length** are equal exactly when their terms are
+        // equal position by position -- the decomposition is an equivalence, not
+        // an approximation. It closes a branch whose sides unfold into a pair of
+        // *independent components*, the shape a two-field constructor produces:
+        // `Rev(Rev(Node L R))` unfolds to `<Rev <Rev L>> <Rev <Rev R>> = (e.L)
+        // (e.R)`, and each component is an instance of the claim.
+        //
+        // It is tried before the whistle because it is the stronger closing rule,
+        // and it is *guarded*: `pair_is_in_domain` refuses it where the components
+        // may lie outside the claim's domain, which is what keeps it sound -- the
+        // same guard that lets it fire here is the one that stops the fold at a
+        // partial callee's field. A decomposition that does not fully close is
+        // rolled back and the walk continues on the existing path, so nothing that
+        // proved without it is disturbed.
+        if left_terms.len() == right_terms.len()
+            && left_terms.len() >= 2
+            && pair_is_in_domain(&left_terms, &right_terms, &self.in_domain)
+        {
+            let mark = (self.steps, self.splits);
+            let mut component_leaves = Vec::new();
+            for index in 0..left_terms.len() {
+                self.prove_pair(
+                    &left_terms[index..index + 1],
+                    &right_terms[index..index + 1],
+                    ancestors,
+                    &mut component_leaves,
+                    depth + 1,
+                )?;
+            }
+            if let Some(refutation) = component_leaves
+                .iter()
+                .find(|leaf| matches!(leaf, EquivalenceLeaf::Refuted { .. }))
+                .cloned()
+            {
+                leaves.push(refutation);
+                return Ok(());
+            }
+            if !component_leaves.is_empty()
+                && component_leaves.iter().all(|leaf| {
+                    matches!(
+                        leaf,
+                        EquivalenceLeaf::Reflexive { .. }
+                            | EquivalenceLeaf::Folded { .. }
+                            | EquivalenceLeaf::Generalized { .. }
+                    )
+                })
+            {
+                leaves.extend(component_leaves);
+                return Ok(());
+            }
+            self.steps = mark.0;
+            self.splits = mark.1;
         }
 
         // The whistle, and generalisation (Turchin 1980 §4.6, 1988). The renaming
@@ -6473,10 +6555,134 @@ impl<'a> EquivalenceProver<'a> {
         {
             let branches = self.callee_patterns(&name);
             if branches.len() >= 2 {
-                return (branches, false);
+                // A callee with a **catch-all** sentence accepts every expression,
+                // so its patterns cover the whole domain and the split *is*
+                // exhaustive -- the hypothesis may be applied at the variables it
+                // introduces, which is what makes a claim over a total function
+                // provable where the same claim over a partial one is not.
+                return (branches, self.callee_is_total(&name));
             }
         }
         (self.partitions(), true)
+    }
+
+    /// Whether a function accepts **every** expression.
+    ///
+    /// A sentence with no conditions whose pattern is a bare expression variable
+    /// matches anything, so nothing can fall off the end of the function: it is
+    /// total. This is the syntactic side of the domain-closure question -- a
+    /// total callee's domain is the whole expression space, so its patterns are
+    /// an exhaustive split of it.
+    fn callee_is_total(&self, name: &str) -> bool {
+        self.program
+            .functions
+            .iter()
+            .filter(|function| function.name.eq_ignore_ascii_case(name))
+            .flat_map(|function| function.sentences.iter())
+            .any(|sentence| {
+                sentence.conditions.is_empty()
+                    && matches!(sentence.pattern.as_slice(), [term] if is_expression_variable(term))
+            })
+    }
+
+    /// Whether `<name ...>` always evaluates to a bracket when its argument is
+    /// one -- every sentence returns a single bracket, or a bare expression
+    /// variable (which, given a bracket argument, is that bracket).
+    fn call_is_bracket_valued(&self, name: &str) -> bool {
+        let mut any = false;
+        for function in self
+            .program
+            .functions
+            .iter()
+            .filter(|function| function.name.eq_ignore_ascii_case(name))
+        {
+            for sentence in &function.sentences {
+                any = true;
+                let bracket_like = match sentence.result.as_slice() {
+                    [term] => matches!(
+                        &term.kind,
+                        CoreTermKind::Bracket(_)
+                            | CoreTermKind::Variable {
+                                kind: VariableKind::Expression,
+                                ..
+                            }
+                    ),
+                    _ => false,
+                };
+                if !bracket_like {
+                    return false;
+                }
+            }
+        }
+        any
+    }
+
+    /// Replace every bracket-valued stuck call in a **field** position by a fresh
+    /// bracket `(c)`, recording the link. See `EquivalenceProver::abstractions`.
+    fn abstract_bracket_calls(&mut self, terms: &[CoreTerm]) -> Vec<CoreTerm> {
+        let mut out = Vec::with_capacity(terms.len());
+        for term in terms {
+            out.push(match &term.kind {
+                CoreTermKind::Bracket(inner) => CoreTerm {
+                    kind: CoreTermKind::Bracket(self.abstract_bracket_calls(inner)),
+                    span: term.span,
+                },
+                CoreTermKind::Call { name, args } if self.call_is_bracket_valued(name) => {
+                    let variable = format!("abs.{}.{}", self.abstract_next, args.len());
+                    self.abstract_next += 1;
+                    self.abstractions.push((variable.clone(), term.clone()));
+                    CoreTerm {
+                        kind: CoreTermKind::Bracket(vec![CoreTerm {
+                            kind: CoreTermKind::Variable {
+                                kind: VariableKind::Expression,
+                                name: variable,
+                            },
+                            span: empty_span(),
+                        }]),
+                        span: term.span,
+                    }
+                }
+                _ => term.clone(),
+            });
+        }
+        out
+    }
+
+    /// Replace each abstracted bracket `(c)` by the call it denotes.
+    fn expand_abstractions(&self, terms: &[CoreTerm]) -> Vec<CoreTerm> {
+        terms
+            .iter()
+            .map(|term| match &term.kind {
+                CoreTermKind::Bracket(inner) => {
+                    if let [
+                        CoreTerm {
+                            kind: CoreTermKind::Variable { name, .. },
+                            ..
+                        },
+                    ] = inner.as_slice()
+                        && let Some((_, denoted)) = self
+                            .abstractions
+                            .iter()
+                            .rev()
+                            .find(|(candidate, _)| candidate.eq_ignore_ascii_case(name))
+                    {
+                        return denoted.clone();
+                    }
+                    CoreTerm {
+                        kind: CoreTermKind::Bracket(self.expand_abstractions(inner)),
+                        span: term.span,
+                    }
+                }
+                CoreTermKind::Call { name, args } => CoreTerm {
+                    kind: CoreTermKind::Call {
+                        name: name.clone(),
+                        args: self.expand_abstractions(args),
+                    },
+                    span: term.span,
+                },
+                _ => term.clone(),
+            })
+            .collect()
     }
 
     /// The distinct, unconditional sentence patterns a function declares.
@@ -6615,6 +6821,11 @@ impl<'a> EquivalenceProver<'a> {
             return Ok(Invoked::Stuck);
         }
         self.steps += 1;
+        // Abstract a bracket field that is a bracket-valued call, so a pattern
+        // that requires a bracket there can match. The links are kept only if a
+        // sentence is selected; a failed match discards them.
+        let mark = self.abstractions.len();
+        let abstracted = self.abstract_bracket_calls(input);
         let mut unknown_before = false;
         let mut blocked: Option<String> = None;
         for definition in self
@@ -6625,7 +6836,7 @@ impl<'a> EquivalenceProver<'a> {
         {
             for sentence in &definition.sentences {
                 let mut bindings: HashMap<String, Vec<CoreTerm>> = HashMap::new();
-                match match_symbolic_pattern(&sentence.pattern, input, &mut bindings) {
+                match match_symbolic_pattern(&sentence.pattern, &abstracted, &mut bindings) {
                     SymbolicMatch::No => continue,
                     SymbolicMatch::Unknown => {
                         if blocked.is_none() {
@@ -6650,15 +6861,18 @@ impl<'a> EquivalenceProver<'a> {
                 if unknown_before {
                     // An earlier sentence might also match, and only a split can
                     // decide which. Committing here would be unsound.
+                    self.abstractions.truncate(mark);
                     return Ok(match blocked {
                         Some(variable) => Invoked::Blocked(variable),
                         None => Invoked::Stuck,
                     });
                 }
-                let result = substitute_terms(&sentence.result, &bindings);
+                let result =
+                    self.expand_abstractions(&substitute_terms(&sentence.result, &bindings));
                 return Ok(Invoked::Reduced(result));
             }
         }
+        self.abstractions.truncate(mark);
         Ok(match blocked {
             Some(variable) => Invoked::Blocked(variable),
             None => Invoked::Stuck,
@@ -6956,7 +7170,14 @@ fn sequence_is_instance_of(
                     continue;
                 }
                 if let Some(previous) = bindings.get(&key) {
-                    if previous == slice && go(instance, general, general_index + 1, end, bindings)
+                    // Compare by **kind**, not by the derived equality: a
+                    // `CoreTerm`'s `PartialEq` includes its source span, and the
+                    // two occurrences of the same subterm are at different spans,
+                    // so `==` would report them as different and the instance
+                    // test would fail on a term that is plainly an instance --
+                    // the same trap `same_term_kind` exists to avoid.
+                    if term_sequences_same_kind(previous, slice)
+                        && go(instance, general, general_index + 1, end, bindings)
                     {
                         return true;
                     }

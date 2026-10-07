@@ -313,8 +313,14 @@ the answer to "what does 100% mean". The order is by what unblocks what.
    tree-reversal fixture is itself false as stated:** its `Rev` is *partial*, so
    `(Node (Foo) (Leaf))` is a case and the claim is undefined there. The theorem
    needs a **total** `Rev` — measured, adding `e.Other = e.Other;` makes
-   `Rev(Rev(T)) = T` hold for every input. See `PROGRESS.md`, "Measured
-   2026-10-07".
+   `Rev(Rev(T)) = T` hold for every input. **Done 2026-10-07: the fixture is
+   restated with a total `Rev` and the theorem is now *proved*** (18 steps,
+   `complete: yes`), gated by `the_prover_proves_the_tree_reversal`. The proof
+   needed the contents abstraction, the guarded aligned-component decomposition,
+   domain closure, and a span-insensitivity fix in `sequence_is_instance_of`. Of
+   SCP4 §4's three named theorems, associativity of `Append` and the tree
+   reversal are now gated; the sorting equality remains, with the general
+   relation. See `PROGRESS.md`, "Done 2026-10-07".
 2. **Negative information and stack configurations (E-11).** **The partition that
    can enter a constructor is built** (`SplitStrategy::Pattern`, projections
    only), which is what unblocked the 2nd projection. What remains is SCP4's

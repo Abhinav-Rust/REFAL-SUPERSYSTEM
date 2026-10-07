@@ -7229,37 +7229,51 @@ fn the_prover_refutes_a_false_equation_and_its_status_says_so() {
     );
 }
 
-/// SCP4 1999 section 4's *second* named theorem, and the prover's measured
-/// boundary (E-12/E-13).
+/// SCP4 1999 section 4's *second* named theorem: reversing a binary tree twice
+/// is the identity, and the prover **proves** it (E-12/E-13).
 ///
-/// `Rev` reverses a binary tree; reversing twice is the identity. The prover
-/// terminates -- the walk closes rather than being truncated by its budget --
-/// and decides the `(Leaf)` branch by reflexivity. The `Node` branch is reported
-/// `open`, because unfolding it produces a pair with **two independent
-/// components** (`<Rev <Rev L>>` against `e.L`, and `<Rev <Rev R>>` against
-/// `e.R`) and the prover drives the pair as one sequence rather than as a
-/// conjunction of sub-goals, so the induction hypothesis is never reached.
+/// The gate requires the proof to *use* its mechanisms, not merely report a
+/// verdict -- a prover that only ever said `proved` proves nothing about which
+/// rule ran. The `(Leaf)` branch closes by reflexivity; the `Node` branch unfolds
+/// to `<Rev <Rev L>> <Rev <Rev R>> = (e.L) (e.R)`, whose two components fold at
+/// **depth 2** (each an instance of the claim -- the structural-induction step);
+/// and the catch-all branch folds at depth 1.
 ///
-/// The gate is on the *shape of the walk*, which is what the whistle and the
-/// callee-driven partition changed. Before them the same claim diverged --
-/// 12,315 leaves and no end at `--steps 20000` -- and the three-way partition
-/// generated two branches whose shapes `Rev` can never accept.
+/// The claim is only true because `Rev` is **total**: the catch-all sentence
+/// makes every term a case, so the hypothesis is sound at every term. With `Rev`
+/// partial the claim is undefined at `(Node (Foo) (Leaf))` and the prover
+/// correctly reports `open` -- see `examples/equiv-partial-domain.ref` and
+/// `the_prover_never_proves_a_claim_that_is_false_outside_the_domain`.
 #[test]
-fn the_tree_reversal_terminates_and_publishes_its_boundary() {
+fn the_prover_proves_the_tree_reversal() {
     let output =
         prove_equivalence_file("examples/equiv-tree-reversal.ref", "Rev-Left", "Rev-Right");
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
+        output.status.success(),
+        "reversing a tree twice should be proved\nstdout:\n{stdout}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
         stdout.contains("  complete: yes"),
         "the walk must close rather than be truncated by the budget:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("verdict: proved"),
+        "the tree reversal is proved:\n{stdout}"
     );
     assert!(
         stdout.contains("reflexive (depth 1)"),
         "the (Leaf) branch is decided by reflexivity:\n{stdout}"
     );
     assert!(
-        stdout.contains("verdict: open"),
-        "the Node branch is the published boundary, and open is the honest verdict:\n{stdout}"
+        stdout.contains("folded (depth 2, ancestor 0)"),
+        "the two components of the Node branch fold at depth 2 -- the induction \
+         step the theorem needs:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("folded (depth 1, ancestor 0)"),
+        "the catch-all branch folds at depth 1:\n{stdout}"
     );
 }
 

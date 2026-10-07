@@ -2788,6 +2788,45 @@ are:
   build the contents abstraction so the double application unfolds; **(3)** relax
   `pair_is_in_domain` to admit a field of a **total** callee. In that order, and
   none of it before (1).
+
+  **Done 2026-10-07 — all three steps landed, and the tree reversal is
+  *proved*.** The fixture is restated with a total `Rev`; `refal prove --equiv
+  Rev-Left Rev-Right` now reports **`proved`** in **18 steps, `complete: yes`**,
+  with the two components folded at depth 2 and the catch-all at depth 1. Four
+  pieces, each of them load-bearing:
+
+  1. **The contents abstraction** (`EquivalenceProver::abstract_bracket_calls` /
+     `expand_abstractions`). `<Rev (Node <Rev (e.R)> <Rev (e.L)>)>` cannot reduce
+     — `Rev`'s pattern needs bracket fields and they are calls — so a
+     bracket-valued stuck call in a field position is replaced by a fresh bracket
+     `(abs.n.k)`, the sentence is selected, and the result is **expanded** back.
+     That is what turns the double application into
+     `<Rev <Rev (e.L)>> <Rev <Rev (e.R)>>`. `call_is_bracket_valued` gates it: a
+     function whose every sentence returns a bracket or a bare expression
+     variable. Links are rolled back by truncation when no sentence is selected.
+  2. **The aligned-component decomposition**, re-added and now *guarded* by
+     `pair_is_in_domain` — the same guard that made it unsound when tried alone on
+     2026-10-07 is what makes it sound here.
+  3. **Domain closure** (`callee_is_total`): a callee with a condition-free
+     catch-all sentence accepts every expression, so its patterns are an
+     *exhaustive* split and the hypothesis may be applied at the fields.
+  4. **A real defect in `sequence_is_instance_of`.** The fold could not close the
+     components because the instance test compared a bound value with `==`, whose
+     `PartialEq` includes the **source span** — the two occurrences of `(e.L)` are
+     at different spans, so an instance that is plainly an instance was reported
+     as none. Fixed to `term_sequences_same_kind`. This is the same trap
+     `same_term_kind` exists to avoid, and it had been latent in the whistle's
+     instance check as well.
+
+  **Gates.** `the_prover_proves_the_tree_reversal` (CLI) requires the verdict *and*
+  both folds, because a prover that only ever says `proved` proves nothing about
+  which rule ran. The partial form is pinned separately:
+  `examples/equiv-partial-domain.ref` and
+  `the_prover_never_proves_a_claim_that_is_false_outside_the_domain` still report
+  `open`. Associativity, right identity, the false-equation refutation, and the
+  whole whistle/predicate/generalisation suite are unchanged. Of SCP4 1999 §4's
+  three named theorems, **two are now gated** (associativity of `Append`, tree
+  reversal); the sorting equality remains, with the general relation.
 - ~~**Two defects found and not yet fixed.**~~ **Both fixed, in one change.** The
   ground matcher (`ground_term_matches`) and its Refal-authored counterpart
   (`DvGround` in `examples/compiler.ref`) both dropped a variable bound inside a
