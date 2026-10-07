@@ -8,9 +8,9 @@
    Turchin's loop edge (1979 section 2). This file carries the second, and it is
    the smallest statement that needs *generalisation* as well.
 
-   `Rev` reverses a binary tree: a `(Leaf)` is its own reverse, and a
-   `(Node L R)` reverses to `(Node <Rev R> <Rev L>)`. The claim is that reversing
-   twice is the identity, by structural induction:
+   `Rev` reverses a binary tree: a `(Leaf)` is its own reverse, a `(Node L R)`
+   reverses to `(Node <Rev R> <Rev L>)`, and anything else is its own reverse.
+   The claim is that reversing twice is the identity:
 
      t = (Leaf)          <Rev <Rev (Leaf)>>  reduces to (Leaf)         reflexive
      t = (Node (e.L) (e.R))
@@ -18,37 +18,37 @@
                          (Node <Rev <Rev L>> <Rev <Rev R>>)           by the
                                                                      induction
                                                                      hypothesis
+     t = anything else   <Rev <Rev t>> = <Rev t> = t                   reflexive
 
-   **The boundary this file publishes.** The prover terminates on it -- 73 steps,
-   the walk closed -- and decides the `(Leaf)` branch by reflexivity, but the
-   `Node` branch is reported `open`. The reason is measured rather than guessed:
-   unfolding the `Node` case produces a pair with *two* independent components
-   (`<Rev <Rev L>>` against `e.L`, and `<Rev <Rev R>>` against `e.R`), and the
-   prover drives the pair as one sequence rather than as a conjunction of
-   sub-goals, so the induction hypothesis is never reached. That is the
-   generalisation this row still withholds: Turchin's generaliser must lift the
-   *pair*, not only each side, for the two components to fold independently.
+   **The catch-all is not decoration -- it is what makes the claim true.** A
+   claim over a function is a claim about the domain that function accepts. With
+   `Rev` *partial* the domain includes `(Node (Foo) (Leaf))`, and the claim is
+   *undefined* there: `Rev` has no sentence for `(Foo)`, measured (`refal run`
+   reports `no sentence matched in function Rev`). A prover that closed it
+   anyway would be applying the induction hypothesis to a term outside the
+   domain -- unsound, and the reason `pair_is_in_domain` refuses that fold.
+   Making `Rev` total makes every term a case, and then the hypothesis is sound
+   everywhere. The partial form is the published boundary in
+   `examples/equiv-partial-domain.ref`.
 
-   The two things this fixture *does* gate are the whistle and the partition.
+   **What the proof needs, and each piece is gated.** (1) The **contents
+   abstraction**: `<Rev (Node <Rev (e.R)> <Rev (e.L)>)>` cannot reduce, because
+   `Rev`'s pattern `(Node (e.L') (e.R'))` needs bracket fields and they are
+   calls. Since `Rev` returns a bracket for a bracket argument, each field *is* a
+   bracket of unknown contents; abstracting it to a fresh bracket lets the
+   pattern match, and expanding it back afterwards is what makes the double
+   application come out as `<Rev <Rev (e.L)>> <Rev <Rev (e.R)>>`. (2) The
+   **aligned-component decomposition**: an expression is a word in the free
+   monoid over terms, so `<Rev <Rev L>> <Rev <Rev R>> = (e.L) (e.R)` splits into
+   the two components, each an *instance* of the claim. (3) **Domain closure**:
+   the hypothesis may be applied only where the terms are in the claim's domain,
+   which holds here because `Rev` is total.
+
+   The two things this fixture also gates are the whistle and the partition.
    Without the whistle the walk diverges -- 12,315 leaves and no end at
    `--steps 20000`. Without the callee-driven partition the split is Turchin's
    three-way `[]` / `s.H e.T` / `(e.B) e.T`, and two of the three branches are
-   shapes `Rev` cannot accept, so they can never reduce. With both, the walk
-   closes and the first branch is decided.
-
-   **Corrected 2026-10-07: the claim above is false as stated, and the reason is
-   that this `Rev` is *partial*.** A claim over a partial function is a claim
-   about the domain the function accepts, and the callee's patterns *are* that
-   domain -- so `(Node (Foo) (Leaf))` is a case, and the claim is undefined
-   there: `Rev` has no sentence for `(Foo)`, measured (`refal run` reports `no
-   sentence matched in function Rev`). `open` is therefore the honest verdict,
-   not a gap to close, and unfolding the double application would let the
-   induction hypothesis be applied at a term outside the domain -- the
-   unsoundness `pair_is_in_domain` exists to refuse. What makes
-   `Rev(Rev(T)) = T` a theorem is making `Rev` **total**: add `e.Other = e.Other;`
-   and it holds for every `T` -- measured on a tree, on `(Node (Foo) (Leaf))`
-   (which then comes back unchanged), and on a bare symbol. That is the form to
-   restate this fixture in before building anything to prove it. */
+   shapes `Rev` cannot accept, so they can never reduce. */
 
 $EXTERN Prout;
 
@@ -67,8 +67,11 @@ Rev-Right {
 
 /* Reversing a binary tree. `Rev`'s own patterns are the domain of its argument,
    which is what the prover's partition reads: a branch that is neither `(Leaf)`
-   nor `(Node (e.L) (e.R))` is not a tree, and is not a case of the claim. */
+   nor `(Node (e.L) (e.R))` is not a tree and is its own reverse, which is what
+   the catch-all supplies -- and what makes the function total, so the induction
+   hypothesis is sound at every term. */
 Rev {
   (Leaf) = (Leaf);
   (Node (e.L) (e.R)) = (Node <Rev (e.R)> <Rev (e.L)>);
+  e.Other = e.Other;
 }
