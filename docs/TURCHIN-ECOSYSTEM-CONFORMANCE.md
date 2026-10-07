@@ -309,8 +309,12 @@ the answer to "what does 100% mean". The order is by what unblocks what.
    `Rev(Rev(T)) = T` under the expression-field `Rev`. `pair_is_in_domain` now
    applies the hypothesis only at an exhaustive partition's variables or the
    claim's own, and the gate is
-   `the_prover_never_proves_a_claim_that_is_false_outside_the_domain`. See
-   `PROGRESS.md`, "Measured 2026-10-07".
+   `the_prover_never_proves_a_claim_that_is_false_outside_the_domain`. **And the
+   tree-reversal fixture is itself false as stated:** its `Rev` is *partial*, so
+   `(Node (Foo) (Leaf))` is a case and the claim is undefined there. The theorem
+   needs a **total** `Rev` — measured, adding `e.Other = e.Other;` makes
+   `Rev(Rev(T)) = T` hold for every input. See `PROGRESS.md`, "Measured
+   2026-10-07".
 2. **Negative information and stack configurations (E-11).** **The partition that
    can enter a constructor is built** (`SplitStrategy::Pattern`, projections
    only), which is what unblocked the 2nd projection. What remains is SCP4's

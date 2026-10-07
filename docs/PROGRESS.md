@@ -2764,6 +2764,30 @@ are:
   plus the CLI gate `the_prover_never_proves_a_claim_that_is_false_outside_the_domain`
   pin it. This is *why* the row is Partial and not Closed: the prover now refuses
   what it cannot justify, but it still cannot **prove** the tree reversal.
+
+  **Measured 2026-10-07, and it corrects the row's framing — the fixture's claim
+  is false as stated, and the reason is the *partiality* of `Rev`.** The contract
+  this file states is that "a claim over a partial function is a claim about the
+  domain the function accepts, and the callee's patterns *are* that domain". By
+  that contract `(Node (Foo) (Leaf))` **is** in `Rev`'s domain -- it matches
+  `(Node (e.L)(e.R))` -- and the claim is *undefined* there: `Rev` has no sentence
+  for `(Foo)`, measured, `refal run` reports `no sentence matched in function
+  Rev`. So `Rev(Rev(T)) = T` is **false** over the domain the fixture's `Rev`
+  accepts, and the prover's `open` is the honest verdict -- not a gap to close.
+  **This is the load-bearing consequence:** the "contents abstraction" (abstract a
+  bracket-valued stuck call to a fresh bracket, unfold, carry the link) would let
+  the fold fire at the field `e.L` -- and that fold is exactly the unsoundness
+  `pair_is_in_domain` was added to stop. **Do not build the abstraction on the
+  partial fixture.** What makes the claim a theorem is making `Rev` **total**: add
+  `e.Other = e.Other;` and `Rev(Rev(T)) = T` holds for *every* `T` -- measured on a
+  tree, on the non-tree `(Node (Foo) (Leaf))` (which now comes back unchanged),
+  and on a bare symbol. With a total callee the fold at a field *is* sound,
+  because the hypothesis holds at every term. The prover reports `incomplete` for
+  that form (it partitions and grows rather than folding), so the work is:
+  **(1)** restate the fixture with a total `Rev` so the claim is true; **(2)**
+  build the contents abstraction so the double application unfolds; **(3)** relax
+  `pair_is_in_domain` to admit a field of a **total** callee. In that order, and
+  none of it before (1).
 - ~~**Two defects found and not yet fixed.**~~ **Both fixed, in one change.** The
   ground matcher (`ground_term_matches`) and its Refal-authored counterpart
   (`DvGround` in `examples/compiler.ref`) both dropped a variable bound inside a
