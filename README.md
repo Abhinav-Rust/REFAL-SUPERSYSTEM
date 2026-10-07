@@ -16,7 +16,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/status-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/status-light.svg">
-  <img alt="Status: about 90% of the supersystem — L0, L1 and the Refal-authored compiler are near complete, L2 is close, and L3 and L4 are partial" src="docs/images/status-light.svg" width="100%">
+  <img alt="Status: about 90.4% of the supersystem — L0, L1 and the Refal-authored compiler are near complete, L2 is close, and L3 and L4 are partial" src="docs/images/status-light.svg" width="100%">
 </picture>
 
 </div>
@@ -388,7 +388,7 @@ to another program.
 
 ## Project status
 
-### Honest completion: ~90%
+### Honest completion: ~90.4%
 
 This figure measures **the whole supersystem** — all four layers — not the compiler
 alone. The compiler is finished; the supersystem is not, and publishing the
@@ -421,11 +421,11 @@ compiler's own number as the project's would misdescribe what this repository is
 | Tier 1 static verification | 10.50 | 8.75 | 1.75 | no *total* termination analysis — and totality is the only thing Theorem 5.1 forbids; the target is a **sound, incomplete, certificate-carrying** analysis (see below) |
 | L2/L4 · Compiler implemented in Refal | 17.85 | 16.80 | 1.05 | not yet fast on very large inputs |
 | L4 · Verified self-hosting fixpoint | 9.10 | 8.05 | 1.05 | the fixpoint holds on the corpus and the compiler's own source, not on arbitrary programs |
-| **L3 · Meta-prover** | **13.00** | **11.00** | **2.00** | the entry, the driving, Turchin's `'True'` criterion, and the *relational* half are built and gated — an equation over free variables is decided by folding a branch to a renaming of the claim. What is withheld is the *general* relation (an arbitrary relation rather than equality) and a proof needing generalisation beyond the loop edge; of SCP4's three named theorems, associativity of `Append` **and the tree reversal** are gated (the reversal needs a total callee, a contents abstraction, a guarded component decomposition and domain closure); the sorting equality is not. A soundness defect — a truncated walk could refute — was found and fixed in an earlier session; a later session fixed a defect the ground matcher and the Refal-authored compiler both carried, which also repaired `refal compile` for a bracket-pattern callee; and this session found and fixed a **third** — the induction hypothesis was being applied at a field variable outside the callee's domain, which reported `proved` for a claim the program does not satisfy (`pair_is_in_domain`, gated) |
+| **L3 · Meta-prover** | **13.00** | **11.40** | **1.60** | the entry, the driving, Turchin's `'True'` criterion, and the *relational* half are built and gated — an equation over free variables is decided by folding a branch to a renaming of the claim. What is withheld is the *general* relation (an arbitrary relation rather than equality) and a proof needing generalisation beyond the loop edge; of SCP4's three named theorems, associativity of `Append` **and the tree reversal** are gated (the reversal needs a total callee, a contents abstraction, a guarded component decomposition and domain closure); the sorting equality is not. A soundness defect — a truncated walk could refute — was found and fixed in an earlier session; a later session fixed a defect the ground matcher and the Refal-authored compiler both carried, which also repaired `refal compile` for a bracket-pattern callee; and this session found and fixed a **third** — the induction hypothesis was being applied at a field variable outside the callee's domain, which reported `proved` for a claim the program does not satisfy (`pair_is_in_domain`, gated) |
 | L4 · Projections as artifacts | 5.00 | 3.50 | 1.50 | the 1st and 2nd both emit target code with gates, and the self-application emits a working compiler; what is withheld is that neither is *derived* by supercompilation (`S(S, int)`) — the 2nd is an authored mode that applies the driver, not a residue of specialising the supercompiler |
 | **L2 · Function inversion** | **3.00** | **3.00** | **0.00** | closed — `refal invert` drives the forward definition and emits the synthesised inverse, round-tripped in a gate |
 | Conformance / release evidence | 2.80 | 2.66 | 0.14 | three file-backed I/O clauses bind to the runtime's own test rather than a fixture |
-| **Total** | **100.00** | **~90** | **~10** | |
+| **Total** | **100.00** | **~90.4** | **~9.6** | |
 
 </details>
 

@@ -261,7 +261,7 @@ def accounting(p):
         ("Tier 1 static verification", 10.50, 8.75),
         ("L2/L4 \u00b7 compiler in Refal", 17.85, 16.80),
         ("L4 \u00b7 self-hosting fixpoint", 9.10, 8.05),
-        ("L3 \u00b7 meta-prover", 13.00, 11.00),
+        ("L3 \u00b7 meta-prover", 13.00, 11.40),
         ("L4 \u00b7 projections as artifacts", 5.00, 3.50),
         ("L2 \u00b7 function inversion", 3.00, 3.00),
         ("Conformance / release evidence", 2.80, 2.66),
