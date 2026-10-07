@@ -6090,8 +6090,10 @@ pub fn prove_equivalence(
         steps: 0,
         max_steps,
         splits: 0,
+        in_domain: Vec::new(),
     };
-    let (left_terms, right_terms) = prover.claim(left, right)?;
+    let (left_terms, right_terms, claim_vars) = prover.claim(left, right)?;
+    prover.in_domain = claim_vars;
     let mut ancestors: Vec<(Vec<CoreTerm>, Vec<CoreTerm>)> = Vec::new();
     let mut leaves = Vec::new();
     prover.prove_pair(&left_terms, &right_terms, &mut ancestors, &mut leaves, 0)?;
@@ -6181,7 +6183,23 @@ struct EquivalenceProver<'a> {
     steps: usize,
     max_steps: usize,
     splits: usize,
+    /// Variables an **exhaustive** partition introduced on the current path.
+    ///
+    /// Turchin's own partition (`[]` / `s.H e.T` / `(e.B) e.T`) covers every
+    /// expression, so a variable it introduces ranges over the whole domain and
+    /// the induction hypothesis may be applied at it. A *callee-driven* split
+    /// takes the callee's own patterns, which cover only the shapes the callee
+    /// accepts; the variables it introduces are *fields* of such a shape, and
+    /// nothing has shown that a field is itself a case of the claim. Folding at
+    /// a field of a callee-driven split applies the hypothesis to a term that
+    /// may lie outside the domain -- which proves a claim the program does not
+    /// satisfy. See `pair_is_in_domain`.
+    in_domain: Vec<String>,
 }
+
+/// The two sides of a claim, and the claim's own variables -- which seed the
+/// prover's `in_domain` set.
+type Claim = (Vec<CoreTerm>, Vec<CoreTerm>, Vec<String>);
 
 /// A term sequence reduced as far as it can go without splitting a variable.
 enum Reduced {
@@ -6202,11 +6220,7 @@ enum Invoked {
 
 impl<'a> EquivalenceProver<'a> {
     /// The two sides of the claim, over one shared set of free variables.
-    fn claim(
-        &mut self,
-        left: &str,
-        right: &str,
-    ) -> Result<(Vec<CoreTerm>, Vec<CoreTerm>), DriveError> {
+    fn claim(&mut self, left: &str, right: &str) -> Result<Claim, DriveError> {
         let left_sentence = self.single_sentence(left)?;
         let right_sentence = self.single_sentence(right)?;
         // The two functions must take the same argument *pattern*, so both sides
@@ -6228,7 +6242,13 @@ impl<'a> EquivalenceProver<'a> {
         }
         let left_terms = left_sentence.result.clone();
         let right_terms = right_sentence.result.clone();
-        Ok((left_terms, right_terms))
+        // The claim's own variables range over its domain, so they seed
+        // `in_domain`: a fold that mentions one of them is inside the domain,
+        // whereas one that mentions a *field* a callee-driven split introduced is
+        // not.
+        let mut claim_vars = Vec::new();
+        collect_free_variables(&left_sentence.pattern, &mut claim_vars);
+        Ok((left_terms, right_terms, claim_vars))
     }
 
     fn single_sentence(&self, function: &str) -> Result<&'a CoreSentence, DriveError> {
@@ -6285,13 +6305,26 @@ impl<'a> EquivalenceProver<'a> {
             leaves.push(EquivalenceLeaf::Reflexive { depth });
             return Ok(());
         }
-        for (index, (ancestor_left, ancestor_right)) in ancestors.iter().enumerate() {
-            if pairs_alpha_equal(&left_terms, &right_terms, ancestor_left, ancestor_right) {
-                leaves.push(EquivalenceLeaf::Folded {
-                    depth,
-                    ancestor: index,
-                });
-                return Ok(());
+        // The induction hypothesis may only be applied where the terms are known
+        // to lie in the claim's **domain**. `self.in_domain` holds the variables
+        // an exhaustive partition introduced -- every expression is one of those
+        // branches, so a pair built only from them is inside the domain. A
+        // variable a callee-driven split introduced is a *field* of a shape the
+        // callee accepts, and nothing has shown the field is itself a case of the
+        // claim; folding at it applies the hypothesis to a term that may lie
+        // outside the domain. That is a real unsoundness, measured: with
+        // `Rev { (Leaf) = (Leaf); (Node e.L e.R) = ...; }` the claim
+        // `Rev(Rev(T)) = T` folds at `T = e.L`, yet it is *false* at
+        // `T = (Node Foo Foo)`, where `Rev` has no sentence at all.
+        if pair_is_in_domain(&left_terms, &right_terms, &self.in_domain) {
+            for (index, (ancestor_left, ancestor_right)) in ancestors.iter().enumerate() {
+                if pairs_alpha_equal(&left_terms, &right_terms, ancestor_left, ancestor_right) {
+                    leaves.push(EquivalenceLeaf::Folded {
+                        depth,
+                        ancestor: index,
+                    });
+                    return Ok(());
+                }
             }
         }
         if is_ground(&left_terms) && is_ground(&right_terms) {
@@ -6342,7 +6375,17 @@ impl<'a> EquivalenceProver<'a> {
                 &mut inner_leaves,
                 depth + 1,
             )?;
+            // A proved generalisation closes the branch only if the branch is
+            // itself known to lie in the claim's domain. The generalised
+            // claim is *stronger* than the branch, so a proof of it is a
+            // proof of the branch -- but only where the branch is an instance
+            // of it *inside the domain*, which is what `pair_is_in_domain`
+            // establishes. Without this the whistle can close a branch whose
+            // terms lie outside the domain, which is how a false claim
+            // (`Rev(Rev(T)) = T` for a `Rev` that has no sentence for
+            // `(Node Foo Foo)`) was reported `proved`.
             let closed = !inner_leaves.is_empty()
+                && pair_is_in_domain(&left_terms, &right_terms, &self.in_domain)
                 && inner_leaves.iter().all(|leaf| {
                     matches!(
                         leaf,
@@ -6375,12 +6418,24 @@ impl<'a> EquivalenceProver<'a> {
             return Ok(());
         }
 
+        let (branches, exhaustive) = self.branches_for(&variable, &left_terms, &right_terms);
         ancestors.push((left_terms.clone(), right_terms.clone()));
-        for branch in self.branches_for(&variable, &left_terms, &right_terms) {
+        let domain_mark = self.in_domain.len();
+        if exhaustive {
+            // An exhaustive split covers the whole domain, so every variable it
+            // introduces ranges over the domain and the hypothesis may be applied
+            // at it. A callee-driven split does not, so its field variables are
+            // deliberately *not* recorded -- see `in_domain`.
+            for branch in &branches {
+                collect_free_variables(branch, &mut self.in_domain);
+            }
+        }
+        for branch in branches {
             let left_branch = substitute_variable(&left_terms, &variable, &branch);
             let right_branch = substitute_variable(&right_terms, &variable, &branch);
             self.prove_pair(&left_branch, &right_branch, ancestors, leaves, depth + 1)?;
         }
+        self.in_domain.truncate(domain_mark);
         ancestors.pop();
         Ok(())
     }
@@ -6400,21 +6455,28 @@ impl<'a> EquivalenceProver<'a> {
     /// at the level of an equation: a claim over a partial function is a claim
     /// about the domain that function accepts, and the callee's patterns are that
     /// domain.
+    ///
+    /// Returns the branches **and whether the split is exhaustive**. Turchin's
+    /// own partition covers every expression, so it is exhaustive; the callee's
+    /// patterns cover only the shapes the callee accepts, so they are not. The
+    /// flag is what the fold and the generalisation consult -- applying the
+    /// induction hypothesis at a field of a non-exhaustive split is the
+    /// unsoundness `pair_is_in_domain` guards against.
     fn branches_for(
         &mut self,
         variable: &str,
         left: &[CoreTerm],
         right: &[CoreTerm],
-    ) -> Vec<Vec<CoreTerm>> {
+    ) -> (Vec<Vec<CoreTerm>>, bool) {
         if let Some(name) =
             sole_argument_callee(left, variable).or_else(|| sole_argument_callee(right, variable))
         {
             let branches = self.callee_patterns(&name);
             if branches.len() >= 2 {
-                return branches;
+                return (branches, false);
             }
         }
-        self.partitions()
+        (self.partitions(), true)
     }
 
     /// The distinct, unconditional sentence patterns a function declares.
@@ -6765,6 +6827,37 @@ fn whistle_ancestor(
                 && !pairs_instance_of(left, right, ancestor_left, ancestor_right))
             .then_some(index)
         })
+}
+
+/// Whether every free variable in the pair is one an exhaustive partition
+/// introduced.
+///
+/// A pair with no free variables is trivially inside the domain; a pair built
+/// only from exhaustive-partition variables is inside it because the partition
+/// covers every expression; a pair that mentions a *field* variable from a
+/// callee-driven split is **not** known to be, which is what stops the induction
+/// hypothesis being applied outside the domain (see `EquivalenceProver::in_domain`).
+fn pair_is_in_domain(left: &[CoreTerm], right: &[CoreTerm], in_domain: &[String]) -> bool {
+    let mut names = Vec::new();
+    collect_free_variables(left, &mut names);
+    collect_free_variables(right, &mut names);
+    names.iter().all(|name| {
+        in_domain
+            .iter()
+            .any(|known| known.eq_ignore_ascii_case(name))
+    })
+}
+
+/// Every free variable name occurring in a term sequence, lowercased.
+fn collect_free_variables(terms: &[CoreTerm], out: &mut Vec<String>) {
+    for term in terms {
+        match &term.kind {
+            CoreTermKind::Variable { name, .. } => out.push(name.to_ascii_lowercase()),
+            CoreTermKind::Bracket(inner) => collect_free_variables(inner, out),
+            CoreTermKind::Call { args, .. } => collect_free_variables(args, out),
+            _ => {}
+        }
+    }
 }
 
 /// A call in the sequence whose **only** argument is the blocked variable.

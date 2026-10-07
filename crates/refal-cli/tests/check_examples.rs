@@ -7263,6 +7263,34 @@ fn the_tree_reversal_terminates_and_publishes_its_boundary() {
     );
 }
 
+/// A soundness gate for the equivalence prover (E-12/E-13): a claim the program
+/// does **not** satisfy must never be reported `proved`.
+///
+/// `examples/equiv-partial-domain.ref` states `Rev(Rev(T)) = T` for a `Rev` whose
+/// domain is not closed under its own field bindings -- `Rev((Node Foo Foo))`
+/// has no sentence. Before 2026-10-07 the prover folded the induction hypothesis
+/// at the field variable `e.L` and reported `proved`; `pair_is_in_domain` now
+/// lets the hypothesis be applied only at an *exhaustive* split's variables or
+/// the claim's own, and the verdict is `open`.
+#[test]
+fn the_prover_never_proves_a_claim_that_is_false_outside_the_domain() {
+    let output =
+        prove_equivalence_file("examples/equiv-partial-domain.ref", "Rev-Left", "Rev-Right");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        !stdout.contains("verdict: proved"),
+        "a claim the program does not satisfy must not be proved:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("  complete: yes"),
+        "the walk must still close rather than be truncated:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("verdict: open"),
+        "the honest verdict is open -- not proved, and no reachable counterexample:\n{stdout}"
+    );
+}
+
 /// The 2nd projection (E-14) emits a compiler, and its partition enters a
 /// constructor.
 ///
