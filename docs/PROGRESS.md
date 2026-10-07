@@ -2713,6 +2713,37 @@ are:
   `the_prover_never_refutes_a_claim_its_budget_cut_short` stays green. The row's
   other gap — the *general* relational form (an arbitrary relation rather than
   equality) — is untouched.
+
+  **Measured 2026-10-07 — the obvious fix is unsound, and the boundary is deeper
+  than "drive the pair as sub-goals".** The natural reading of "generalisation
+  must lift the pair" is: replace the pair `L1 … Ln = R1 … Rn` by the aligned
+  conjunction `∧i (Li = Ri)`, which *is* an equivalence over the free monoid of
+  terms (two words of equal length are equal exactly when their letters are equal
+  position by position). It was implemented — a decomposition tried before the
+  whistle, additive on failure — and **reverted**, because it is unsound. It does
+  fire on the tree reversal's `Node` branch, and it closes it by folding the
+  sub-goal `<Rev <Rev (e.L)>> = (e.L)` to the claim — which is the induction
+  hypothesis applied at `T = (e.L)`, a term **not established to be in `Rev`'s
+  domain**. Measured: `Rev { (Leaf) = (Leaf); (Node (e.L) (e.R)) = …; }` has no
+  sentence for `(Node (Foo Bar) (Leaf))` — `refal run` reports `no sentence
+  matched in function Rev` — so `Rev(Rev(T)) = T` is *false* for that `T`, and the
+  fold would prove it anyway. The current prover is sound only because it
+  partitions a variable into the callee's domain **before** folding; a
+  decomposition folds a component whose variable came from the callee's own
+  pattern binding, and so bypasses that partition. **The real boundary is domain
+  closure**: the induction is over `Rev`'s domain, the domain is not closed under
+  the pattern's sub-bindings, and the hypothesis may not be applied to a field
+  until the field is shown to be in the domain. That is the mechanism SCP4's
+  *stack configuration* (E-11) supplies — which is why E-12/E-13's remaining half
+  and E-11 are **one item rather than two**. A second measured fact, one level
+  down: the outer `Rev` cannot reduce at all until the inner field variables are
+  split — `<Rev (Node <Rev (e.R)> <Rev (e.L)>)>` is stuck because the pattern's
+  bracket field meets a **call** — so the walk stalls one level *above* the pair a
+  decomposition would split, and the decomposition fires (at depth 3) on a pair
+  (`<Rev (e.R)> <Rev (e.L)> = (e.L) (e.R)`) that is not a theorem at all. Both
+  facts are recorded so the next session does not re-derive them: a proof of the
+  tree reversal needs the inner field split into the domain **and** the pair
+  lifted, in that order.
 - ~~**Two defects found and not yet fixed.**~~ **Both fixed, in one change.** The
   ground matcher (`ground_term_matches`) and its Refal-authored counterpart
   (`DvGround` in `examples/compiler.ref`) both dropped a variable bound inside a
