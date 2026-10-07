@@ -296,7 +296,14 @@ the answer to "what does 100% mean". The order is by what unblocks what.
    false equation is refuted with a witness. What remains of the row is the
    *general* relational form — an arbitrary relation between two functions, and a
    proof that needs generalisation beyond the loop edge — and the other two named
-   theorems (a tree reversal, a sorting equality) are not yet gated.
+   theorems (a tree reversal, a sorting equality) are not yet gated. **The tree
+   reversal's boundary is deeper than "lift the pair", and it was measured on
+   2026-10-07:** the aligned-conjunction decomposition is an equivalence but is
+   *unsound* to fold, because it applies the induction hypothesis to a field
+   variable not established to be in the callee's domain. What the row needs is
+   **domain closure** of the partition under the callee's sub-bindings — SCP4's
+   stack configuration — so the remaining half of E-12/E-13 and E-11 are one item.
+   See `PROGRESS.md`, "Measured 2026-10-07".
 2. **Negative information and stack configurations (E-11).** **The partition that
    can enter a constructor is built** (`SplitStrategy::Pattern`, projections
    only), which is what unblocked the 2nd projection. What remains is SCP4's
