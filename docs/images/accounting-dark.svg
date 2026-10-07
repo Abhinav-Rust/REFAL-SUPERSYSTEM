@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 452" width="1200" height="452" role="img" aria-labelledby="t d">
+  <title id="t">How the completion figure is counted</title>
+  <desc id="d">Twelve horizontal bars, one per workstream, filled in proportion to the credit earned out of its weight.</desc>
+  <rect x="0.5" y="0.5" width="1199" height="451" rx="16" fill="#0D1117" stroke="#30363D" stroke-width="1"/>
+  <text x="40" y="52" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="3.2" fill="#0F766E">HOW THE FIGURE IS COUNTED</text>
+  <text x="40" y="90" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="-0.3" fill="#E6EDF3">Twelve workstreams, weighted — credit only behind a green gate</text>
+  <line x1="40" y1="112" x2="1160" y2="112" stroke="#30363D" stroke-width="1"/>
+  <text x="40" y="152" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8B949E">L0 · frontend</text>
+  <rect x="400" y="140" width="640" height="14" rx="7" fill="#21262D"/>
+  <rect x="400" y="140" width="35.84" height="14" rx="7" fill="#14B8A6"/>
+  <text x="1052" y="152" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="600" fill="#E6EDF3">5.6 / 5.95</text>
+  <text x="40" y="173" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8B949E">L0 · semantics</text>
+  <rect x="400" y="161" width="640" height="14" rx="7" fill="#21262D"/>
+  <rect x="400" y="161" width="20.16" height="14" rx="7" fill="#14B8A6"/>
+  <text x="1052" y="173" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="600" fill="#E6EDF3">3.15 / 4.2</text>
+  <text x="40" y="194" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8B949E">L0 · machine / runtime</text>
+  <rect x="400" y="182" width="640" height="14" rx="7" fill="#21262D"/>
+  <rect x="400" y="182" width="86.464" height="14" rx="7" fill="#14B8A6"/>
+  <text x="1052" y="194" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="600" fill="#E6EDF3">13.51 / 13.65</text>
+  <text x="40" y="215" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8B949E">L1 · reflection engine</text>
+  <rect x="400" y="203" width="640" height="14" rx="7" fill="#21262D"/>
+  <rect x="400" y="203" width="57.6" height="14" rx="7" fill="#14B8A6"/>
+  <text x="1052" y="215" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="600" fill="#E6EDF3">9 / 9</text>
+  <text x="40" y="236" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8B949E">L2 · graph of states</text>
+  <rect x="400" y="224" width="640" height="14" rx="7" fill="#21262D"/>
+  <rect x="400" y="224" width="33.6" height="14" rx="7" fill="#14B8A6"/>
+  <text x="1052" y="236" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="600" fill="#E6EDF3">5.25 / 5.95</text>
+  <text x="40" y="257" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8B949E">Tier 1 static verification</text>
+  <rect x="400" y="245" width="640" height="14" rx="7" fill="#21262D"/>
+  <rect x="400" y="245" width="56.0" height="14" rx="7" fill="#14B8A6"/>
+  <text x="1052" y="257" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="600" fill="#E6EDF3">8.75 / 10.5</text>
+  <text x="40" y="278" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8B949E">L2/L4 · compiler in Refal</text>
+  <rect x="400" y="266" width="640" height="14" rx="7" fill="#21262D"/>
+  <rect x="400" y="266" width="107.52" height="14" rx="7" fill="#14B8A6"/>
+  <text x="1052" y="278" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="600" fill="#E6EDF3">16.8 / 17.85</text>
+  <text x="40" y="299" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8B949E">L4 · self-hosting fixpoint</text>
+  <rect x="400" y="287" width="640" height="14" rx="7" fill="#21262D"/>
+  <rect x="400" y="287" width="51.52" height="14" rx="7" fill="#14B8A6"/>
+  <text x="1052" y="299" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="600" fill="#E6EDF3">8.05 / 9.1</text>
+  <text x="40" y="320" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8B949E">L3 · meta-prover</text>
+  <rect x="400" y="308" width="640" height="14" rx="7" fill="#21262D"/>
+  <rect x="400" y="308" width="70.4" height="14" rx="7" fill="#14B8A6"/>
+  <text x="1052" y="320" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="600" fill="#E6EDF3">11 / 13</text>
+  <text x="40" y="341" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8B949E">L4 · projections as artifacts</text>
+  <rect x="400" y="329" width="640" height="14" rx="7" fill="#21262D"/>
+  <rect x="400" y="329" width="22.4" height="14" rx="7" fill="#14B8A6"/>
+  <text x="1052" y="341" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="600" fill="#E6EDF3">3.5 / 5</text>
+  <text x="40" y="362" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8B949E">L2 · function inversion</text>
+  <rect x="400" y="350" width="640" height="14" rx="7" fill="#21262D"/>
+  <rect x="400" y="350" width="19.2" height="14" rx="7" fill="#14B8A6"/>
+  <text x="1052" y="362" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="600" fill="#E6EDF3">3 / 3</text>
+  <text x="40" y="383" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8B949E">Conformance / release evidence</text>
+  <rect x="400" y="371" width="640" height="14" rx="7" fill="#21262D"/>
+  <rect x="400" y="371" width="17.024" height="14" rx="7" fill="#14B8A6"/>
+  <text x="1052" y="383" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="600" fill="#E6EDF3">2.66 / 2.8</text>
+  <rect x="40" y="396" width="1120" height="44" rx="12" fill="#062925" stroke="#134E4A" stroke-width="1.5"/>
+  <text x="64" y="424" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#99F6E4">One number, one method: ~90 of 100, from one table. A row carries zero credit until a gate behind it is green.</text>
+</svg>
