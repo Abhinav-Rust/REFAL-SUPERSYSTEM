@@ -459,8 +459,12 @@ The ordered work list lives in
    the forward function's outputs, and the gate round-trips the emitted inverse.
 4. ~~**The partition that can enter a constructor (E-11)**~~ — **built, and the
    compiler-side defect it exposed is closed.** `SplitStrategy::Pattern`
-   partitions a configuration component by the *callee's own sentence patterns*.
-   Still open: **negative information** (`e.X ≠ 'A' …`) and an explicit two-level
+   partitions a configuration component by the *callee's own sentence patterns*,
+   and it now carries the **negative** half of the partition as well: a sentence
+   whose component at the split position is a bare variable names no shape, but it
+   is exactly the complement of the shapes the other sentences demand, so it is
+   emitted as the ordered catch-all — `e.X ≠ ('A')` — and the callee is
+   **eliminated** rather than left residual. Still open: an explicit two-level
    stack configuration.
 5. **The projections as artifacts (E-14)** — the self-application now **emits a
    working compiler** and is gated by *running* it on the corpus; `refal project2`

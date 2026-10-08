@@ -7341,6 +7341,71 @@ fn the_second_projection_emits_a_compiler_that_decides_its_branches() {
     );
 }
 
+/// E-11's **negative** half, at the command line: the partition carries the
+/// complement of its definite branches, so the callee is *eliminated* rather
+/// than left residual.
+///
+/// `examples/projection-complement.ref`'s `F` has a definite sentence `('A')`
+/// followed by a catch-all `e.Other`. The catch-all names no shape, so the
+/// branch it would produce *is* the configuration and cannot be driven -- but
+/// placed after the definite branch it fires exactly when the argument is not
+/// `('A')`, which is `e.X != ('A')` with no negation operator. The gate requires
+/// both halves: the artifact must carry the complement branch, and it must
+/// **agree with the source** on an input that takes the definite branch and one
+/// that takes the complement -- because a residue that decides a branch by
+/// guessing is a wrong program, not a fast one.
+#[test]
+fn the_partition_emits_the_complement_branch_and_the_callee_disappears() {
+    let source = workspace_path("examples/projection-complement.ref");
+    let output = Command::new(refal_bin())
+        .args(["project2", &source, "F"])
+        .output()
+        .expect("run refal binary");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "a closed projection exits zero:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("splits: 1") && stdout.contains("walk: closed"),
+        "the complement closes the partition in one split:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("e.Other = 'z'"),
+        "the artifact carries the complement branch:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("\nF {"),
+        "the callee is eliminated, not left residual:\n{stdout}"
+    );
+
+    // The artifact must agree with the source, on the definite branch and on the
+    // complement. `run` takes an argument as a bracket of the argument's
+    // characters, so `A` reaches the definite branch `('A')`.
+    let artifact = stdout
+        .lines()
+        .skip_while(|line| !line.starts_with("$ENTRY Go {"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let artifact_path = scratch_source("refal-projection-complement", &artifact);
+    for argument in ["A", "B", "Q"] {
+        let from_source = Command::new(refal_bin())
+            .args(["run", &source, argument])
+            .output()
+            .expect("run the source");
+        let from_artifact = Command::new(refal_bin())
+            .args(["run"])
+            .arg(&artifact_path)
+            .arg(argument)
+            .output()
+            .expect("run the artifact");
+        assert_eq!(
+            from_source.stdout, from_artifact.stdout,
+            "the artifact must agree with the source on {argument:?}"
+        );
+    }
+}
+
 /// The compiler's sequence partition must not grow without bound on a
 /// bracket-pattern callee (E-11).
 ///

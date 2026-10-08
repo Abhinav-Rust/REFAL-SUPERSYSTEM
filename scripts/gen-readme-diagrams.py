@@ -388,8 +388,8 @@ def roadmap(p):
     p = dict(p, _h=546)
     out = header(p, "WHAT IS LEFT", "Six rows stand between ~90.4% and 100% \u2014 each with a named gap")
     rows = [
-        ("E-11", "Negative information & stack configurations",
-         "e.X \u2260 'A' is not carried at all, and no explicit two-level stack configuration is built"),
+        ("E-11", "Stack configurations",
+         "the complement of the partition's definite branches is now carried; an explicit two-level stack configuration is not built"),
         ("E-12", "The meta-prover's general relation",
          "an arbitrary relation between two functions, and a proof needing generalisation beyond the loop edge"),
         ("E-13", "Proof is supercompilation, cashed out",
