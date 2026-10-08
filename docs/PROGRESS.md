@@ -2532,36 +2532,63 @@ projection found a dead dedup test and a cursor where a source belongs.
    built. The compiler path and the projections share the arity test, the
    generated split decline, and now the complement.
 
-   ### E-11: the stack-configuration boundary, measured (2026-10-08)
+   ### E-11: the non-tail-recursion half, closed — and a defect it exposed (2026-10-08)
 
-   **The gap is not "non-tail recursion" in general -- it is narrower, and the
-   narrowing is the finding.** A non-tail recursion *whose context is a bracket*
-   folds when the callee **names the bracket case explicitly**, and does not when
-   a single `t.` variable covers the symbol and bracket cases together -- which
-   is how a Refal programmer would naturally write it.
+   **Measuring first found a matcher defect rather than a missing stack machine.**
+   A non-tail recursion *whose context is a bracket* folded when the callee
+   **named the bracket case explicitly**, and whistled into a residual call when a
+   single `t.` variable covered the symbol and bracket cases together -- which is
+   how a Refal programmer would naturally write it:
 
-   Measured on the two forms, at the compiler's default path:
+   | `Rev` | before | after |
+   |---|---|---|
+   | `{ = ; s.H e.T = <Rev e.T> s.H; (e.B) e.T = <Rev e.T> (e.B); }` | folds (7 steps, 0 whistles, residual-work 6) | unchanged |
+   | `{ = ; t.H e.T = <Rev e.T> t.H; }` | **whistled at the bracket branch** (6 steps, 1 whistle, residual-work 10, `Rev` retained) | **folds** (7 steps, 0 whistles, residual-work 6, `Rev` eliminated) |
 
-   | `Rev` | Residue |
-   |---|---|
-   | `{ = ; s.H e.T = <Rev e.T> s.H; (e.B) e.T = <Rev e.T> (e.B); }` | **folds** — `(e.B1) e.T1 = <Split1 e.T1> (e.B1)`; `Rev` eliminated; 7 steps, **0 whistles**, residual-work 6 |
-   | `{ = ; t.H e.T = <Rev e.T> t.H; }` | **whistles at the bracket branch** — `(e.B1) e.T1 = <Rev (e.B1) e.T1>`; `Rev` carried into the residue; 6 steps, 1 whistle, residual-work 10 |
+   **The cause was one line of the homeomorphic embedding.**
+   `term_homeomorphic_embeds` returned `true` for *any* variable, so a `s.`
+   variable was treated as embedding into a bracket -- impossible, because a `s.`
+   variable binds a symbol and a bracket is never a symbol. The sequence
+   partition's two non-empty branches (`s.H e.T` and `(e.B) e.T`) are **disjoint
+   cases of the same variable**, so neither is a growth of the other; but when one
+   sentence's pattern covers both, the branches reach the *same state*, the
+   embedding test compares them against each other, and the symbol branch looked
+   like a growth of the bracket branch. The whistle fired and the configuration
+   was left residual instead of reduced.
 
-   Both residues are **correct**; what the merged form loses is the fold. The
-   asymmetry is what SCP4's stack configuration
-   (`⟨active redex⟩ : control stack : environment constraints`) supplies: the
-   explicit form's bracket branch reduces to `<Rev e.T1> (e.B1)`, whose recursive
-   call is the split's own configuration and so folds to `<Split1 e.T1>`; the
-   merged form's walk whistles at the branch *before* that reduction, and the
-   `t.` variable binding a bracket-valued term is where the two diverge.
+   **Fixed in both implementations, as the discipline requires.**
+   `term_homeomorphic_embeds` now returns false for a `s.` variable against a
+   bracket, and `examples/compiler.ref`'s `DsTermEmbeds` carries the same sentence
+   ordered before the general one. The differential corpus is unchanged
+   (`differential-corpus: equal`, 72 cases) because both sides moved together.
 
-   Pinned in both directions by
-   `a_non_tail_recursion_folds_only_when_the_bracket_case_is_named` (`refal-cli`),
-   so the day the fold lands the second half fails and says so. **This is the
-   entry point for the next session**: the cause is on the `t.`-variable path
-   (`visited_inputs` / the whistle in `DriveContext`, mirrored as `DsWhistle*` in
-   `examples/compiler.ref`), and a fix there is a *paired* change -- it moves the
-   compiler's residues, so the Refal-authored counterpart must land with it.
+   **The compiler's own compiled output shrank by 2,642 bytes.** `refal compile
+   examples/compiler.ref` is **102,436 bytes**, down from 105,078, and the
+   self-hosting fixpoint still holds (`gen1 == gen2`, byte for byte).
+
+   Gated by
+   `a_non_tail_recursion_folds_whether_or_not_the_bracket_case_is_named`
+   (`refal-cli`), which requires **both** forms to fold **and** both residues to
+   agree with their source on three inputs.
+
+   ### E-11: what the row still withholds, re-measured (2026-10-08)
+
+   **Nested accumulators do not survive driving, and that is now the row's whole
+   remaining gap.** Measured on the accumulator reverse --
+   `Rev { () (e.A) = (e.A); (t.H e.T) (e.A) = <Rev (e.T) (t.H e.A)>; }` driven
+   from `Go { e.X = <Rev e.X ()>; }` -- the walk reaches **one** configuration
+   (`visited: S0`), whistles not at all, emits **three** splits, and leaves `Rev`
+   entirely residual at **residual-work 37** (worse than the source's own
+   structure). The outer list and the accumulator are partitioned, but the
+   driver never enters either bracket, so nothing folds.
+
+   That is exactly what an explicit two-level stack configuration
+   (`⟨active redex⟩ : control stack : environment constraints`) supplies, and it
+   is **not** built. So E-11 stays Partial: its positive half (the arity test),
+   its negative half (the complement branch) and its non-tail-recursion half are
+   built and gated, and the accumulator half is the one that needs the data
+   structure. The next session starts from this measurement rather than from the
+   row's name.
 6. **The compiler's speed on very large inputs.** The last named gap in the
    compiler-in-Refal row. `scripts/perf.sh` measures it; `CleanG` and the checker
    are linear now, and what is left is the constant.

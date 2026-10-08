@@ -349,7 +349,7 @@ def demonstrations(p):
     p = dict(p, _h=504)
     out = header(p, "SEE IT WORK", "Four results \u2014 each one a command in this checkout")
     cards = [
-        ("SELF-HOSTING FIXPOINT", "105,078 bytes", "gen1 == gen2, byte for byte",
+        ("SELF-HOSTING FIXPOINT", "102,436 bytes", "gen1 == gen2, byte for byte",
          "ok", "Built",
          "The compiler compiles its own source, and compiling the result again changes nothing at all."),
         ("METASYSTEM TRANSITION", "172 \u2192 4 steps", "the interpreter disappears",
@@ -378,7 +378,7 @@ def demonstrations(p):
         out.append(circle(x + cw - 96, y + 29, 4.5, p[tone]))
         out.append(text(x + cw - 86, y + 33, status, 12, p[tone], "600"))
     out += footer(p, 452, h="Every number is a command you can run here; nothing is a mock-up. \u201crefal\u201d is  cargo run -p refal --  or the built  target/release/refal.")
-    return wrap(p, 504, "See it work", "Four result cards: the self-hosting fixpoint at 105,078 bytes, the metasystem transition at 172 to 4 steps, the strict checker catching a proven defect, and the meta-prover proving associativity.", out)
+    return wrap(p, 504, "See it work", "Four result cards: the self-hosting fixpoint at 102,436 bytes, the metasystem transition at 172 to 4 steps, the strict checker catching a proven defect, and the meta-prover proving associativity.", out)
 
 
 # --------------------------------------------------------------------------
@@ -388,8 +388,8 @@ def roadmap(p):
     p = dict(p, _h=546)
     out = header(p, "WHAT IS LEFT", "Six rows stand between ~90.4% and 100% \u2014 each with a named gap")
     rows = [
-        ("E-11", "Stack configurations",
-         "the complement of the partition's definite branches is now carried; an explicit two-level stack configuration is not built"),
+        ("E-11", "Nested accumulators",
+         "the partition's complement and the non-tail bracket context are built; nested accumulators still need an explicit two-level stack configuration"),
         ("E-12", "The meta-prover's general relation",
          "an arbitrary relation between two functions, and a proof needing generalisation beyond the loop edge"),
         ("E-13", "Proof is supercompilation, cashed out",

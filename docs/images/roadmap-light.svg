@@ -9,8 +9,8 @@
   <rect x="40" y="140" width="4" height="52" rx="2" fill="#B45309"/>
   <rect x="60" y="152" width="60" height="28" rx="9" fill="#FFFFFF" stroke="#FDE68A" stroke-width="1.5"/>
   <text x="90" y="171" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="13" font-weight="600" text-anchor="middle" fill="#B45309">E-11</text>
-  <text x="136" y="164" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#1F2328">Stack configurations</text>
-  <text x="136" y="182" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">the complement of the partition's definite branches is now carried; an explicit two-level stack configuration is not built</text>
+  <text x="136" y="164" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#1F2328">Nested accumulators</text>
+  <text x="136" y="182" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">the partition's complement and the non-tail bracket context are built; nested accumulators still need an explicit two-level stack configuration</text>
   <text x="1140" y="171" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" text-anchor="end" fill="#B45309">Partial</text>
   <rect x="40" y="198" width="1120" height="52" rx="12" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1.5"/>
   <rect x="40" y="198" width="4" height="52" rx="2" fill="#B45309"/>

@@ -250,8 +250,26 @@ fn sequence_homeomorphic_embeds(previous: &[CoreTerm], current: &[CoreTerm]) -> 
 }
 
 fn term_homeomorphic_embeds(previous: &CoreTerm, current: &CoreTerm) -> bool {
-    if matches!(previous.kind, CoreTermKind::Variable { .. }) {
-        return true;
+    if let CoreTermKind::Variable { kind, .. } = &previous.kind {
+        // A `t.` variable binds any single term and an `e.` variable a sequence,
+        // so both embed into anything. A `s.` variable binds a **symbol**, and a
+        // bracket is never a symbol, so it must not embed into one.
+        //
+        // This is not a nicety. The sequence partition splits `e.X` into
+        // `[]` / `s.H e.T` / `(e.B) e.T`, and the two non-empty branches are
+        // *disjoint cases of the same variable* -- neither is a growth of the
+        // other. When one sentence's pattern covers both (a `t.` or `e.`
+        // variable at the split position), both branches reach the **same
+        // state**, and the embedding test below then compares them against each
+        // other. Treating `s.H` as embedding into `(e.B)` makes the bracket
+        // branch look like a growth of the symbol branch, fires the whistle, and
+        // leaves `<F (e.B1) e.T1>` residual -- where the configuration would have
+        // reduced. Measured on `F { t.H e.T = 'ok'; }`: the bracket branch stays
+        // a call, and the fold is lost.
+        return match kind {
+            VariableKind::Symbol => !matches!(current.kind, CoreTermKind::Bracket(_)),
+            VariableKind::Term | VariableKind::Expression => true,
+        };
     }
 
     let same_constructor = match (&previous.kind, &current.kind) {

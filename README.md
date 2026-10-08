@@ -46,7 +46,7 @@ mock-up. (`refal` below is `cargo run -p refal --`, or the built
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/demonstrations-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/demonstrations-light.svg">
-  <img alt="Four result cards: the self-hosting fixpoint at 105,078 bytes, the metasystem transition at 172 to 4 steps, the strict checker catching a proven defect, and the meta-prover proving associativity" src="docs/images/demonstrations-light.svg" width="100%">
+  <img alt="Four result cards: the self-hosting fixpoint at 102,436 bytes, the metasystem transition at 172 to 4 steps, the strict checker catching a proven defect, and the meta-prover proving associativity" src="docs/images/demonstrations-light.svg" width="100%">
 </picture>
 
 </div>
@@ -59,7 +59,7 @@ compiled again, and the two generations compared byte for byte:
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/fixpoint-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/fixpoint-light.svg">
-  <img alt="The compiler's own source is compiled to gen1.ref, then compiled again to gen2.ref; the two are identical byte for byte at 105,078 bytes." src="docs/images/fixpoint-light.svg" width="100%">
+  <img alt="The compiler's own source is compiled to gen1.ref, then compiled again to gen2.ref; the two are identical byte for byte at 102,436 bytes." src="docs/images/fixpoint-light.svg" width="100%">
 </picture>
 
 </div>
@@ -76,7 +76,7 @@ $ cmp gen1.ref gen2.ref && echo "fixpoint: gen1 == gen2, byte for byte"
 fixpoint: gen1 == gen2, byte for byte
 ```
 
-Both generations are **105,078 bytes**, identical. And this is a *supercompilation*,
+Both generations are **102,436 bytes**, identical. And this is a *supercompilation*,
 not a re-print: `Go` in the output is `<Split1 e.Input>`, and `Split1` is the
 compile-time dispatch over the token stream that the driver discovered.
 
@@ -464,10 +464,13 @@ The ordered work list lives in
    whose component at the split position is a bare variable names no shape, but it
    is exactly the complement of the shapes the other sentences demand, so it is
    emitted as the ordered catch-all — `e.X ≠ ('A')` — and the callee is
-   **eliminated** rather than left residual. Still open: an explicit two-level
-   stack configuration, whose boundary is now **measured** — a non-tail recursion
-   with a bracket context folds when the callee names the bracket case explicitly,
-   and whistles into a residual call when one `t.` variable covers both cases.
+   **eliminated** rather than left residual. The **non-tail-recursion** half is
+   closed too: a kind-blind homeomorphic embedding treated a `s.` variable as
+   embedding into a bracket, so the partition's two disjoint branches looked like
+   growth of each other and the whistle fired — fixed in both implementations, and
+   the compiler's own compiled output shrank from 105,078 to **102,436 bytes**.
+   Still open: **nested accumulators**, which need an explicit two-level stack
+   configuration.
 5. **The projections as artifacts (E-14)** — the self-application now **emits a
    working compiler** and is gated by *running* it on the corpus; `refal project2`
    exists and the partition it needed is built, but its artifact is the *driven
