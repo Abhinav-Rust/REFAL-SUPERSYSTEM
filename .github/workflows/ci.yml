@@ -8,10 +8,16 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # The suite is serial by construction (`--test-threads=1`) because four of
+    # its tests compile the compiler with the Refal-authored compiler, and the
+    # workspace does not tolerate them running concurrently. Measured on the
+    # runner: 34-43 minutes. The limit was 45, which is a two-minute margin on a
+    # slow runner -- a flake waiting to happen, and the margin shrinks with every
+    # test added. 90 gives a slow runner room to finish rather than fail.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo test -- --test-threads=1
+      - run: cargo test --all -j 2 -- --test-threads=1
