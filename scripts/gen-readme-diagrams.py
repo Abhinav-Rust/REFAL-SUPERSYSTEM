@@ -342,7 +342,80 @@ def layerstack(p):
     return wrap(p, 680, "What each layer does", "A stack of five layers, L0 to L4: the Refal-5 machine, the reflection engine and the supercompiler core are built; the meta-prover and self-application are partial.", out)
 
 
-DIAGRAMS = [projections, conformance, timeline, anatomy, accounting, layerstack]
+# --------------------------------------------------------------------------
+# See it work -- the four demonstrations as result cards
+# --------------------------------------------------------------------------
+def demonstrations(p):
+    p = dict(p, _h=504)
+    out = header(p, "SEE IT WORK", "Four results \u2014 each one a command in this checkout")
+    cards = [
+        ("SELF-HOSTING FIXPOINT", "105,078 bytes", "gen1 == gen2, byte for byte",
+         "ok", "Built",
+         "The compiler compiles its own source, and compiling the result again changes nothing at all."),
+        ("METASYSTEM TRANSITION", "172 \u2192 4 steps", "the interpreter disappears",
+         "ok", "Built",
+         "An interpreter driven over a program comes back as specialised code, not as a trace."),
+        ("STRICT CHECKER", "proven defect", "refuses what cannot run",
+         "ok", "Built",
+         "--classic accepts exactly what Refal-5 accepts; --strict adds the deny-by-default lints."),
+        ("META-PROVER", "proved", "associativity, by folding",
+         "part", "Partial",
+         "An equation over free variables is decided by folding a branch to a renaming of the claim."),
+    ]
+    cw, ch, gx, gy = 540, 142, 20, 18
+    for i, (label, headline, caption, tone, status, note) in enumerate(cards):
+        col, row = i % 2, i // 2
+        x = 40 + col * (cw + gx)
+        y = 140 + row * (ch + gy)
+        out.append(rect(x, y, cw, ch, fill=p["cardbg"], stroke=p["cardbd"], rx=14, sw=1.5))
+        out.append(rect(x, y, 4, ch, fill=p[tone], rx=2))
+        out.append(text(x + 24, y + 28, label, 11.5, p[tone], "600", spacing="1.6"))
+        out.append(text(x + 24, y + 64, headline, 24, p["ink"], "600", family=MONO))
+        out.append(text(x + 24, y + 88, caption, 13, p["muted"]))
+        for j, ln in enumerate(wrap_lines(note, 60)[:2]):
+            out.append(text(x + 24, y + 110 + j * 15, ln, 11.5, p["muted"]))
+        out.append(rect(x + cw - 112, y + 16, 92, 26, fill=p[tone + "bg"], stroke=p[tone + "bd"], rx=13, sw=1.5))
+        out.append(circle(x + cw - 96, y + 29, 4.5, p[tone]))
+        out.append(text(x + cw - 86, y + 33, status, 12, p[tone], "600"))
+    out += footer(p, 452, h="Every number is a command you can run here; nothing is a mock-up. \u201crefal\u201d is  cargo run -p refal --  or the built  target/release/refal.")
+    return wrap(p, 504, "See it work", "Four result cards: the self-hosting fixpoint at 105,078 bytes, the metasystem transition at 172 to 4 steps, the strict checker catching a proven defect, and the meta-prover proving associativity.", out)
+
+
+# --------------------------------------------------------------------------
+# What is left -- the six partial rows and their named gaps
+# --------------------------------------------------------------------------
+def roadmap(p):
+    p = dict(p, _h=546)
+    out = header(p, "WHAT IS LEFT", "Six rows stand between ~90.4% and 100% \u2014 each with a named gap")
+    rows = [
+        ("E-11", "Negative information & stack configurations",
+         "e.X \u2260 'A' is not carried at all, and no explicit two-level stack configuration is built"),
+        ("E-12", "The meta-prover's general relation",
+         "an arbitrary relation between two functions, and a proof needing generalisation beyond the loop edge"),
+        ("E-13", "Proof is supercompilation, cashed out",
+         "the constructive reading \u2014 a set is a generator, truth is a terminating verification algorithm"),
+        ("E-14", "The 2nd and 3rd projections",
+         "the derivation S(S, int) by supercompilation, and the compiler generator S(S, S)"),
+        ("E-7",  "Perfection by transformation (\u00a74.4)",
+         "rewriting a walk so it becomes feasible, rather than removing the walks that provably are not"),
+        ("E-17", "Metavariable stratification",
+         "the level indices on the transformer's own variables that the 1995 report introduces"),
+    ]
+    y, h, gap = 140, 52, 6
+    for tag, title, gap_text in rows:
+        out.append(rect(40, y, 1120, h, fill=p["partbg"], stroke=p["partbd"], rx=12, sw=1.5))
+        out.append(rect(40, y, 4, h, fill=p["part"], rx=2))
+        out.append(rect(60, y + 12, 60, 28, fill=p["bg"], stroke=p["partbd"], rx=9, sw=1.5))
+        out.append(text(90, y + 31, tag, 13, p["part"], "600", anchor="middle", family=MONO))
+        out.append(text(136, y + 24, title, 14, p["ink"], "600"))
+        out.append(text(136, y + 42, gap_text, 11.5, p["muted"]))
+        out.append(text(1140, y + 31, "Partial", 12, p["part"], "600", anchor="end"))
+        y += h + gap
+    out += footer(p, 494, h="Statuses are those of docs/TURCHIN-ECOSYSTEM-CONFORMANCE.md. A row is Closed only when a gate is green for the general case.")
+    return wrap(p, 546, "What is left", "Six partial rows E-7, E-11, E-12, E-13, E-14 and E-17, each with the named gap that keeps it from being closed.", out)
+
+
+DIAGRAMS = [projections, conformance, timeline, anatomy, accounting, layerstack, demonstrations, roadmap]
 
 
 def main():

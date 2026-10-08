@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 546" width="1200" height="546" role="img" aria-labelledby="t d">
+  <title id="t">What is left</title>
+  <desc id="d">Six partial rows E-7, E-11, E-12, E-13, E-14 and E-17, each with the named gap that keeps it from being closed.</desc>
+  <rect x="0.5" y="0.5" width="1199" height="545" rx="16" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1"/>
+  <text x="40" y="52" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="3.2" fill="#0F766E">WHAT IS LEFT</text>
+  <text x="40" y="90" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="-0.3" fill="#1F2328">Six rows stand between ~90.4% and 100% — each with a named gap</text>
+  <line x1="40" y1="112" x2="1160" y2="112" stroke="#D0D7DE" stroke-width="1"/>
+  <rect x="40" y="140" width="1120" height="52" rx="12" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1.5"/>
+  <rect x="40" y="140" width="4" height="52" rx="2" fill="#B45309"/>
+  <rect x="60" y="152" width="60" height="28" rx="9" fill="#FFFFFF" stroke="#FDE68A" stroke-width="1.5"/>
+  <text x="90" y="171" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="13" font-weight="600" text-anchor="middle" fill="#B45309">E-11</text>
+  <text x="136" y="164" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#1F2328">Negative information &amp; stack configurations</text>
+  <text x="136" y="182" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">e.X ≠ 'A' is not carried at all, and no explicit two-level stack configuration is built</text>
+  <text x="1140" y="171" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" text-anchor="end" fill="#B45309">Partial</text>
+  <rect x="40" y="198" width="1120" height="52" rx="12" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1.5"/>
+  <rect x="40" y="198" width="4" height="52" rx="2" fill="#B45309"/>
+  <rect x="60" y="210" width="60" height="28" rx="9" fill="#FFFFFF" stroke="#FDE68A" stroke-width="1.5"/>
+  <text x="90" y="229" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="13" font-weight="600" text-anchor="middle" fill="#B45309">E-12</text>
+  <text x="136" y="222" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#1F2328">The meta-prover's general relation</text>
+  <text x="136" y="240" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">an arbitrary relation between two functions, and a proof needing generalisation beyond the loop edge</text>
+  <text x="1140" y="229" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" text-anchor="end" fill="#B45309">Partial</text>
+  <rect x="40" y="256" width="1120" height="52" rx="12" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1.5"/>
+  <rect x="40" y="256" width="4" height="52" rx="2" fill="#B45309"/>
+  <rect x="60" y="268" width="60" height="28" rx="9" fill="#FFFFFF" stroke="#FDE68A" stroke-width="1.5"/>
+  <text x="90" y="287" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="13" font-weight="600" text-anchor="middle" fill="#B45309">E-13</text>
+  <text x="136" y="280" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#1F2328">Proof is supercompilation, cashed out</text>
+  <text x="136" y="298" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">the constructive reading — a set is a generator, truth is a terminating verification algorithm</text>
+  <text x="1140" y="287" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" text-anchor="end" fill="#B45309">Partial</text>
+  <rect x="40" y="314" width="1120" height="52" rx="12" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1.5"/>
+  <rect x="40" y="314" width="4" height="52" rx="2" fill="#B45309"/>
+  <rect x="60" y="326" width="60" height="28" rx="9" fill="#FFFFFF" stroke="#FDE68A" stroke-width="1.5"/>
+  <text x="90" y="345" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="13" font-weight="600" text-anchor="middle" fill="#B45309">E-14</text>
+  <text x="136" y="338" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#1F2328">The 2nd and 3rd projections</text>
+  <text x="136" y="356" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">the derivation S(S, int) by supercompilation, and the compiler generator S(S, S)</text>
+  <text x="1140" y="345" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" text-anchor="end" fill="#B45309">Partial</text>
+  <rect x="40" y="372" width="1120" height="52" rx="12" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1.5"/>
+  <rect x="40" y="372" width="4" height="52" rx="2" fill="#B45309"/>
+  <rect x="60" y="384" width="60" height="28" rx="9" fill="#FFFFFF" stroke="#FDE68A" stroke-width="1.5"/>
+  <text x="90" y="403" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="13" font-weight="600" text-anchor="middle" fill="#B45309">E-7</text>
+  <text x="136" y="396" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#1F2328">Perfection by transformation (§4.4)</text>
+  <text x="136" y="414" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">rewriting a walk so it becomes feasible, rather than removing the walks that provably are not</text>
+  <text x="1140" y="403" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" text-anchor="end" fill="#B45309">Partial</text>
+  <rect x="40" y="430" width="1120" height="52" rx="12" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1.5"/>
+  <rect x="40" y="430" width="4" height="52" rx="2" fill="#B45309"/>
+  <rect x="60" y="442" width="60" height="28" rx="9" fill="#FFFFFF" stroke="#FDE68A" stroke-width="1.5"/>
+  <text x="90" y="461" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="13" font-weight="600" text-anchor="middle" fill="#B45309">E-17</text>
+  <text x="136" y="454" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#1F2328">Metavariable stratification</text>
+  <text x="136" y="472" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">the level indices on the transformer's own variables that the 1995 report introduces</text>
+  <text x="1140" y="461" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" text-anchor="end" fill="#B45309">Partial</text>
+  <rect x="40" y="494" width="1120" height="44" rx="12" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1.5"/>
+  <text x="64" y="522" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#134E4A">Statuses are those of docs/TURCHIN-ECOSYSTEM-CONFORMANCE.md. A row is Closed only when a gate is green for the general case.</text>
+</svg>
