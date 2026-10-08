@@ -8,5 +8,9 @@ Thumbs.db
 /.logs/
 
 
-# WorkBuddy AI session state: local tooling, not project content
-.workbuddy-ai/
+# WorkBuddy AI session state: local tooling, not project content. The memory
+# directory is the exception -- it is the project's own long-term notes and the
+# Chief Architect keeps this working copy as a complete mirror, so it travels
+# with the repository rather than living only on one machine.
+.workbuddy-ai/*
+!.workbuddy-ai/memory/
