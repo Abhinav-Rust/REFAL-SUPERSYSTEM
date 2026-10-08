@@ -2095,6 +2095,28 @@ impl<'a> DriveContext<'a> {
         }
 
         let mut branches: Vec<Vec<CoreTerm>> = Vec::new();
+        // The **negative** half of the partition, one slot per branch.
+        //
+        // A sentence whose component at the split position is a bare `e.` or
+        // `t.` variable names no shape, so the branch it produces *is* the
+        // configuration itself and cannot be driven: the drive would fold
+        // straight back to the split -- `Split7 { (e.Rest) t.P e.In = <Split7
+        // (e.Rest) t.P e.In>; }`, the infinite self-loop the decline exists to
+        // prevent.
+        //
+        // But that sentence is exactly the **complement** of the shapes the
+        // other sentences demand, and it does not have to be driven to be
+        // emitted. Refal's sentences are ordered, so a branch placed after the
+        // definite ones is selected precisely when none of them matched: the
+        // catch-all *is* `e.X != (A) ...`, with no negation operator needed. Its
+        // body is the sentence's own result, taken verbatim -- the configuration
+        // is never re-entered, so the loop cannot form, and the callee is
+        // eliminated from the residue instead of being left residual.
+        //
+        // The complement is emitted only when there is something to be the
+        // complement *of*: with no definite branch the partition would merely
+        // rename the call, which is the case the decline already covers.
+        let mut complement: Vec<Option<Vec<CoreTerm>>> = Vec::new();
         for state in self
             .graph
             .states
@@ -2104,12 +2126,19 @@ impl<'a> DriveContext<'a> {
             let Some(component) = state.pattern.get(position) else {
                 return Ok(None);
             };
-            // A bare `e.` or `t.` variable at the split position names no shape
-            // to branch on. Emitting it anyway produces a branch equal to the
-            // configuration itself -- `Split7 { (e.Rest) t.P e.In = <Split7
-            // (e.Rest) t.P e.In>; }`, an infinite self-loop -- so the walk
-            // declines and the call stays residual.
-            if is_pattern_split_variable(component) {
+            let is_bare = is_pattern_split_variable(component);
+            // A conditional sentence's result is not the complement's body: its
+            // condition may fail and control fall through to a later sentence,
+            // which a branch carrying no conditions cannot reproduce. Declining
+            // is the sound answer there.
+            if is_bare && !state.conditions.is_empty() {
+                return Ok(None);
+            }
+            // The complement's body is the sentence's own result, and that result
+            // may name variables bound by the callee's pattern *before* the split
+            // position -- which this branch does not bind. Only a position whose
+            // leading pattern terms are variable-free is safe.
+            if is_bare && state.pattern[..position].iter().any(term_has_variable) {
                 return Ok(None);
             }
             let mut branch = input[..position].to_vec();
@@ -2119,9 +2148,19 @@ impl<'a> DriveContext<'a> {
                 .any(|existing| term_sequences_same_kind(existing, &branch))
             {
                 branches.push(branch);
+                complement.push(if is_bare {
+                    Some(state.result.clone())
+                } else {
+                    None
+                });
             }
         }
         if branches.is_empty() || self.splits.len() >= MAX_SPLITS {
+            return Ok(None);
+        }
+        // Nothing to be the complement of: every sentence is a bare variable, so
+        // the partition would only rename the call. Decline, as before.
+        if complement.iter().all(Option::is_some) {
             return Ok(None);
         }
 
@@ -2169,16 +2208,22 @@ impl<'a> DriveContext<'a> {
 
         let mut sentences = Vec::new();
         let mut drive_error = None;
-        for branch in branches {
-            let body = match self.invoke_symbolic(function, &branch) {
-                Ok(SymbolicInvoke::Reduced(reduced)) => reduced,
-                Ok(SymbolicInvoke::Residual) | Ok(SymbolicInvoke::Fails) => {
-                    vec![call_term(function, &branch)]
-                }
-                Err(error) => {
-                    drive_error = Some(error);
-                    break;
-                }
+        for (branch, complement_body) in branches.into_iter().zip(complement) {
+            // A complement branch carries its body already; driving it would
+            // re-enter the configuration it *is* and fold back to the split. See
+            // the note where the branches are collected.
+            let body = match complement_body {
+                Some(result) => result,
+                None => match self.invoke_symbolic(function, &branch) {
+                    Ok(SymbolicInvoke::Reduced(reduced)) => reduced,
+                    Ok(SymbolicInvoke::Residual) | Ok(SymbolicInvoke::Fails) => {
+                        vec![call_term(function, &branch)]
+                    }
+                    Err(error) => {
+                        drive_error = Some(error);
+                        break;
+                    }
+                },
             };
             sentences.push(CoreSentence {
                 pattern: branch,
@@ -2793,6 +2838,34 @@ fn is_pattern_split_variable(term: &CoreTerm) -> bool {
             ..
         }
     )
+}
+
+/// Whether a term names a variable anywhere inside it.
+///
+/// A partition's complement branch carries the callee's own result verbatim, and
+/// that result may only name variables the branch binds -- which is the callee's
+/// pattern from the split position onward. A variable in the pattern *before*
+/// that position is bound by neither, so the complement is only safe where the
+/// leading pattern terms are variable-free. See
+/// [`DriveContext::pattern_split_configuration`].
+fn term_has_variable(term: &CoreTerm) -> bool {
+    match &term.kind {
+        CoreTermKind::Variable { .. } => true,
+        CoreTermKind::Bracket(inner) | CoreTermKind::Call { args: inner, .. } => {
+            inner.iter().any(term_has_variable)
+        }
+        CoreTermKind::Block {
+            argument,
+            sentences,
+        } => {
+            argument.iter().any(term_has_variable)
+                || sentences.iter().any(|sentence| {
+                    sentence.pattern.iter().any(term_has_variable)
+                        || sentence.result.iter().any(term_has_variable)
+                })
+        }
+        CoreTermKind::Char(_) | CoreTermKind::Identifier(_) | CoreTermKind::Number(_) => false,
+    }
 }
 
 /// Whether a term is one driving cannot see through: a symbolic variable, or a
@@ -11363,6 +11436,151 @@ mod tests {
         }
     }
 
+    /// `Go { e.X = <F e.X>; } F { (A) = 'a'; e.Other = 'z'; }` -- the smallest
+    /// program whose callee has a definite sentence *followed by* a catch-all, so
+    /// the partition has something for the catch-all to be the complement *of*.
+    fn projection_complement_program() -> CoreProgram {
+        let variable = |name: &str, kind: VariableKind| CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind,
+                name: name.to_string(),
+            },
+            span: Span { start: 0, end: 0 },
+        };
+        let identifier = |name: &str| CoreTerm {
+            kind: CoreTermKind::Identifier(name.to_string()),
+            span: Span { start: 0, end: 0 },
+        };
+        let character = |symbol: char| CoreTerm {
+            kind: CoreTermKind::Char(symbol),
+            span: Span { start: 0, end: 0 },
+        };
+        let bracket = |content: Vec<CoreTerm>| CoreTerm {
+            kind: CoreTermKind::Bracket(content),
+            span: Span { start: 0, end: 0 },
+        };
+        let call = |name: &str, args: Vec<CoreTerm>| CoreTerm {
+            kind: CoreTermKind::Call {
+                name: name.to_string(),
+                args,
+            },
+            span: Span { start: 0, end: 0 },
+        };
+        let sentence = |pattern: Vec<CoreTerm>, result: Vec<CoreTerm>| CoreSentence {
+            pattern,
+            conditions: vec![],
+            result,
+            span: Span { start: 0, end: 0 },
+        };
+        CoreProgram {
+            declarations: vec![],
+            functions: vec![
+                CoreFunction {
+                    name: "Go".to_string(),
+                    visibility: Visibility::Entry,
+                    sentences: vec![sentence(
+                        vec![variable("X", VariableKind::Expression)],
+                        vec![call("F", vec![variable("X", VariableKind::Expression)])],
+                    )],
+                    span: Span { start: 0, end: 0 },
+                },
+                CoreFunction {
+                    name: "F".to_string(),
+                    visibility: Visibility::Local,
+                    sentences: vec![
+                        sentence(vec![bracket(vec![identifier("A")])], vec![character('a')]),
+                        sentence(
+                            vec![variable("Other", VariableKind::Expression)],
+                            vec![character('z')],
+                        ),
+                    ],
+                    span: Span { start: 0, end: 0 },
+                },
+            ],
+        }
+    }
+
+    /// E-11's **negative** half: a callee whose last sentence is a bare variable
+    /// is the complement of the shapes the other sentences demand, and the
+    /// partition carries it instead of declining.
+    ///
+    /// `F { (A) = 'a'; e.Other = 'z'; }` driven with a free argument used to
+    /// decline, because the bare-variable branch *is* the configuration and
+    /// driving it folds back to the split -- the self-loop
+    /// `a_bare_variable_at_the_split_position_is_declined_rather_than_looped`
+    /// pins. But that branch does not have to be driven: Refal's sentences are
+    /// ordered, so a branch placed after the definite ones fires exactly when
+    /// none of them matched. That catch-all **is** `e.X != (A)`, and its body is
+    /// the sentence's own result -- so the callee is eliminated rather than left
+    /// residual, which is the whole difference between the two.
+    #[test]
+    fn the_partition_carries_the_complement_of_its_definite_branches() {
+        let program = projection_complement_program();
+        let graph = clean_unreachable_states(&build_seed_graph(&program));
+        let report = project_compiler(&program, &graph, "F", 200, DriveStrategy::Compilative)
+            .expect("the projection drives");
+        assert!(report.complete, "the walk must close inside its budget");
+        assert_eq!(
+            report.splits, 1,
+            "the complement closes the partition in one split"
+        );
+        let split = report
+            .program
+            .functions
+            .iter()
+            .find(|function| function.name == "Split1")
+            .expect("the artifact carries the split it emits");
+        assert_eq!(
+            split.sentences.len(),
+            2,
+            "one definite branch and its complement"
+        );
+        // The definite branch is the shape the callee demands, `(A)`.
+        assert!(
+            matches!(
+                split.sentences[0].pattern.as_slice(),
+                [CoreTerm {
+                    kind: CoreTermKind::Bracket(_),
+                    ..
+                }]
+            ),
+            "the first branch is the callee's own pattern"
+        );
+        // The complement is a bare expression variable -- `e.X != (A)` -- and its
+        // body is the catch-all sentence's own result. It is *not* a call to the
+        // split (which would loop) and *not* a residual call to `F` (which would
+        // mean the partition had decided nothing).
+        assert!(
+            matches!(
+                split.sentences[1].pattern.as_slice(),
+                [CoreTerm {
+                    kind: CoreTermKind::Variable {
+                        kind: VariableKind::Expression,
+                        ..
+                    },
+                    ..
+                }]
+            ),
+            "the complement is the ordered catch-all, a bare expression variable"
+        );
+        assert_eq!(
+            split.sentences[1].result,
+            vec![CoreTerm {
+                kind: CoreTermKind::Char('z'),
+                span: Span { start: 0, end: 0 },
+            }],
+            "the complement carries the catch-all sentence's own result"
+        );
+        assert!(
+            !report
+                .program
+                .functions
+                .iter()
+                .any(|function| function.name == "F"),
+            "the callee is eliminated, not left residual -- the point of the complement"
+        );
+    }
+
     /// The 2nd projection's partition enters the constructor, so the walk closes
     /// and the artifact decides `(A)` and `(B)` outright.
     ///
@@ -11426,9 +11644,14 @@ mod tests {
         );
     }
 
-    /// A callee whose pattern at the split position is a bare variable names no
-    /// shape to branch on, so the walk must *decline* rather than emit a branch
-    /// equal to the configuration itself -- which is an infinite self-loop.
+    /// A callee whose *every* sentence is a bare variable at the split position
+    /// names no shape to branch on, so the walk must *decline* rather than emit
+    /// a branch equal to the configuration itself -- which is an infinite
+    /// self-loop.
+    ///
+    /// The complement case -- a bare variable *after* a definite branch -- is the
+    /// other half of E-11 and is carried rather than declined; see
+    /// `the_partition_carries_the_complement_of_its_definite_branches`.
     #[test]
     fn a_bare_variable_at_the_split_position_is_declined_rather_than_looped() {
         let program = projection_bracket_program();

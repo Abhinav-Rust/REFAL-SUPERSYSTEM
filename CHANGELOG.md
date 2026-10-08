@@ -2,6 +2,44 @@
 
 ## Unreleased
 
+**E-11's negative half: the partition carries the complement of its branches.**
+
+- **A callee whose last sentence is a catch-all is now *eliminated* by the 2nd
+  projection instead of being left residual.** A sentence whose component at the
+  split position is a bare variable names no shape, so the branch it would
+  produce *is* the configuration and cannot be driven -- driving it folds
+  straight back to the split, the infinite self-loop
+  `Split7 { (e.Rest) t.P e.In = <Split7 (e.Rest) t.P e.In>; }` the decline exists
+  to prevent. But that sentence is exactly the **complement** of the shapes the
+  other sentences demand, and Refal's ordered sentences express a complement with
+  no negation operator: a branch placed after the definite ones fires precisely
+  when none of them matched. That catch-all **is** `e.X != ('A')`, and its body is
+  the sentence's own result taken verbatim -- the configuration is never
+  re-entered, so the loop cannot form.
+- Measured: `F { ('A') = 'a'; e.Other = 'z'; }` driven with a free argument closes
+  in **one split** as `Split1 { ('A') = 'a'; e.Other = 'z'; }`, and `F` is gone
+  from the artifact -- where the walk previously declined and emitted
+  `<F e.Program>`, the program itself.
+- The complement is emitted only where there is something for it to be the
+  complement *of*: a callee whose *every* sentence is a bare variable still
+  declines, which is the case the decline was written for. It is withheld where
+  the sentence carries a condition, or where the pattern before the split
+  position binds a variable the complement's body would need -- neither can be
+  reproduced by a branch that carries no conditions.
+- Gates: `the_partition_carries_the_complement_of_its_definite_branches`
+  (`refal-core`) pins the artifact's shape;
+  `the_partition_emits_the_complement_branch_and_the_callee_disappears`
+  (`refal-cli`) **runs** the artifact against the source, on the definite branch
+  and on the complement. New fixture `examples/projection-complement.ref`.
+- **The compiler's default path is untouched by construction.** The complement
+  lives in `SplitStrategy::Pattern`, which the compiler never selects, so no
+  Refal-authored counterpart is needed and the Refal-vs-Rust differential cannot
+  move; the fast gate is unchanged (`differential-corpus: equal`, 72 cases).
+- **The completion figure is unchanged.** The withheld credit in the
+  graph-of-states row belongs to §4.4, not to E-11's negative half, and
+  re-weighting the accounting is a plan-level change. E-11 stays Partial: the
+  two-level stack configuration is still open.
+
 **The README is now visual-first, and two new diagrams carry the story.**
 
 - **`docs/images/demonstrations-{light,dark}.svg`** — the four "see it work"

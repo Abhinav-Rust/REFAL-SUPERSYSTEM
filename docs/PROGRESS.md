@@ -2504,10 +2504,33 @@ projection found a dead dedup test and a cursor where a source belongs.
    `the_driven_compiler_is_a_fixpoint_of_the_driver` and
    `the_refal_driver_reaches_a_fixpoint_on_the_compiler_itself`.
 
-   **What E-11 still withholds:** *negative* information (`e.X ≠ 'A' …`) is not
-   carried, and no explicit two-level stack configuration is built. The
-   compiler path and the projections now share the arity test and the generated
-   split decline.
+   **E-11's negative half is built (2026-10-08).** The partition now carries the
+   **complement** of its definite branches. A sentence whose component at the
+   split position is a bare variable names no shape, so the branch it would
+   produce *is* the configuration and cannot be driven -- driving it folds back
+   to the split. But it is exactly the complement of the shapes the other
+   sentences demand, and Refal's ordered sentences express a complement with no
+   negation operator: a branch placed after the definite ones fires precisely
+   when none of them matched. Its body is the sentence's own result, taken
+   verbatim, so the configuration is never re-entered and the loop cannot form.
+   Measured on `F { ('A') = 'a'; e.Other = 'z'; }`: the projection closes in **one
+   split** as `Split1 { ('A') = 'a'; e.Other = 'z'; }` with `F` gone from the
+   artifact, where it previously declined and emitted `<F e.Program>`.
+   `the_partition_carries_the_complement_of_its_definite_branches` (`refal-core`)
+   pins the shape and `the_partition_emits_the_complement_branch_and_the_callee_disappears`
+   (`refal-cli`) **runs** the artifact against the source. The complement is
+   withheld where the sentence carries a condition, or where the pattern before
+   the split position binds a variable the complement's body would need, and it
+   is withheld entirely when *every* sentence is a bare variable -- there is
+   nothing for it to be the complement *of*, which is the case the original
+   decline was written for. **The default path is untouched by construction**:
+   the complement lives in `SplitStrategy::Pattern`, which the compiler never
+   selects, so the fast gate is unchanged (`differential-corpus: equal`, 72
+   cases).
+
+   **What E-11 still withholds:** no explicit two-level stack configuration is
+   built. The compiler path and the projections share the arity test, the
+   generated split decline, and now the complement.
 6. **The compiler's speed on very large inputs.** The last named gap in the
    compiler-in-Refal row. `scripts/perf.sh` measures it; `CleanG` and the checker
    are linear now, and what is left is the constant.
