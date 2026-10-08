@@ -16,7 +16,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/status-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/status-light.svg">
-  <img alt="Status: about 90.4% of the supersystem — L0, L1 and the Refal-authored compiler are near complete, L2 is close, and L3 and L4 are partial" src="docs/images/status-light.svg" width="100%">
+  <img alt="Status: about 90.5% of the supersystem — L0, L1 and the Refal-authored compiler are near complete, L2 is close, and L3 and L4 are partial" src="docs/images/status-light.svg" width="100%">
 </picture>
 
 </div>
@@ -324,7 +324,7 @@ part of the problem.
 
 ## Project status
 
-### Honest completion: ~90.4%
+### Honest completion: ~90.5%
 
 This figure measures **the whole supersystem** — all four layers — not the compiler
 alone. The compiler is finished; the supersystem is not, and publishing the
@@ -353,7 +353,7 @@ compiler's own number as the project's would misdescribe what this repository is
 | L0 · Bootstrap semantics | 4.20 | 3.15 | 1.05 | exhaustiveness lives in Tier 1 rather than here |
 | L0 · Refal machine / runtime | 13.65 | 13.51 | 0.14 | block sentences carrying conditions take the recursive path |
 | **L1 · Reflection engine** | **9.00** | **9.00** | **0.00** | closed — the service is exposed as `refal reflect`, with four shape gates |
-| L2 · Graph of states / emission | 5.95 | 5.25 | 0.70 | §4.4's other half — perfection by transformation |
+| L2 · Graph of states / emission | 5.95 | 5.35 | 0.60 | **§4.4's other half (E-7)** — 0.45, a Tier-2 research item — and **E-11's stack configuration** — 0.15. E-11's other behaviours (positive information, negative information, the non-tail bracket context) are built and gated, so they carry credit |
 | Tier 1 static verification | 10.50 | 8.75 | 1.75 | no *total* termination analysis — and totality is the only thing Theorem 5.1 forbids; the target is a **sound, incomplete, certificate-carrying** analysis (see below) |
 | L2/L4 · Compiler implemented in Refal | 17.85 | 16.80 | 1.05 | not yet fast on very large inputs |
 | L4 · Verified self-hosting fixpoint | 9.10 | 8.05 | 1.05 | the fixpoint holds on the corpus and the compiler's own source, not on arbitrary programs |
@@ -361,9 +361,16 @@ compiler's own number as the project's would misdescribe what this repository is
 | L4 · Projections as artifacts | 5.00 | 3.50 | 1.50 | the 1st and 2nd both emit target code with gates, and the self-application emits a working compiler; what is withheld is that neither is *derived* by supercompilation (`S(S, int)`) — the 2nd is an authored mode that applies the driver, not a residue of specialising the supercompiler |
 | **L2 · Function inversion** | **3.00** | **3.00** | **0.00** | closed — `refal invert` drives the forward definition and emits the synthesised inverse, round-tripped in a gate |
 | Conformance / release evidence | 2.80 | 2.66 | 0.14 | three file-backed I/O clauses bind to the runtime's own test rather than a fixture |
-| **Total** | **100.00** | **~90.4** | **~9.6** | |
+| **Total** | **100.00** | **~90.5** | **~9.5** | |
 
 </details>
+
+**The 2026-10-08 re-attribution.** The graph-of-states row's withheld credit was
+attributed entirely to §4.4, and that was wrong: the row also carries E-11's stack
+configuration. The 0.70 is therefore split explicitly — **§4.4 0.45, E-11 0.15** —
+and E-11's three *built* behaviours (positive information, negative information,
+and the non-tail bracket context) now carry credit. The figure moves **~90.4% →
+~90.5%**. The E-11 share is a judgment, published here so it can be reviewed.
 
 **The figure is a judgment, published to one decimal and no finer.** A defensible
 re-weighting moves it by ±0.5 points; a single credit judgment by ±0.9. **A row

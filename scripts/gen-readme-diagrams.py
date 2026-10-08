@@ -257,7 +257,7 @@ def accounting(p):
         ("L0 \u00b7 semantics", 4.20, 3.15),
         ("L0 \u00b7 machine / runtime", 13.65, 13.51),
         ("L1 \u00b7 reflection engine", 9.00, 9.00),
-        ("L2 \u00b7 graph of states", 5.95, 5.25),
+        ("L2 \u00b7 graph of states", 5.95, 5.35),
         ("Tier 1 static verification", 10.50, 8.75),
         ("L2/L4 \u00b7 compiler in Refal", 17.85, 16.80),
         ("L4 \u00b7 self-hosting fixpoint", 9.10, 8.05),
@@ -274,7 +274,7 @@ def accounting(p):
         filled = track_w * credit / 100.0
         out.append(rect(track_x, y - 8, max(filled, 3), 14, fill=p["a2"], rx=7, sw=0))
         out.append(text(track_x + track_w + 12, y + 4, f"{credit:g} / {weight:g}", 11.5, p["ink"], "600", family=MONO))
-    out += footer(p, 396, h="One number, one method: ~90 of 100, from one table. A row carries zero credit until a gate behind it is green.")
+    out += footer(p, 396, h="One number, one method: ~90.5 of 100, from one table. A row carries zero credit until a gate behind it is green.")
     return wrap(p, 452, "How the completion figure is counted", "Twelve horizontal bars, one per workstream, filled in proportion to the credit earned out of its weight.", out)
 
 
@@ -386,7 +386,7 @@ def demonstrations(p):
 # --------------------------------------------------------------------------
 def roadmap(p):
     p = dict(p, _h=546)
-    out = header(p, "WHAT IS LEFT", "Six rows stand between ~90.4% and 100% \u2014 each with a named gap")
+    out = header(p, "WHAT IS LEFT", "Six rows stand between ~90.5% and 100% \u2014 each with a named gap")
     rows = [
         ("E-11", "Nested accumulators",
          "the partition's complement and the non-tail bracket context are built; nested accumulators still need an explicit two-level stack configuration"),
