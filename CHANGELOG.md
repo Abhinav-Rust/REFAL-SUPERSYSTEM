@@ -40,6 +40,32 @@
   re-weighting the accounting is a plan-level change. E-11 stays Partial: the
   two-level stack configuration is still open.
 
+**E-11's stack-configuration boundary, measured.**
+
+- **The gap is narrower than "non-tail recursion", and the narrowing is the
+  finding.** A non-tail recursion *whose context is a bracket* folds when the
+  callee names the bracket case explicitly, and does not when one `t.` variable
+  covers the symbol and bracket cases together -- which is how a Refal programmer
+  would naturally write it.
+
+  | `Rev` | Residue |
+  |---|---|
+  | `{ = ; s.H e.T = <Rev e.T> s.H; (e.B) e.T = <Rev e.T> (e.B); }` | **folds** -- `(e.B1) e.T1 = <Split1 e.T1> (e.B1)`; `Rev` eliminated; 7 steps, 0 whistles, residual-work 6 |
+  | `{ = ; t.H e.T = <Rev e.T> t.H; }` | **whistles at the bracket branch** -- `(e.B1) e.T1 = <Rev (e.B1) e.T1>`; `Rev` carried into the residue; 6 steps, 1 whistle, residual-work 10 |
+
+- Both residues are **correct**; the merged form loses only the fold. The
+  asymmetry is what SCP4's stack configuration supplies: the explicit form's
+  bracket branch reduces to `<Rev e.T1> (e.B1)`, whose recursive call *is* the
+  split's own configuration and folds to `<Split1 e.T1>`; the merged form's walk
+  whistles at the branch *before* that reduction, and the `t.` variable binding a
+  bracket-valued term is where the two diverge.
+- Pinned in both directions by
+  `a_non_tail_recursion_folds_only_when_the_bracket_case_is_named` (`refal-cli`),
+  so the day the fold lands the second half fails and says so rather than the
+  improvement arriving silently.
+- **The full suite is green at this commit**: 388 passed, 0 failed (72 core + 171
+  CLI integration + 145 across the other four crates).
+
 **The README is now visual-first, and two new diagrams carry the story.**
 
 - **`docs/images/demonstrations-{light,dark}.svg`** — the four "see it work"

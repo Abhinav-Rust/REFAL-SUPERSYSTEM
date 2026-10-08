@@ -49,7 +49,7 @@ See `README.md` §"What Theorem 5.1 does and does not forbid" and
 | | |
 |---|---|
 | Honest completion | **~90.4%** (supersystem completeness — one method, one table, in `README.md`) |
-| Tests | 383 (70 core + 168 CLI integration + 145 across the other four crates), 0 clippy, fmt clean |
+| Tests | 388 (72 core + 171 CLI integration + 145 across the other four crates), 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
 
@@ -2531,6 +2531,37 @@ projection found a dead dedup test and a cursor where a source belongs.
    **What E-11 still withholds:** no explicit two-level stack configuration is
    built. The compiler path and the projections share the arity test, the
    generated split decline, and now the complement.
+
+   ### E-11: the stack-configuration boundary, measured (2026-10-08)
+
+   **The gap is not "non-tail recursion" in general -- it is narrower, and the
+   narrowing is the finding.** A non-tail recursion *whose context is a bracket*
+   folds when the callee **names the bracket case explicitly**, and does not when
+   a single `t.` variable covers the symbol and bracket cases together -- which
+   is how a Refal programmer would naturally write it.
+
+   Measured on the two forms, at the compiler's default path:
+
+   | `Rev` | Residue |
+   |---|---|
+   | `{ = ; s.H e.T = <Rev e.T> s.H; (e.B) e.T = <Rev e.T> (e.B); }` | **folds** — `(e.B1) e.T1 = <Split1 e.T1> (e.B1)`; `Rev` eliminated; 7 steps, **0 whistles**, residual-work 6 |
+   | `{ = ; t.H e.T = <Rev e.T> t.H; }` | **whistles at the bracket branch** — `(e.B1) e.T1 = <Rev (e.B1) e.T1>`; `Rev` carried into the residue; 6 steps, 1 whistle, residual-work 10 |
+
+   Both residues are **correct**; what the merged form loses is the fold. The
+   asymmetry is what SCP4's stack configuration
+   (`⟨active redex⟩ : control stack : environment constraints`) supplies: the
+   explicit form's bracket branch reduces to `<Rev e.T1> (e.B1)`, whose recursive
+   call is the split's own configuration and so folds to `<Split1 e.T1>`; the
+   merged form's walk whistles at the branch *before* that reduction, and the
+   `t.` variable binding a bracket-valued term is where the two diverge.
+
+   Pinned in both directions by
+   `a_non_tail_recursion_folds_only_when_the_bracket_case_is_named` (`refal-cli`),
+   so the day the fold lands the second half fails and says so. **This is the
+   entry point for the next session**: the cause is on the `t.`-variable path
+   (`visited_inputs` / the whistle in `DriveContext`, mirrored as `DsWhistle*` in
+   `examples/compiler.ref`), and a fix there is a *paired* change -- it moves the
+   compiler's residues, so the Refal-authored counterpart must land with it.
 6. **The compiler's speed on very large inputs.** The last named gap in the
    compiler-in-Refal row. `scripts/perf.sh` measures it; `CleanG` and the checker
    are linear now, and what is left is the constant.

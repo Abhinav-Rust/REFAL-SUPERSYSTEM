@@ -7406,6 +7406,71 @@ fn the_partition_emits_the_complement_branch_and_the_callee_disappears() {
     }
 }
 
+/// Compiles `source` and returns the residue, so a gate can read what the driver
+/// emitted without going through a fixture file.
+fn compile_residue(prefix: &str, source: &str) -> String {
+    let path = scratch_source(prefix, source);
+    let output = Command::new(refal_bin())
+        .args(["compile"])
+        .arg(&path)
+        .output()
+        .expect("run the compiler");
+    assert!(
+        output.status.success(),
+        "the compiler runs on {prefix}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8_lossy(&output.stdout).into_owned()
+}
+
+/// E-11's remaining gap, pinned in **both** directions: the driver folds a
+/// non-tail recursion when the callee names the bracket case, and leaves it
+/// residual when a single `t.` variable covers the symbol and bracket cases
+/// together.
+///
+/// `Rev { = ; s.H e.T = <Rev e.T> s.H; (e.B) e.T = <Rev e.T> (e.B); }` folds. The
+/// bracket branch's recursive call *is* the split's own configuration, so it
+/// becomes `<Split1 e.T1> (e.B1)` and `Rev` leaves the residue entirely.
+///
+/// `Rev { = ; t.H e.T = <Rev e.T> t.H; }` -- the same function with the two
+/// cases merged into one `t.` variable, which is how a Refal programmer would
+/// naturally write it -- does not. The walk whistles at the bracket branch and
+/// leaves `<Rev (e.B1) e.T1>` residual, so `Rev` is carried into the residue.
+/// The residue is still *correct*; what is lost is the fold.
+///
+/// That asymmetry is the boundary SCP4's stack configuration
+/// (`⟨active redex⟩ : control stack : environment constraints`) closes, and it is
+/// the last of E-11. Pinning both halves is deliberate: the day the fold lands,
+/// the second half fails and says so, rather than the improvement arriving
+/// silently.
+#[test]
+fn a_non_tail_recursion_folds_only_when_the_bracket_case_is_named() {
+    let explicit = "$ENTRY Go { e.X = <Rev e.X>; }\n\
+                    Rev { = ; s.H e.T = <Rev e.T> s.H; (e.B) e.T = <Rev e.T> (e.B); }\n";
+    let merged = "$ENTRY Go { e.X = <Rev e.X>; }\n\
+                  Rev { = ; t.H e.T = <Rev e.T> t.H; }\n";
+
+    let folded = compile_residue("refal-nontail-explicit", explicit);
+    assert!(
+        !folded.contains("\nRev {"),
+        "an explicitly named bracket case folds, so Rev leaves the residue:\n{folded}"
+    );
+    assert!(
+        folded.contains("<Split1 e.T1> (e.B1)"),
+        "the bracket branch is the split's own configuration:\n{folded}"
+    );
+
+    let unfused = compile_residue("refal-nontail-merged", merged);
+    assert!(
+        unfused.contains("\nRev {"),
+        "the merged `t.` form does not fold yet -- the last of E-11:\n{unfused}"
+    );
+    assert!(
+        unfused.contains("<Rev (e.B1) e.T1>"),
+        "the bracket branch stays a residual call:\n{unfused}"
+    );
+}
+
 /// The compiler's sequence partition must not grow without bound on a
 /// bracket-pattern callee (E-11).
 ///

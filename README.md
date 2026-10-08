@@ -465,7 +465,9 @@ The ordered work list lives in
    is exactly the complement of the shapes the other sentences demand, so it is
    emitted as the ordered catch-all — `e.X ≠ ('A')` — and the callee is
    **eliminated** rather than left residual. Still open: an explicit two-level
-   stack configuration.
+   stack configuration, whose boundary is now **measured** — a non-tail recursion
+   with a bracket context folds when the callee names the bracket case explicitly,
+   and whistles into a residual call when one `t.` variable covers both cases.
 5. **The projections as artifacts (E-14)** — the self-application now **emits a
    working compiler** and is gated by *running* it on the corpus; `refal project2`
    exists and the partition it needed is built, but its artifact is the *driven
