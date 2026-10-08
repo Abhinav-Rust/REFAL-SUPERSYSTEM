@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+**The whistle no longer fires on a `s.` variable meeting a bracket (E-11).**
+
+- **One line of the homeomorphic embedding was wrong, and it was losing folds.**
+  `term_homeomorphic_embeds` returned `true` for *any* variable, so a `s.`
+  variable was treated as embedding into a bracket -- impossible, because a `s.`
+  variable binds a symbol and a bracket is never a symbol.
+- **Why it mattered.** The sequence partition splits `e.X` into
+  `[]` / `s.H e.T` / `(e.B) e.T`, and the two non-empty branches are **disjoint
+  cases of the same variable** -- neither is a growth of the other. When one
+  sentence's pattern covers both (a `t.` or `e.` variable at the split position)
+  the branches reach the *same state*, so the embedding test compares them
+  against each other, and the symbol branch looked like a growth of the bracket
+  branch. The whistle fired and the configuration was left residual instead of
+  reduced.
+- **Measured.** `F { t.H e.T = 'ok'; }` driven with a free argument left
+  `(e.B1) e.T1 = <F (e.B1) e.T1>`; it now reduces to `'ok'`. A non-tail reverse
+  written the natural way -- `Rev { = ; t.H e.T = <Rev e.T> t.H; }` -- whistled at
+  the bracket branch and carried `Rev` into the residue (1 whistle,
+  residual-work 10); it now folds exactly as the explicit `s.`/`(e.B)` form does
+  (0 whistles, residual-work 6, `Rev` eliminated).
+- **The compiler's own compiled output shrank by 2,642 bytes**: `refal compile
+  examples/compiler.ref` is **102,436 bytes**, down from 105,078, and the
+  self-hosting fixpoint still holds (`gen1 == gen2`, byte for byte).
+- **Paired, as the discipline requires.** `examples/compiler.ref`'s
+  `DsTermEmbeds` carries the same rule and the same sentence order, so the
+  Refal-authored driver agrees with the Rust one: the differential corpus is
+  unchanged (`differential-corpus: equal`, 72 cases).
+- Gates: `a_non_tail_recursion_folds_whether_or_not_the_bracket_case_is_named`
+  (`refal-cli`) requires **both** forms to fold **and** both residues to agree
+  with their source; refal-core is 72/72; fmt and clippy are clean.
+
 **E-11's negative half: the partition carries the complement of its branches.**
 
 - **A callee whose last sentence is a catch-all is now *eliminated* by the 2nd
@@ -69,7 +100,7 @@
 **The README is now visual-first, and two new diagrams carry the story.**
 
 - **`docs/images/demonstrations-{light,dark}.svg`** — the four "see it work"
-  results as cards (the 105,078-byte fixpoint, the 172→4-step metasystem
+  results as cards (the 102,436-byte fixpoint, the 172→4-step metasystem
   transition, the strict checker, the prover). The four console transcripts move
   behind a `<details>`, so a reader who wants the picture gets the picture and a
   reader who wants the evidence gets the evidence.

@@ -7423,52 +7423,66 @@ fn compile_residue(prefix: &str, source: &str) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
-/// E-11's remaining gap, pinned in **both** directions: the driver folds a
-/// non-tail recursion when the callee names the bracket case, and leaves it
-/// residual when a single `t.` variable covers the symbol and bracket cases
-/// together.
+/// E-11's stack-configuration boundary, **closed**: a non-tail recursion with a
+/// bracket context folds whichever way the callee names the bracket case.
 ///
-/// `Rev { = ; s.H e.T = <Rev e.T> s.H; (e.B) e.T = <Rev e.T> (e.B); }` folds. The
-/// bracket branch's recursive call *is* the split's own configuration, so it
-/// becomes `<Split1 e.T1> (e.B1)` and `Rev` leaves the residue entirely.
+/// The two forms used to differ. `Rev { = ; s.H e.T = <Rev e.T> s.H; (e.B) e.T =
+/// <Rev e.T> (e.B); }` folded, while the merged `t.H e.T` form -- the same
+/// function, written the way a Refal programmer naturally would -- whistled at
+/// the bracket branch and left `<Rev (e.B1) e.T1>` residual, carrying `Rev` into
+/// the residue.
 ///
-/// `Rev { = ; t.H e.T = <Rev e.T> t.H; }` -- the same function with the two
-/// cases merged into one `t.` variable, which is how a Refal programmer would
-/// naturally write it -- does not. The walk whistles at the bracket branch and
-/// leaves `<Rev (e.B1) e.T1>` residual, so `Rev` is carried into the residue.
-/// The residue is still *correct*; what is lost is the fold.
+/// The cause was one line of the homeomorphic embedding: a `s.` variable was
+/// treated as embedding into *any* term, a bracket included. The sequence
+/// partition's two non-empty branches (`s.H e.T` and `(e.B) e.T`) are **disjoint
+/// cases of the same variable**, so neither is a growth of the other -- but when
+/// one sentence's pattern covers both, the branches reach the *same state*, the
+/// embedding test compares them against each other, and the symbol branch looked
+/// like a growth of the bracket branch. A `s.` variable binds a symbol, and a
+/// bracket is never a symbol, so it must not embed into one.
 ///
-/// That asymmetry is the boundary SCP4's stack configuration
-/// (`⟨active redex⟩ : control stack : environment constraints`) closes, and it is
-/// the last of E-11. Pinning both halves is deliberate: the day the fold lands,
-/// the second half fails and says so, rather than the improvement arriving
-/// silently.
+/// Both forms must now fold, and both residues must still agree with their
+/// source -- a residue that folds by guessing is a wrong program, not a fast one.
 #[test]
-fn a_non_tail_recursion_folds_only_when_the_bracket_case_is_named() {
+fn a_non_tail_recursion_folds_whether_or_not_the_bracket_case_is_named() {
     let explicit = "$ENTRY Go { e.X = <Rev e.X>; }\n\
                     Rev { = ; s.H e.T = <Rev e.T> s.H; (e.B) e.T = <Rev e.T> (e.B); }\n";
     let merged = "$ENTRY Go { e.X = <Rev e.X>; }\n\
                   Rev { = ; t.H e.T = <Rev e.T> t.H; }\n";
 
-    let folded = compile_residue("refal-nontail-explicit", explicit);
-    assert!(
-        !folded.contains("\nRev {"),
-        "an explicitly named bracket case folds, so Rev leaves the residue:\n{folded}"
-    );
-    assert!(
-        folded.contains("<Split1 e.T1> (e.B1)"),
-        "the bracket branch is the split's own configuration:\n{folded}"
-    );
+    for (label, source) in [("explicit", explicit), ("merged", merged)] {
+        let residue = compile_residue(&format!("refal-nontail-{label}"), source);
+        assert!(
+            !residue.contains("\nRev {"),
+            "the {label} form folds, so Rev leaves the residue:\n{residue}"
+        );
+        assert!(
+            residue.contains("<Split1 e.T1> (e.B1)"),
+            "the bracket branch is the split's own configuration ({label}):\n{residue}"
+        );
 
-    let unfused = compile_residue("refal-nontail-merged", merged);
-    assert!(
-        unfused.contains("\nRev {"),
-        "the merged `t.` form does not fold yet -- the last of E-11:\n{unfused}"
-    );
-    assert!(
-        unfused.contains("<Rev (e.B1) e.T1>"),
-        "the bracket branch stays a residual call:\n{unfused}"
-    );
+        // The fold must not change what the program does.
+        let source_path = scratch_source(&format!("refal-nontail-{label}-src"), source);
+        let residue_path = scratch_source(&format!("refal-nontail-{label}-res"), &residue);
+        for argument in ["abc", "a", ""] {
+            let from_source = Command::new(refal_bin())
+                .args(["run"])
+                .arg(&source_path)
+                .arg(argument)
+                .output()
+                .expect("run the source");
+            let from_residue = Command::new(refal_bin())
+                .args(["run"])
+                .arg(&residue_path)
+                .arg(argument)
+                .output()
+                .expect("run the residue");
+            assert_eq!(
+                from_source.stdout, from_residue.stdout,
+                "the {label} residue must agree with its source on {argument:?}"
+            );
+        }
+    }
 }
 
 /// The compiler's sequence partition must not grow without bound on a

@@ -4109,6 +4109,20 @@ DsEmbedsFind {
 }
 
 DsTermEmbeds {
+* A `t.` variable binds any single term and an `e.` variable a sequence, so both
+* embed into anything. A `s.` variable binds a **symbol**, and a bracket is never
+* a symbol, so it must not embed into one. Mirrors `term_homeomorphic_embeds` in
+* `refal-core`.
+*
+* This sentence must precede the general one below. The sequence partition splits
+* `e.X` into `[]` / `s.H e.T` / `(e.B) e.T`, and the two non-empty branches are
+* *disjoint cases of the same variable* -- neither is a growth of the other. When
+* one sentence's pattern covers both (a `t.` or `e.` variable at the split
+* position), both branches reach the same state, and the embedding test compares
+* them against each other: treating `s.H` as embedding into `(e.B)` makes the
+* bracket branch look like a growth of the symbol branch, fires the whistle, and
+* loses the fold.
+  (VAR 's' e.N) (BR e.Inner) = ;
   (VAR s.K e.N) t.C = '1';
   (SYM s.A) (SYM s.B), <SameChars (s.A) (s.B)> : '1' = '1';
   (ID e.A) (ID e.B), <SameChars (<Upper e.A>) (<Upper e.B>)> : '1' = '1';
