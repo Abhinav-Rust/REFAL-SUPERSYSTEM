@@ -43,20 +43,22 @@ course of action I recommend.** The Chief Architect's convention for this repo:
   witness, re-checked by `verify`) / `infeasible` (shadowing proof) / `unproven`
   (named). Per function: `Terminating { components }` / `NonRecursive` /
   `Unproven`. Termination is **size change over the strongly connected
-  components** (`CallClass` strict/nonstrict/unknown) under a **family of
-  measures** — measure 0 is the whole argument, measure k>0 its k-th top-level
-  term — so **mutual recursion is covered** and a call that rebuilds its argument
-  can still be proved. Module: `crates/refal-semantics/src/feasibility.rs`.
-  Measured: 0 infeasible across the 77 non-`bad-*` examples; `compiler.ref` 343
-  unproven functions (439 before per-position measures, 129 for the earlier
-  *unsound* version). **The driven-graph norm was measured and REFUTED
-  (2026-10-09) — do not rebuild it**: `refal drive-symbolic --configurations`
-  shows the driver leaves a call in argument position as a call
-  (`C0 -Scan <Split1 e.Input>-> residual`), because a symbolic argument has no
-  value. The analysis now reports the **closest measure** (`JudgeFailure.unbounded`
-  = calls with no bound); on `compiler.ref` the big component is **21** calls
-  from a proof, and **24 functions are 1 call away**. Next candidates:
-  lexicographic measure pairs, the one-call-away shape, or E-14's generator.
+  components** (`CallClass` strict/nonstrict/unknown) under a **ranking** —
+  measure 0 is the whole argument, measure k>0 its k-th top-level term, and a
+  ranking may be a **lexicographic pair** `k+l` — so **mutual recursion is
+  covered** and a call that rebuilds its argument can still be proved. Module:
+  `crates/refal-semantics/src/feasibility.rs`. Measured: 0 infeasible across the
+  77 non-`bad-*` examples; `compiler.ref` 330 unproven functions (343 before
+  pairs, 439 before per-position measures, 129 for the earlier *unsound*
+  version).
+- **THE MEASURE DIRECTION IS CLOSED (2026-10-09).** A lexicographic pair is
+  `unknown` wherever its *first* measure is, so pairs can break non-decreasing
+  **cycles** but can **never bound a call that no measure bounds**. Pinned as
+  `a_pair_can_never_bound_a_call_its_first_measure_cannot`. Do NOT try deeper
+  paths, more measures, or other combinations: the compiler's 21 unbounded calls
+  are a call in argument position (`<DsScan <DsBump …>>`), which has no static
+  size. The driven-graph norm was also measured and refuted. **The measure must
+  bound the call itself** — or the technique must change.
 - **Soundness over coverage, always.** An earlier version of that analysis
   collected only self-calls and so reported mutual loops as terminating; it was
   replaced, and the unproven count rose 129 → 439. Record the worse number.

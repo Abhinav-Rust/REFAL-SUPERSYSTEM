@@ -7832,7 +7832,7 @@ fn the_certificate_re_checks_itself() {
     assert!(stdout.contains("call 0 Rev Rev strict 2"), "{stdout}");
     assert!(stdout.contains("component 0 REV REV"), "{stdout}");
     assert!(
-        stdout.contains("terminates Rev measure 0 cycles REV"),
+        stdout.contains("terminates Rev ranking 0 cycles REV"),
         "{stdout}"
     );
     assert!(

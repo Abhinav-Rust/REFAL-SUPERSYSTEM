@@ -49,7 +49,7 @@ See `README.md` §"What Theorem 5.1 does and does not forbid" and
 | | |
 |---|---|
 | Honest completion | **~91.5%** (supersystem completeness — one method, one table, in `README.md`) |
-| Tests | 413 (72 core + 176 CLI integration + 165 across the other four crates), 0 clippy, fmt clean |
+| Tests | 415 (72 core + 176 CLI integration + 167 across the other four crates), 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
 
@@ -71,6 +71,44 @@ Rust oracle at budgets 1, 2, 5 and 12. The T-4/T-6 differential
 corpus gate is green at `cases: 71`, `positive: 31`, `check-failure: 6`,
 `runtime-failure: 1`, `residual: 33`, `cleaned-sentences: 1`, and
 `clippy --all-targets -D warnings` and `cargo fmt --check` are clean.
+
+### Done — lexicographic pairs, and the limit they prove (2026-10-09)
+
+**The approved step: a ranking may be a lexicographic pair.** Measures are tried
+singly and then in pairs, `k+l` meaning "the k-th position, and the l-th only
+where the k-th does not fall". A product of well-founded rankings is
+well-founded, so a pair is a proof for exactly the same reason a single measure
+is, and the certificate carries the pair.
+
+**Measured.** `examples/compiler.ref` **343 → 330** unproven functions; the 77
+non-`bad-*` examples **430 → 417**; **zero infeasible sentences** still. And the
+run got **2× faster — 3.9 s → 2.0 s** — because the classification of every call
+under every ranking is now computed once per ranking rather than once per
+function, which is what the earlier version was really paying for.
+
+**The honest correction, and it matters more than the 13 functions.** I told the
+Chief Architect that a pair would let "an edge that is unbounded at k₂ still be
+usable when k₁ strictly decreases", and that it would therefore attack the
+**24 functions that are one unbounded call away**. **Both claims are wrong**, and
+the code now proves it: a pair is `unknown` wherever its *first* measure is,
+because the pair's ranking contains the first measure. So a lexicographic
+combination can break a non-decreasing **cycle** — by turning a non-strict edge
+strict — but it can **never bound a call that no measure bounds**. The 24
+one-call-away functions are untouched, and the big component is still 21 calls
+from a proof.
+
+**That closes the direction rather than extending it.** No combination of
+position measures, however deep or however many, can bound a call whose argument
+is computed. The measure has to bound *the call itself*, and a call in argument
+position has no static size to bound. The property is pinned as a test
+(`a_pair_can_never_bound_a_call_its_first_measure_cannot`), so the next session
+starts from the limit rather than rediscovering it.
+
+**Gates:** 47 tests in `refal-semantics` (the pair property, the pair's strictness
+implication, the closest-ranking diagnostic, mutual recursion, a positional
+proof), the `refal-cli` certificate tests, `fmt`, `clippy --all-targets -D
+warnings`, the strict-mode gate and the fast differential gate all clean. The
+figure does not move: this is the same Tier-1 row.
 
 ### Measured — the driven-graph norm rests on a false premise (2026-10-09)
 

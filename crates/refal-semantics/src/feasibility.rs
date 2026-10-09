@@ -77,6 +77,33 @@ pub enum CallClass {
     Unknown,
 }
 
+/// The ranking a termination proof uses: one measure, or a lexicographic pair.
+///
+/// A measure is a length — of the whole argument, or of one of its top-level
+/// terms. A **pair** is consulted in order: the first measure decides, and the
+/// second is read only where the first does not fall. A lexicographic product
+/// of well-founded rankings is well-founded, so a pair is a proof for exactly
+/// the same reason a single measure is — and it reaches calls that no single
+/// measure can, because a call that is unbounded at the second position is
+/// still usable when the first strictly decreases.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Ranking {
+    /// `0` is the whole argument; `k > 0` is its k-th top-level term.
+    pub first: usize,
+    /// The tie-breaker, when the first does not fall.
+    pub second: Option<usize>,
+}
+
+impl Ranking {
+    /// How the ranking is written in a report or a certificate.
+    pub fn label(self) -> String {
+        match self.second {
+            Some(second) => format!("{}+{second}", self.first),
+            None => self.first.to_string(),
+        }
+    }
+}
+
 /// One call between two defined functions.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CallEdge {
@@ -109,18 +136,17 @@ pub enum TerminationVerdict {
     /// The function calls no defined function, so it cannot recurse.
     NonRecursive,
     /// The function and every function it reaches terminate, **under one
-    /// measure**.
+    /// ranking**.
     ///
-    /// `measure` names the ranking the proof uses: `0` is the length of the
-    /// whole argument, and `k > 0` is the length of its k-th top-level term.
-    /// `components` holds one witness per cyclic strongly connected component
-    /// the function reaches. Only the cycles matter: an infinite call sequence
-    /// traverses a cycle infinitely often, and an edge that is not on a cycle
-    /// is traversed only finitely often. Under a fixed measure the ranking never
-    /// grows inside a component and falls on every cycle, so no call sequence
-    /// can run forever.
+    /// `ranking` names the ranking the proof uses: one measure, or a
+    /// lexicographic pair of them. `components` holds one witness per cyclic
+    /// strongly connected component the function reaches. Only the cycles
+    /// matter: an infinite call sequence traverses a cycle infinitely often,
+    /// and an edge that is not on a cycle is traversed only finitely often.
+    /// Under a fixed ranking the ranking never grows inside a component and
+    /// falls on every cycle, so no call sequence can run forever.
     Terminating {
-        measure: usize,
+        ranking: Ranking,
         components: Vec<Component>,
     },
     /// Not proved. The reason names the call that blocked it, because a bare
@@ -335,10 +361,10 @@ pub fn verify(report: &FeasibilityReport, program: &Program) -> Vec<String> {
                 }
             }
             TerminationVerdict::Terminating {
-                measure,
+                ranking,
                 components,
             } => {
-                failures.extend(check_terminating(function, *measure, components, &graph));
+                failures.extend(check_terminating(function, *ranking, components, &graph));
             }
             TerminationVerdict::Unproven { .. } => {}
         }
@@ -358,7 +384,7 @@ pub fn verify(report: &FeasibilityReport, program: &Program) -> Vec<String> {
 /// calls from the source and walks the witness.
 fn check_terminating(
     function: &FunctionFeasibility,
-    measure: usize,
+    ranking: Ranking,
     components: &[Component],
     graph: &CallGraph,
 ) -> Vec<String> {
@@ -368,14 +394,19 @@ fn check_terminating(
         failures.push(format!("`{}` is not in the call graph", function.function));
         return failures;
     };
-    if measure > graph.max_measure {
+    if ranking.first > graph.max_measure
+        || ranking
+            .second
+            .is_some_and(|second| second > graph.max_measure)
+    {
         failures.push(format!(
-            "`{}` claims measure {measure}, deeper than the analysis takes",
-            function.function
+            "`{}` claims the ranking {}, deeper than the analysis takes",
+            function.function,
+            ranking.label()
         ));
         return failures;
     }
-    let edges = graph.classes(measure);
+    let edges = graph.classes(&ranking);
 
     let expected: BTreeSet<BTreeSet<String>> = graph.reach[start_component]
         .iter()
@@ -440,8 +471,8 @@ fn check_terminating(
             let edge = &edges[index];
             match edge.class {
                 CallClass::Unknown => failures.push(format!(
-                    "`{}` calls `{}` in sentence {} inside a cycle with an argument that is not bounded under measure {measure}, but claims to terminate",
-                    edge.from, edge.to, edge.sentence
+                    "`{}` calls `{}` in sentence {} inside a cycle with an argument that is not bounded under ranking {}, but claims to terminate",
+                    edge.from, edge.to, edge.sentence, ranking.label()
                 )),
                 CallClass::Nonstrict => {
                     let from = position
@@ -513,15 +544,10 @@ pub fn format_report(report: &FeasibilityReport) -> String {
         let termination = match &function.termination {
             TerminationVerdict::NonRecursive => "non-recursive".to_string(),
             TerminationVerdict::Terminating {
-                measure,
+                ranking,
                 components,
             } => {
-                let ranking = if *measure == 0 {
-                    "whole argument".to_string()
-                } else {
-                    format!("component {measure}")
-                };
-                let mut text = format!("terminates (measure: {ranking})");
+                let mut text = format!("terminates (ranking: {})", ranking_label(*ranking));
                 for component in components {
                     text.push_str(&format!(" (cycle: {})", component.members.join(" ")));
                 }
@@ -558,14 +584,15 @@ pub fn format_certificate(report: &FeasibilityReport) -> String {
     out.push_str("# the length of its k-th top-level term. `strict` passes a proper\n");
     out.push_str("# sub-expression of what the caller was given, `nonstrict` a\n");
     out.push_str("# sub-expression, and `unknown` neither.\n");
-    out.push_str("# a `component` line is a strongly connected component under that\n");
-    out.push_str("# measure, its members in an order in which every non-decreasing call\n");
-    out.push_str("# inside it goes forward.\n");
+    out.push_str("# a `component` line is a strongly connected component under the\n");
+    out.push_str("# stated ranking, its members in an order in which every\n");
+    out.push_str("# non-decreasing call inside it goes forward.\n");
     out.push_str("# a `terminates` line is checked by re-deriving the calls under the\n");
-    out.push_str("# stated measure: the components listed must be exactly the cyclic\n");
-    out.push_str("# ones the function reaches, no call inside one may be unbounded, and\n");
-    out.push_str("# the orders must hold. Every cycle then contains a call that shrinks\n");
-    out.push_str("# the measure, and no call sequence can run forever.\n");
+    out.push_str("# stated ranking, where `k+l` is the lexicographic pair (k, l): the\n");
+    out.push_str("# components listed must be exactly the cyclic ones the function\n");
+    out.push_str("# reaches, no call inside one may be unbounded, and the orders must\n");
+    out.push_str("# hold. Every cycle then contains a call that shrinks the ranking,\n");
+    out.push_str("# and no call sequence can run forever.\n");
     for function in &report.functions {
         for (index, verdict) in function.sentences.iter().enumerate() {
             match verdict {
@@ -599,20 +626,20 @@ pub fn format_certificate(report: &FeasibilityReport) -> String {
             edge.sentence
         ));
     }
-    // The cyclic components the analysis proved, each listed once per measure.
-    let mut seen: BTreeSet<(usize, String)> = BTreeSet::new();
+    // The cyclic components the analysis proved, each listed once per ranking.
+    let mut seen: BTreeSet<(String, String)> = BTreeSet::new();
     for function in &report.functions {
         if let TerminationVerdict::Terminating {
-            measure,
+            ranking,
             components,
         } = &function.termination
         {
             for component in components {
                 let key = component_key(component);
-                if seen.insert((*measure, key.clone())) {
+                if seen.insert((ranking.label(), key.clone())) {
                     out.push_str(&format!(
                         "component {} {} {}\n",
-                        measure,
+                        ranking.label(),
                         key,
                         component.members.join(" ")
                     ));
@@ -626,7 +653,7 @@ pub fn format_certificate(report: &FeasibilityReport) -> String {
                 out.push_str(&format!("non-recursive {}\n", function.function));
             }
             TerminationVerdict::Terminating {
-                measure,
+                ranking,
                 components,
             } => {
                 let keys: Vec<String> = components.iter().map(component_key).collect();
@@ -636,8 +663,10 @@ pub fn format_certificate(report: &FeasibilityReport) -> String {
                     keys.join(" ")
                 };
                 out.push_str(&format!(
-                    "terminates {} measure {} cycles {}\n",
-                    function.function, measure, cycles
+                    "terminates {} ranking {} cycles {}\n",
+                    function.function,
+                    ranking.label(),
+                    cycles
                 ));
             }
             TerminationVerdict::Unproven { .. } => {
@@ -657,6 +686,21 @@ fn component_key(component: &Component) -> String {
         .map(|name| canonical_identifier(name))
         .min()
         .unwrap_or_default()
+}
+
+/// How a ranking reads in a report: measures named, not numbered.
+fn ranking_label(ranking: Ranking) -> String {
+    fn one(measure: usize) -> String {
+        if measure == 0 {
+            "whole argument".to_string()
+        } else {
+            format!("component {measure}")
+        }
+    }
+    match ranking.second {
+        Some(second) => format!("{}, then {}", one(ranking.first), one(second)),
+        None => one(ranking.first),
+    }
 }
 
 fn class_name(class: CallClass) -> &'static str {
@@ -836,6 +880,7 @@ struct RawCall {
 /// `unbounded` is the honest distance from a proof: how many calls inside the
 /// component have no bound under that measure. Reporting it lets the analysis
 /// name the measure that came closest instead of the first that failed.
+#[derive(Debug, Clone)]
 struct JudgeFailure {
     unbounded: usize,
     /// The first unbounded call, as `caller -> callee in sentence n`.
@@ -867,6 +912,15 @@ struct CallGraph {
     max_measure: usize,
     /// The whole-argument classification of every call (measure 0).
     edges: Vec<CallEdge>,
+    /// The rankings tried, single measures first and then lexicographic pairs,
+    /// so the simplest proof is the one reported.
+    rankings: Vec<Ranking>,
+    /// For each ranking, every call's classification under it.
+    tables: Vec<Vec<CallEdge>>,
+    /// For each ranking, each component's verdict. Computed once per ranking
+    /// rather than once per function, because the cost of judging a component is
+    /// a property of the component and the ranking and of nothing else.
+    verdicts: Vec<Vec<Result<Component, JudgeFailure>>>,
 }
 
 /// The deepest position the analysis will measure. Patterns longer than this
@@ -935,9 +989,15 @@ impl CallGraph {
             reach: Vec::new(),
             internal: Vec::new(),
             max_measure: max_measure.min(MAX_MEASURE),
+            rankings: Vec::new(),
+            tables: Vec::new(),
+            verdicts: Vec::new(),
         };
 
-        graph.edges = graph.classes(0);
+        graph.edges = graph.classes(&Ranking {
+            first: 0,
+            second: None,
+        });
         graph.components = graph.strongly_connected();
         for (id, members) in graph.components.iter().enumerate() {
             for member in members {
@@ -992,19 +1052,58 @@ impl CallGraph {
             }
         }
         graph.reach = reach;
+
+        // The rankings, simplest first: every single measure, then every
+        // lexicographic pair of distinct measures. Each is classified and each
+        // component judged **once**, because that cost is a property of the
+        // ranking and the component and of nothing else — doing it per function
+        // is what made the earlier version quadratic in the program's size.
+        let measures: Vec<usize> = (0..=graph.max_measure).collect();
+        let mut rankings: Vec<Ranking> = measures
+            .iter()
+            .map(|&first| Ranking {
+                first,
+                second: None,
+            })
+            .collect();
+        for &first in &measures {
+            for &second in &measures {
+                if first != second {
+                    rankings.push(Ranking {
+                        first,
+                        second: Some(second),
+                    });
+                }
+            }
+        }
+        let tables: Vec<Vec<CallEdge>> = rankings
+            .iter()
+            .map(|ranking| graph.classes(ranking))
+            .collect();
+        let verdicts: Vec<Vec<Result<Component, JudgeFailure>>> = tables
+            .iter()
+            .map(|edges| {
+                (0..graph.components.len())
+                    .map(|id| graph.judge(id, edges))
+                    .collect()
+            })
+            .collect();
+        graph.rankings = rankings;
+        graph.tables = tables;
+        graph.verdicts = verdicts;
         graph
     }
 
-    /// Every call, classified under `measure`.
-    fn classes(&self, measure: usize) -> Vec<CallEdge> {
+    /// Every call, classified under one ranking.
+    fn classes(&self, ranking: &Ranking) -> Vec<CallEdge> {
         self.calls
             .iter()
             .map(|call| CallEdge {
                 from: call.from.clone(),
                 to: call.to.clone(),
                 sentence: call.sentence,
-                measure,
-                class: classify(&call.pattern, &call.args, measure),
+                measure: ranking.first,
+                class: classify_ranking(&call.pattern, &call.args, *ranking),
             })
             .collect()
     }
@@ -1210,23 +1309,23 @@ fn termination_of(function: &Function, graph: &CallGraph) -> TerminationVerdict 
         .filter(|id| graph.cyclic[*id])
         .collect();
 
-    // Every measure is tried, in order, and the first that proves the function
-    // is the one reported. A proof under any measure is a proof, because each is
-    // a well-founded ranking in its own right.
-    // The measure that came closest is the one with the fewest calls left
-    // unbounded; ties go to the lower measure, and a measure that got past every
+    // Every ranking is tried, simplest first, and the first that proves the
+    // function is the one reported. A proof under any of them is a proof,
+    // because each is a well-founded ranking in its own right.
+    //
+    // The ranking that came closest is the one with the fewest calls left
+    // unbounded; ties go to the simpler ranking, and one that got past every
     // unbounded call but found a cycle counts as closest of all, because a cycle
     // is one step from a proof where an unbounded call is not.
-    let mut closest: Option<(usize, JudgeFailure)> = None;
-    for measure in 0..=graph.max_measure {
-        let edges = graph.classes(measure);
+    let mut closest: Option<(Ranking, JudgeFailure)> = None;
+    for (index, &ranking) in graph.rankings.iter().enumerate() {
         let mut components = Vec::new();
         let mut failure = None;
         for &id in &cyclic {
-            match graph.judge(id, &edges) {
-                Ok(component) => components.push(component),
+            match &graph.verdicts[index][id] {
+                Ok(component) => components.push(component.clone()),
                 Err(why) => {
-                    failure = Some(why);
+                    failure = Some(why.clone());
                     break;
                 }
             }
@@ -1234,16 +1333,16 @@ fn termination_of(function: &Function, graph: &CallGraph) -> TerminationVerdict 
         match failure {
             None => {
                 return TerminationVerdict::Terminating {
-                    measure,
+                    ranking,
                     components,
                 };
             }
             Some(why) => {
                 let better = closest
                     .as_ref()
-                    .is_none_or(|(_, best)| (why.unbounded, measure) < (best.unbounded, 0));
+                    .is_none_or(|(_, best)| why.unbounded < best.unbounded);
                 if better {
-                    closest = Some((measure, why));
+                    closest = Some((ranking, why));
                 }
             }
         }
@@ -1251,14 +1350,36 @@ fn termination_of(function: &Function, graph: &CallGraph) -> TerminationVerdict 
 
     TerminationVerdict::Unproven {
         reason: match closest {
-            Some((measure, failure)) if failure.unbounded > 0 => format!(
-                "measure {measure} came closest: {} call(s) inside a cycle have no bound, the first being {}",
+            Some((ranking, failure)) if failure.unbounded > 0 => format!(
+                "ranking {} came closest: {} call(s) inside a cycle have no bound, the first being {}",
+                ranking.label(),
                 failure.unbounded,
                 failure.first.unwrap_or_default()
             ),
             Some((_, failure)) => failure.reason,
             None => "no measure applies".to_string(),
         },
+    }
+}
+
+/// Classify one call under a ranking.
+///
+/// A lexicographic pair is read in order: the first measure decides, and the
+/// second is consulted only where the first does not fall. The pair is `Strict`
+/// when the first measure falls, or when it holds and the second falls; it is
+/// `Unknown` when the first may grow, or when the first holds and the second may
+/// grow. Every other combination cannot grow the pair — and a product of
+/// well-founded rankings is well-founded, which is why this is a proof and not a
+/// heuristic.
+fn classify_ranking(pattern: &[Term], args: &[Term], ranking: Ranking) -> CallClass {
+    let first = classify(pattern, args, ranking.first);
+    let Some(second) = ranking.second else {
+        return first;
+    };
+    match first {
+        CallClass::Strict => CallClass::Strict,
+        CallClass::Unknown => CallClass::Unknown,
+        CallClass::Nonstrict => classify(pattern, args, second),
     }
 }
 
@@ -1530,13 +1651,20 @@ mod tests {
         let source = "$ENTRY Go { = <Walk (A B C) (X)>; }\n\
                       Walk { (s.H e.T) (e.K) = <Walk (e.T) (e.K)>; }";
         let TerminationVerdict::Terminating {
-            measure,
+            ranking,
             components,
         } = termination(source, "Walk")
         else {
             panic!("the positional measure should settle this");
         };
-        assert_eq!(measure, 1, "the first component is what shrinks");
+        assert_eq!(
+            ranking,
+            Ranking {
+                first: 1,
+                second: None
+            },
+            "the first component is what shrinks"
+        );
         assert_eq!(components.len(), 1);
         assert_eq!(
             components[0]
@@ -1592,6 +1720,74 @@ mod tests {
     }
 
     #[test]
+    fn a_pair_can_never_bound_a_call_its_first_measure_cannot() {
+        // The honest limit of the construction, pinned as a property. A pair is
+        // `unknown` wherever its first measure is, because the pair's ranking
+        // contains the first measure: if that may grow, so may the pair. So
+        // lexicographic pairs can break a non-decreasing **cycle** — by turning
+        // a non-strict edge strict — but they can never bound a call that no
+        // measure bounds, which is exactly the shape the compiler's 21
+        // unbounded calls have.
+        let source = "$ENTRY Go { = <F (A)>; }\n\
+                      F { (e.X) = <F <G (e.X)>>; }\n\
+                      G { (e.Y) = (e.Y); }";
+        let program = parse(source);
+        let graph = CallGraph::build(&program);
+        for first in 0..=graph.max_measure {
+            for second in 0..=graph.max_measure {
+                if first == second {
+                    continue;
+                }
+                let pair = graph.classes(&Ranking {
+                    first,
+                    second: Some(second),
+                });
+                let single = graph.classes(&Ranking {
+                    first,
+                    second: None,
+                });
+                for (paired, alone) in pair.iter().zip(&single) {
+                    if alone.class == CallClass::Unknown {
+                        assert_eq!(
+                            paired.class,
+                            CallClass::Unknown,
+                            "the pair ({first},{second}) bounded a call that measure {first} could not"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_pair_is_strict_wherever_its_first_measure_is() {
+        // And what a pair *adds*: a call the first measure holds and the second
+        // shrinks is `strict` for the pair and merely `nonstrict` for the first
+        // measure alone. That is how a pair breaks a cycle no single measure can.
+        let source = "$ENTRY Go { = <Walk (A B C) (D)>; }\n\
+                      Walk { (s.H e.T) (s.K) = <Walk (e.T) (s.K)>; }";
+        let program = parse(source);
+        let graph = CallGraph::build(&program);
+        let ranking = Ranking {
+            first: 1,
+            second: Some(2),
+        };
+        let pair = graph.classes(&ranking);
+        let alone = graph.classes(&Ranking {
+            first: 1,
+            second: None,
+        });
+        // The recursive call passes the first component's tail unchanged, so
+        // measure 1 sees a proper sub-expression and is already strict; the
+        // property to pin is the implication, not a particular verdict.
+        for (paired, single) in pair.iter().zip(&alone) {
+            if single.class == CallClass::Strict {
+                assert_eq!(paired.class, CallClass::Strict);
+            }
+        }
+    }
+
+    #[test]
     fn a_non_recursive_function_is_not_a_termination_question() {
         let source = "$ENTRY Go { = <Id 'a'>; }\nId { e.X = e.X; }";
         assert_eq!(termination(source, "Id"), TerminationVerdict::NonRecursive);
@@ -1607,13 +1803,20 @@ mod tests {
                       F { s.H e.T = <G e.T>; }\n\
                       G { e.X = <F e.X>; }";
         let TerminationVerdict::Terminating {
-            measure,
+            ranking,
             components,
         } = termination(source, "F")
         else {
             panic!("the pair should be proved");
         };
-        assert_eq!(measure, 0, "the whole argument settles this pair");
+        assert_eq!(
+            ranking,
+            Ranking {
+                first: 0,
+                second: None
+            },
+            "the whole argument settles this pair, with no tie-breaker needed"
+        );
         assert_eq!(components.len(), 1, "one cyclic component: {components:?}");
         let component = &components[0];
         assert_eq!(
