@@ -6861,7 +6861,7 @@ fn every_reference_clause_has_a_traceable_fixture() {
 /// the newest dated heading in `CHANGELOG.md` — and three places is two chances
 /// to forget one. This test reads all three and requires them to agree.
 ///
-/// It is what makes `scripts/package.sh` honest: the archive is named from
+/// It is what makes `cargo xtask package` honest: the archive is named from
 /// `Cargo.toml`, so a changelog that was not updated would ship an archive whose
 /// version has no entry, and a binary that reported a different number would be
 /// a binary nobody can identify from the release notes.
