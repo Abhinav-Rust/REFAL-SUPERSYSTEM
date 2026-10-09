@@ -34,19 +34,24 @@ course of action I recommend.** The Chief Architect's convention for this repo:
 
 ## Current state
 
-- **Honest completion ~90.5%** of the four-layer supersystem (one number, one
-  table, in `README.md`). **A re-attribution is PROPOSED and awaiting the Chief
-  Architect**: Tier-1 row 8.75 → 9.50 of 10.50 (total ~90.5% → ~91.2%), because
-  `refal feasibility` now supplies the sound, incomplete, certificate-carrying
-  feasibility + termination analysis the row's withheld credit was for. Do not
-  move it without approval.
+- **Honest completion ~91.5%** of the four-layer supersystem (one number, one
+  table, in `README.md`). The table's twelve credits sum to 91.52 — **the
+  published figure must always equal the table's sum**; a 0.27 discrepancy was
+  found and fixed on 2026-10-09.
 - **`refal feasibility <file.ref> [--certificate]`** (2026-10-09) — Tier 1
   feasibility and termination with certificates. Per sentence: `feasible` (ground
   witness, re-checked by `verify`) / `infeasible` (shadowing proof) / `unproven`
-  (named). Per function: `Descends{sentence,from,to}` / `NonRecursive` /
-  `Unproven`. Module: `crates/refal-semantics/src/feasibility.rs`. Measured: 0
-  infeasible across the 77 non-`bad-*` examples. Remaining gap: termination for
-  non-structural-descent recursion (accumulators, mutual recursion).
+  (named). Per function: `Terminating { components }` / `NonRecursive` /
+  `Unproven`. Termination is **size change over the strongly connected
+  components** (`CallClass` strict/nonstrict/unknown), so **mutual recursion is
+  covered**. Module: `crates/refal-semantics/src/feasibility.rs`.
+  Measured: 0 infeasible across the 77 non-`bad-*` examples; `compiler.ref` 439
+  unproven functions. **Next rung: per-position measures** (the length of a
+  *component* of the argument) — the whole-argument-length measure cannot settle
+  a call that rebuilds/extends its argument, which is most of the compiler.
+- **Soundness over coverage, always.** An earlier version of that analysis
+  collected only self-calls and so reported mutual loops as terminating; it was
+  replaced, and the unproven count rose 129 → 439. Record the worse number.
 - **The repository is 100% Rust** (2026-10-09) — no Python, no Shell; tooling is
   `crates/xtask` via `cargo xtask <task>`.
 - **Conformance ledger: 19 closed / 6 partial / 1 out of scope** (`E-1 … E-26`;

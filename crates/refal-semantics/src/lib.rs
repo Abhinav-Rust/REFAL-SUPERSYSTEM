@@ -5,8 +5,8 @@ mod formats;
 mod lints;
 
 pub use feasibility::{
-    FeasibilityReport, FunctionFeasibility, SentenceVerdict, TerminationVerdict, analyse,
-    format_certificate, format_report, render_terms, selects, verify,
+    CallClass, CallEdge, Component, FeasibilityReport, FunctionFeasibility, SentenceVerdict,
+    TerminationVerdict, analyse, format_certificate, format_report, render_terms, selects, verify,
 };
 pub use formats::{Format, Formats, Shape, infer_formats};
 pub use lints::pattern_subsumes;

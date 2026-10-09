@@ -7787,14 +7787,20 @@ fn feasibility_proves_what_it_can_and_names_what_it_cannot() {
     // the unproven set is printed rather than left silent.
     let source = "$ENTRY Go { = <Rev 'ab'>; }\n\
                   Rev { = ; s.H e.T = <Rev e.T> s.H; }\n\
-                  Loop { e.X = <Loop e.X>; }";
+                  Loop { e.X = <Loop e.X>; }\n\
+                  Mutual { s.H e.T = <Mutual-Helper e.T>; }\n\
+                  Mutual-Helper { e.X = <Mutual e.X>; }";
     let output = feasibility_source(source, &[]);
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     assert!(stdout.contains("feasible   witness: 'x'"), "{stdout}");
     assert!(
-        stdout.contains("unproven (sentence 1 calls `Loop` without passing"),
-        "a non-descending recursion must be named:\n{stdout}"
+        stdout.contains("unproven (the non-decreasing calls inside the cycle through `Loop`"),
+        "a cycle of non-decreasing calls must be named:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("decreasing: Mutual->Mutual-Helper"),
+        "mutual recursion with one shrinking call must be proved:\n{stdout}"
     );
     assert!(
         stdout.contains("unproven: 0 sentence(s), 1 function(s)"),
@@ -7823,10 +7829,9 @@ fn the_certificate_re_checks_itself() {
     let output = feasibility_source(source, &["--certificate"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("feasible Rev 2 'x'"), "{stdout}");
-    assert!(
-        stdout.contains("terminates Rev sentence 2 run 1 2"),
-        "{stdout}"
-    );
+    assert!(stdout.contains("call Rev Rev strict 2"), "{stdout}");
+    assert!(stdout.contains("component REV Rev"), "{stdout}");
+    assert!(stdout.contains("terminates Rev cycles REV"), "{stdout}");
     assert!(
         stdout.contains("# checked: every claim re-verified"),
         "{stdout}"

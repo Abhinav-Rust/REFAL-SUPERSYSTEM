@@ -2,6 +2,40 @@
 
 ## Unreleased
 
+**Termination is now decided by size change over the call graph, and mutual
+recursion is covered — and this found an unsoundness in the previous release's
+own analysis.**
+
+- **`refal feasibility` decides termination over the strongly connected
+  components.** The measure is the argument's length; every call is `strict` (a
+  proper sub-expression), `nonstrict` (a sub-expression) or `unknown`. Only the
+  cycles matter — an infinite call sequence traverses a cycle infinitely often,
+  while an edge not on a cycle is traversed finitely often — so a component
+  terminates when no call inside it is `unknown` and its non-decreasing calls
+  cannot form a cycle. The witness is the component's members in an order in
+  which every non-decreasing call goes forward, and `--certificate` re-checks it
+  by re-deriving the graph and walking the order.
+- **Mutual recursion is proved.** `F` may call `G` non-strictly while `G` calls
+  `F` strictly, and the pair terminates — invisible to a per-function analysis.
+  An `unknown` call *between* components is harmless and is tolerated, so an
+  entry point that calls a function with a fresh literal argument is not
+  reported as non-terminating.
+- **The previous analysis was unsound, and it was replaced rather than
+  patched.** It collected only **self**-calls, so
+  `F { s.H e.T = <G e.T>; } G { e.X = <F e.X>; }` was reported `non-recursive` —
+  *terminating* — and it loops. **The count was flattering**: 129 unproven
+  functions on `examples/compiler.ref` where the sound analysis reports 439, and
+  537 across the 77 non-`bad-*` examples. The number got worse and the analysis
+  got right.
+- **What bounds the reach, named:** the compiler's 480 functions form one large
+  component whose calls rebuild or extend their argument (`<DsBlkCondL (e.Ctx)
+  (e.B) (e.Val) (e.Sents) (e.More) '0'>` adds a term), which the length of the
+  *whole* argument cannot settle. Per-position measures are the next rung.
+- Measured: **zero infeasible sentences across the 77 non-`bad-*` examples**;
+  `compiler.ref` in 1.5 s. Gates: 41 tests in `refal-semantics`, the `refal-cli`
+  certificate tests, fmt, clippy, the strict-mode gate and the fast differential
+  gate all clean.
+
 **Tier 1 now decides feasibility and termination, with certificates.**
 
 - **`refal feasibility` decides every sentence as `feasible`, `infeasible` or

@@ -312,7 +312,7 @@ part of the problem.
 | **Refal machine** | ✅ **Clause-complete against the reference's builtin sections**; no fixed call-depth limit; the projecting matcher (§2.2); the view field in all three shapes; Chapter 6 metacode in full, including §6.4's `unknown` values |
 | **Graph of states** | ✅ `drive → clean → residualise` verified against the interpreter over the corpus; case splitting on a wholly unknown argument; §4.3 cleaning and the §4.5 verdict; generalization by common computation history; **the compilation strategy is searched**, not fixed; **driving a residue is a fixpoint** |
 | **Tier 1 static analysis** | ✅ Complete for its published guarantee with zero false positives across the corpus: dead sentences, recognition-impossible reachability, builtin domain errors, and a format lattice that describes a bracket's contents recursively |
-| **Feasibility & termination** | ✅ `refal feasibility` decides each sentence's selectability with a **ground witness it re-checks**, and each function's termination by **structural descent** — a sound, incomplete, certificate-carrying analysis (§4.5; §5.8). Zero infeasible sentences across the 77 non-`bad-*` examples, and the `unproven` set is printed rather than left silent |
+| **Feasibility & termination** | ✅ `refal feasibility` decides each sentence's selectability with a **ground witness it re-checks**, and each function's termination by **size change over the call graph** — including **mutual recursion**, since only the strongly connected components matter. Sound, incomplete, certificate-carrying (§4.5; §5.8). Zero infeasible sentences across the 77 non-`bad-*` examples, and the `unproven` set is printed rather than left silent |
 | **Compiler written in Refal** | ✅ A real Refal-authored lexer, parser, checker and emitter over the full Classic grammar; the transforming half — `GRAPH`, `RESIDUALIZE`, `DRIVE`, `DRIVE-SYMBOLIC`, `RESIDUALIZE-DRIVEN` — byte-identical to its Rust counterpart over the corpus, **and the last of them is the compiler's default path** |
 | **Self-hosting** | ✅ C1 = C2 = C3 byte-identical over the full grammar at 12,599 bytes, every generation checked; `refal compile examples/compiler.ref` emits the driven residue, so the self-application is a supercompilation rather than a re-print |
 | **Meta-prover** | 🔶 Layer 3, partial — `refal prove` drives a predicate to Turchin's single terminal node `'True'`; `refal prove --equiv` decides an **equation** between two reductions over free variables by folding a branch whose sides have reduced to a renaming of the claim. Associativity of `Append`, right identity and **the correctness of binary tree reversals** are proved; a false equation is refuted with its witness. The general relation, and a proof needing generalisation beyond the loop edge, are not yet accepted |
@@ -355,7 +355,7 @@ compiler's own number as the project's would misdescribe what this repository is
 | L0 · Refal machine / runtime | 13.65 | 13.51 | 0.14 | block sentences carrying conditions take the recursive path |
 | **L1 · Reflection engine** | **9.00** | **9.00** | **0.00** | closed — the service is exposed as `refal reflect`, with four shape gates |
 | L2 · Graph of states / emission | 5.95 | 5.35 | 0.60 | **§4.4's other half (E-7)** — 0.45, a Tier-2 research item — and **E-11's stack configuration** — 0.15. E-11's other behaviours (positive information, negative information, the non-tail bracket context) are built and gated, so they carry credit |
-| Tier 1 static verification | 10.50 | 9.50 | 1.00 | the decidable checks, **and a sound, incomplete, certificate-carrying feasibility and termination analysis** (`refal feasibility`, see below). What is withheld is termination for recursion that is not a structural descent — accumulators, mutual recursion, calls that pass a reordering — and feasibility beyond the witness budget |
+| Tier 1 static verification | 10.50 | 9.50 | 1.00 | the decidable checks, **and a sound, incomplete, certificate-carrying feasibility and termination analysis** (`refal feasibility`, see below). What is withheld is termination where the measure is not the argument's length — calls that rebuild or extend their argument, as the compiler's own 480-function component does — and feasibility beyond the witness budget |
 | L2/L4 · Compiler implemented in Refal | 17.85 | 16.80 | 1.05 | not yet fast on very large inputs |
 | L4 · Verified self-hosting fixpoint | 9.10 | 8.05 | 1.05 | the fixpoint holds on the corpus and the compiler's own source, not on arbitrary programs |
 | **L3 · Meta-prover** | **13.00** | **11.40** | **1.60** | the entry, the driving, Turchin's `'True'` criterion, and the *relational* half are built and gated. What is withheld is the *general* relation (an arbitrary relation rather than equality) and a proof needing generalisation beyond the loop edge; of SCP4's three named theorems, associativity of `Append` **and the tree reversal** are gated, the sorting equality is not |
@@ -761,11 +761,11 @@ remaining credit is *for*, not that it is unreachable.
 
 **And it is now built.** `refal feasibility` decides every sentence as
 `feasible` (with a ground witness it re-checks), `infeasible` (with the
-shadowing proof), or `unproven` — and decides termination by structural descent,
-naming the run of the argument that shrinks. `--certificate` prints the
-machine-checkable certificate and verifies it. The `unproven` set is the honest
-measure of what is left, and it is published. See
-[`VERIFICATION-CONTRACT.md`](docs/VERIFICATION-CONTRACT.md).
+shadowing proof), or `unproven` — and decides termination by size change over
+the call graph, **mutual recursion included**, naming the component and the call
+that shrinks. `--certificate` prints the machine-checkable certificate and
+verifies it. The `unproven` set is the honest measure of what is left, and it is
+published. See [`VERIFICATION-CONTRACT.md`](docs/VERIFICATION-CONTRACT.md).
 
 ## Reporting rules
 

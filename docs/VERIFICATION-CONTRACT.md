@@ -193,20 +193,42 @@ earlier sentences are compared **ignoring their conditions**, which is the
 conservative direction: a witness that fails to match an earlier pattern reaches
 this sentence whether or not that sentence's conditions would have succeeded.
 
-**Termination is decided by structural descent.** A function whose every
-self-recursive call passes a **proper contiguous run** of its argument — with a
-term *outside* that run that binds at least one term — strictly shrinks its
-argument at every call, so length is a well-founded ranking and the run is the
-witness. The second condition is load-bearing, not decoration:
-`F { e.X e.Y = <F e.X>; }` is *not* proved, because `e.Y` may bind nothing and
-`e.X` may then be the whole argument. `F { s.H e.T = <F s.H>; }` is not proved
-either, and correctly so — it loops when `e.T` is empty.
+**Termination is decided by size change over the call graph.** The measure is
+the length of a function's argument, and every call is classified by where its
+argument comes from: `strict` (a proper sub-expression — the argument shrinks),
+`nonstrict` (a sub-expression — it cannot grow), or `unknown` (neither, so
+nothing bounds it). Termination is then a property of the **strongly connected
+components**, because an infinite call sequence traverses a cycle infinitely
+often while an edge that is not on a cycle is traversed only finitely often. A
+component terminates when no call inside it is `unknown` and its non-decreasing
+calls cannot form a cycle, so every cycle contains a call that shrinks the
+argument. The witness is the component's members in an order in which every
+non-decreasing call goes forward — a proof a third party checks by re-deriving
+the calls and walking the order, with no search and no trust.
+
+**Mutual recursion is covered**, which is the point of taking the closure over
+the call graph instead of looking at one function at a time: `F` may call `G`
+non-strictly while `G` calls `F` strictly, and the pair terminates. A call that
+is `unknown` *between* components is harmless — it is not on a cycle — which is
+what keeps an entry point that calls a function with a fresh literal argument
+from being reported as non-terminating.
+
+**A defect this step found, in the previous step's own work.** The first version
+of the termination analysis collected only **self**-calls, so mutual recursion
+was invisible to it: `F { s.H e.T = <G e.T>; } G { e.X = <F e.X>; }` was
+reported `non-recursive` — that is, *terminating* — and it loops. It was
+replaced rather than patched, and the honest count is worse than the flattering
+one: on `examples/compiler.ref` the unsound version reported 129 unproven
+functions, and the sound one reports 439. **A count that flatters is the failure
+mode this project exists to refuse.**
 
 **What is not decided is named, not hidden.** The command prints its `unproven`
-set: the sentences whose selectability and the functions whose termination it
-could not settle. That set is the honest measure of the analysis's reach, and it
-is the thing a total decision procedure would have to be empty — which Theorem
-5.1 says cannot always be arranged.
+set, and its reach is bounded by the measure. The compiler's 480 functions form
+one large strongly connected component whose calls rebuild or extend their
+argument (`<DsBlkCondL (e.Ctx) (e.B) (e.Val) (e.Sents) (e.More) '0'>` adds a
+term), so the length of the *whole* argument cannot settle them. Per-position
+measures — the length of a **component** of the argument rather than of the
+whole — are the named next rung.
 
 Measured on the corpus: **zero infeasible sentences across the 77 non-`bad-*`
 examples** (no false positives — the soundness property holds end to end), with
