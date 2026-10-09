@@ -49,7 +49,7 @@ See `README.md` §"What Theorem 5.1 does and does not forbid" and
 | | |
 |---|---|
 | Honest completion | **~91.5%** (supersystem completeness — one method, one table, in `README.md`) |
-| Tests | 415 (72 core + 176 CLI integration + 167 across the other four crates), 0 clippy, fmt clean |
+| Tests | 416 (72 core + 177 CLI integration + 167 across the other four crates), 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
 
@@ -71,6 +71,53 @@ Rust oracle at budgets 1, 2, 5 and 12. The T-4/T-6 differential
 corpus gate is green at `cases: 71`, `positive: 31`, `check-failure: 6`,
 `runtime-failure: 1`, `residual: 33`, `cleaned-sentences: 1`, and
 `clippy --all-targets -D warnings` and `cargo fmt --check` are clean.
+
+### Measured — E-14's derivation now closes, and the blocker was already removed (2026-10-09)
+
+**The E-14 note of 2026-10-05 recorded that the self-application's derivation
+*stops*: "the residue is 101 KB in 7 steps, and its entry is `<Dispatch
+('SPECIALISE') (<the interpreter, inlined>) e.Input>`. `Dispatch` stays residual,
+because its pattern `('SPECIALISE') (e.Interpreter) (e.Program)` requires the
+program to be a **bracket**, and the open variable is not one."**
+
+**Measured again, and it closes.** `refal project2 examples/compiler.ref
+Dispatch --steps 200` — the supercompiler's own dispatcher, driven with its
+argument open, through the partition that can **enter a constructor**:
+
+```
+configurations: 51
+splits: 1
+driving steps: 147
+walk: closed
+```
+
+**The blocker was removed after the note was written, and by a different row.**
+`SplitStrategy::Pattern` — the partition that enters a constructor — is E-11's
+work, built on 2026-10-05 *after* the E-14 note. So the derivation was blocked by
+a missing capability that the note could not see, and the note's conclusion ("a
+restructuring of `compiler.ref`, not a new driver mode") was **wrong**: no
+restructuring was needed, and none was done.
+
+**What the artifact is, measured.** 546 definitions, entry
+`Go { e.Program = <Split1 e.Program>; }`, **`Dispatch` eliminated** (0
+occurrences), and **it checks as Refal** (`refal check` exits 0). So the
+structural half of the row's gate is now green, and it is gated by
+`the_supercompiler_derives_a_dispatcher_free_compiler`.
+
+**What is not yet green, and it is the half that matters.** The row's gate says
+"emit the residue, check it as Refal, and require it to agree with the existing
+`refal compile` on every example". Running the artifact as a compiler **does not
+complete within 120 s even on a one-line program** under the bootstrap
+interpreter. That is either the bootstrap being slow on a 546-definition
+program, or a residue that does not terminate — and the two are distinguished by
+measurement, not by reading. **The figure does not move**: a residue that is
+emitted and checks but has not been *run* is exactly what this project refuses to
+call done.
+
+**Next measurement, named:** run the derived artifact under the **release** build
+on a one-line program and see whether it terminates and agrees with
+`refal compile`. If it does, the row's gate is green and the credit moves; if it
+does not, the residue is defective and that is the finding.
 
 ### Done — lexicographic pairs, and the limit they prove (2026-10-09)
 
