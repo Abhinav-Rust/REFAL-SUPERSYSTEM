@@ -10,6 +10,30 @@ four-layer Refal supersystem, in Rust. The compiler is written in Refal.
 
 ---
 
+## Reading the citations — what `§` means
+
+The documents cite Turchin by **section**, and the sign is `§`, the *section
+sign* (also called a silcrow). So `§4.4` is simply **section 4.4**, and `§5.8`
+is section 5.8. Nearly every one of them is a section of a single work: the 1980
+Courant monograph *The Language REFAL — The Theory of Compilation and Metasystem
+Analysis*, which is this repository's design document. The compiler's rules are
+drawn from it line by line, which is why the README cites it rather than
+paraphrasing it.
+
+| Citation | What it is |
+|---|---|
+| `§2.2` | the **projecting matcher** — how a pattern is matched against an expression |
+| `§2.3` | function **formats** — what a function accepts, and what it returns |
+| `§4.2` | **driving** — contracting a configuration into a graph of states |
+| `§4.3` | **cleaning** — removing the vertices no input can reach |
+| `§4.4` | the **compilation strategy**: where on the axis between interpreting and compiling a residue is taken. Its *other* half is perfection by **transformation** — rewriting a walk so it becomes feasible rather than removing the walks that provably are not — and that half is still open (row `E-7`) |
+| `§4.5` | the **perfection** verdict — is every walk in the residue feasible? |
+| `§5.8` | **Theorem 5.1**, the limit of perfection — see below |
+| `§6.4` | the **`unknown` values** of the metacode, a runtime object here |
+| `§C.2` | the builtin reference: arithmetic operands and the standard result form |
+
+---
+
 ## The language
 
 ### Refal (Recursive Functions Algorithmic Language)
