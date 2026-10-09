@@ -43,12 +43,15 @@ course of action I recommend.** The Chief Architect's convention for this repo:
   witness, re-checked by `verify`) / `infeasible` (shadowing proof) / `unproven`
   (named). Per function: `Terminating { components }` / `NonRecursive` /
   `Unproven`. Termination is **size change over the strongly connected
-  components** (`CallClass` strict/nonstrict/unknown), so **mutual recursion is
-  covered**. Module: `crates/refal-semantics/src/feasibility.rs`.
-  Measured: 0 infeasible across the 77 non-`bad-*` examples; `compiler.ref` 439
-  unproven functions. **Next rung: per-position measures** (the length of a
-  *component* of the argument) — the whole-argument-length measure cannot settle
-  a call that rebuilds/extends its argument, which is most of the compiler.
+  components** (`CallClass` strict/nonstrict/unknown) under a **family of
+  measures** — measure 0 is the whole argument, measure k>0 its k-th top-level
+  term — so **mutual recursion is covered** and a call that rebuilds its argument
+  can still be proved. Module: `crates/refal-semantics/src/feasibility.rs`.
+  Measured: 0 infeasible across the 77 non-`bad-*` examples; `compiler.ref` 343
+  unproven functions (439 before per-position measures, 129 for the earlier
+  *unsound* version). **Next rung: a norm over the driven graph**, because a call
+  in argument position (`<DsScan <DsBump …>>`) has no static size at any
+  position and keeps the compiler's 480-function component unproven.
 - **Soundness over coverage, always.** An earlier version of that analysis
   collected only self-calls and so reported mutual loops as terminating; it was
   replaced, and the unproven count rose 129 → 439. Record the worse number.

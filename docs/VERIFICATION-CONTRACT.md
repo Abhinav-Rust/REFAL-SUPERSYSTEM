@@ -193,16 +193,34 @@ earlier sentences are compared **ignoring their conditions**, which is the
 conservative direction: a witness that fails to match an earlier pattern reaches
 this sentence whether or not that sentence's conditions would have succeeded.
 
-**Termination is decided by size change over the call graph.** The measure is
-the length of a function's argument, and every call is classified by where its
-argument comes from: `strict` (a proper sub-expression — the argument shrinks),
-`nonstrict` (a sub-expression — it cannot grow), or `unknown` (neither, so
-nothing bounds it). Termination is then a property of the **strongly connected
-components**, because an infinite call sequence traverses a cycle infinitely
-often while an edge that is not on a cycle is traversed only finitely often. A
-component terminates when no call inside it is `unknown` and its non-decreasing
+**Termination is decided by size change over the call graph, under a family of
+measures.** Which "something" a call must shrink is the *measure*, and there is
+one measure per argument position:
+
+| Measure | What it ranks |
+|---|---|
+| `0` | the length of the **whole argument** |
+| `k > 0` | the length of the argument's **k-th top-level term** |
+
+Under a fixed measure every call is classified by where its argument comes from:
+`strict` (a proper sub-expression — the measure shrinks), `nonstrict` (a
+sub-expression — it cannot grow), or `unknown` (neither, so nothing bounds it).
+Termination is then a property of the **strongly connected components**, because
+an infinite call sequence traverses a cycle infinitely often while an edge that
+is not on a cycle is traversed only finitely often. A component terminates when
+no call inside it is `unknown` **under that measure** and its non-decreasing
 calls cannot form a cycle, so every cycle contains a call that shrinks the
-argument. The witness is the component's members in an order in which every
+measure. Every measure is tried and the first that proves the function is the
+one reported: a proof under any of them is a proof, because each is a
+well-founded ranking in its own right.
+
+**The second measure is what settles a function that rebuilds its argument.** A
+compiler pass that carries a context along — `<DsBlkCondL (e.Ctx) (e.B) (e.Val)
+(e.Sents) (e.More) '0'>` — *grows* its argument by one term, so measure 0 can
+never prove it; but its fourth component `(e.Sents)` becomes `(e.Rest)`, a
+proper sub-expression, so measure 4 can. Measured, that took
+`examples/compiler.ref` from 439 unproven functions to **343**, and the corpus
+from 537 to **430**. The witness is the component's members in an order in which every
 non-decreasing call goes forward — a proof a third party checks by re-deriving
 the calls and walking the order, with no search and no trust.
 
@@ -213,22 +231,23 @@ is `unknown` *between* components is harmless — it is not on a cycle — which
 what keeps an entry point that calls a function with a fresh literal argument
 from being reported as non-terminating.
 
-**A defect this step found, in the previous step's own work.** The first version
-of the termination analysis collected only **self**-calls, so mutual recursion
-was invisible to it: `F { s.H e.T = <G e.T>; } G { e.X = <F e.X>; }` was
-reported `non-recursive` — that is, *terminating* — and it loops. It was
-replaced rather than patched, and the honest count is worse than the flattering
-one: on `examples/compiler.ref` the unsound version reported 129 unproven
-functions, and the sound one reports 439. **A count that flatters is the failure
-mode this project exists to refuse.**
+**A defect an earlier step found, in its own predecessor.** The first version of
+the termination analysis collected only **self**-calls, so mutual recursion was
+invisible to it: `F { s.H e.T = <G e.T>; } G { e.X = <F e.X>; }` was reported
+`non-recursive` — that is, *terminating* — and it loops. It was replaced rather
+than patched, and the honest count was worse than the flattering one: 129
+unproven functions on `examples/compiler.ref` became 439. **A count that
+flatters is the failure mode this project exists to refuse.**
 
 **What is not decided is named, not hidden.** The command prints its `unproven`
-set, and its reach is bounded by the measure. The compiler's 480 functions form
-one large strongly connected component whose calls rebuild or extend their
-argument (`<DsBlkCondL (e.Ctx) (e.B) (e.Val) (e.Sents) (e.More) '0'>` adds a
-term), so the length of the *whole* argument cannot settle them. Per-position
-measures — the length of a **component** of the argument rather than of the
-whole — are the named next rung.
+set, and its reach is bounded by the measures it has. A call **in argument
+position** — `<DsScan <DsBump <DsRecCall (e.Ctx) (e.Fn) (e.In)>> (e.Fn) (e.In)
+('0' '0') …>` — has no static size at any position, so no measure applies, and
+inside a cycle that makes the component `Unproven`. That is what still bounds the
+compiler: its 480 functions form one large component in which such calls occur,
+and **343** of them remain unproven. The named next rung is a norm over the
+**driven graph** rather than over the source text, which is what Turchin's own
+whistle supplies.
 
 Measured on the corpus: **zero infeasible sentences across the 77 non-`bad-*`
 examples** (no false positives — the soundness property holds end to end), with

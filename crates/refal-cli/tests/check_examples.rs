@@ -7829,9 +7829,12 @@ fn the_certificate_re_checks_itself() {
     let output = feasibility_source(source, &["--certificate"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("feasible Rev 2 'x'"), "{stdout}");
-    assert!(stdout.contains("call Rev Rev strict 2"), "{stdout}");
-    assert!(stdout.contains("component REV Rev"), "{stdout}");
-    assert!(stdout.contains("terminates Rev cycles REV"), "{stdout}");
+    assert!(stdout.contains("call 0 Rev Rev strict 2"), "{stdout}");
+    assert!(stdout.contains("component 0 REV REV"), "{stdout}");
+    assert!(
+        stdout.contains("terminates Rev measure 0 cycles REV"),
+        "{stdout}"
+    );
     assert!(
         stdout.contains("# checked: every claim re-verified"),
         "{stdout}"
