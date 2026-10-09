@@ -1,0 +1,23 @@
+# Line endings.
+#
+# The repository is stored with LF and every checkout keeps LF, on every
+# platform. Without this, a machine with `core.autocrlf=true` gets CRLF in the
+# working tree while `cargo xtask gen-readme-diagrams` writes LF, so a
+# regenerated diagram would show a whole-file diff that is not a change.
+* text=auto eol=lf
+
+# Generated or binary assets: never line-ending-translated.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.gz binary
+*.tar.gz binary
+
+# The diagrams are generated text; keep them diffable and LF.
+docs/images/*.svg text eol=lf
+
+# Test fixtures that must stay byte-exact.
+*.ref text eol=lf
+*.manifest text eol=lf
