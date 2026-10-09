@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+**E-14's derivation closes — and it was blocked by a capability another row
+removed while the note was being written.**
+
+- **The E-14 note of 2026-10-05 recorded that the derivation *stops*:** driving
+  the supercompiler's dispatcher left `Dispatch` residual, "because its pattern
+  requires the program to be a **bracket**, and the open variable is not one". It
+  concluded the fix was "a restructuring of `compiler.ref`".
+- **Measured again: it closes.** `refal project2 examples/compiler.ref Dispatch
+  --steps 200` reports **51 configurations, 1 split, 147 steps, walk closed**.
+  `SplitStrategy::Pattern` — the partition that enters a constructor — is E-11's
+  work, built *after* that note. **No restructuring was needed and none was
+  done**, so the note's conclusion was wrong about its own fix.
+- **The artifact, measured:** 546 definitions, entry
+  `Go { e.Program = <Split1 e.Program>; }`, **`Dispatch` eliminated**, and it
+  **checks as Refal**. Gated by
+  `the_supercompiler_derives_a_dispatcher_free_compiler`.
+- **What is not green:** running the artifact as a compiler does not complete
+  within 120 s on a one-line program under the bootstrap. The row's gate requires
+  it to be *run* and to agree with `refal compile`, so **the figure does not
+  move** — a residue that is emitted and checks but has not been run is not done.
+
 **A ranking may be a lexicographic pair — and the pair proves a limit.**
 
 - **Measures are tried singly and then in pairs**, `k+l` meaning "the k-th

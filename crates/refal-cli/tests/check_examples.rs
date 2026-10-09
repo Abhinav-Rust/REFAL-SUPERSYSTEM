@@ -7341,6 +7341,74 @@ fn the_second_projection_emits_a_compiler_that_decides_its_branches() {
     );
 }
 
+/// E-14, **derived rather than authored**: the supercompiler's own dispatcher,
+/// driven with its argument open, closes and emits a program that checks as
+/// Refal and no longer contains `Dispatch`.
+///
+/// The E-14 note of 2026-10-05 recorded that this derivation *stops* — "the
+/// residue is 101 KB in 7 steps, and its entry is `<Dispatch ('SPECIALISE')
+/// (<the interpreter, inlined>) e.Input>`. `Dispatch` stays residual, because its
+/// pattern `('SPECIALISE') (e.Interpreter) (e.Program)` requires the program to
+/// be a **bracket**, and the open variable is not one."
+///
+/// That blocker is gone, because the partition that can **enter a constructor**
+/// (`SplitStrategy::Pattern`, E-11) was built *after* the note. The walk now
+/// closes: **147 steps, 51 configurations, one split**, and the dispatcher is
+/// eliminated rather than left residual.
+///
+/// This settles the half of the row's gate that is structural. The other half —
+/// running the artifact as a compiler and agreeing with `refal compile` — needs
+/// the artifact to *execute*, and that is measured separately, because it is a
+/// question about the bootstrap's speed rather than about the derivation.
+#[test]
+fn the_supercompiler_derives_a_dispatcher_free_compiler() {
+    let output = Command::new(refal_bin())
+        .args([
+            "project2",
+            &workspace_path("examples/compiler.ref"),
+            "Dispatch",
+            "--steps",
+            "200",
+        ])
+        .output()
+        .expect("run refal binary");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "a closed projection exits zero:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("walk: closed"),
+        "the walk must close rather than be truncated by the budget:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("splits: 1"),
+        "the pattern partition settles it in one split:\n{stdout}"
+    );
+
+    let artifact = stdout
+        .split_once("$EXTERN")
+        .map(|(_, rest)| format!("$EXTERN{rest}"))
+        .expect("the driver's report is followed by the emitted program");
+    assert!(
+        !artifact.contains("Dispatch {"),
+        "the dispatcher must be eliminated, not re-printed"
+    );
+
+    let path = temp_ref_path("derived-compiler");
+    fs::write(&path, &artifact).expect("write the artifact");
+    let checked = Command::new(refal_bin())
+        .args(["check", path.to_str().expect("utf-8 path")])
+        .output()
+        .expect("run refal binary");
+    let _ = fs::remove_file(&path);
+    assert!(
+        checked.status.success(),
+        "the derived artifact must check as Refal:\n{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+}
+
 /// E-11's **negative** half, at the command line: the partition carries the
 /// complement of its definite branches, so the callee is *eliminated* rather
 /// than left residual.
