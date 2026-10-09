@@ -49,7 +49,7 @@ See `README.md` §"What Theorem 5.1 does and does not forbid" and
 | | |
 |---|---|
 | Honest completion | **~91.5%** (supersystem completeness — one method, one table, in `README.md`) |
-| Tests | 405 (72 core + 176 CLI integration + 157 across the other four crates), 0 clippy, fmt clean |
+| Tests | 409 (72 core + 176 CLI integration + 161 across the other four crates), 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
 
@@ -71,6 +71,52 @@ Rust oracle at budgets 1, 2, 5 and 12. The T-4/T-6 differential
 corpus gate is green at `cases: 71`, `positive: 31`, `check-failure: 6`,
 `runtime-failure: 1`, `residual: 33`, `cleaned-sentences: 1`, and
 `clippy --all-targets -D warnings` and `cargo fmt --check` are clean.
+
+### Done — size-change termination over the call graph (2026-10-09)
+
+**The approved next rung: termination is now decided by size change over the
+strongly connected components, and mutual recursion is covered.** The measure is
+the length of a function's argument; every call is classified `strict` (a proper
+sub-expression — the argument shrinks), `nonstrict` (a sub-expression — it
+cannot grow), or `unknown`. Termination is a property of the **components**,
+because an infinite call sequence traverses a cycle infinitely often while an
+edge that is not on a cycle is traversed only finitely often. A component
+terminates when no call inside it is `unknown` and its non-decreasing calls
+cannot form a cycle; the witness is the component's members in an order in which
+every non-decreasing call goes forward, which `verify` re-derives and walks.
+
+**Mutual recursion is proved, and that is the point of taking the closure.**
+`Mutual { s.H e.T = <Mutual-Helper e.T>; } Mutual-Helper { e.X = <Mutual e.X>; }`
+now reports `terminates (cycle: Mutual-Helper Mutual); decreasing:
+Mutual->Mutual-Helper in sentence 1`. A per-function analysis cannot see it. A
+call that is `unknown` *between* components is harmless and is tolerated, which
+is what keeps an entry point that calls a function with a fresh literal argument
+from being reported as non-terminating.
+
+**The step found an unsoundness in the previous step's own work, and replaced it
+rather than patching it.** The first termination analysis collected only
+**self**-calls, so mutual recursion was invisible to it:
+`F { s.H e.T = <G e.T>; } G { e.X = <F e.X>; }` was reported `non-recursive` —
+that is, *terminating* — and it loops. **The published count was flattering.**
+The unsound version reported **129** unproven functions on
+`examples/compiler.ref`; the sound one reports **439**, and **537** across the
+77 non-`bad-*` examples. The number got worse and the analysis got right, and
+that is recorded rather than quietly absorbed: a count that flatters is the
+failure mode this project exists to refuse.
+
+**Why the sound number is high, named exactly.** The compiler's 480 functions
+form one large component whose calls rebuild or extend their argument —
+`DsBlkCond` passes its own five components *plus* a fresh `'0'`, so the argument
+grows and the length measure cannot settle it. **Per-position measures** — the
+length of a *component* of the argument rather than of the whole — are the next
+rung, and they are what would recover the compiler.
+
+**Measured.** `examples/compiler.ref` in 1.5 s. **Zero infeasible sentences
+across the 77 non-`bad-*` examples** — the soundness property holds end to end.
+Gates: 41 tests in `refal-semantics` (mutual recursion proved; a non-decreasing
+cycle, a computed argument and a reordered argument all unproven) and the
+`refal-cli` tests updated to the new certificate; `fmt`, `clippy --all-targets -D
+warnings`, the strict-mode gate and the fast differential gate are clean.
 
 ### Done — Tier 1 feasibility and termination, with certificates (2026-10-09)
 
