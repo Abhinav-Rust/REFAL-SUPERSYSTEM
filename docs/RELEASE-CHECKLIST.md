@@ -33,10 +33,10 @@ project's actual claims rather than to Rust hygiene.
    the same version in `Cargo.toml`. Gate 10 is what notices if only one of the
    two moved.
 4. Confirm the supported-scope statement below still matches reality.
-5. Measure, do not remember: `cargo build --release -p refal && ./scripts/perf.sh`.
+5. Measure, do not remember: `cargo build --release -p refal && ./cargo xtask perf`.
    A published figure that no longer reproduces is a defect, and the only way to
    know is to run it.
-6. Cut the archive: `./scripts/package.sh`. It carries the version from
+6. Cut the archive: `./cargo xtask package`. It carries the version from
    `Cargo.toml`, so an archive cannot be named after a release that does not
    exist.
 7. Tag the commit. CI must be green on the tag, not on an ancestor of it.
@@ -101,5 +101,5 @@ What is **not** promised:
 - **The CLI surface.** Flags may be added or renamed between releases while the
   project is below 1.0. `refal --version` and the modes documented in
   `refal --help` are the stable part.
-- **Performance.** The figures `scripts/perf.sh` prints are measurements, not
+- **Performance.** The figures `cargo xtask perf` prints are measurements, not
   contracts.

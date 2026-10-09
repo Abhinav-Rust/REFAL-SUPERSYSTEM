@@ -72,6 +72,33 @@ corpus gate is green at `cases: 71`, `positive: 31`, `check-failure: 6`,
 `runtime-failure: 1`, `residual: 33`, `cleaned-sentences: 1`, and
 `clippy --all-targets -D warnings` and `cargo fmt --check` are clean.
 
+### Done — the repository is now 100% Rust (2026-10-09)
+
+**Every `scripts/*.py` and `scripts/*.sh` file is gone; the tooling is
+`crates/xtask`, run as `cargo xtask <task>`.** The Chief Architect asked whether
+the language bar could be 100% Rust and whether Python and Shell were necessary.
+They were not: all six were *repository tooling* -- the README diagram generator,
+the corpus sweep, the profiler, the performance suite, the packaging script and
+the Turchin source fetch -- not part of the product, and each is now a Rust task
+in one binary.
+
+**The diagram generator is a port, and the diff is the gate.** The generator was
+the bulk of the Python (23 KB of 31 KB). Its output is committed, so the port is
+verifiable exactly: `cargo xtask gen-readme-diagrams` then `git diff docs/images`
+must be empty, and it is -- **all sixteen SVGs byte-identical**. The only
+fidelity point is that Python's `str()` prints an integral float as `60.0` where
+Rust prints `60`; the port models the distinction (`Coord`/`Pf`) rather than
+changing the committed diagrams. That is the same "answer right, description
+wrong" trap this file records elsewhere, here caught before it shipped.
+
+**Verified at this commit:** `cargo build` (whole workspace), `cargo fmt --check`
+and `cargo clippy --all-targets -D warnings` clean including `xtask`, the fast
+gate green (`differential-corpus: equal`, 72 cases), and the sixteen generated
+SVGs unchanged. `cargo xtask help` lists the six tasks.
+
+**The figure does not move.** This is tooling, not a layer: no conformance row
+changes, and the completion stays **~90.5%**. A build script is not a gate.
+
 ### Done — the 2nd projection, and the partition it needed (E-11, E-14)
 
 **`refal project2 <interpreter.ref> <Function>` drives an interpreter with its
@@ -363,22 +390,22 @@ because **a release is one version in three places, and three places is two
 chances to forget one.** Gate 10,
 `the_workspace_version_and_the_changelog_agree`, reads all three and requires them
 to agree, requires the newest heading to carry an ISO date, and requires
-`Unreleased` to stay above it. It is what makes the archive honest: `package.sh`
-names the tarball from `Cargo.toml`, so a changelog that was not updated would
+`Unreleased` to stay above it. It is what makes the archive honest: `cargo xtask
+package` names the tarball from `Cargo.toml`, so a changelog that was not updated would
 ship an archive whose version has no entry.
 
 `refal --version` is new, and it is the half of that gate a user can see without
 reading a file. Until now the only way to ask the binary what it was, was to give
 it a file and read the usage message it printed when it failed.
 
-**`scripts/package.sh`** cuts the archive: the binary, the documentation, the
-corpus, the scripts, and an `INSTALL.md` that says what the binary is and is not.
+**`cargo xtask package`** cuts the archive: the binary, the documentation, the
+corpus, and an `INSTALL.md` that says what the binary is and is not.
 The Refal sources are in it because they are the point — this is a compiler that
 compiles them, and the binary is what runs it and what the differential gates
 compare it against. The version comes from `Cargo.toml`, so the archive cannot be
 named after a release that does not exist.
 
-**`scripts/perf.sh`** measures every speed figure the README publishes *about
+**`cargo xtask perf`** measures every speed figure the README publishes *about
 the compiler*, on the
 compiler's own source, which is the largest input the repository has and the only
 one whose size is a property of the project rather than of a fixture. It prints
@@ -1939,7 +1966,7 @@ rather than semantic ones.
 
 ### Done — a call profiler, and what it says the driver's cost actually is
 
-`scripts/profile.py` wraps every one of the compiler's 480 definitions in a
+`cargo xtask profile` wraps every one of the compiler's 480 definitions in a
 one-line function that prints a marker and forwards its arguments, runs a mode,
 and counts the markers. The result is an exact histogram, not a sample, and
 `--compare` prints each function's growth ratio across inputs — which is what
@@ -2003,7 +2030,7 @@ Refal-authored compiler and a `Compile` that drives.
   the sense that every strategy is a refinement of it — so this is an
   optimisation, not a gap.
 - **The compiler's speed on very large inputs**, measured rather than described.
-  `scripts/perf.sh` prints the numbers; on this machine, against the compiler's
+  `cargo xtask perf` prints the numbers; on this machine, against the compiler's
   own 146 KB source: `refal compile` **47.8 s**, `compiler.ref GRAPH` **25.5 s**,
   `compiler.ref RESIDUALIZE-DRIVEN` **45.4 s**, `compiler.ref` compiling itself
   **46.6 s** — against **0.23 s** for `refal residualize-driven` and **0.30 s**
@@ -2013,14 +2040,14 @@ Refal-authored compiler and a `Compile` that drives.
   work. That is the Refal-compiler row's remaining deduction, and it is a
   constant-factor problem in the interpreter rather than a missing pass.
   (Per-invocation timings on this machine also carry about 0.8 s of process
-  startup, which `scripts/perf.sh` measures as a baseline before subtracting it.)
+  startup, which `cargo xtask perf` measures as a baseline before subtracting it.)
 - **T-8** metacodes (Ch. 1.3) — closed for ground expressions; see the section
   above. The §6.4 `unknown` values remain open and are recorded there.
 - **The `Reverse` shape** — a rope whose left spine is as deep as the nesting,
   built by a result that puts a call before other terms. Every prepend-shaped
   walk is O(1) per step, the compiler's own source is linear, and the shape
   itself measures linear (16,000/32,000/64,000 characters in 614/712/911 ms on the
-  2026-09-24 machine), so this is a bound rather than a cost. `scripts/perf.sh`
+  2026-09-24 machine), so this is a bound rather than a cost. `cargo xtask perf`
   does not reproduce that figure and says why: `--input-file` hands a program one
   character-string term rather than one term per character, and the CLI wraps each
   argument in a bracket, so a large flat term list cannot be handed to a program
@@ -2590,7 +2617,7 @@ projection found a dead dedup test and a cursor where a source belongs.
    structure. The next session starts from this measurement rather than from the
    row's name.
 6. **The compiler's speed on very large inputs.** The last named gap in the
-   compiler-in-Refal row. `scripts/perf.sh` measures it; `CleanG` and the checker
+   compiler-in-Refal row. `cargo xtask perf` measures it; `CleanG` and the checker
    are linear now, and what is left is the constant.
 7. **The self-hosting fixpoint over an arbitrary program**, rather than over the
    corpus and the compiler's own source.
@@ -2613,7 +2640,7 @@ byte-identical over the whole symbolic-drive corpus, and
 removing the ones that provably are not — is a research item on the order of
 Tier 2, and the search closed the part of §4.4 that is engineering.
 
-**A fourth round of measurement is still not needed.** `scripts/profile.py`
+**A fourth round of measurement is still not needed.** `cargo xtask profile`
 answers "where is the cost" in one command and answers it with call counts. What
 the graph-pass session added is that a call count is not enough on its own:
 `CleanG`'s counts were already as low as the algorithm allowed when the pass was

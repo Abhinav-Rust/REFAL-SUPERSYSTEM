@@ -79,9 +79,13 @@ suite grew 383 → 389 tests on 2026-10-08). Raised to **90**.
 
 ## Assets added
 
-- `scripts/gen-readme-diagrams.py` — regenerates the README's theme-aware SVG
-  family (`docs/images/*-{light,dark}.svg`) from one description. Edit the script,
-  not the SVGs. Verify with headless Chrome → PNG → read.
+- `crates/xtask` — the repository's tooling, in Rust. Six tasks via
+  `cargo xtask <task>` (alias in `.cargo/config.toml`): `gen-readme-diagrams`
+  (the theme-aware SVG family, `docs/images/*-{light,dark}.svg`, from one
+  description — edit the task, not the SVGs; verify by regenerating and
+  `git diff docs/images`, which must be empty), `sweep`, `profile`, `perf`,
+  `package`, `fetch-sources`. **The repo is 100% Rust** as of 2026-10-09 — no
+  Python, no Shell. Verify diagrams with headless Chrome → PNG → read.
 
 ## Reference material
 

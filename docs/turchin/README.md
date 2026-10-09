@@ -4,7 +4,7 @@ This compiler is built to Valentin Turchin's own design. This directory indexes 
 sources that design is drawn from, so that any claim in this repository can be checked against
 the original text.
 
-Run `./fetch-sources.sh` to download the nineteen scripted CS documents (~53 MB) into `docs/turchin/pdf/`. Three further documents were added from the Chief Architect's collection on 2026-09-08: the 1986 TOPLAS supercompiler paper, the 1993 JFP metasystem-transition paper, and the 1995 Dialogue. **22 documents, ~34 MB on disk.**
+Run `cargo xtask fetch-sources` to download the nineteen scripted CS documents (~53 MB) into `docs/turchin/pdf/`. Three further documents were added from the Chief Architect's collection on 2026-09-08: the 1986 TOPLAS supercompiler paper, the 1993 JFP metasystem-transition paper, and the 1995 Dialogue. **22 documents, ~34 MB on disk.**
 Every one has a machine-readable text layer; extract with `pdftotext <file>.pdf -`.
 
 ## Why the PDFs are not committed

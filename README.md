@@ -511,6 +511,9 @@ differential oracle, and the Refal sources are what compile themselves.
 ## Building
 
 **Prerequisites:** a stable Rust toolchain — install via [rustup](https://rustup.rs/).
+Nothing else. The repository is **100% Rust**: the compiler, the corpus, and the
+tooling that draws the README's diagrams and measures its figures are all Rust, so
+there is one toolchain from the front door to the back.
 
 ```sh
 git clone https://github.com/Abhinav-Rust/REFAL-SUPERSYSTEM.git
@@ -528,10 +531,13 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-Retrieve the primary sources the design is drawn from:
+The repository's own tasks run through `cargo xtask`:
 
 ```sh
-./docs/turchin/fetch-sources.sh
+cargo xtask gen-readme-diagrams   # regenerate the theme-aware README diagrams
+cargo xtask perf                  # the performance suite
+cargo xtask package               # cut the release archive
+cargo xtask fetch-sources         # download Turchin's primary works (not committed)
 ```
 
 ## Using the CLI
@@ -765,7 +771,7 @@ and a new workstream carries zero credit until a gate behind it is green.
 | [REFAL-FIRST-COMPLETION.md](docs/REFAL-FIRST-COMPLETION.md) | Self-hosting completion contract and scorecard |
 | [CLEANROOM.md](docs/CLEANROOM.md) | Clean-room authorship policy |
 | [CHANGELOG.md](CHANGELOG.md) | What has changed, release by release |
-| [scripts/gen-readme-diagrams.py](scripts/gen-readme-diagrams.py) | Regenerates the theme-aware SVG diagrams it defines — each emitted as a light/dark pair from one description, so the two themes cannot drift. The remaining diagrams are drawn once and committed as SVG |
+| [crates/xtask](crates/xtask) | The repository's tooling, in Rust: regenerates the theme-aware SVG diagrams (each emitted as a light/dark pair from one description, so the two themes cannot drift), and carries the corpus sweep, the profiler, the performance suite, packaging and the source fetch. Run as `cargo xtask <task>` |
 
 ## Contributing
 

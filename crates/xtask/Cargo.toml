@@ -1,0 +1,20 @@
+[package]
+name = "xtask"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+# The repository's own tooling, in the repository's own language. Every task
+# that used to be a `scripts/*.py` or `scripts/*.sh` file lives here, so the
+# project has one toolchain and one language from the front door to the back.
+# Run it as `cargo run -p xtask -- <task>`, or add the usual alias:
+#   [alias] xtask = "run --package xtask --"
+[[bin]]
+name = "xtask"
+path = "src/main.rs"
+
+[lints]
+workspace = true

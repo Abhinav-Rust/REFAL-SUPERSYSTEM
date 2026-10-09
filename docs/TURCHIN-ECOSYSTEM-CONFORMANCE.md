@@ -48,7 +48,7 @@ The consequence for the conformance rows below: **a row's source citation is to 
 document in the corpus, and a claim that turns on the exact wording of a paper
 must be re-checked against the primary PDF before it is made load-bearing.**
 `docs/turchin/pdf/` is where the primaries live (gitignored; retrieved by
-`fetch-sources.sh`). One row below — E-12, the meta-prover — is exactly such a
+`cargo xtask fetch-sources`). One row below — E-12, the meta-prover — is exactly such a
 row, and it is marked.
 
 A second consequence: this document does **not** publish a completion percentage.

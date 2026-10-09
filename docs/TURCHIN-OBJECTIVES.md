@@ -114,7 +114,7 @@ lowerable example.
 ## Source provenance
 
 All documents cited above are in `docs/turchin/pdf/` (retrieved by
-`fetch-sources.sh`, not committed — see that directory's README for the
+`cargo xtask fetch-sources`, not committed — see that directory's README for the
 rationale). The 1986 *Concept of a Supercompiler*, 1993 *Program Transformation
 with Metasystem Transitions*, and 1995 *Dialogue on Metasystem Transition* were
 added to the corpus from the Chief Architect's local collection on 2026-09-08.
