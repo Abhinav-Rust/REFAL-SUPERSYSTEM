@@ -757,6 +757,7 @@ and a new workstream carries zero credit until a gate behind it is green.
 
 | Document | Description |
 |---|---|
+| [GLOSSARY.md](docs/GLOSSARY.md) | Every term this project is built on — Refal, supercompilation, metacomputation, the graph of states, the Futamura projections, Theorem 5.1 — defined plainly, with its source and the code that implements it |
 | [PLAN.md](docs/PLAN.md) | Phase plan, gates, and completion accounting |
 | [TURCHIN-ECOSYSTEM-CONFORMANCE.md](docs/TURCHIN-ECOSYSTEM-CONFORMANCE.md) | The ecosystem matrix `E-1 … E-26`: the four layers, what is closed, what is open, and where the boundary is |
 | [TURCHIN-OBJECTIVES.md](docs/TURCHIN-OBJECTIVES.md) | The conformance oracle: objectives `T-1 … T-12`, each bound to a gate |
