@@ -831,6 +831,20 @@ struct RawCall {
     args: Vec<Term>,
 }
 
+/// Why a component was not proved under one measure.
+///
+/// `unbounded` is the honest distance from a proof: how many calls inside the
+/// component have no bound under that measure. Reporting it lets the analysis
+/// name the measure that came closest instead of the first that failed.
+struct JudgeFailure {
+    unbounded: usize,
+    /// The first unbounded call, as `caller -> callee in sentence n`.
+    first: Option<String>,
+    /// The reason, for a component whose calls are all bounded but whose
+    /// non-decreasing calls form a cycle.
+    reason: String,
+}
+
 /// The classified calls of a program, with the topology they induce.
 struct CallGraph {
     calls: Vec<RawCall>,
@@ -1082,22 +1096,37 @@ impl CallGraph {
 
     /// Whether a component is proved to terminate under `edges`, and if so its
     /// witness; if not, why not.
-    fn judge(&self, id: usize, edges: &[CallEdge]) -> Result<Component, String> {
+    ///
+    /// A failure carries how many calls inside the component have **no bound**
+    /// under this measure, because that count is the honest distance from a
+    /// proof: it says how many calls would have to be settled for this measure
+    /// to work, and it is what lets the caller report the measure that came
+    /// closest rather than the first one that failed.
+    fn judge(&self, id: usize, edges: &[CallEdge]) -> Result<Component, JudgeFailure> {
         if !self.cyclic[id] {
             return Ok(Component {
                 members: self.components[id].clone(),
                 strict: Vec::new(),
             });
         }
-        if let Some(&index) = self.internal[id]
+        let unbounded: Vec<usize> = self.internal[id]
             .iter()
-            .find(|index| edges[**index].class == CallClass::Unknown)
-        {
+            .copied()
+            .filter(|index| edges[*index].class == CallClass::Unknown)
+            .collect();
+        if let Some(&index) = unbounded.first() {
             let call = &edges[index];
-            return Err(format!(
-                "`{}` calls `{}` in sentence {} inside a cycle, with an argument that is not a sub-expression of its own, so nothing bounds the argument",
-                call.from, call.to, call.sentence
-            ));
+            return Err(JudgeFailure {
+                unbounded: unbounded.len(),
+                first: Some(format!(
+                    "`{}` -> `{}` in sentence {}",
+                    call.from, call.to, call.sentence
+                )),
+                reason: format!(
+                    "`{}` calls `{}` in sentence {} inside a cycle, with an argument that is not a sub-expression of its own, so nothing bounds the argument",
+                    call.from, call.to, call.sentence
+                ),
+            });
         }
         match self.order(id, edges) {
             Some(members) => {
@@ -1112,10 +1141,14 @@ impl CallGraph {
                 });
                 Ok(Component { members, strict })
             }
-            None => Err(format!(
-                "the non-decreasing calls inside the cycle through `{}` contain a cycle, so no argument is guaranteed to shrink",
-                self.name(&self.components[id][0])
-            )),
+            None => Err(JudgeFailure {
+                unbounded: 0,
+                first: None,
+                reason: format!(
+                    "the non-decreasing calls inside the cycle through `{}` contain a cycle, so no argument is guaranteed to shrink",
+                    self.name(&self.components[id][0])
+                ),
+            }),
         }
     }
 
@@ -1180,21 +1213,25 @@ fn termination_of(function: &Function, graph: &CallGraph) -> TerminationVerdict 
     // Every measure is tried, in order, and the first that proves the function
     // is the one reported. A proof under any measure is a proof, because each is
     // a well-founded ranking in its own right.
-    let mut first_reason = None;
+    // The measure that came closest is the one with the fewest calls left
+    // unbounded; ties go to the lower measure, and a measure that got past every
+    // unbounded call but found a cycle counts as closest of all, because a cycle
+    // is one step from a proof where an unbounded call is not.
+    let mut closest: Option<(usize, JudgeFailure)> = None;
     for measure in 0..=graph.max_measure {
         let edges = graph.classes(measure);
         let mut components = Vec::new();
-        let mut reason = None;
+        let mut failure = None;
         for &id in &cyclic {
             match graph.judge(id, &edges) {
                 Ok(component) => components.push(component),
                 Err(why) => {
-                    reason = Some(why);
+                    failure = Some(why);
                     break;
                 }
             }
         }
-        match reason {
+        match failure {
             None => {
                 return TerminationVerdict::Terminating {
                     measure,
@@ -1202,13 +1239,26 @@ fn termination_of(function: &Function, graph: &CallGraph) -> TerminationVerdict 
                 };
             }
             Some(why) => {
-                first_reason.get_or_insert(why);
+                let better = closest
+                    .as_ref()
+                    .is_none_or(|(_, best)| (why.unbounded, measure) < (best.unbounded, 0));
+                if better {
+                    closest = Some((measure, why));
+                }
             }
         }
     }
 
     TerminationVerdict::Unproven {
-        reason: first_reason.unwrap_or_else(|| "no measure applies".to_string()),
+        reason: match closest {
+            Some((measure, failure)) if failure.unbounded > 0 => format!(
+                "measure {measure} came closest: {} call(s) inside a cycle have no bound, the first being {}",
+                failure.unbounded,
+                failure.first.unwrap_or_default()
+            ),
+            Some((_, failure)) => failure.reason,
+            None => "no measure applies".to_string(),
+        },
     }
 }
 
@@ -1509,6 +1559,36 @@ mod tests {
             termination(source, "F"),
             TerminationVerdict::Unproven { .. }
         ));
+    }
+
+    #[test]
+    fn an_unproven_function_names_the_measure_that_came_closest() {
+        // A bare `unproven` says nothing about how far the analysis got. The
+        // reason names the measure with the fewest unbounded calls, and the
+        // call itself, so the remaining gap is diagnosable rather than opaque.
+        let source = "$ENTRY Go { = <F (A)>; }\n\
+                      F { (e.X) = <F <G (e.X)>>; }\n\
+                      G { (e.Y) = (e.Y); }";
+        let TerminationVerdict::Unproven { reason } = termination(source, "F") else {
+            panic!("a computed argument cannot be bounded");
+        };
+        assert!(reason.contains("came closest"), "{reason}");
+        assert!(reason.contains("have no bound"), "{reason}");
+        assert!(reason.contains("`F` -> `F` in sentence 1"), "{reason}");
+    }
+
+    #[test]
+    fn a_cycle_is_reported_as_a_cycle_rather_than_as_an_unbounded_call() {
+        // A component whose calls are all bounded but whose non-decreasing calls
+        // form a cycle is a different failure, and it is reported as one.
+        let source = "$ENTRY Go { = <F (A)>; }\nF { (e.X) = <F (e.X)>; }";
+        let TerminationVerdict::Unproven { reason } = termination(source, "F") else {
+            panic!("the walk cannot shrink");
+        };
+        assert!(
+            reason.contains("non-decreasing calls inside the cycle"),
+            "{reason}"
+        );
     }
 
     #[test]

@@ -49,9 +49,14 @@ course of action I recommend.** The Chief Architect's convention for this repo:
   can still be proved. Module: `crates/refal-semantics/src/feasibility.rs`.
   Measured: 0 infeasible across the 77 non-`bad-*` examples; `compiler.ref` 343
   unproven functions (439 before per-position measures, 129 for the earlier
-  *unsound* version). **Next rung: a norm over the driven graph**, because a call
-  in argument position (`<DsScan <DsBump …>>`) has no static size at any
-  position and keeps the compiler's 480-function component unproven.
+  *unsound* version). **The driven-graph norm was measured and REFUTED
+  (2026-10-09) — do not rebuild it**: `refal drive-symbolic --configurations`
+  shows the driver leaves a call in argument position as a call
+  (`C0 -Scan <Split1 e.Input>-> residual`), because a symbolic argument has no
+  value. The analysis now reports the **closest measure** (`JudgeFailure.unbounded`
+  = calls with no bound); on `compiler.ref` the big component is **21** calls
+  from a proof, and **24 functions are 1 call away**. Next candidates:
+  lexicographic measure pairs, the one-call-away shape, or E-14's generator.
 - **Soundness over coverage, always.** An earlier version of that analysis
   collected only self-calls and so reported mutual loops as terminating; it was
   replaced, and the unproven count rose 129 → 439. Record the worse number.

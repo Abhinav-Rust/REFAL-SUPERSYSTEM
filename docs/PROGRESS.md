@@ -49,7 +49,7 @@ See `README.md` §"What Theorem 5.1 does and does not forbid" and
 | | |
 |---|---|
 | Honest completion | **~91.5%** (supersystem completeness — one method, one table, in `README.md`) |
-| Tests | 411 (72 core + 176 CLI integration + 163 across the other four crates), 0 clippy, fmt clean |
+| Tests | 413 (72 core + 176 CLI integration + 165 across the other four crates), 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
 
@@ -71,6 +71,62 @@ Rust oracle at budgets 1, 2, 5 and 12. The T-4/T-6 differential
 corpus gate is green at `cases: 71`, `positive: 31`, `check-failure: 6`,
 `runtime-failure: 1`, `residual: 33`, `cleaned-sentences: 1`, and
 `clippy --all-targets -D warnings` and `cargo fmt --check` are clean.
+
+### Measured — the driven-graph norm rests on a false premise (2026-10-09)
+
+**The approved next step was "take the ranking over the driven graph, where a
+call like `<DsBump …>` is no longer opaque". Measured first, as this file
+requires, and the premise is false.** `refal drive-symbolic --configurations` on
+
+```refal
+$ENTRY Go { e.X = <Scan <Bump e.X>> e.X; }
+Scan { (e.A) (e.B) = (e.A) (e.B); }
+Bump { (e.C) = (e.C); }
+```
+
+reports the driver's own record of that call:
+
+```
+C0 -Bump (e.B1)-> C1            the inner call *is* driven, as its own configuration
+C0 -Scan <Split1 e.Input>-> residual
+residual: <Scan <Split1 e.Input>> e.Input
+```
+
+**The inner call stays a call in argument position.** The driver drives `Bump`
+as a configuration of its own, but what it hands to `Scan` is `<Split1 e.Input>`
+— a call — not a value, and `Scan` is therefore left residual. That is not an
+implementation gap: with a *symbolic* argument there is no value for `Bump e.X`
+to have, so driving cannot make the argument concrete. The opacity the step was
+meant to remove is intrinsic to driving with an unknown input.
+
+**So the step is not built, and the reason is recorded rather than worked
+around.** What the measurement *did* produce is a real diagnostic and the
+evidence for what to do instead.
+
+**The analysis now names the measure that came closest.** `JudgeFailure` carries
+how many calls inside a component have no bound under a measure, and an
+unproven function reports the measure with the fewest rather than the first that
+failed — because an unbounded call is a step from a proof and a cycle is a step
+from a proof in a different way. Measured on `examples/compiler.ref`:
+
+| closest measure | unbounded calls | functions |
+|---|---:|---:|
+| 2 | 21 | 61 |
+| 2 | 23 | 35 |
+| 0 | 1 | 24 |
+| 0 | 2 | 22 |
+| 1 | 2 | 21 |
+| 1 | 3 | 17 |
+
+**What that says.** The compiler's big component is not one call from a proof —
+it is **twenty-one** calls from one, and no single source-level measure reaches
+it. Separately, **24 functions are a single unbounded call away** at measure 0,
+which is a different and much more tractable shape.
+
+**Gates:** 43 tests in `refal-semantics`, the `refal-cli` tests, `fmt`, `clippy
+--all-targets -D warnings`, the strict-mode gate and the fast differential gate
+are clean. The figure does not move; no capability was added, and the step's
+premise was refuted before any code was written against it.
 
 ### Done — a family of measures, indexed by argument position (2026-10-09)
 

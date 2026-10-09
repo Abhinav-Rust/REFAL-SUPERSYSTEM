@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+**The termination analysis now names the measure that came closest — and the
+next step was measured and refuted before any code was written against it.**
+
+- **`refal feasibility` reports, for an unproven function, the measure with the
+  fewest unbounded calls** rather than the first measure that failed. An
+  unbounded call is one step from a proof, so that count is the honest distance
+  from one. On `examples/compiler.ref` the closest measure for the big component
+  still leaves **21 calls** unbounded — it is not one call away — while **24
+  functions are a single unbounded call away** at measure 0.
+- **The approved next step — taking the ranking over the driven graph — was
+  refuted by measurement and is not built.** `refal drive-symbolic
+  --configurations` shows the driver leaving a call in argument position as a
+  call: `C0 -Scan <Split1 e.Input>-> residual`. With a *symbolic* argument there
+  is no value for the inner call to have, so driving cannot make the argument
+  concrete; the opacity is intrinsic to driving rather than an implementation
+  gap. The measurement is recorded in `docs/PROGRESS.md` rather than worked
+  around, because a step built on a false premise is worse than a step not built.
+- **`docs/GLOSSARY.md` now explains the `§` citations** — the section sign — with
+  a table of what each cited section of the 1980 Courant monograph is. The README
+  cites the monograph by section throughout and never said what the sign meant.
+
 **Termination is decided under a family of measures, one per argument position.**
 
 - **Measure `0` is the length of the whole argument; measure `k > 0` is the
