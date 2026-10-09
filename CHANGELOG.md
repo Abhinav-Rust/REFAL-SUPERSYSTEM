@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+**Discoverability: a glossary, and the repository metadata to match.**
+
+- **`docs/GLOSSARY.md`** defines every term the project is built on -- Refal,
+  Refal-5, pattern matching, homoiconicity, supercompilation, the graph of
+  states, driving, the whistle, folding, the metasystem transition, the Futamura
+  projections, function inversion, the four layers, Theorem 5.1,
+  sound-and-incomplete, and certificate-carrying analysis -- each with its
+  Turchin source and the code that implements it. It is written so a reader who
+  has never met Refal can follow the README, and so a reader arriving from a
+  search engine can learn a term before reading code.
+- **A social-preview card** (`docs/images/social-preview.svg` and its rendered
+  `.png`, 1280x640), produced by the same Rust task as the other diagrams, so it
+  cannot drift from the project's numbers.
+- **The GitHub description and topics were refreshed** to name the search terms
+  the project actually answers to.
+- **`.gitattributes` normalises line endings** to LF on every platform, so a
+  regenerated diagram cannot show a whole-file diff that is not a change.
+
 **The repository is now 100% Rust.**
 
 - **Every `scripts/*.py` and `scripts/*.sh` file is gone.** The README's diagram
