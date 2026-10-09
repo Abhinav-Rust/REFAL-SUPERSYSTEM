@@ -324,13 +324,9 @@ fn footer(p: &Palette, y: f64, h_text: &str) -> Vec<String> {
 }
 
 fn wrap(h: f64, title: &str, desc: &str, body: &[String]) -> String {
-    wrap_sized(1200.0, h, title, desc, body)
-}
-
-fn wrap_sized(w: f64, h: f64, title: &str, desc: &str, body: &[String]) -> String {
     let mut out = vec![
         format!(
-            "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {w} {h}\" width=\"{w}\" height=\"{h}\" role=\"img\" aria-labelledby=\"t d\">"
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1200 {h}\" width=\"1200\" height=\"{h}\" role=\"img\" aria-labelledby=\"t d\">"
         ),
         format!("  <title id=\"t\">{}</title>", esc(title)),
         format!("  <desc id=\"d\">{}</desc>", esc(desc)),
@@ -741,7 +737,7 @@ fn accounting(p: &Palette) -> String {
         ("L0 \u{00b7} machine / runtime", 13.65, 13.51),
         ("L1 \u{00b7} reflection engine", 9.00, 9.00),
         ("L2 \u{00b7} graph of states", 5.95, 5.35),
-        ("Tier 1 static verification", 10.50, 8.75),
+        ("Tier 1 static verification", 10.50, 9.50),
         ("L2/L4 \u{00b7} compiler in Refal", 17.85, 16.80),
         ("L4 \u{00b7} self-hosting fixpoint", 9.10, 8.05),
         ("L3 \u{00b7} meta-prover", 13.00, 11.40),
@@ -788,7 +784,7 @@ fn accounting(p: &Palette) -> String {
     out.extend(footer(
         p,
         396.0,
-        "One number, one method: ~90.5 of 100, from one table. A row carries zero credit until a gate behind it is green.",
+        "One number, one method: ~91.5 of 100, from one table. A row carries zero credit until a gate behind it is green.",
     ));
     wrap(
         h,
@@ -1038,7 +1034,7 @@ fn roadmap(p: &Palette) -> String {
     let mut out = header(
         p,
         "WHAT IS LEFT",
-        "Six rows stand between ~90.5% and 100% \u{2014} each with a named gap",
+        "Six rows stand between ~91.5% and 100% \u{2014} each with a named gap",
         h,
     );
     let rows = [
@@ -1132,119 +1128,6 @@ fn roadmap(p: &Palette) -> String {
 /// One generated diagram: its file stem, and the function that draws it.
 type Diagram = (&'static str, fn(&Palette) -> String);
 
-/// The GitHub social-preview card: 1280x640, one dark image rather than a theme
-/// pair, because GitHub shows it on a light page in a link unfurl.
-fn social_preview(p: &Palette) -> String {
-    let (w, h) = (1280.0, 640.0);
-    let mut out: Vec<String> = vec![
-        rect(0.0, 0.0, w, h, p.bg, None, 0.0, 0.0),
-        rect(0.0, 0.0, 10.0, h, p.a2, None, 0.0, 0.0),
-        text(
-            72.0,
-            122.0,
-            "VALENTIN TURCHIN'S 1991 SUPERSYSTEM \u{00b7} IMPLEMENTED IN RUST",
-            19.0,
-            p.a2,
-            Txt::ws("600", "3.4"),
-        ),
-        text(66.0, 214.0, "REFAL-SUPERSYSTEM", 76.0, p.ink, Txt::w("700")),
-        t(
-            72.0,
-            272.0,
-            "A compiler that compiles itself. A prover that decides by supercompilation.",
-            24.0,
-            p.muted,
-        ),
-        t(
-            72.0,
-            306.0,
-            "One engine, four layers, one shared expression space \u{2014} in Rust.",
-            24.0,
-            p.muted,
-        ),
-    ];
-    let chips = [
-        ("L0", "Refal-5 machine"),
-        ("L1", "Reflection engine"),
-        ("L2", "Supercompiler"),
-        ("L3", "Meta-prover"),
-        ("L4", "Self-application"),
-    ];
-    let mut x = 72.0;
-    for (tag, name) in chips {
-        let cw = 66.0 + name.chars().count() as f64 * 10.2;
-        out.push(rect(
-            x,
-            358.0,
-            cw,
-            54.0,
-            p.cardbg,
-            Some(p.cardbd),
-            12.0,
-            1.5,
-        ));
-        out.push(text(x + 18.0, 393.0, tag, 22.0, p.a2, Txt::wf("700", MONO)));
-        out.push(text(x + 62.0, 392.0, name, 18.0, p.ink, Txt::default()));
-        x += cw + 14.0;
-    }
-    out.push(rect(
-        72.0,
-        448.0,
-        w - 144.0,
-        78.0,
-        p.fbg,
-        Some(p.fbd),
-        14.0,
-        1.5,
-    ));
-    out.push(text(
-        100.0,
-        486.0,
-        "102,436-byte self-hosting fixpoint",
-        22.0,
-        p.fink,
-        Txt::wf("600", MONO),
-    ));
-    out.push(t(
-        100.0,
-        514.0,
-        "the compiler's own source compiles to itself, byte for byte",
-        17.0,
-        p.muted,
-    ));
-    out.push(text(
-        w - 100.0,
-        486.0,
-        "~90.5%",
-        22.0,
-        p.ok,
-        Txt::wf("600", MONO),
-    ));
-    out.push(text(
-        w - 100.0,
-        514.0,
-        "of the four layers, behind green gates",
-        17.0,
-        p.muted,
-        Txt::wa("400", "end"),
-    ));
-    out.push(text(
-        72.0,
-        588.0,
-        "github.com/Abhinav-Rust/REFAL-SUPERSYSTEM",
-        20.0,
-        p.a2,
-        Txt::wf("600", MONO),
-    ));
-    wrap_sized(
-        w,
-        h,
-        "REFAL-SUPERSYSTEM",
-        "A self-hosting Refal-5 compiler, supercompiler, reflection engine and meta-prover in Rust: Valentin Turchin's four-layer supersystem.",
-        &out,
-    )
-}
-
 /// Generate the eight theme-aware diagrams into `docs/images/`.
 pub fn run() {
     let outdir = crate::repo_root().join("docs").join("images");
@@ -1273,12 +1156,4 @@ pub fn run() {
             println!("wrote docs/images/{name}-{theme}.svg");
         }
     }
-    // The social-preview card is one dark image, not a theme pair: GitHub shows
-    // it on a light page, in a link unfurl.
-    let path = outdir.join("social-preview.svg");
-    if let Err(err) = std::fs::write(&path, social_preview(&DARK)) {
-        eprintln!("cannot write {}: {err}", path.display());
-        std::process::exit(1);
-    }
-    println!("wrote docs/images/social-preview.svg");
 }
