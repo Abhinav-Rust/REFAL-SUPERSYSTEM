@@ -49,7 +49,7 @@ See `README.md` §"What Theorem 5.1 does and does not forbid" and
 | | |
 |---|---|
 | Honest completion | **~90.5%** (supersystem completeness — one method, one table, in `README.md`) |
-| Tests | 389 (72 core + 172 CLI integration + 145 across the other four crates), 0 clippy, fmt clean |
+| Tests | 405 (72 core + 176 CLI integration + 157 across the other four crates), 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
 
@@ -71,6 +71,67 @@ Rust oracle at budgets 1, 2, 5 and 12. The T-4/T-6 differential
 corpus gate is green at `cases: 71`, `positive: 31`, `check-failure: 6`,
 `runtime-failure: 1`, `residual: 33`, `cleaned-sentences: 1`, and
 `clippy --all-targets -D warnings` and `cargo fmt --check` are clean.
+
+### Done — Tier 1 feasibility and termination, with certificates (2026-10-09)
+
+**`refal feasibility` decides every sentence's selectability and every function's
+termination, and it carries certificates.** This is the shape the Tier-1 row has
+been asking for since 2026-10-05: the README states the target as "a sound,
+incomplete, certificate-carrying feasibility analysis — one that proves what it
+can, emits a witness a third party can check, and names the walks it could not
+settle rather than staying silent about them."
+
+**The design, in one paragraph.** For each sentence: `feasible` with a
+synthesised **ground input** that matches this sentence's pattern and no earlier
+sentence's (a ground input makes matching decidable, so the witness *is* a
+certificate); `infeasible` with the earlier sentence that shadows it
+(`pattern_subsumes`, the existing `dead-sentence` rule carrying its proof); or
+`unproven`, named. For each function: `terminates` when every self-recursive call
+passes a **proper contiguous run** of its argument with a term outside that run
+that binds at least one term (so the argument strictly shrinks — a size-change
+argument, the simplest sound instance of ranking-function synthesis), or
+`unproven`, named.
+
+**The load-bearing details, and how they were found.**
+- **The complement condition is not decoration.** `F { e.X e.Y = <F e.X>; }`
+  must *not* be proved: `e.Y` may bind nothing, so `e.X` may be the whole
+  argument and the call is a genuine loop. `binds_at_least_one_term` excludes it,
+  and `F { s.H e.T = <F s.H>; }` is likewise unproven — correctly, since it loops
+  when `e.T` is empty. Both are gated.
+- **Earlier sentences are compared ignoring their conditions** when checking a
+  witness. That is the conservative direction, and it means a conditional earlier
+  sentence neither shadows the later one nor lets a witness through: the verdict
+  is `unproven`. Gated by
+  `a_conditional_earlier_sentence_does_not_shadow_and_leaves_the_later_unproven`.
+- **The descent run belongs to a sentence, not to a function.** The first cut
+  recorded only `from..to` and the checker validated it against sentence 1's
+  pattern — which is empty for `Rev { = ; s.H e.T = ...; }`, so the checker
+  rejected a correct claim. **The checker found a defect in the analysis's own
+  certificate format**, which is what a checker is for. The verdict now carries
+  the sentence index.
+- **A tampered witness must be rejected.** `a_tampered_witness_is_rejected_by_the_checker`
+  is the gate that a checker can say no.
+
+**Measured.** Across the **77 non-`bad-*` examples: zero infeasible sentences** —
+no false positives, the soundness property holding end to end. On
+`examples/compiler.ref` (480 functions) the analysis takes **1.9 s** and reports
+**90 unproven sentences and 129 unproven functions**; the unproven set is the
+honest measure of its reach and it is printed.
+
+**Gates:** 14 tests in `refal-semantics` and 4 in `refal-cli` (the command, its
+exit status, the self-check, and a certificate gate over `compiler.ref`,
+`runtime-recursion.ref` and `hello.ref`). `fmt`, `clippy --all-targets -D
+warnings` and the fast differential gate are clean.
+
+**The figure does not move yet, and that is deliberate.** The Tier-1 row
+(10.50 weight, 8.75 credit, 1.75 withheld) now has a green gate behind the
+capability its withheld credit was *for*. Raising it is a re-attribution of the
+accounting, which the standing orders reserve to the Chief Architect. **Proposed:
+Tier 1 8.75 → 9.50 of 10.50, total ~90.5% → ~91.2%** — 0.75 earned, because the
+analysis proves structural descent and sentence selectability but not
+termination for the 129 functions whose recursion is not a structural descent
+(accumulators, mutual recursion), nor feasibility beyond the witness budget.
+Awaiting approval.
 
 ### Done — line endings, and discoverability (2026-10-09)
 
@@ -2088,6 +2149,16 @@ Refal-authored compiler and a `Compile` that drives.
 
 **The projections as artifacts, then §4.4's other half, then the remaining
 relational forms.**
+
+> **2026-10-09 — the Tier-1 row's feasibility target is built.** `refal
+> feasibility` decides each sentence's selectability with a **ground witness it
+> re-checks**, and each function's termination by **structural descent**, and it
+> prints an explicit `unproven` set. Measured: zero infeasible sentences across
+> the 77 non-`bad-*` examples. **What the row still withholds** is termination
+> for recursion that is not a structural descent — accumulators, mutual
+> recursion, and calls that pass a reordering — and feasibility beyond the
+> witness budget. A re-attribution of the Tier-1 row is proposed in the Done
+> section above and awaits the Chief Architect.
 
 **The order changed on 2026-09-27, and why it changed is the finding.** A complete
 read of Turchin's 80 primary works (all four of his domains, via the Chief

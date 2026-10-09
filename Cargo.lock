@@ -36,6 +36,7 @@ name = "refal-semantics"
 version = "0.10.0"
 dependencies = [
  "refal-ast",
+ "refal-syntax",
 ]
 
 [[package]]

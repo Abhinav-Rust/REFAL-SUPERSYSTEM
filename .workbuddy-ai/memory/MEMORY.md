@@ -34,8 +34,21 @@ course of action I recommend.** The Chief Architect's convention for this repo:
 
 ## Current state
 
-- **Honest completion ~90.4%** of the four-layer supersystem (one number, one
-  table, in `README.md`).
+- **Honest completion ~90.5%** of the four-layer supersystem (one number, one
+  table, in `README.md`). **A re-attribution is PROPOSED and awaiting the Chief
+  Architect**: Tier-1 row 8.75 → 9.50 of 10.50 (total ~90.5% → ~91.2%), because
+  `refal feasibility` now supplies the sound, incomplete, certificate-carrying
+  feasibility + termination analysis the row's withheld credit was for. Do not
+  move it without approval.
+- **`refal feasibility <file.ref> [--certificate]`** (2026-10-09) — Tier 1
+  feasibility and termination with certificates. Per sentence: `feasible` (ground
+  witness, re-checked by `verify`) / `infeasible` (shadowing proof) / `unproven`
+  (named). Per function: `Descends{sentence,from,to}` / `NonRecursive` /
+  `Unproven`. Module: `crates/refal-semantics/src/feasibility.rs`. Measured: 0
+  infeasible across the 77 non-`bad-*` examples. Remaining gap: termination for
+  non-structural-descent recursion (accumulators, mutual recursion).
+- **The repository is 100% Rust** (2026-10-09) — no Python, no Shell; tooling is
+  `crates/xtask` via `cargo xtask <task>`.
 - **Conformance ledger: 19 closed / 6 partial / 1 out of scope** (`E-1 … E-26`;
   `E-26` is the Principia Cybernetica network, out of scope). Source of truth:
   `docs/TURCHIN-ECOSYSTEM-CONFORMANCE.md`.

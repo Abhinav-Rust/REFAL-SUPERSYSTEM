@@ -126,6 +126,7 @@ fn main() {
         "project2" => project_compiler_command(&program, &input_args),
         "analyze" => analyze_program(&program, &input_args),
         "formats" => formats_program(&program, &input_args),
+        "feasibility" => feasibility_program(&program, &input_args),
         "overlap" => overlap_program(&program, &input_args),
         "drive" => drive_program(&program, &input_args),
         "drive-symbolic" => drive_symbolic_program(&program, &input_args),
@@ -289,6 +290,10 @@ fn print_usage() {
     eprintln!("  analyze    Report bounded Tier 1 reachability, terminals, and SCCs");
     eprintln!("  overlap    Report conservative sentence-pattern compatibility pairs");
     eprintln!("  formats    Report inferred function formats (argument -> result)");
+    eprintln!("  feasibility  Decide each sentence's selectability with a witness, and");
+    eprintln!("             each function's termination by structural descent (1980 4.5)");
+    eprintln!("             [--certificate]  print the machine-checkable certificate and");
+    eprintln!("                              re-check every claim against the source");
     eprintln!("  drive      Execute the bounded ground graph driver [--steps N] [args...]");
     eprintln!(
         "  drive-symbolic  Partially drive from an expression variable [--steps N] [--configurations]"
@@ -463,6 +468,40 @@ fn formats_program(program: &refal_ast::Program, args: &[String]) {
         process::exit(2);
     }
     print!("{}", refal_semantics::infer_formats(program));
+}
+
+/// The Tier 1 feasibility and termination analysis (Turchin 1980 §4.5; §5.8).
+///
+/// It proves what it can, emits a witness a third party can check, and names
+/// what it could not settle. `--certificate` prints the machine-checkable
+/// certificate and **re-checks it**, exiting non-zero if any claim fails — an
+/// analysis that emits witnesses must be able to hand them to a checker, and
+/// the checker must be able to say no.
+///
+/// Without `--certificate` the exit status carries the verdict: a sentence
+/// proven infeasible is a proven defect, so the run fails on it.
+fn feasibility_program(program: &refal_ast::Program, args: &[String]) {
+    let report = refal_semantics::analyse(program);
+    if args.iter().any(|flag| flag == "--certificate") {
+        print!("{}", refal_semantics::format_certificate(&report));
+        let failures = refal_semantics::verify(&report, program);
+        if failures.is_empty() {
+            println!("# checked: every claim re-verified");
+            return;
+        }
+        for failure in &failures {
+            eprintln!("certificate check failed: {failure}");
+        }
+        process::exit(1);
+    }
+    if !args.is_empty() {
+        eprintln!("Usage: refal feasibility <file.ref> [--certificate]");
+        process::exit(2);
+    }
+    print!("{}", refal_semantics::format_report(&report));
+    if report.infeasible() > 0 {
+        process::exit(1);
+    }
 }
 
 fn graph_program(program: &refal_ast::Program, args: &[String]) {

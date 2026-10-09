@@ -7749,3 +7749,111 @@ fn the_generator_emits_target_code_that_runs() {
         );
     }
 }
+
+/// A scratch `.ref` path, unique to this process **and to this call**, so two
+/// tests running in parallel cannot clobber each other's fixture.
+fn temp_ref_path(stem: &str) -> PathBuf {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static COUNTER: AtomicUsize = AtomicUsize::new(0);
+    let serial = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let mut path = env::temp_dir();
+    path.push(format!("refal-{stem}-{}-{serial}.ref", process::id()));
+    path
+}
+
+fn feasibility_source(source: &str, args: &[&str]) -> std::process::Output {
+    let path = temp_ref_path("feasibility");
+    fs::write(&path, source).expect("write the fixture");
+    let mut command = Command::new(refal_bin());
+    command.args(["feasibility", path.to_str().expect("utf-8 path")]);
+    command.args(args);
+    let output = command.output().expect("run refal binary");
+    let _ = fs::remove_file(&path);
+    output
+}
+
+fn feasibility_file(path: &str, args: &[&str]) -> std::process::Output {
+    let mut command = Command::new(refal_bin());
+    command.args(["feasibility", &workspace_path(path)]);
+    command.args(args);
+    command.output().expect("run refal binary")
+}
+
+#[test]
+fn feasibility_proves_what_it_can_and_names_what_it_cannot() {
+    // Tier 1's honest shape (Turchin 1980 4.5; 5.8 Theorem 5.1): a sound,
+    // incomplete analysis. Every sentence is `feasible` with a witness, or
+    // `infeasible` with its shadowing proof, or explicitly `unproven` -- and
+    // the unproven set is printed rather than left silent.
+    let source = "$ENTRY Go { = <Rev 'ab'>; }\n\
+                  Rev { = ; s.H e.T = <Rev e.T> s.H; }\n\
+                  Loop { e.X = <Loop e.X>; }";
+    let output = feasibility_source(source, &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(stdout.contains("feasible   witness: 'x'"), "{stdout}");
+    assert!(
+        stdout.contains("unproven (sentence 1 calls `Loop` without passing"),
+        "a non-descending recursion must be named:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("unproven: 0 sentence(s), 1 function(s)"),
+        "{stdout}"
+    );
+    assert!(output.status.success(), "no sentence here is infeasible");
+}
+
+#[test]
+fn a_proven_infeasible_sentence_fails_the_command() {
+    // A dead sentence is a proven defect, so the exit status carries it, the
+    // same way `--strict` refuses the program.
+    let source = "$ENTRY Go { = <F 'a'>; }\nF { s.X = 'sym'; 'a' = 'lit'; }";
+    let output = feasibility_source(source, &[]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stdout).contains("infeasible shadowed by sentence 1"));
+}
+
+#[test]
+fn the_certificate_re_checks_itself() {
+    // The claim the README makes is that the analysis emits a witness a third
+    // party can check. The command checks its own certificate, and says so --
+    // an analysis that emits witnesses must be able to hand them to a checker.
+    let source = "$ENTRY Go { = <Rev 'ab'>; }\n\
+                  Rev { = ; s.H e.T = <Rev e.T> s.H; }";
+    let output = feasibility_source(source, &["--certificate"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("feasible Rev 2 'x'"), "{stdout}");
+    assert!(
+        stdout.contains("terminates Rev sentence 2 run 1 2"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("# checked: every claim re-verified"),
+        "{stdout}"
+    );
+    assert!(output.status.success());
+}
+
+#[test]
+fn every_certificate_on_the_corpus_re_checks() {
+    // The soundness gate, end to end: whatever the analysis claims about a real
+    // program, its own checker must accept. This is the property the row turns
+    // on -- an unsound analysis would emit a witness that does not select its
+    // sentence, and the checker would reject it.
+    for path in [
+        "examples/compiler.ref",
+        "examples/runtime-recursion.ref",
+        "examples/hello.ref",
+    ] {
+        let output = feasibility_file(path, &["--certificate"]);
+        assert!(
+            output.status.success(),
+            "{path}: the certificate did not re-check:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            String::from_utf8_lossy(&output.stdout).contains("# checked: every claim re-verified"),
+            "{path}: the run did not report a clean check"
+        );
+    }
+}

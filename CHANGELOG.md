@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+**Tier 1 now decides feasibility and termination, with certificates.**
+
+- **`refal feasibility` decides every sentence as `feasible`, `infeasible` or
+  `unproven`, and never guesses.** A `feasible` verdict carries a synthesised
+  **ground witness**, and a ground input makes matching decidable, so the
+  witness is a certificate rather than a claim. An `infeasible` verdict carries
+  the earlier sentence that shadows it. Everything else is named in an explicit
+  `unproven` set rather than left silent — which is the honest shape of Turchin's
+  §5.8 Theorem 5.1: no algorithm decides it universally, but a *sound,
+  incomplete* one can still prove a great deal and say what it could not.
+- **Termination is decided by structural descent.** A function whose every
+  self-recursive call passes a **proper contiguous run** of its argument — with
+  a term outside that run that binds at least one term — strictly shrinks its
+  argument at every call, so length is a well-founded ranking and the run is the
+  witness. The complement condition is load-bearing, not decoration:
+  `F { e.X e.Y = <F e.X>; }` is **not** proved, because `e.Y` may bind nothing
+  and `e.X` may then be the whole argument.
+- **`--certificate` prints the machine-checkable certificate and re-checks it**,
+  exiting non-zero if any claim fails. An analysis that emits witnesses must be
+  able to hand them to a checker, and the checker must be able to say no.
+- **Measured: zero infeasible sentences across the 77 non-`bad-*` examples.**
+  The analysis is sound on the corpus and incomplete by design; its `unproven`
+  set is printed for each program.
+- Gates: 14 tests in `refal-semantics` — witness synthesis, the shadowing proof,
+  the condition rule, four termination cases, and a checker that rejects a
+  tampered witness — and 4 in `refal-cli`: the command, the exit status, the
+  self-check, and a certificate gate over the corpus. The completion figure is
+  unchanged pending the Chief Architect's re-attribution of the Tier-1 row.
+
 **Discoverability: a glossary, and the repository metadata to match.**
 
 - **`docs/GLOSSARY.md`** defines every term the project is built on -- Refal,
