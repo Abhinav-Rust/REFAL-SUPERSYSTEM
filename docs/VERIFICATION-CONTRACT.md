@@ -168,6 +168,50 @@ is one-directional — nothing is reported that is not proven — so leaving the
 the runtime cannot make a sound program fail `--strict`; it does mean a real
 operand defect is not caught statically.
 
+## Feasibility and termination, with certificates
+
+`--strict` decides defects. It does not answer Turchin's §4.5 question — *is
+every walk in this program feasible?* — and §5.8 Theorem 5.1 says no algorithm
+can answer it universally: he proves it by reducing formal arithmetic in Refal to
+Church's theorem, so it is a computability bound, not a tooling gap.
+
+`refal feasibility <file.ref>` is the **sound, incomplete** answer. For every
+sentence it decides one of three things and never guesses:
+
+| Verdict | Meaning | Certificate |
+|---|---|---|
+| `feasible` | an input selects this sentence | the input itself |
+| `infeasible` | no input selects it | the earlier sentence that shadows it |
+| `unproven` | neither proven | — |
+
+**A witness is a certificate, not a claim.** The synthesised input is *ground*,
+and matching a ground expression against a pattern is decidable, so
+`refal feasibility --certificate` re-checks every `feasible` line against the
+source and exits non-zero if any claim fails. A ground input selects sentence *i*
+exactly when it matches sentence *i*'s pattern and no earlier sentence's — and
+earlier sentences are compared **ignoring their conditions**, which is the
+conservative direction: a witness that fails to match an earlier pattern reaches
+this sentence whether or not that sentence's conditions would have succeeded.
+
+**Termination is decided by structural descent.** A function whose every
+self-recursive call passes a **proper contiguous run** of its argument — with a
+term *outside* that run that binds at least one term — strictly shrinks its
+argument at every call, so length is a well-founded ranking and the run is the
+witness. The second condition is load-bearing, not decoration:
+`F { e.X e.Y = <F e.X>; }` is *not* proved, because `e.Y` may bind nothing and
+`e.X` may then be the whole argument. `F { s.H e.T = <F s.H>; }` is not proved
+either, and correctly so — it loops when `e.T` is empty.
+
+**What is not decided is named, not hidden.** The command prints its `unproven`
+set: the sentences whose selectability and the functions whose termination it
+could not settle. That set is the honest measure of the analysis's reach, and it
+is the thing a total decision procedure would have to be empty — which Theorem
+5.1 says cannot always be arranged.
+
+Measured on the corpus: **zero infeasible sentences across the 77 non-`bad-*`
+examples** (no false positives — the soundness property holds end to end), with
+the unproven set printed for each.
+
 ## Not yet implemented
 
 - Bracket *contents* in the format lattice. `Shape::Bracket` is opaque, so

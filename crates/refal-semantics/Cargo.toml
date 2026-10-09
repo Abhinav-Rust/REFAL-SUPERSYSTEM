@@ -9,6 +9,12 @@ authors.workspace = true
 [dependencies]
 refal-ast = { path = "../refal-ast" }
 
+# The feasibility tests parse Refal source, so the analyser's own gates run on
+# real programs rather than on hand-built trees. `refal-syntax` depends only on
+# `refal-ast`, so this is a test-only edge and not a cycle.
+[dev-dependencies]
+refal-syntax = { path = "../refal-syntax" }
+
 [lib]
 path = "src/lib.rs"
 

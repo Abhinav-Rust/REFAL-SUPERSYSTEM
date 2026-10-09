@@ -312,6 +312,7 @@ part of the problem.
 | **Refal machine** | ✅ **Clause-complete against the reference's builtin sections**; no fixed call-depth limit; the projecting matcher (§2.2); the view field in all three shapes; Chapter 6 metacode in full, including §6.4's `unknown` values |
 | **Graph of states** | ✅ `drive → clean → residualise` verified against the interpreter over the corpus; case splitting on a wholly unknown argument; §4.3 cleaning and the §4.5 verdict; generalization by common computation history; **the compilation strategy is searched**, not fixed; **driving a residue is a fixpoint** |
 | **Tier 1 static analysis** | ✅ Complete for its published guarantee with zero false positives across the corpus: dead sentences, recognition-impossible reachability, builtin domain errors, and a format lattice that describes a bracket's contents recursively |
+| **Feasibility & termination** | ✅ `refal feasibility` decides each sentence's selectability with a **ground witness it re-checks**, and each function's termination by **structural descent** — a sound, incomplete, certificate-carrying analysis (§4.5; §5.8). Zero infeasible sentences across the 77 non-`bad-*` examples, and the `unproven` set is printed rather than left silent |
 | **Compiler written in Refal** | ✅ A real Refal-authored lexer, parser, checker and emitter over the full Classic grammar; the transforming half — `GRAPH`, `RESIDUALIZE`, `DRIVE`, `DRIVE-SYMBOLIC`, `RESIDUALIZE-DRIVEN` — byte-identical to its Rust counterpart over the corpus, **and the last of them is the compiler's default path** |
 | **Self-hosting** | ✅ C1 = C2 = C3 byte-identical over the full grammar at 12,599 bytes, every generation checked; `refal compile examples/compiler.ref` emits the driven residue, so the self-application is a supercompilation rather than a re-print |
 | **Meta-prover** | 🔶 Layer 3, partial — `refal prove` drives a predicate to Turchin's single terminal node `'True'`; `refal prove --equiv` decides an **equation** between two reductions over free variables by folding a branch whose sides have reduced to a renaming of the claim. Associativity of `Append`, right identity and **the correctness of binary tree reversals** are proved; a false equation is refuted with its witness. The general relation, and a proof needing generalisation beyond the loop edge, are not yet accepted |
@@ -744,6 +745,14 @@ settle rather than staying silent about them. That is achievable today, it is
 strictly more than "no termination analysis", and it is the honest modern reading
 of §5.8. **The target remains 100% of the four layers**; the row states what the
 remaining credit is *for*, not that it is unreachable.
+
+**And it is now built.** `refal feasibility` decides every sentence as
+`feasible` (with a ground witness it re-checks), `infeasible` (with the
+shadowing proof), or `unproven` — and decides termination by structural descent,
+naming the run of the argument that shrinks. `--certificate` prints the
+machine-checkable certificate and verifies it. The `unproven` set is the honest
+measure of what is left, and it is published. See
+[`VERIFICATION-CONTRACT.md`](docs/VERIFICATION-CONTRACT.md).
 
 ## Reporting rules
 
