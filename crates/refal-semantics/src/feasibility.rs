@@ -84,6 +84,9 @@ pub struct CallEdge {
     pub to: String,
     /// The 1-based sentence of `from` the call appears in.
     pub sentence: usize,
+    /// The measure the class is under: `0` is the length of the whole argument,
+    /// and `k > 0` is the length of its k-th top-level term.
+    pub measure: usize,
     pub class: CallClass,
 }
 
@@ -105,15 +108,21 @@ pub struct Component {
 pub enum TerminationVerdict {
     /// The function calls no defined function, so it cannot recurse.
     NonRecursive,
-    /// The function and every function it reaches terminate.
+    /// The function and every function it reaches terminate, **under one
+    /// measure**.
     ///
+    /// `measure` names the ranking the proof uses: `0` is the length of the
+    /// whole argument, and `k > 0` is the length of its k-th top-level term.
     /// `components` holds one witness per cyclic strongly connected component
     /// the function reaches. Only the cycles matter: an infinite call sequence
     /// traverses a cycle infinitely often, and an edge that is not on a cycle
-    /// is traversed only finitely often. Within every reachable component the
-    /// argument length never grows and falls on every cycle, so no call
-    /// sequence can run forever.
-    Terminating { components: Vec<Component> },
+    /// is traversed only finitely often. Under a fixed measure the ranking never
+    /// grows inside a component and falls on every cycle, so no call sequence
+    /// can run forever.
+    Terminating {
+        measure: usize,
+        components: Vec<Component>,
+    },
     /// Not proved. The reason names the call that blocked it, because a bare
     /// "unproven" is not checkable.
     Unproven { reason: String },
@@ -168,29 +177,29 @@ impl FeasibilityReport {
 
 /// Analyse every function in the program.
 pub fn analyse(program: &Program) -> FeasibilityReport {
-    let analysis = Termination::build(program);
+    let graph = CallGraph::build(program);
     let functions = program
         .items
         .iter()
         .filter_map(|item| match item {
-            Item::Function(function) => Some(analyse_function(function, &analysis)),
+            Item::Function(function) => Some(analyse_function(function, &graph)),
             Item::Declaration(_) => None,
         })
         .collect();
     FeasibilityReport {
         functions,
-        edges: analysis.graph.edges.clone(),
+        edges: graph.edges.clone(),
     }
 }
 
-fn analyse_function(function: &Function, analysis: &Termination) -> FunctionFeasibility {
+fn analyse_function(function: &Function, graph: &CallGraph) -> FunctionFeasibility {
     let sentences = (0..function.sentences.len())
         .map(|index| verdict_for(&function.sentences, index))
         .collect();
     FunctionFeasibility {
         function: function.name.clone(),
         sentences,
-        termination: termination_of(function, analysis),
+        termination: termination_of(function, graph),
     }
 }
 
@@ -243,14 +252,14 @@ pub fn selects(sentences: &[Sentence], index: usize, witness: &[Term]) -> bool {
 /// be able to hand them to a checker, and the checker must be able to say no.
 pub fn verify(report: &FeasibilityReport, program: &Program) -> Vec<String> {
     let mut failures = Vec::new();
-    let analysis = Termination::build(program);
+    let graph = CallGraph::build(program);
     // The call table is part of the certificate, so it is re-derived and
     // compared before anything is checked against it.
-    if analysis.graph.edges != report.edges {
+    if graph.edges != report.edges {
         failures.push(format!(
             "the certificate's call table has {} entries, the program's has {}",
             report.edges.len(),
-            analysis.graph.edges.len()
+            graph.edges.len()
         ));
     }
     let by_name: Vec<&Function> = program
@@ -318,15 +327,18 @@ pub fn verify(report: &FeasibilityReport, program: &Program) -> Vec<String> {
         }
         match &function.termination {
             TerminationVerdict::NonRecursive => {
-                if analysis.graph.of(&function.function).next().is_some() {
+                if graph.of(&function.function).next().is_some() {
                     failures.push(format!(
                         "`{}` is claimed non-recursive but calls a defined function",
                         function.function
                     ));
                 }
             }
-            TerminationVerdict::Terminating { components } => {
-                failures.extend(check_terminating(function, components, &analysis));
+            TerminationVerdict::Terminating {
+                measure,
+                components,
+            } => {
+                failures.extend(check_terminating(function, *measure, components, &graph));
             }
             TerminationVerdict::Unproven { .. } => {}
         }
@@ -336,29 +348,39 @@ pub fn verify(report: &FeasibilityReport, program: &Program) -> Vec<String> {
 
 /// Re-check one `terminates` claim.
 ///
-/// The claim is a set of cyclic components, each with an order. Checking it is
-/// mechanical: the claimed components must be exactly the cyclic ones the
-/// function reaches, each member set must really be a component of the program,
-/// no call inside one may be unbounded, every non-decreasing call inside one
+/// The claim is a measure and a set of cyclic components, each with an order.
+/// Checking it is mechanical: the measure must be one the analysis can take, the
+/// claimed components must be exactly the cyclic ones the function reaches, each
+/// member set must really be a component of the program, no call inside one may
+/// be unbounded **under that measure**, every non-decreasing call inside one
 /// must go forward in the order it was given, and the decreasing calls it lists
 /// must be the real ones. Nothing here trusts the analysis — it re-derives the
-/// graph from the source and walks the witness.
+/// calls from the source and walks the witness.
 fn check_terminating(
     function: &FunctionFeasibility,
+    measure: usize,
     components: &[Component],
-    analysis: &Termination,
+    graph: &CallGraph,
 ) -> Vec<String> {
     let mut failures = Vec::new();
     let start = canonical_identifier(&function.function);
-    let Some(&start_component) = analysis.component_of.get(&start) else {
+    let Some(&start_component) = graph.component_of.get(&start) else {
         failures.push(format!("`{}` is not in the call graph", function.function));
         return failures;
     };
+    if measure > graph.max_measure {
+        failures.push(format!(
+            "`{}` claims measure {measure}, deeper than the analysis takes",
+            function.function
+        ));
+        return failures;
+    }
+    let edges = graph.classes(measure);
 
-    let expected: BTreeSet<BTreeSet<String>> = analysis.reach[start_component]
+    let expected: BTreeSet<BTreeSet<String>> = graph.reach[start_component]
         .iter()
-        .filter(|id| analysis.cyclic[**id])
-        .map(|id| analysis.components[*id].iter().cloned().collect())
+        .filter(|id| graph.cyclic[**id])
+        .map(|id| graph.components[*id].iter().cloned().collect())
         .collect();
     let claimed: BTreeSet<BTreeSet<String>> = components
         .iter()
@@ -394,11 +416,11 @@ fn check_terminating(
         let Some(&id) = members
             .iter()
             .next()
-            .and_then(|name| analysis.component_of.get(name))
+            .and_then(|name| graph.component_of.get(name))
         else {
             continue;
         };
-        let real: BTreeSet<String> = analysis.components[id].iter().cloned().collect();
+        let real: BTreeSet<String> = graph.components[id].iter().cloned().collect();
         if real != members {
             failures.push(format!(
                 "`{}` claims a component that is not strongly connected in the program",
@@ -414,36 +436,35 @@ fn check_terminating(
             .map(|(index, name)| (canonical_identifier(name), index))
             .collect();
         let mut actual_strict: BTreeSet<(String, String, usize)> = BTreeSet::new();
-        for member in &members {
-            for edge in analysis.graph.of(member) {
-                if !members.contains(&canonical_identifier(&edge.to)) {
-                    continue;
-                }
-                match edge.class {
-                    CallClass::Unknown => failures.push(format!(
-                        "`{}` calls `{}` inside a cycle with an unbounded argument, but claims to terminate",
-                        edge.from, edge.to
-                    )),
-                    CallClass::Nonstrict => {
-                        let from = position.get(member).copied().unwrap_or(usize::MAX);
-                        let to = position
-                            .get(&canonical_identifier(&edge.to))
-                            .copied()
-                            .unwrap_or(usize::MAX);
-                        if from >= to {
-                            failures.push(format!(
-                                "`{}` -> `{}` does not shrink the argument and does not go forward in the claimed order",
-                                edge.from, edge.to
-                            ));
-                        }
-                    }
-                    CallClass::Strict => {
-                        actual_strict.insert((
-                            canonical_identifier(&edge.from),
-                            canonical_identifier(&edge.to),
-                            edge.sentence,
+        for &index in &graph.internal[id] {
+            let edge = &edges[index];
+            match edge.class {
+                CallClass::Unknown => failures.push(format!(
+                    "`{}` calls `{}` in sentence {} inside a cycle with an argument that is not bounded under measure {measure}, but claims to terminate",
+                    edge.from, edge.to, edge.sentence
+                )),
+                CallClass::Nonstrict => {
+                    let from = position
+                        .get(&canonical_identifier(&edge.from))
+                        .copied()
+                        .unwrap_or(usize::MAX);
+                    let to = position
+                        .get(&canonical_identifier(&edge.to))
+                        .copied()
+                        .unwrap_or(usize::MAX);
+                    if from >= to {
+                        failures.push(format!(
+                            "`{}` -> `{}` does not shrink the argument and does not go forward in the claimed order",
+                            edge.from, edge.to
                         ));
                     }
+                }
+                CallClass::Strict => {
+                    actual_strict.insert((
+                        canonical_identifier(&edge.from),
+                        canonical_identifier(&edge.to),
+                        edge.sentence,
+                    ));
                 }
             }
         }
@@ -491,26 +512,28 @@ pub fn format_report(report: &FeasibilityReport) -> String {
         }
         let termination = match &function.termination {
             TerminationVerdict::NonRecursive => "non-recursive".to_string(),
-            TerminationVerdict::Terminating { components } => {
-                if components.is_empty() {
-                    "terminates (no cycles)".to_string()
+            TerminationVerdict::Terminating {
+                measure,
+                components,
+            } => {
+                let ranking = if *measure == 0 {
+                    "whole argument".to_string()
                 } else {
-                    let mut text = "terminates".to_string();
-                    for component in components {
-                        text.push_str(&format!(" (cycle: {})", component.members.join(" ")));
-                    }
-                    let strict = components
-                        .iter()
-                        .flat_map(|component| component.strict.iter())
-                        .map(|edge| {
-                            format!("{}->{} in sentence {}", edge.from, edge.to, edge.sentence)
-                        })
-                        .collect::<Vec<_>>();
-                    if !strict.is_empty() {
-                        text.push_str(&format!("; decreasing: {}", strict.join(", ")));
-                    }
-                    text
+                    format!("component {measure}")
+                };
+                let mut text = format!("terminates (measure: {ranking})");
+                for component in components {
+                    text.push_str(&format!(" (cycle: {})", component.members.join(" ")));
                 }
+                let strict = components
+                    .iter()
+                    .flat_map(|component| component.strict.iter())
+                    .map(|edge| format!("{}->{} in sentence {}", edge.from, edge.to, edge.sentence))
+                    .collect::<Vec<_>>();
+                if !strict.is_empty() {
+                    text.push_str(&format!("; decreasing: {}", strict.join(", ")));
+                }
+                text
             }
             TerminationVerdict::Unproven { reason } => format!("unproven ({reason})"),
         };
@@ -530,16 +553,19 @@ pub fn format_certificate(report: &FeasibilityReport) -> String {
     out.push_str("# feasibility certificate 2.0\n");
     out.push_str("# a `feasible` line is checked by matching its witness against the\n");
     out.push_str("# sentence's pattern and every earlier sentence's pattern.\n");
-    out.push_str("# a `call` line classifies one call between two defined functions:\n");
-    out.push_str("# `strict` passes a proper sub-expression of the caller's argument,\n");
-    out.push_str("# `nonstrict` a sub-expression, and `unknown` neither.\n");
-    out.push_str("# a `component` line is a strongly connected component, its members in\n");
-    out.push_str("# an order in which every non-decreasing call inside it goes forward.\n");
-    out.push_str("# a `terminates` line is checked by re-deriving the call graph: the\n");
-    out.push_str("# components listed must be exactly the cyclic ones the function\n");
-    out.push_str("# reaches, no call inside one may be unbounded, and the orders must\n");
-    out.push_str("# hold. Every cycle then contains a call that shrinks the argument,\n");
-    out.push_str("# and no call sequence can run forever.\n");
+    out.push_str("# a `call` line classifies one call between two defined functions,\n");
+    out.push_str("# under a measure: `0` is the length of the whole argument and `k` is\n");
+    out.push_str("# the length of its k-th top-level term. `strict` passes a proper\n");
+    out.push_str("# sub-expression of what the caller was given, `nonstrict` a\n");
+    out.push_str("# sub-expression, and `unknown` neither.\n");
+    out.push_str("# a `component` line is a strongly connected component under that\n");
+    out.push_str("# measure, its members in an order in which every non-decreasing call\n");
+    out.push_str("# inside it goes forward.\n");
+    out.push_str("# a `terminates` line is checked by re-deriving the calls under the\n");
+    out.push_str("# stated measure: the components listed must be exactly the cyclic\n");
+    out.push_str("# ones the function reaches, no call inside one may be unbounded, and\n");
+    out.push_str("# the orders must hold. Every cycle then contains a call that shrinks\n");
+    out.push_str("# the measure, and no call sequence can run forever.\n");
     for function in &report.functions {
         for (index, verdict) in function.sentences.iter().enumerate() {
             match verdict {
@@ -565,22 +591,28 @@ pub fn format_certificate(report: &FeasibilityReport) -> String {
     }
     for edge in &report.edges {
         out.push_str(&format!(
-            "call {} {} {} {}\n",
+            "call {} {} {} {} {}\n",
+            edge.measure,
             edge.from,
             edge.to,
             class_name(edge.class),
             edge.sentence
         ));
     }
-    // The cyclic components the analysis proved, each listed once.
-    let mut seen: BTreeSet<String> = BTreeSet::new();
+    // The cyclic components the analysis proved, each listed once per measure.
+    let mut seen: BTreeSet<(usize, String)> = BTreeSet::new();
     for function in &report.functions {
-        if let TerminationVerdict::Terminating { components } = &function.termination {
+        if let TerminationVerdict::Terminating {
+            measure,
+            components,
+        } = &function.termination
+        {
             for component in components {
                 let key = component_key(component);
-                if seen.insert(key.clone()) {
+                if seen.insert((*measure, key.clone())) {
                     out.push_str(&format!(
-                        "component {} {}\n",
+                        "component {} {} {}\n",
+                        measure,
                         key,
                         component.members.join(" ")
                     ));
@@ -593,7 +625,10 @@ pub fn format_certificate(report: &FeasibilityReport) -> String {
             TerminationVerdict::NonRecursive => {
                 out.push_str(&format!("non-recursive {}\n", function.function));
             }
-            TerminationVerdict::Terminating { components } => {
+            TerminationVerdict::Terminating {
+                measure,
+                components,
+            } => {
                 let keys: Vec<String> = components.iter().map(component_key).collect();
                 let cycles = if keys.is_empty() {
                     "-".to_string()
@@ -601,8 +636,8 @@ pub fn format_certificate(report: &FeasibilityReport) -> String {
                     keys.join(" ")
                 };
                 out.push_str(&format!(
-                    "terminates {} cycles {}\n",
-                    function.function, cycles
+                    "terminates {} measure {} cycles {}\n",
+                    function.function, measure, cycles
                 ));
             }
             TerminationVerdict::Unproven { .. } => {
@@ -748,49 +783,82 @@ fn bracket_term(source: &Term, inner: Vec<Term>) -> Term {
 // Termination by size change, over the strongly connected components
 // ---------------------------------------------------------------------------
 //
-// The measure is the **length of a function's argument**. Every call either
-// passes a sub-expression of the caller's argument or it does not, and it is
-// classified accordingly: `Strict` (a proper sub-expression — the argument
-// shrinks), `Nonstrict` (a sub-expression — it cannot grow), or `Unknown` (it
-// can grow, and nothing bounds it).
+// The proof is a size-change argument, and the only question it asks is: **does
+// this call pass something smaller than what it was given?** Which "something"
+// is the *measure*, and this analysis has a family of them:
 //
-// Termination is then a property of the **strongly connected components**, not
-// of one function at a time, and that is the whole point of the construction:
+//   * measure 0 is the length of the whole argument;
+//   * measure `k > 0` is the length of the **k-th top-level term** of the
+//     argument.
 //
-//   an infinite call sequence traverses a cycle infinitely often, and an edge
-//   that is not on a cycle is traversed only finitely often.
+// The second is what settles a function that rebuilds its argument. A compiler
+// pass that carries a context along — `<DsBlkCondL (e.Ctx) (e.B) (e.Val)
+// (e.Sents) (e.More) '0'>` — *grows* its argument by one term, so measure 0 can
+// never prove it; but the fourth component `(e.Sents)` becomes `(e.Rest)`, a
+// proper sub-expression, so measure 4 does.
 //
-// So only the cycles matter. A component terminates when (a) no call inside it
-// is `Unknown` — otherwise the argument could grow inside a cycle — and (b) the
-// non-decreasing calls inside it cannot form a cycle, so every cycle contains a
-// call that strictly shrinks the argument. The length then falls on every cycle
-// and never rises inside a component, which cannot go on forever.
+// Termination is then a property of the **strongly connected components**,
+// because an infinite call sequence traverses a cycle infinitely often while an
+// edge that is not on a cycle is traversed only finitely often. Under a fixed
+// measure `k`, a component terminates when no call inside it is `unknown` — so
+// the measure cannot grow — and its non-decreasing calls cannot form a cycle —
+// so every cycle contains a call that strictly shrinks it. The measure then
+// falls on every cycle and never rises, which cannot go on forever.
 //
-// The witness is small and checkable: for each cyclic component reached, its
-// members in an order in which every non-decreasing call inside it goes forward.
-// A third party re-derives the calls, walks the order, and is done.
+// The witness is small and checkable: the measure, and the component's members
+// in an order in which every non-decreasing call goes forward. A third party
+// re-derives the calls under that measure, walks the order, and is done.
 //
-// **Mutual recursion is covered**, which is the point: `F` may call `G`
-// non-strictly while `G` calls `F` strictly, and the pair terminates. A
-// per-function analysis cannot see that.
+// **Mutual recursion is covered**, which is why the closure is taken over the
+// call graph rather than over one function at a time: `F` may call `G`
+// non-strictly while `G` calls `F` strictly, and the pair terminates. A call
+// that is `unknown` *between* components is harmless — it is not on a cycle —
+// which is what keeps an entry point that calls a function with a fresh literal
+// argument from being reported as non-terminating.
 //
 // **What is not decided.** A call whose argument is a reordering, or is
-// computed, is `Unknown`; inside a cycle that makes the component `Unproven`
-// rather than guessed at. A call that is `Unknown` but *between* components is
-// harmless — it is not on a cycle — and is tolerated, which is what keeps an
-// entry point that calls a function with a fresh literal argument from being
-// reported as non-terminating.
+// computed, is `unknown` under every measure; inside a cycle that makes the
+// component `Unproven` rather than guessed at. Deeper positions — a path two
+// brackets down — are not measured, and neither is the *sum* of two components.
 
-/// The classified calls of a program, indexed by caller.
+/// One call site, keeping the pattern it stands in and the argument it passes,
+/// so the call can be re-classified under any measure.
+struct RawCall {
+    from: String,
+    to: String,
+    sentence: usize,
+    pattern: Vec<Term>,
+    args: Vec<Term>,
+}
+
+/// The classified calls of a program, with the topology they induce.
 struct CallGraph {
-    edges: Vec<CallEdge>,
+    calls: Vec<RawCall>,
     by_caller: BTreeMap<String, Vec<usize>>,
     /// Every defined function, canonically named.
     nodes: BTreeSet<String>,
     /// Canonical name -> the name as written, so a report shows the source's
     /// spelling while the graph compares under Refal-5 name equivalence.
     display: BTreeMap<String, String>,
+    /// The strongly connected components, each sorted.
+    components: Vec<Vec<String>>,
+    component_of: BTreeMap<String, usize>,
+    /// Whether a component contains a cycle.
+    cyclic: Vec<bool>,
+    /// For each component, the components it can reach, itself included.
+    reach: Vec<BTreeSet<usize>>,
+    /// For each component, the indices of the calls inside it.
+    internal: Vec<Vec<usize>>,
+    /// The highest position any sentence pattern reaches, capped.
+    max_measure: usize,
+    /// The whole-argument classification of every call (measure 0).
+    edges: Vec<CallEdge>,
 }
+
+/// The deepest position the analysis will measure. Patterns longer than this
+/// are measured only at their first positions, which can lose a proof but never
+/// invent one.
+const MAX_MEASURE: usize = 12;
 
 impl CallGraph {
     fn build(program: &Program) -> Self {
@@ -804,20 +872,22 @@ impl CallGraph {
             }
         }
 
-        let mut edges = Vec::new();
+        let mut calls = Vec::new();
         let mut by_caller: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+        let mut max_measure = 0usize;
         for item in &program.items {
             let Item::Function(function) = item else {
                 continue;
             };
             let caller = canonical_identifier(&function.name);
             for (index, sentence) in function.sentences.iter().enumerate() {
-                let mut calls: Vec<(&str, &[Term])> = Vec::new();
-                collect_calls(&sentence.result, &mut calls);
+                max_measure = max_measure.max(sentence.pattern.len());
+                let mut found: Vec<(&str, &[Term])> = Vec::new();
+                collect_calls(&sentence.result, &mut found);
                 for condition in &sentence.conditions {
-                    collect_calls(&condition.result, &mut calls);
+                    collect_calls(&condition.result, &mut found);
                 }
-                for (name, args) in calls {
+                for (name, args) in found {
                     let callee = canonical_identifier(name);
                     // A call to a builtin or an extern has no body to recurse
                     // into, and every builtin terminates.
@@ -827,22 +897,102 @@ impl CallGraph {
                     by_caller
                         .entry(caller.clone())
                         .or_default()
-                        .push(edges.len());
-                    edges.push(CallEdge {
+                        .push(calls.len());
+                    calls.push(RawCall {
                         from: function.name.clone(),
                         to: name.to_string(),
                         sentence: index + 1,
-                        class: classify(&sentence.pattern, args),
+                        pattern: sentence.pattern.clone(),
+                        args: args.to_vec(),
                     });
                 }
             }
         }
-        CallGraph {
-            edges,
+
+        let mut graph = CallGraph {
+            edges: Vec::new(),
+            calls,
             by_caller,
             nodes,
             display,
+            components: Vec::new(),
+            component_of: BTreeMap::new(),
+            cyclic: Vec::new(),
+            reach: Vec::new(),
+            internal: Vec::new(),
+            max_measure: max_measure.min(MAX_MEASURE),
+        };
+
+        graph.edges = graph.classes(0);
+        graph.components = graph.strongly_connected();
+        for (id, members) in graph.components.iter().enumerate() {
+            for member in members {
+                graph.component_of.insert(member.clone(), id);
+            }
         }
+        graph.cyclic = graph
+            .components
+            .iter()
+            .map(|members| {
+                members.len() > 1
+                    || graph.calls.iter().any(|call| {
+                        canonical_identifier(&call.from) == members[0]
+                            && canonical_identifier(&call.to) == members[0]
+                    })
+            })
+            .collect();
+
+        graph.internal = (0..graph.components.len())
+            .map(|id| {
+                let members = &graph.components[id];
+                (0..graph.calls.len())
+                    .filter(|index| {
+                        let call = &graph.calls[*index];
+                        members.contains(&canonical_identifier(&call.from))
+                            && members.contains(&canonical_identifier(&call.to))
+                    })
+                    .collect()
+            })
+            .collect();
+
+        let mut reach: Vec<BTreeSet<usize>> = (0..graph.components.len())
+            .map(|id| BTreeSet::from([id]))
+            .collect();
+        // The component graph is a DAG, so a fixpoint over the edges is enough.
+        let mut changed = true;
+        while changed {
+            changed = false;
+            for call in &graph.calls {
+                let (Some(&from), Some(&to)) = (
+                    graph.component_of.get(&canonical_identifier(&call.from)),
+                    graph.component_of.get(&canonical_identifier(&call.to)),
+                ) else {
+                    continue;
+                };
+                let targets: Vec<usize> = reach[to].iter().copied().collect();
+                for target in targets {
+                    if reach[from].insert(target) {
+                        changed = true;
+                    }
+                }
+            }
+        }
+        graph.reach = reach;
+        graph
+    }
+
+    /// Every call, classified under `measure`.
+    fn classes(&self, measure: usize) -> Vec<CallEdge> {
+        self.calls
+            .iter()
+            .map(|call| CallEdge {
+                from: call.from.clone(),
+                to: call.to.clone(),
+                sentence: call.sentence,
+                measure,
+                class: classify(&call.pattern, &call.args, measure),
+            })
+            .collect()
     }
 
     fn of<'a>(&'a self, function: &str) -> impl Iterator<Item = &'a CallEdge> {
@@ -863,7 +1013,7 @@ impl CallGraph {
     /// The strongly connected components, by Kosaraju's algorithm: order the
     /// nodes by finishing time, then walk the reversed graph in that order, and
     /// each walk is one component.
-    fn components(&self) -> Vec<Vec<String>> {
+    fn strongly_connected(&self) -> Vec<Vec<String>> {
         let names: Vec<&String> = self.nodes.iter().collect();
         let position: BTreeMap<&str, usize> = names
             .iter()
@@ -872,9 +1022,9 @@ impl CallGraph {
             .collect();
         let mut successors: Vec<Vec<usize>> = vec![Vec::new(); names.len()];
         let mut predecessors: Vec<Vec<usize>> = vec![Vec::new(); names.len()];
-        for edge in &self.edges {
-            let from = canonical_identifier(&edge.from);
-            let to = canonical_identifier(&edge.to);
+        for call in &self.calls {
+            let from = canonical_identifier(&call.from);
+            let to = canonical_identifier(&call.to);
             let (Some(&from), Some(&to)) = (position.get(from.as_str()), position.get(to.as_str()))
             else {
                 continue;
@@ -929,177 +1079,183 @@ impl CallGraph {
         }
         components
     }
-}
 
-/// The whole termination analysis, derived once per program.
-struct Termination {
-    graph: CallGraph,
-    /// Canonical name -> the index of its component.
-    component_of: BTreeMap<String, usize>,
-    /// The components, each sorted.
-    components: Vec<Vec<String>>,
-    /// Whether a component contains a cycle (more than one member, or a
-    /// self-call).
-    cyclic: Vec<bool>,
-    /// For each component, the components it can reach, itself included.
-    reach: Vec<BTreeSet<usize>>,
-}
-
-impl Termination {
-    fn build(program: &Program) -> Self {
-        let graph = CallGraph::build(program);
-        let components = graph.components();
-        let mut component_of = BTreeMap::new();
-        for (id, members) in components.iter().enumerate() {
-            for member in members {
-                component_of.insert(member.clone(), id);
-            }
-        }
-        let cyclic = components
-            .iter()
-            .map(|members| {
-                members.len() > 1
-                    || graph
-                        .of(&members[0])
-                        .any(|edge| canonical_identifier(&edge.to) == members[0])
-            })
-            .collect::<Vec<_>>();
-
-        let mut reach: Vec<BTreeSet<usize>> = (0..components.len())
-            .map(|id| BTreeSet::from([id]))
-            .collect();
-        // The component graph is a DAG, so a fixpoint over the edges is enough.
-        let mut changed = true;
-        while changed {
-            changed = false;
-            for edge in &graph.edges {
-                let (Some(&from), Some(&to)) = (
-                    component_of.get(&canonical_identifier(&edge.from)),
-                    component_of.get(&canonical_identifier(&edge.to)),
-                ) else {
-                    continue;
-                };
-                let targets: Vec<usize> = reach[to].iter().copied().collect();
-                for target in targets {
-                    if reach[from].insert(target) {
-                        changed = true;
-                    }
-                }
-            }
-        }
-
-        Termination {
-            graph,
-            component_of,
-            components,
-            cyclic,
-            reach,
-        }
-    }
-
-    /// Whether a component is proved to terminate, and if not, why not.
-    fn judge(&self, id: usize) -> Result<(), String> {
+    /// Whether a component is proved to terminate under `edges`, and if so its
+    /// witness; if not, why not.
+    fn judge(&self, id: usize, edges: &[CallEdge]) -> Result<Component, String> {
         if !self.cyclic[id] {
-            return Ok(());
+            return Ok(Component {
+                members: self.components[id].clone(),
+                strict: Vec::new(),
+            });
         }
-        let members = &self.components[id];
-        let inside = |name: &str| members.contains(&canonical_identifier(name));
-        let mut internal: Vec<&CallEdge> = Vec::new();
-        for member in members {
-            for edge in self.graph.of(member) {
-                if inside(&edge.to) {
-                    internal.push(edge);
-                }
-            }
-        }
-        if let Some(edge) = internal
+        if let Some(&index) = self.internal[id]
             .iter()
-            .find(|edge| edge.class == CallClass::Unknown)
+            .find(|index| edges[**index].class == CallClass::Unknown)
         {
+            let call = &edges[index];
             return Err(format!(
                 "`{}` calls `{}` in sentence {} inside a cycle, with an argument that is not a sub-expression of its own, so nothing bounds the argument",
-                edge.from, edge.to, edge.sentence
+                call.from, call.to, call.sentence
             ));
         }
-        match nonstrict_order(members, &internal) {
-            Some(_) => Ok(()),
+        match self.order(id, edges) {
+            Some(members) => {
+                let mut strict: Vec<CallEdge> = self.internal[id]
+                    .iter()
+                    .map(|index| &edges[*index])
+                    .filter(|edge| edge.class == CallClass::Strict)
+                    .cloned()
+                    .collect();
+                strict.sort_by(|a, b| {
+                    (&a.from, &a.to, a.sentence).cmp(&(&b.from, &b.to, b.sentence))
+                });
+                Ok(Component { members, strict })
+            }
             None => Err(format!(
                 "the non-decreasing calls inside the cycle through `{}` contain a cycle, so no argument is guaranteed to shrink",
-                self.graph.name(&members[0])
+                self.name(&self.components[id][0])
             )),
         }
     }
 
     /// The witness for a component: its members in an order in which every
     /// non-decreasing call inside it goes forward.
-    fn order(&self, id: usize) -> Vec<String> {
+    fn order(&self, id: usize, edges: &[CallEdge]) -> Option<Vec<String>> {
         let members = &self.components[id];
-        let internal: Vec<&CallEdge> = members
-            .iter()
-            .flat_map(|member| self.graph.of(member))
-            .filter(|edge| members.contains(&canonical_identifier(&edge.to)))
-            .collect();
-        nonstrict_order(members, &internal)
-            .unwrap_or_else(|| members.clone())
-            .into_iter()
-            .map(|name| self.graph.name(&name))
-            .collect()
-    }
+        let mut indegree: BTreeMap<String, usize> =
+            members.iter().cloned().map(|name| (name, 0)).collect();
+        for index in &self.internal[id] {
+            let edge = &edges[*index];
+            if edge.class != CallClass::Nonstrict {
+                continue;
+            }
+            if let Some(entry) = indegree.get_mut(&canonical_identifier(&edge.to)) {
+                *entry += 1;
+            }
+        }
 
-    fn strict_inside(&self, id: usize) -> Vec<CallEdge> {
-        let members = &self.components[id];
-        let mut strict: Vec<CallEdge> = members
+        let mut ready: Vec<String> = indegree
             .iter()
-            .flat_map(|member| self.graph.of(member))
-            .filter(|edge| {
-                members.contains(&canonical_identifier(&edge.to)) && edge.class == CallClass::Strict
-            })
-            .cloned()
+            .filter(|(_, degree)| **degree == 0)
+            .map(|(name, _)| name.clone())
             .collect();
-        strict.sort_by(|a, b| (&a.from, &a.to, a.sentence).cmp(&(&b.from, &b.to, b.sentence)));
-        strict
+        let mut order = Vec::new();
+        while let Some(next) = ready.pop() {
+            order.push(next.clone());
+            for index in &self.internal[id] {
+                let edge = &edges[*index];
+                if edge.class != CallClass::Nonstrict || canonical_identifier(&edge.from) != next {
+                    continue;
+                }
+                let target = canonical_identifier(&edge.to);
+                if let Some(entry) = indegree.get_mut(&target) {
+                    *entry -= 1;
+                    if *entry == 0 {
+                        ready.push(target);
+                    }
+                }
+            }
+        }
+        (order.len() == members.len()).then_some(order)
     }
 }
 
-fn termination_of(function: &Function, analysis: &Termination) -> TerminationVerdict {
-    if analysis.graph.of(&function.name).next().is_none() {
+fn termination_of(function: &Function, graph: &CallGraph) -> TerminationVerdict {
+    if graph.of(&function.name).next().is_none() {
         return TerminationVerdict::NonRecursive;
     }
     let start = canonical_identifier(&function.name);
-    let Some(&start_component) = analysis.component_of.get(&start) else {
+    let Some(&start_component) = graph.component_of.get(&start) else {
         return TerminationVerdict::Unproven {
             reason: "the function is not in the call graph".to_string(),
         };
     };
+    let cyclic: Vec<usize> = graph.reach[start_component]
+        .iter()
+        .copied()
+        .filter(|id| graph.cyclic[*id])
+        .collect();
 
-    let mut components = Vec::new();
-    for &id in &analysis.reach[start_component] {
-        if !analysis.cyclic[id] {
-            continue;
+    // Every measure is tried, in order, and the first that proves the function
+    // is the one reported. A proof under any measure is a proof, because each is
+    // a well-founded ranking in its own right.
+    let mut first_reason = None;
+    for measure in 0..=graph.max_measure {
+        let edges = graph.classes(measure);
+        let mut components = Vec::new();
+        let mut reason = None;
+        for &id in &cyclic {
+            match graph.judge(id, &edges) {
+                Ok(component) => components.push(component),
+                Err(why) => {
+                    reason = Some(why);
+                    break;
+                }
+            }
         }
-        if let Err(reason) = analysis.judge(id) {
-            return TerminationVerdict::Unproven { reason };
+        match reason {
+            None => {
+                return TerminationVerdict::Terminating {
+                    measure,
+                    components,
+                };
+            }
+            Some(why) => {
+                first_reason.get_or_insert(why);
+            }
         }
-        components.push(Component {
-            members: analysis.order(id),
-            strict: analysis.strict_inside(id),
-        });
     }
-    TerminationVerdict::Terminating { components }
+
+    TerminationVerdict::Unproven {
+        reason: first_reason.unwrap_or_else(|| "no measure applies".to_string()),
+    }
 }
 
-/// Classify one call: is the argument a sub-expression of the caller's own?
-///
-/// Each argument term must be an occurrence of a *distinct* term of the caller's
-/// pattern, in order — the greedy leftmost match, which finds such an assignment
-/// whenever one exists. Then the value passed is a concatenation of parts of the
-/// caller's argument, so its length is at most the caller's.
+/// Classify one call under `measure`: is what it passes smaller than what it was
+/// given, as far as that measure can see?
+fn classify(pattern: &[Term], args: &[Term], measure: usize) -> CallClass {
+    if measure == 0 {
+        return classify_sequence(pattern, args);
+    }
+    // The `measure`-th element of the argument is pinned by the pattern only
+    // when every term before it — and it — binds exactly one term. An `e.`
+    // variable may bind a run, and then there is no single element to measure.
+    if pattern.len() < measure
+        || pattern[..measure]
+            .iter()
+            .any(|term| !binds_at_least_one_term(term))
+    {
+        return CallClass::Unknown;
+    }
+    let (Some(pattern_term), Some(argument_term)) =
+        (pattern.get(measure - 1), args.get(measure - 1))
+    else {
+        return CallClass::Unknown;
+    };
+    if same_term(pattern_term, argument_term) {
+        return CallClass::Nonstrict;
+    }
+    // A bracket may be replaced by a bracket whose contents are a sub-run of its
+    // own: the element shrinks, and the element is the measure.
+    let (TermKind::Bracket(pattern_inner), TermKind::Bracket(argument_inner)) =
+        (&pattern_term.kind, &argument_term.kind)
+    else {
+        return CallClass::Unknown;
+    };
+    classify_sequence(pattern_inner, argument_inner)
+}
+
+/// The whole-argument classification: every argument term must be an occurrence
+/// of a *distinct* term of the pattern, in order — the greedy leftmost match,
+/// which finds such an assignment whenever one exists. Then the value passed is
+/// a concatenation of parts of the caller's argument, so it cannot be longer.
 ///
 /// The call is `Strict` when that assignment leaves out a term of the pattern
 /// which binds at least one term: the value passed is then *strictly* shorter.
 /// Only the greedy assignment is examined, which can call a shrinking call
 /// non-strict but can never call a growing call shrinking — the safe direction.
-fn classify(pattern: &[Term], args: &[Term]) -> CallClass {
+fn classify_sequence(pattern: &[Term], args: &[Term]) -> CallClass {
     let mut matched = vec![false; pattern.len()];
     let mut cursor = 0usize;
     for argument in args {
@@ -1153,45 +1309,6 @@ fn collect_calls<'a>(terms: &'a [Term], out: &mut Vec<(&'a str, &'a [Term])>) {
             TermKind::Symbol(_) | TermKind::Variable(_) => {}
         }
     }
-}
-
-/// An order of `members` in which every non-decreasing call among `internal`
-/// goes forward, or `None` when such an order cannot exist — which is exactly
-/// when the non-decreasing calls contain a cycle.
-fn nonstrict_order(members: &[String], internal: &[&CallEdge]) -> Option<Vec<String>> {
-    let mut indegree: BTreeMap<String, usize> =
-        members.iter().cloned().map(|name| (name, 0)).collect();
-    for edge in internal {
-        if edge.class != CallClass::Nonstrict {
-            continue;
-        }
-        if let Some(entry) = indegree.get_mut(&canonical_identifier(&edge.to)) {
-            *entry += 1;
-        }
-    }
-
-    let mut ready: Vec<String> = indegree
-        .iter()
-        .filter(|(_, degree)| **degree == 0)
-        .map(|(name, _)| name.clone())
-        .collect();
-    let mut order = Vec::new();
-    while let Some(next) = ready.pop() {
-        order.push(next.clone());
-        for edge in internal {
-            if edge.class != CallClass::Nonstrict || canonical_identifier(&edge.from) != next {
-                continue;
-            }
-            let target = canonical_identifier(&edge.to);
-            if let Some(entry) = indegree.get_mut(&target) {
-                *entry -= 1;
-                if *entry == 0 {
-                    ready.push(target);
-                }
-            }
-        }
-    }
-    (order.len() == members.len()).then_some(order)
 }
 
 /// Structural equality of terms, ignoring spans — the same discipline the
@@ -1355,6 +1472,46 @@ mod tests {
     }
 
     #[test]
+    fn a_call_that_grows_the_argument_is_proved_at_a_position() {
+        // The whole argument is rebuilt — `(s.H e.T)` becomes `(e.T)` — so the
+        // length measure sees nothing to compare and cannot settle it. The
+        // *first* component shrinks, so measure 1 can, and that is the point of
+        // having a family of measures rather than one.
+        let source = "$ENTRY Go { = <Walk (A B C) (X)>; }\n\
+                      Walk { (s.H e.T) (e.K) = <Walk (e.T) (e.K)>; }";
+        let TerminationVerdict::Terminating {
+            measure,
+            components,
+        } = termination(source, "Walk")
+        else {
+            panic!("the positional measure should settle this");
+        };
+        assert_eq!(measure, 1, "the first component is what shrinks");
+        assert_eq!(components.len(), 1);
+        assert_eq!(
+            components[0]
+                .strict
+                .iter()
+                .map(|edge| (edge.measure, edge.from.as_str(), edge.to.as_str()))
+                .collect::<Vec<_>>(),
+            vec![(1, "Walk", "Walk")]
+        );
+    }
+
+    #[test]
+    fn a_computed_argument_is_unproven_under_every_measure() {
+        // A call in argument position has no static size at any position, so no
+        // measure applies. `Unproven` is the honest answer.
+        let source = "$ENTRY Go { = <F (A)>; }\n\
+                      F { (e.X) = <F <G (e.X)>>; }\n\
+                      G { (e.Y) = (e.Y); }";
+        assert!(matches!(
+            termination(source, "F"),
+            TerminationVerdict::Unproven { .. }
+        ));
+    }
+
+    #[test]
     fn a_non_recursive_function_is_not_a_termination_question() {
         let source = "$ENTRY Go { = <Id 'a'>; }\nId { e.X = e.X; }";
         assert_eq!(termination(source, "Id"), TerminationVerdict::NonRecursive);
@@ -1369,9 +1526,14 @@ mod tests {
         let source = "$ENTRY Go { = <F 'ab'>; }\n\
                       F { s.H e.T = <G e.T>; }\n\
                       G { e.X = <F e.X>; }";
-        let TerminationVerdict::Terminating { components } = termination(source, "F") else {
+        let TerminationVerdict::Terminating {
+            measure,
+            components,
+        } = termination(source, "F")
+        else {
             panic!("the pair should be proved");
         };
+        assert_eq!(measure, 0, "the whole argument settles this pair");
         assert_eq!(components.len(), 1, "one cyclic component: {components:?}");
         let component = &components[0];
         assert_eq!(

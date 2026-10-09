@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+**Termination is decided under a family of measures, one per argument position.**
+
+- **Measure `0` is the length of the whole argument; measure `k > 0` is the
+  length of its k-th top-level term.** Every measure is tried and the first that
+  proves a function is reported — a proof under any of them is a proof, because
+  each is a well-founded ranking in its own right.
+- **This is what settles a function that rebuilds its argument.**
+  `DsBlkCond` grows its argument by a term (`<DsBlkCondL (e.Ctx) (e.B) (e.Val)
+  (e.Sents) (e.More) '0'>`), which measure 0 can never prove; its fourth
+  component shrinks, which measure 4 can. Measured: `examples/compiler.ref`
+  **439 → 343** unproven functions, and the 77 non-`bad-*` examples **537 → 430**.
+- **And the rung above it is named exactly.** What remains is a call **in
+  argument position** (`<DsScan <DsBump …>>`), which has no static size at any
+  position, so no measure applies and, inside a cycle, the whole component is
+  `Unproven`. The compiler's 480 functions form one such component; a norm over
+  the **driven graph** is what would settle it.
+- `compiler.ref` in 3.9 s, up from 1.5 s: every measure is a full pass, and the
+  price is paid for the coverage. **Zero infeasible sentences across the corpus**;
+  the strict-mode and fast differential gates are unchanged; 43 tests in
+  `refal-semantics`. The completion figure does not move.
+
 **Termination is now decided by size change over the call graph, and mutual
 recursion is covered — and this found an unsoundness in the previous release's
 own analysis.**

@@ -49,7 +49,7 @@ See `README.md` §"What Theorem 5.1 does and does not forbid" and
 | | |
 |---|---|
 | Honest completion | **~91.5%** (supersystem completeness — one method, one table, in `README.md`) |
-| Tests | 409 (72 core + 176 CLI integration + 161 across the other four crates), 0 clippy, fmt clean |
+| Tests | 411 (72 core + 176 CLI integration + 163 across the other four crates), 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
 
@@ -71,6 +71,42 @@ Rust oracle at budgets 1, 2, 5 and 12. The T-4/T-6 differential
 corpus gate is green at `cases: 71`, `positive: 31`, `check-failure: 6`,
 `runtime-failure: 1`, `residual: 33`, `cleaned-sentences: 1`, and
 `clippy --all-targets -D warnings` and `cargo fmt --check` are clean.
+
+### Done — a family of measures, indexed by argument position (2026-10-09)
+
+**The approved next rung: the size-change analysis now measures any top-level
+term of the argument, not only the whole of it.** Measure `0` is the length of
+the whole argument; measure `k > 0` is the length of its k-th top-level term.
+Every measure is tried and the first that proves a function is the one reported —
+a proof under any of them is a proof, because each is a well-founded ranking in
+its own right.
+
+**This is what settles a function that rebuilds its argument, and the measurement
+says so.** `DsBlkCond` grows its argument by a term
+(`<DsBlkCondL (e.Ctx) (e.B) (e.Val) (e.Sents) (e.More) '0'>`), which measure 0
+can never prove; its fourth component shrinks, which measure 4 can. Measured:
+
+| | unproven functions |
+|---|---:|
+| `examples/compiler.ref` | 439 → **343** |
+| the 77 non-`bad-*` examples | 537 → **430** |
+
+**And the rung above it is now named exactly.** What remains is a call **in
+argument position** — `<DsScan <DsBump <DsRecCall (e.Ctx) (e.Fn) (e.In)>> (e.Fn)
+(e.In) ('0' '0') <DsStates (e.Ctx)>>` — which has no static size at any position,
+so no measure applies, and inside a cycle it makes the whole component
+`Unproven`. The compiler's 480 functions form one such component. A norm over the
+**driven graph** rather than over the source text is what would settle it, which
+is what Turchin's own whistle supplies.
+
+**Measured.** `compiler.ref` in 3.9 s — was 1.5 s, because every measure is a
+full pass and the price is paid for the coverage. **Zero infeasible sentences
+across the 77 non-`bad-*` examples** — the soundness property still holds end to
+end. Gates: 43 tests in `refal-semantics` (a positional proof, a computed
+argument unproven under every measure, mutual recursion, a non-decreasing cycle)
+and the `refal-cli` certificate tests; `fmt`, `clippy --all-targets -D warnings`,
+the strict-mode gate and the fast differential gate are clean. The figure does
+not move: this is the same Tier-1 row.
 
 ### Done — size-change termination over the call graph (2026-10-09)
 
