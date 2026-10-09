@@ -28,8 +28,15 @@
 - Gates: 14 tests in `refal-semantics` — witness synthesis, the shadowing proof,
   the condition rule, four termination cases, and a checker that rejects a
   tampered witness — and 4 in `refal-cli`: the command, the exit status, the
-  self-check, and a certificate gate over the corpus. The completion figure is
-  unchanged pending the Chief Architect's re-attribution of the Tier-1 row.
+  self-check, and a certificate gate over the corpus.
+- **The completion figure moves `~90.5% → ~91.5%`, and 0.27 of that is a
+  correction, not progress.** The Tier-1 row's credit rises **8.75 → 9.50**
+  (0.75 earned, approved). Landing it exposed that the twelve-row accounting
+  table never summed to its own published total: the credits total **90.77**
+  where the README said 90.5, every row consistent with its own weight and only
+  the total disagreeing. "One number, one method, from one table" means the
+  published figure is the table's sum, so it is now — with the correction stated
+  in the README beside the row it came from.
 
 **Discoverability: a glossary, and the repository metadata to match.**
 
@@ -41,13 +48,16 @@
   Turchin source and the code that implements it. It is written so a reader who
   has never met Refal can follow the README, and so a reader arriving from a
   search engine can learn a term before reading code.
-- **A social-preview card** (`docs/images/social-preview.svg` and its rendered
-  `.png`, 1280x640), produced by the same Rust task as the other diagrams, so it
-  cannot drift from the project's numbers.
 - **The GitHub description and topics were refreshed** to name the search terms
   the project actually answers to.
+- **A social-preview card was built and then withdrawn.** The generated card was
+  not wanted — the repository's existing preview is kept — so the image and the
+  task that drew it are removed rather than left as dead weight.
 - **`.gitattributes` normalises line endings** to LF on every platform, so a
   regenerated diagram cannot show a whole-file diff that is not a change.
+- **The README's keyword footer is one line again.** A multi-line block inside
+  `<sub>` is rendered by GitHub with the lines overlapping; the footer is now a
+  single line, which is the shape GitHub renders correctly.
 
 **The repository is now 100% Rust.**
 

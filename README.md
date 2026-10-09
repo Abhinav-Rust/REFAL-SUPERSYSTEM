@@ -16,7 +16,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/status-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/status-light.svg">
-  <img alt="Status: about 90.5% of the supersystem — L0, L1 and the Refal-authored compiler are near complete, L2 is close, and L3 and L4 are partial" src="docs/images/status-light.svg" width="100%">
+  <img alt="Status: about 91.5% of the supersystem — L0, L1 and the Refal-authored compiler are near complete, L2 is close, and L3 and L4 are partial" src="docs/images/status-light.svg" width="100%">
 </picture>
 
 </div>
@@ -325,7 +325,7 @@ part of the problem.
 
 ## Project status
 
-### Honest completion: ~90.5%
+### Honest completion: ~91.5%
 
 This figure measures **the whole supersystem** — all four layers — not the compiler
 alone. The compiler is finished; the supersystem is not, and publishing the
@@ -355,16 +355,29 @@ compiler's own number as the project's would misdescribe what this repository is
 | L0 · Refal machine / runtime | 13.65 | 13.51 | 0.14 | block sentences carrying conditions take the recursive path |
 | **L1 · Reflection engine** | **9.00** | **9.00** | **0.00** | closed — the service is exposed as `refal reflect`, with four shape gates |
 | L2 · Graph of states / emission | 5.95 | 5.35 | 0.60 | **§4.4's other half (E-7)** — 0.45, a Tier-2 research item — and **E-11's stack configuration** — 0.15. E-11's other behaviours (positive information, negative information, the non-tail bracket context) are built and gated, so they carry credit |
-| Tier 1 static verification | 10.50 | 8.75 | 1.75 | no *total* termination analysis — and totality is the only thing Theorem 5.1 forbids; the target is a **sound, incomplete, certificate-carrying** analysis (see below) |
+| Tier 1 static verification | 10.50 | 9.50 | 1.00 | the decidable checks, **and a sound, incomplete, certificate-carrying feasibility and termination analysis** (`refal feasibility`, see below). What is withheld is termination for recursion that is not a structural descent — accumulators, mutual recursion, calls that pass a reordering — and feasibility beyond the witness budget |
 | L2/L4 · Compiler implemented in Refal | 17.85 | 16.80 | 1.05 | not yet fast on very large inputs |
 | L4 · Verified self-hosting fixpoint | 9.10 | 8.05 | 1.05 | the fixpoint holds on the corpus and the compiler's own source, not on arbitrary programs |
 | **L3 · Meta-prover** | **13.00** | **11.40** | **1.60** | the entry, the driving, Turchin's `'True'` criterion, and the *relational* half are built and gated. What is withheld is the *general* relation (an arbitrary relation rather than equality) and a proof needing generalisation beyond the loop edge; of SCP4's three named theorems, associativity of `Append` **and the tree reversal** are gated, the sorting equality is not |
 | L4 · Projections as artifacts | 5.00 | 3.50 | 1.50 | the 1st and 2nd both emit target code with gates, and the self-application emits a working compiler; what is withheld is that neither is *derived* by supercompilation (`S(S, int)`) — the 2nd is an authored mode that applies the driver, not a residue of specialising the supercompiler |
 | **L2 · Function inversion** | **3.00** | **3.00** | **0.00** | closed — `refal invert` drives the forward definition and emits the synthesised inverse, round-tripped in a gate |
 | Conformance / release evidence | 2.80 | 2.66 | 0.14 | three file-backed I/O clauses bind to the runtime's own test rather than a fixture |
-| **Total** | **100.00** | **~90.5** | **~9.5** | |
+| **Total** | **100.00** | **~91.5** | **~8.5** | |
 
 </details>
+
+**The 2026-10-09 re-attribution, and an arithmetic defect it exposed.** The
+Tier-1 row's withheld credit was for a *sound, incomplete, certificate-carrying
+feasibility analysis*, and that is now built and gated: `refal feasibility`
+decides each sentence's selectability with a re-checked ground witness and each
+function's termination by structural descent. The row's credit rises
+**8.75 → 9.50**. **Landing it exposed a defect in this table:** the twelve
+credits sum to **90.77**, where the published figure said 90.5 — every row is
+consistent with its own weight and only the total disagreed, by 0.27. The
+published figure is now the table's own sum, so the total moves
+**~90.5% → ~91.5%**: **0.75 earned** by the new analysis and **0.27 corrected**.
+The row's remaining 1.00 is named above, and the analysis's own `unproven` set
+is published per program rather than hidden.
 
 **The 2026-10-08 re-attribution.** The graph-of-states row's withheld credit was
 attributed entirely to §4.4, and that was wrong: the row also carries E-11's stack
@@ -801,15 +814,6 @@ This project is licensed under the [MIT License](LICENSE-MIT).
 
 <div align="center">
 
-<sub>
-
-**Refal** · **Refal-5** · **Valentin Turchin** · **supercompilation** · **metasystem transition** ·
-**metacomputation** · **partial evaluation** · **Futamura projections** · **term rewriting** ·
-**program transformation** · **symbolic computation** · **self-hosting compiler** ·
-**automated theorem proving** · **program verification** · **metaprogramming** ·
-**homoiconic language** · **pattern matching** · **graph of states** · **residual program synthesis** ·
-**Principia Cybernetica** · **cybernetics**
-
-</sub>
+<sub>**Refal** · **Refal-5** · **Valentin Turchin** · **supercompilation** · **metasystem transition** · **metacomputation** · **partial evaluation** · **Futamura projections** · **term rewriting** · **program transformation** · **symbolic computation** · **self-hosting compiler** · **automated theorem proving** · **program verification** · **metaprogramming** · **homoiconic language** · **pattern matching** · **graph of states** · **residual program synthesis** · **Principia Cybernetica** · **cybernetics**</sub>
 
 </div>
