@@ -218,9 +218,24 @@ well-founded ranking in its own right.
 compiler pass that carries a context along — `<DsBlkCondL (e.Ctx) (e.B) (e.Val)
 (e.Sents) (e.More) '0'>` — *grows* its argument by one term, so measure 0 can
 never prove it; but its fourth component `(e.Sents)` becomes `(e.Rest)`, a
-proper sub-expression, so measure 4 can. Measured, that took
-`examples/compiler.ref` from 439 unproven functions to **343**, and the corpus
-from 537 to **430**. The witness is the component's members in an order in which every
+proper sub-expression, so measure 4 can.
+
+**A ranking may also be a lexicographic pair.** Measures are tried singly and
+then in pairs, `k+l` meaning "the k-th position, and the l-th only where the k-th
+does not fall". A product of well-founded rankings is well-founded, so a pair is
+a proof for exactly the same reason a single measure is. Measured: these took
+`examples/compiler.ref` from 439 unproven functions to **330**, and the corpus
+from 537 to **417**.
+
+**And the pair closes a direction rather than opening one.** A pair is `unknown`
+wherever its first measure is — the pair's ranking *contains* the first measure,
+so if that may grow, so may the pair. A lexicographic combination can therefore
+break a non-decreasing **cycle**, by turning a non-strict edge strict, but it can
+**never bound a call that no measure bounds**. That is pinned as a property
+(`a_pair_can_never_bound_a_call_its_first_measure_cannot`), and it is why the
+compiler's remaining calls are untouched by it: **more measures, in any
+combination, is not the answer.** The measure has to bound the call itself, and a
+call in argument position has no static size to bound. The witness is the component's members in an order in which every
 non-decreasing call goes forward — a proof a third party checks by re-deriving
 the calls and walking the order, with no search and no trust.
 

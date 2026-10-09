@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+**A ranking may be a lexicographic pair — and the pair proves a limit.**
+
+- **Measures are tried singly and then in pairs**, `k+l` meaning "the k-th
+  argument position, and the l-th only where the k-th does not fall". A product
+  of well-founded rankings is well-founded, so a pair is a proof for the same
+  reason a single measure is, and the certificate carries it.
+- **Measured:** `examples/compiler.ref` **343 → 330** unproven functions, the 77
+  non-`bad-*` examples **430 → 417**, zero infeasible sentences. And the run is
+  **2× faster (3.9 s → 2.0 s)**, because every call's classification is now
+  computed once per ranking instead of once per function.
+- **A correction, which matters more than the 13 functions.** I claimed a pair
+  would let an edge unbounded at the second position be usable when the first
+  strictly decreases, and that it would therefore reach the 24 functions that are
+  one unbounded call away. **Both are wrong**, and the code now proves it: a pair
+  is `unknown` wherever its *first* measure is, because the pair's ranking
+  contains the first measure. So a pair can break a non-decreasing **cycle** but
+  can **never bound a call no measure bounds**. The direction is closed, not
+  extended: no combination of position measures can bound a computed call. The
+  property is pinned as `a_pair_can_never_bound_a_call_its_first_measure_cannot`.
+- 47 tests in `refal-semantics`; fmt, clippy, the strict-mode gate and the fast
+  differential gate are clean. The completion figure does not move.
+
 **The termination analysis now names the measure that came closest — and the
 next step was measured and refuted before any code was written against it.**
 
