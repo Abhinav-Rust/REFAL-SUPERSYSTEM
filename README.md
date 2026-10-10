@@ -354,7 +354,7 @@ operations at the centre of the language.
 | **Front end** | ✅ Lexer and parser over the documented Classic scope; **every clause of the syntax reference is bound to a fixture**, in both directions wherever a clause states a rule with a forbidden half |
 | **Semantic checker** | ✅ Entry-point structure, duplicate detection, unresolved calls, calls in patterns, variable binding and kind consistency — each citing its clause |
 | **Refal machine** | ✅ **Clause-complete against the reference's builtin sections**; no fixed call-depth limit; the projecting matcher (§2.2); the view field in all three shapes; Chapter 6 metacode in full, including §6.4's `unknown` values |
-| **Graph of states** | ✅ `drive → clean → residualise` verified against the interpreter over the corpus; case splitting on a wholly unknown argument; §4.3 cleaning and the §4.5 verdict; generalization by common computation history; **the compilation strategy is searched**, not fixed; **driving a residue is a fixpoint** |
+| **Graph of states** | ✅ `drive → clean → residualise` verified against the interpreter over the corpus; case splitting on a wholly unknown argument; §4.3 cleaning and the §4.5 verdict; generalization by common computation history; **the compilation strategy is searched**, not fixed; **the partition is selectable** — the sequence split, or the constructor-entering one that folds a nested accumulator; **driving a residue is a fixpoint** |
 | **Tier 1 static analysis** | ✅ Complete for its published guarantee with zero false positives across the corpus: dead sentences, recognition-impossible reachability, builtin domain errors, and a format lattice that describes a bracket's contents recursively |
 | **Feasibility & termination** | ✅ `refal feasibility` decides each sentence's selectability with a **ground witness it re-checks**, and each function's termination by **size change over the call graph** under a ranking — one argument position, or a lexicographic pair of them — which is what settles a call that rebuilds its argument. **Mutual recursion included**, since only the strongly connected components matter. Sound, incomplete, certificate-carrying (§4.5; §5.8). Zero infeasible sentences across the 77 non-`bad-*` examples, and the `unproven` set is printed rather than left silent |
 | **Compiler written in Refal** | ✅ A real Refal-authored lexer, parser, checker and emitter over the full Classic grammar; the transforming half — `GRAPH`, `RESIDUALIZE`, `DRIVE`, `DRIVE-SYMBOLIC`, `RESIDUALIZE-DRIVEN` — byte-identical to its Rust counterpart over the corpus, **and the last of them is the compiler's default path** |
@@ -398,7 +398,7 @@ compiler's own number as the project's would misdescribe what this repository is
 | L0 · Bootstrap semantics | 4.20 | 3.15 | 1.05 | exhaustiveness lives in Tier 1 rather than here |
 | **L0 · Refal machine / runtime** | **13.65** | **13.65** | **0.00** | closed — a block sentence carrying a condition now runs on the work list exactly as a named call does, so a recursion through one no longer uses the host stack. The gate drives 100,000 such steps, which overflowed the stack before the fix |
 | **L1 · Reflection engine** | **9.00** | **9.00** | **0.00** | closed — the service is exposed as `refal reflect`, with four shape gates |
-| L2 · Graph of states / emission | 5.95 | 5.35 | 0.60 | **§4.4's other half (E-7)** — 0.45, a Tier-2 research item — and **E-11's stack configuration** — 0.15. E-11's other behaviours (positive information, negative information, the non-tail bracket context) are built and gated, so they carry credit |
+| L2 · Graph of states / emission | 5.95 | 5.35 | 0.60 | **§4.4's other half (E-7)** — 0.45, a Tier-2 research item — and **E-11's remaining half** — 0.15. E-11's behaviours (positive information, negative information, the non-tail bracket context, **and now the nested accumulator**) are built and gated, so they carry credit. What is withheld is that the **constructor-entering partition is not the compiler's default**: `--split pattern` folds the accumulator — measured, residual-work 9 with `Rev` eliminated, against 37 with `Rev` residual — but a corpus scan found 13 examples where it is strictly better, so switching the default moves corpus residues and needs the Refal-authored driver to move with it |
 | Tier 1 static verification | 10.50 | 9.50 | 1.00 | the decidable checks, **and a sound, incomplete, certificate-carrying feasibility and termination analysis** (`refal feasibility`, see below). What is withheld is termination where a call passes something no measure ranks — a computed argument, `<DsScan <DsBump …>>` — which is what still bounds the compiler's 480-function component, and feasibility beyond the witness budget |
 | L2/L4 · Compiler implemented in Refal | 17.85 | 16.80 | 1.05 | not yet fast on very large inputs |
 | L4 · Verified self-hosting fixpoint | 9.10 | 8.05 | 1.05 | the fixpoint holds on the corpus and the compiler's own source, not on arbitrary programs |
@@ -711,6 +711,13 @@ cargo run -p refal -- differential examples/differential-corpus.manifest --corpu
 
 # Drive the entry configuration and emit the residue for one program
 cargo run -p refal -- residualize-driven examples/runtime-recursion.ref
+
+# Choose the partition (Turchin's driving step, E-11). `sequence` (the default)
+# splits `[] / s.H e.T / (e.B) e.T`; `pattern` partitions the component by the
+# callee's own sentence patterns, so it can *enter a constructor*. That is what
+# folds a nested accumulator, where the sequence partition leaves the callee
+# entirely residual:
+cargo run -p refal -- residualize-driven examples/accumulator-reverse.ref --split pattern
 
 # Residualization is total: the budget bounds how much is driven, not whether a
 # program comes out.
