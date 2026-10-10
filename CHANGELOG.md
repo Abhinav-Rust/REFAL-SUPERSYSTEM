@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+**The file-backed I/O clauses are bound to a runnable fixture — and the
+conformance row closes.**
+
+- **The premise was half wrong.** The clauses `c1.4`, `c1.6`, `c1.7` were bound
+  only to the runtime's own test, because "a committed program cannot carry a path
+  that is valid wherever the suite runs". An **absolute** path cannot; a
+  **relative** one is valid if the process's working directory is one the suite
+  owns, and the harness can own it.
+- **What changed:** `run_with_closed_stdin` runs every `run` row in a fresh
+  temporary directory it removes afterwards (so nothing leaks into the checkout),
+  and `examples/builtin-file-io-conformance.ref` opens a file by a relative name
+  and exercises `Put`, `Putout` and `Get` on it, with descriptors inside the
+  reference's 1–19 range. The unit rows stay — a fixture proves the builtin is
+  reachable from a program, the unit test can assert the exact bytes the file
+  received.
+- **Gates:** `every_builtin_clause_has_a_traceable_fixture` green; the fixture
+  passes `check --strict` and `lower`; no stray file or directory left behind; the
+  seven `refal_authored_*` corpus differentials green with the new fixture in the
+  corpus.
+- **The figure moves `~91.7% → ~91.8%`** — an earning: the row's withheld credit
+  was for exactly this. Conformance/release rises **2.66 → 2.80**; the table sums
+  to **91.80**.
+
 **A block sentence carrying a condition runs on the work list — and the runtime
 row closes.**
 

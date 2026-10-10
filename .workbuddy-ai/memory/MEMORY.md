@@ -34,13 +34,19 @@ course of action I recommend.** The Chief Architect's convention for this repo:
 
 ## Current state
 
-- **Honest completion ~91.7%** of the four-layer supersystem (one number, one
-  table, in `README.md`). The table's twelve credits sum to **91.66** — **the
+- **Honest completion ~91.8%** of the four-layer supersystem (one number, one
+  table, in `README.md`). The table's twelve credits sum to **91.80** — **the
   published figure must always equal the table's sum** (a 0.27 discrepancy was
-  found and fixed on 2026-10-09; the runtime row earned 13.51 → 13.65 on
-  2026-10-10). The **`status` SVG pair is hand-committed**, so moving the figure
-  means editing it by hand too (headline, desc, and the L0 bar — L0's grouping is
-  `(frontend + semantics + runtime)`).
+  found and fixed on 2026-10-09; the runtime row earned 13.51 → 13.65 and the
+  conformance/release row 2.66 → 2.80 on 2026-10-10). The **`status` SVG pair is
+  hand-committed**, and when the figure moves **only its `<desc>` and headline
+  change — never the bars** (that is what `0e21285`, `015a263` and `ccc4193` all
+  did; a bar edit this session was reverted).
+- **A committed Refal fixture *can* do file I/O** (2026-10-10): the conformance
+  harness `run_with_closed_stdin` runs every `run` row in a fresh temp directory
+  (set as `current_dir`, removed after), so a fixture may use a **relative** file
+  name. `examples/builtin-file-io-conformance.ref` is the pattern; the `unit` row
+  stays for assertions a program cannot print (exact file bytes).
 - **A block sentence carrying a condition now runs on the work list** (2026-10-10,
   runtime row closed). `ConditionEval` carries a `ConditionOwner` (`Function` or
   `Block`) so a failing chain continues into the right next sentence;

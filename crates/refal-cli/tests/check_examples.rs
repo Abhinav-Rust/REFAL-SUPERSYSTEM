@@ -6945,13 +6945,34 @@ fn the_workspace_version_and_the_changelog_agree() {
 /// `Command::output` already closes the child's stdin, but this says so
 /// explicitly, because a fixture that reads it -- `Card`, `Get 0` -- would
 /// otherwise hang the suite instead of seeing end of file.
+/// Run a fixture with its standard input closed, in a fresh temporary working
+/// directory.
+///
+/// The directory is what lets a *committed* fixture do file I/O at all. The
+/// reference's C.1 clauses -- Open, Get, Put, Putout -- take a file name, and a
+/// name that is valid wherever the suite runs cannot be baked into the source;
+/// but a *relative* name is valid if the process's working directory is one the
+/// suite owns. So the fixture creates its file here and the directory is removed
+/// afterwards, which is why nothing leaks into the checkout. The fixture path is
+/// absolute (`workspace_path`), so the changed directory does not affect it.
 fn run_with_closed_stdin(path: &str, args: &[&str]) -> std::process::Output {
-    Command::new(refal_bin())
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock after the epoch")
+        .as_nanos();
+    let cwd = env::temp_dir().join(format!("refal-fixture-{}-{unique}", process::id()));
+    fs::create_dir_all(&cwd).expect("create the fixture's working directory");
+    let output = Command::new(refal_bin())
         .args(["run", &workspace_path(path)])
         .args(args)
+        .current_dir(&cwd)
         .stdin(process::Stdio::null())
         .output()
-        .expect("run refal binary")
+        .expect("run refal binary");
+    // Removed whether the fixture passed or not, so a failing row leaves nothing
+    // behind either.
+    let _ = fs::remove_dir_all(&cwd);
+    output
 }
 
 /// The clause-by-clause conformance corpus for the builtin library.

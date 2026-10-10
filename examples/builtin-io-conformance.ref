@@ -9,9 +9,9 @@
 *        acts like <Card> on the file the descriptor names.
 *
 * The other half of the section -- Open, Put, Putout and Get on a real file --
-* needs a path that is valid wherever the suite runs, and a committed fixture
-* cannot carry one. Those clauses are bound to the runtime's own test instead,
-* which is what the `unit` rows of `examples/builtin-conformance.manifest` name.
+* is `examples/builtin-file-io-conformance.ref`. It uses a *relative* file name,
+* which works because `every_builtin_clause_has_a_traceable_fixture` runs every
+* `run` row in a temporary directory it owns and removes afterwards.
 *
 * The suite runs the program with its standard input closed, so Card and Get 0
 * both see end of file immediately and return macrodigit 0, which is exactly the

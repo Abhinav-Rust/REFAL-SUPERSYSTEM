@@ -16,7 +16,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/status-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/status-light.svg">
-  <img alt="Status: about 91.7% of the supersystem — L0, L1 and the Refal-authored compiler are near complete, L2 is close, and L3 and L4 are partial" src="docs/images/status-light.svg" width="100%">
+  <img alt="Status: about 91.8% of the supersystem — L0, L1 and the Refal-authored compiler are near complete, L2 is close, and L3 and L4 are partial" src="docs/images/status-light.svg" width="100%">
 </picture>
 
 </div>
@@ -38,7 +38,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/glance-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/glance-light.svg">
-  <img alt="At a glance: four layers over one shared expression space; about 91.7% of the supersystem complete by one method; 100% Rust; a byte-identical self-hosting fixpoint at 12,599 bytes; and 19 of 25 in-scope conformance rows closed" src="docs/images/glance-light.svg" width="100%">
+  <img alt="At a glance: four layers over one shared expression space; about 91.8% of the supersystem complete by one method; 100% Rust; a byte-identical self-hosting fixpoint at 12,599 bytes; and 19 of 25 in-scope conformance rows closed" src="docs/images/glance-light.svg" width="100%">
 </picture>
 
 </div>
@@ -369,7 +369,7 @@ operations at the centre of the language.
 
 ## Project status
 
-### Honest completion: ~91.7%
+### Honest completion: ~91.8%
 
 This figure measures **the whole supersystem** — all four layers — not the compiler
 alone. The compiler is finished; the supersystem is not, and publishing the
@@ -405,12 +405,27 @@ compiler's own number as the project's would misdescribe what this repository is
 | **L3 · Meta-prover** | **13.00** | **11.40** | **1.60** | the entry, the driving, Turchin's `'True'` criterion, and the *relational* half are built and gated. What is withheld is the *general* relation (an arbitrary relation rather than equality) and a proof needing generalisation beyond the loop edge; of SCP4's three named theorems, associativity of `Append` **and the tree reversal** are gated, the sorting equality is not |
 | L4 · Projections as artifacts | 5.00 | 3.50 | 1.50 | the 1st and 2nd both emit target code with gates, and the self-application emits a working compiler. **Driving the supercompiler's own dispatcher now *closes*** — 147 steps, 51 configurations, one split — and emits a `Dispatch`-free program that **checks as Refal**, so the derivation is real rather than authored. What is withheld is that the residue has not been **run**: as a compiler it does not complete under the bootstrap, and the row's gate requires it to agree with `refal compile` on every example |
 | **L2 · Function inversion** | **3.00** | **3.00** | **0.00** | closed — `refal invert` drives the forward definition and emits the synthesised inverse, round-tripped in a gate |
-| Conformance / release evidence | 2.80 | 2.66 | 0.14 | three file-backed I/O clauses bind to the runtime's own test rather than a fixture |
-| **Total** | **100.00** | **~91.7** | **~8.3** | |
+| **Conformance / release evidence** | **2.80** | **2.80** | **0.00** | closed — the file-backed input/output clauses (`c1.4`, `c1.6`, `c1.7`) are bound to a runnable fixture, not only to the runtime's own test: `examples/builtin-file-io-conformance.ref` opens a file by a **relative** name, and the conformance harness runs every `run` row in a temporary directory it owns and removes, so a committed program can carry a path after all |
+| **Total** | **100.00** | **~91.8** | **~8.2** | |
 
 </details>
 
-**The 2026-10-10 move, and it is an *earning* rather than a re-attribution.** The
+**The 2026-10-10 conformance move.** The conformance/release row's withheld credit
+was its last part: the **file-backed input/output clauses** (`c1.4`, `c1.6`,
+`c1.7`) were bound to the runtime's own test rather than to a runnable fixture,
+because a committed program "cannot carry a path that is valid wherever the suite
+runs". That premise was half wrong — a path cannot be *absolute* and portable, but
+a **relative** one is valid if the process's working directory is one the suite
+owns, and the harness can own it.
+`every_builtin_clause_has_a_traceable_fixture` now runs every `run` row in a fresh
+temporary directory which it removes afterwards, so nothing leaks into the
+checkout, and `examples/builtin-file-io-conformance.ref` opens a file by a
+relative name and exercises `Put`, `Putout` and `Get` on it. The runtime test
+stays, because it can look at what a program cannot print — the exact bytes a
+file received. The row's credit rises **2.66 → 2.80**, the table's sum moves
+**91.66 → 91.80**, and the published figure moves **~91.7% → ~91.8%**.
+
+**The 2026-10-10 runtime move, an *earning* rather than a re-attribution.** The
 runtime row's withheld credit was for the one thing the work list did not cover:
 a **block sentence carrying conditions** still fell back to the recursive
 evaluator, and `terms_are_worklist_safe` rejected such a block, so every function
@@ -928,7 +943,7 @@ without garbage collection.
 <summary><b>Is it usable today?</b></summary>
 
 The **compiler is finished and gated**; the *supersystem* is being completed and
-is at about **91.7%**. `refal compile`, `refal run`, `refal check`, `refal reflect`,
+is at about **91.8%**. `refal compile`, `refal run`, `refal check`, `refal reflect`,
 `refal prove`, `refal invert` and `refal project2` all work and are exercised by
 tests. What remains is named row by row in
 [What is left](#what-is-left).

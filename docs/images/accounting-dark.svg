@@ -51,8 +51,8 @@
   <text x="1052" y="362" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="600" fill="#E6EDF3">3 / 3</text>
   <text x="40" y="383" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8B949E">Conformance / release evidence</text>
   <rect x="400" y="371" width="640" height="14" rx="7" fill="#21262D"/>
-  <rect x="400" y="371" width="17.024" height="14" rx="7" fill="#14B8A6"/>
-  <text x="1052" y="383" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="600" fill="#E6EDF3">2.66 / 2.8</text>
+  <rect x="400" y="371" width="17.92" height="14" rx="7" fill="#14B8A6"/>
+  <text x="1052" y="383" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="600" fill="#E6EDF3">2.8 / 2.8</text>
   <rect x="40" y="396" width="1120" height="44" rx="12" fill="#062925" stroke="#134E4A" stroke-width="1.5"/>
-  <text x="64" y="424" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#99F6E4">One number, one method: ~91.7 of 100, from one table. A row carries zero credit until a gate behind it is green.</text>
+  <text x="64" y="424" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#99F6E4">One number, one method: ~91.8 of 100, from one table. A row carries zero credit until a gate behind it is green.</text>
 </svg>
