@@ -11,7 +11,7 @@
 //!
 //! The seven hand-drawn diagrams (`hero`, `status`, `layers`, `pipeline`,
 //! `prover`, `fixpoint`, `metasystem`) are committed as SVG directly; this
-//! program owns the eight it can describe from data.
+//! program owns the thirteen it can describe from data.
 
 use std::path::PathBuf;
 
@@ -1213,17 +1213,347 @@ fn roadmap(p: &Palette) -> String {
     )
 }
 
+// --------------------------------------------------------------------------
+// The command surface -- one command per layer capability
+// --------------------------------------------------------------------------
+fn commands(p: &Palette) -> String {
+    let h = 660.0;
+    let mut out = header(
+        p,
+        "THE COMMAND SURFACE",
+        "One command per layer capability \u{2014} each one backed by a gate",
+        h,
+    );
+    // (layer, command, one-line description)
+    let rows: [(&str, &str, &str); 9] = [
+        (
+            "L0",
+            "refal run",
+            "execute a Refal-5 program on the bootstrap machine",
+        ),
+        (
+            "L0",
+            "refal check --strict",
+            "refuse a provable defect before it ever runs",
+        ),
+        (
+            "L1",
+            "refal reflect",
+            "freeze the active configuration and return it as data",
+        ),
+        (
+            "L2",
+            "refal compile",
+            "drive \u{2192} clean \u{2192} emit \u{2014} the compiler's default path",
+        ),
+        (
+            "L2",
+            "refal metasystem",
+            "drive an interpreter over a program; the interpreter disappears",
+        ),
+        (
+            "L3",
+            "refal prove",
+            "decide a predicate, or an equation, by complete tree reduction",
+        ),
+        (
+            "L4",
+            "refal invert",
+            "synthesise f\u{207b}\u{00b9} from f by driving the forward definition",
+        ),
+        (
+            "L4",
+            "refal project2",
+            "drive an interpreter with its object program left open",
+        ),
+        (
+            "L4",
+            "refal differential",
+            "run a residue and require the source's output \u{2014} truth as efficacy",
+        ),
+    ];
+    let (mut y, hh, gap) = (136.0_f64, 44.0_f64, 6.0_f64);
+    for (layer, cmd, desc) in rows {
+        let tone_key = match layer {
+            "L3" | "L4" => "part",
+            _ => "ok",
+        };
+        let (fg, bg, bd) = tone(p, tone_key);
+        out.push(rect(
+            40.0,
+            y,
+            1120.0,
+            hh,
+            p.cardbg,
+            Some(p.cardbd),
+            10.0,
+            1.0,
+        ));
+        out.push(rect(56.0, y + 8.0, 44.0, 28.0, bg, Some(bd), 8.0, 1.2));
+        out.push(text(
+            78.0,
+            y + 27.0,
+            layer,
+            13.0,
+            fg,
+            Txt::wfa("600", MONO, "middle"),
+        ));
+        out.push(text(
+            116.0,
+            y + 28.0,
+            cmd,
+            14.0,
+            p.ink,
+            Txt::wf("600", MONO),
+        ));
+        out.push(t(400.0, y + 28.0, desc, 12.5, p.muted));
+        y += hh + gap;
+    }
+    out.extend(footer(
+        p,
+        594.0,
+        "Run any of them as `cargo run -p refal -- <command>`. The full reference, with every flag, is further down the README.",
+    ));
+    wrap(
+        h,
+        "The command surface",
+        "Nine commands across four layers: run and check for layer 0, reflect for layer 1, compile and metasystem for layer 2, prove for layer 3, and invert, project2 and differential for layer 4.",
+        &out,
+    )
+}
+
+// --------------------------------------------------------------------------
+// Who this is for -- four readers and the one reason each should care
+// --------------------------------------------------------------------------
+fn audience(p: &Palette) -> String {
+    let h = 380.0;
+    let mut out = header(
+        p,
+        "WHO THIS IS FOR",
+        "Four readers \u{2014} and the one reason each should care",
+        h,
+    );
+    let cards: [(&str, &str, &str); 4] = [
+        (
+            "COMPILER & TOOLING ENGINEERS",
+            "Rewrite rules, not walkers",
+            "source-to-source transformations, normalisation passes and optimisers written as rewrite rules",
+        ),
+        (
+            "LANGUAGE RESEARCHERS",
+            "An implemented model",
+            "a compact, running model for term rewriting, partial evaluation and supercompilation",
+        ),
+        (
+            "AI & AUTOMATION DEVELOPERS",
+            "A symbolic layer for AI",
+            "parse model output, validate tool calls, rewrite plans and check rule-based constraints exactly",
+        ),
+        (
+            "APPLICATION DEVELOPERS",
+            "Declarative rules",
+            "DSLs, templates, workflows and business rules described declaratively, not in ad hoc string code",
+        ),
+    ];
+    let (cw, gap, top, ch) = (272.0_f64, 16.0_f64, 140.0_f64, 172.0_f64);
+    for (i, (title, sub, body)) in cards.iter().enumerate() {
+        let x = 40.0 + i as f64 * (cw + gap);
+        out.push(rect(x, top, cw, ch, p.cardbg, Some(p.cardbd), 14.0, 1.5));
+        out.push(rect(x, top, cw, 5.0, p.a1, None, 2.5, 0.0));
+        for (j, ln) in wrap_lines(title, 26).iter().take(2).enumerate() {
+            out.push(text(
+                x + 20.0,
+                top + 38.0 + j as f64 * 17.0,
+                ln,
+                11.5,
+                p.a1,
+                Txt::ws("600", "1.0"),
+            ));
+        }
+        out.push(text(x + 20.0, top + 82.0, sub, 14.5, p.ink, Txt::w("600")));
+        for (j, ln) in wrap_lines(body, 33).iter().take(4).enumerate() {
+            out.push(t(
+                x + 20.0,
+                top + 106.0 + j as f64 * 15.0,
+                ln,
+                11.5,
+                p.muted,
+            ));
+        }
+    }
+    out.extend(footer(
+        p,
+        324.0,
+        "Neural models generate and discover patterns; production systems still need exact, inspectable transformations. This is a tool for that part of the problem.",
+    ));
+    wrap(
+        h,
+        "Who this is for",
+        "Four cards: compiler engineers get rewrite rules, researchers get an implemented model, AI developers get a deterministic symbolic layer, and application developers get declarative rules.",
+        &out,
+    )
+}
+
+// --------------------------------------------------------------------------
+// Architecture -- the crate spine, and the artifact under test
+// --------------------------------------------------------------------------
+fn architecture(p: &Palette) -> String {
+    let h = 380.0;
+    let mut out = header(
+        p,
+        "ARCHITECTURE",
+        "Six crates, one dependency spine \u{2014} and one artifact under test",
+        h,
+    );
+    let crates: [(&str, &str); 6] = [
+        ("refal-ast", "node types, name equivalence"),
+        ("refal-syntax", "lexer and parser"),
+        ("refal-semantics", "checker and Tier 1"),
+        ("refal-runtime", "the Refal-5 machine"),
+        ("refal-core", "graph of states, driving"),
+        ("refal-cli", "the command surface"),
+    ];
+    let (cw, gap) = (176.0_f64, 12.0_f64);
+    for (i, (name, desc)) in crates.iter().enumerate() {
+        let x = 40.0 + i as f64 * (cw + gap);
+        out.push(rect(
+            x,
+            150.0,
+            cw,
+            78.0,
+            p.cardbg,
+            Some(p.cardbd),
+            12.0,
+            1.5,
+        ));
+        out.push(text(
+            x + cw / 2.0,
+            Pf(184.0),
+            name,
+            13.5,
+            p.ink,
+            Txt::wfa("600", MONO, "middle"),
+        ));
+        for (j, ln) in wrap_lines(desc, 22).iter().take(2).enumerate() {
+            out.push(text(
+                x + cw / 2.0,
+                Pf(206.0 + j as f64 * 14.0),
+                ln,
+                11.0,
+                p.muted,
+                Txt::a("middle"),
+            ));
+        }
+        if i < 5 {
+            out.push(line(
+                Pf(x + cw + 1.0),
+                Pf(189.0),
+                Pf(x + cw + gap - 1.0),
+                Pf(189.0),
+                p.a1,
+                2.0,
+            ));
+        }
+    }
+    out.push(t(
+        40.0,
+        268.0,
+        "examples/compiler.ref is the artifact under test \u{2014} a Refal-authored compiler the Rust crates exist to bootstrap and to check.",
+        12.5,
+        p.muted,
+    ));
+    out.extend(footer(
+        p,
+        300.0,
+        "The compiler in Refal lives in the corpus, not in a crate, because it is the thing being verified rather than the verifier.",
+    ));
+    wrap(
+        h,
+        "Architecture",
+        "A horizontal spine of six crates: refal-ast, refal-syntax, refal-semantics, refal-runtime, refal-core and refal-cli, with examples/compiler.ref as the artifact under test.",
+        &out,
+    )
+}
+
+// --------------------------------------------------------------------------
+// Quickstart -- one toolchain, three commands
+// --------------------------------------------------------------------------
+fn quickstart(p: &Palette) -> String {
+    let h = 356.0;
+    let mut out = header(p, "QUICKSTART", "One toolchain, three commands", h);
+    // A command may carry a newline: the box holds two lines so a long URL fits.
+    let steps: [(&str, &str, &str); 3] = [
+        (
+            "1",
+            "Clone",
+            "git clone https://github.com/\nAbhinav-Rust/REFAL-SUPERSYSTEM.git",
+        ),
+        ("2", "Build", "cargo build"),
+        ("3", "Compile a program", "refal compile examples/hello.ref"),
+    ];
+    let (cw, gap) = (360.0_f64, 20.0_f64);
+    for (i, (num, title, cmd)) in steps.iter().enumerate() {
+        let x = 40.0 + i as f64 * (cw + gap);
+        out.push(rect(
+            x,
+            150.0,
+            cw,
+            116.0,
+            p.cardbg,
+            Some(p.cardbd),
+            14.0,
+            1.5,
+        ));
+        out.push(circle(Pf(x + 36.0), Pf(186.0), 18.0, p.okbg));
+        out.push(text(
+            x + 36.0,
+            192.0,
+            num,
+            17.0,
+            p.ok,
+            Txt::wfa("700", MONO, "middle"),
+        ));
+        out.push(text(x + 66.0, 191.0, title, 15.0, p.ink, Txt::w("600")));
+        out.push(rect(
+            x + 20.0,
+            208.0,
+            cw - 40.0,
+            46.0,
+            p.fbg,
+            Some(p.fbd),
+            8.0,
+            1.0,
+        ));
+        let lines: Vec<&str> = cmd.split('\n').collect();
+        let base = if lines.len() > 1 { 224.0 } else { 235.0 };
+        for (k, ln) in lines.iter().enumerate() {
+            out.push(t(x + 32.0, base + k as f64 * 16.0, ln, 11.0, p.fink));
+        }
+    }
+    out.extend(footer(
+        p,
+        292.0,
+        "Prerequisite: a stable Rust toolchain (rustup). Nothing else \u{2014} the compiler, the corpus and the tooling are all Rust.",
+    ));
+    wrap(
+        h,
+        "Quickstart",
+        "Three steps: clone the repository, build with cargo, and compile an example program.",
+        &out,
+    )
+}
+
 /// One generated diagram: its file stem, and the function that draws it.
 type Diagram = (&'static str, fn(&Palette) -> String);
 
-/// Generate the eight theme-aware diagrams into `docs/images/`.
+/// Generate the theme-aware diagrams into `docs/images/`.
 pub fn run() {
     let outdir = crate::repo_root().join("docs").join("images");
     if let Err(err) = std::fs::create_dir_all(&outdir) {
         eprintln!("cannot create {}: {err}", outdir.display());
         std::process::exit(1);
     }
-    let diagrams: [Diagram; 9] = [
+    let diagrams: [Diagram; 13] = [
         ("glance", glance),
         ("projections", projections),
         ("conformance", conformance),
@@ -1233,6 +1563,10 @@ pub fn run() {
         ("layerstack", layerstack),
         ("demonstrations", demonstrations),
         ("roadmap", roadmap),
+        ("commands", commands),
+        ("audience", audience),
+        ("architecture", architecture),
+        ("quickstart", quickstart),
     ];
     for (name, build) in diagrams {
         for (theme, palette) in [("light", &LIGHT), ("dark", &DARK)] {

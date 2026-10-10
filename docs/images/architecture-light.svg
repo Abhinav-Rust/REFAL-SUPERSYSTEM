@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 380" width="1200" height="380" role="img" aria-labelledby="t d">
+  <title id="t">Architecture</title>
+  <desc id="d">A horizontal spine of six crates: refal-ast, refal-syntax, refal-semantics, refal-runtime, refal-core and refal-cli, with examples/compiler.ref as the artifact under test.</desc>
+  <rect x="0.5" y="0.5" width="1199" height="379" rx="16" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1"/>
+  <text x="40" y="52" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="3.2" fill="#0F766E">ARCHITECTURE</text>
+  <text x="40" y="90" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="-0.3" fill="#1F2328">Six crates, one dependency spine — and one artifact under test</text>
+  <line x1="40" y1="112" x2="1160" y2="112" stroke="#D0D7DE" stroke-width="1"/>
+  <rect x="40" y="150" width="176" height="78" rx="12" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1.5"/>
+  <text x="128" y="184.0" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="13.5" font-weight="600" text-anchor="middle" fill="#1F2328">refal-ast</text>
+  <text x="128" y="206.0" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" fill="#57606A">node types, name</text>
+  <text x="128" y="220.0" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" fill="#57606A">equivalence</text>
+  <line x1="217.0" y1="189.0" x2="227.0" y2="189.0" stroke="#0F766E" stroke-width="2"/>
+  <rect x="228" y="150" width="176" height="78" rx="12" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1.5"/>
+  <text x="316" y="184.0" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="13.5" font-weight="600" text-anchor="middle" fill="#1F2328">refal-syntax</text>
+  <text x="316" y="206.0" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" fill="#57606A">lexer and parser</text>
+  <line x1="405.0" y1="189.0" x2="415.0" y2="189.0" stroke="#0F766E" stroke-width="2"/>
+  <rect x="416" y="150" width="176" height="78" rx="12" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1.5"/>
+  <text x="504" y="184.0" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="13.5" font-weight="600" text-anchor="middle" fill="#1F2328">refal-semantics</text>
+  <text x="504" y="206.0" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" fill="#57606A">checker and Tier 1</text>
+  <line x1="593.0" y1="189.0" x2="603.0" y2="189.0" stroke="#0F766E" stroke-width="2"/>
+  <rect x="604" y="150" width="176" height="78" rx="12" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1.5"/>
+  <text x="692" y="184.0" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="13.5" font-weight="600" text-anchor="middle" fill="#1F2328">refal-runtime</text>
+  <text x="692" y="206.0" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" fill="#57606A">the Refal-5 machine</text>
+  <line x1="781.0" y1="189.0" x2="791.0" y2="189.0" stroke="#0F766E" stroke-width="2"/>
+  <rect x="792" y="150" width="176" height="78" rx="12" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1.5"/>
+  <text x="880" y="184.0" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="13.5" font-weight="600" text-anchor="middle" fill="#1F2328">refal-core</text>
+  <text x="880" y="206.0" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" fill="#57606A">graph of states,</text>
+  <text x="880" y="220.0" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" fill="#57606A">driving</text>
+  <line x1="969.0" y1="189.0" x2="979.0" y2="189.0" stroke="#0F766E" stroke-width="2"/>
+  <rect x="980" y="150" width="176" height="78" rx="12" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1.5"/>
+  <text x="1068" y="184.0" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="13.5" font-weight="600" text-anchor="middle" fill="#1F2328">refal-cli</text>
+  <text x="1068" y="206.0" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" fill="#57606A">the command surface</text>
+  <text x="40" y="268" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#57606A">examples/compiler.ref is the artifact under test — a Refal-authored compiler the Rust crates exist to bootstrap and to check.</text>
+  <rect x="40" y="300" width="1120" height="44" rx="12" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1.5"/>
+  <text x="64" y="328" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#134E4A">The compiler in Refal lives in the corpus, not in a crate, because it is the thing being verified rather than the verifier.</text>
+</svg>

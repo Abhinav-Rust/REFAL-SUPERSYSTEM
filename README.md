@@ -43,6 +43,18 @@
 
 </div>
 
+## Start here
+
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/quickstart-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/quickstart-light.svg">
+  <img alt="Three steps: clone the repository, cargo build, then refal compile examples/hello.ref. The prerequisite is a stable Rust toolchain and nothing else." src="docs/images/quickstart-light.svg" width="100%">
+</picture>
+
+</div>
+
 ---
 
 ## See it work
@@ -209,9 +221,20 @@ whether the transformation meant what it claimed.
 
 </div>
 
-Each built layer is exercised by a command — `refal run` (L0), `refal reflect`
-(L1), `refal compile` (L2) — and each partial layer names its own gap. The full
-capability-by-capability table is under [What works today](#what-works-today).
+Every layer is exercised by a command, and every command is backed by a gate. The
+green rows are built; the amber rows name their own gap.
+
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/commands-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/commands-light.svg">
+  <img alt="Nine commands, one per layer capability: run and check for L0; reflect for L1; compile and metasystem for L2; prove for L3; and invert, project2 and differential for L4." src="docs/images/commands-light.svg" width="100%">
+</picture>
+
+</div>
+
+The full capability-by-capability table is under [What works today](#what-works-today).
 
 ## The metasystem transition, demonstrated
 
@@ -299,6 +322,19 @@ generated programs. Most mainstream languages can process that data, but they ma
 you build the matching, traversal and rewriting machinery by hand. Refal puts those
 operations at the centre of the language.
 
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/audience-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/audience-light.svg">
+  <img alt="Four readers: compiler engineers get rewrite rules instead of hand-written walkers; language researchers get an implemented model; AI developers get a deterministic symbolic layer; application developers get declarative rules." src="docs/images/audience-light.svg" width="100%">
+</picture>
+
+</div>
+
+<details>
+<summary><b>What each reader gets</b>, in one line each</summary>
+
 | For | What you get |
 |---|---|
 | **Compiler & tooling engineers** | source-to-source transformations, normalisation passes, interpreters and optimisers expressed directly as rewrite rules |
@@ -306,9 +342,7 @@ operations at the centre of the language.
 | **AI & automation developers** | a deterministic symbolic layer around probabilistic systems — parsing model outputs, validating tool-call structures, rewriting plans, checking rule-based constraints |
 | **Application developers** | DSLs, templates, workflows and business rules described declaratively instead of buried in ad hoc string manipulation |
 
-Neural models are powerful at generation and pattern discovery. Production systems
-still need exact, inspectable, auditable transformations. This is a tool for that
-part of the problem.
+</details>
 
 ## What works today
 
@@ -519,6 +553,23 @@ different artifact class, with no completion criterion.
 
 ## Architecture
 
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/architecture-light.svg">
+  <img alt="Six crates in one dependency spine: refal-ast, refal-syntax, refal-semantics, refal-runtime, refal-core and refal-cli. examples/compiler.ref is the artifact under test." src="docs/images/architecture-light.svg" width="100%">
+</picture>
+
+</div>
+
+**The compiler in Refal lives in `examples/compiler.ref`**, not in a crate, because
+it is the artifact under test: the Rust crates are the bootstrap and the
+differential oracle, and the Refal sources are what compile themselves.
+
+<details>
+<summary><b>Crate by crate</b></summary>
+
 | Crate | Responsibility |
 |---|---|
 | `refal-ast` | AST node types and Refal-5 name-equivalence helpers, each citing its spec clause |
@@ -528,22 +579,15 @@ different artifact class, with no completion criterion.
 | `refal-core` | The graph of states, driving, cleaning, generalization, residualization |
 | `refal-cli` | The command surface — one mode per layer capability |
 
-**The compiler in Refal lives in `examples/compiler.ref`**, not in a crate, because
-it is the artifact under test: the Rust crates are the bootstrap and the
-differential oracle, and the Refal sources are what compile themselves.
+</details>
 
 ## Building
 
 **Prerequisites:** a stable Rust toolchain — install via [rustup](https://rustup.rs/).
 Nothing else. The repository is **100% Rust**: the compiler, the corpus, and the
 tooling that draws the README's diagrams and measures its figures are all Rust, so
-there is one toolchain from the front door to the back.
-
-```sh
-git clone https://github.com/Abhinav-Rust/REFAL-SUPERSYSTEM.git
-cd REFAL-SUPERSYSTEM
-cargo build
-```
+there is one toolchain from the front door to the back. The [Start here](#start-here)
+panel above is the three commands that get you to a compiled program.
 
 Run the test suite, or the full local gate CI uses:
 
@@ -777,6 +821,121 @@ that shrinks. `--certificate` prints the machine-checkable certificate and
 verifies it. The `unproven` set is the honest measure of what is left, and it is
 published. See [`VERIFICATION-CONTRACT.md`](docs/VERIFICATION-CONTRACT.md).
 
+## Frequently asked questions
+
+<details>
+<summary><b>What is Refal?</b></summary>
+
+Refal — *Recursive Functions Algorithmic Language* — is a functional language
+built around **pattern matching and term rewriting**, created by **Valentin F.
+Turchin** in 1968. A Refal program is a set of rewrite rules over symbolic
+expressions, so the same machinery that evaluates a program can also transform
+one: Refal is a *metacomputation* language, and programs are ordinary data.
+</details>
+
+<details>
+<summary><b>What is supercompilation?</b></summary>
+
+**Supercompilation** is Turchin's program-transformation method: a configuration
+is *driven* — symbolically evaluated — into a **graph of states**, the graph is
+cleaned and generalised, and a residual program is emitted from it. It subsumes
+partial evaluation, deforestation and many loop optimisations, and it is the
+engine of this repository's compiler.
+</details>
+
+<details>
+<summary><b>Who was Valentin Turchin?</b></summary>
+
+**Valentin F. Turchin** (1931–2010) was a Soviet-American physicist, computer
+scientist and philosopher. He created Refal and supercompilation, wrote *The
+Phenomenon of Science*, and founded the **Principia Cybernetica Project**. This
+repository is a reading of his four-layer *Supersystem of Language Refal* (1991).
+</details>
+
+<details>
+<summary><b>What is this repository, in one sentence?</b></summary>
+
+**REFAL-SUPERSYSTEM** is a Rust implementation of Turchin's four-layer supersystem:
+one reflective engine providing a **Refal-5 machine**, a **reflection engine**, a
+**supercompiler core** and a **meta-prover**, with a **self-hosting Refal-5
+compiler** that compiles its own source.
+</details>
+
+<details>
+<summary><b>Does the compiler really compile itself?</b></summary>
+
+Yes, and the fixpoint is checked: compiling the compiler's own source, then
+compiling the output again, gives **byte-identical** files (`C1 = C2 = C3`). It is
+a *supercompilation*, not a re-print — the output's `Go` is a compile-time
+dispatch the driver discovered.
+</details>
+
+<details>
+<summary><b>What is the metasystem transition?</b></summary>
+
+The moment an interpreter is driven over a program and what comes out is not a
+trace but a **specialised residual program** — a new level of control. Turchin
+called this a **metasystem transition**; the repository demonstrates it with
+`refal metasystem`, which refuses to report success unless the residue is checked
+Refal, agrees with the interpreter, and is measurably cheaper.
+</details>
+
+<details>
+<summary><b>What are the Futamura projections?</b></summary>
+
+Three ways to specialise a program by its arguments: specialising an **interpreter**
+to a program yields a **target program** (1st); specialising the **supercompiler**
+to an interpreter yields a **compiler** (2nd); specialising it to itself yields a
+**compiler generator** (3rd). The 1st is built and gated here; the 2nd emits an
+artifact; the 3rd is the open item.
+</details>
+
+<details>
+<summary><b>How does this relate to partial evaluation and metacomputation?</b></summary>
+
+**Partial evaluation** and **metacomputation** are the modern names for the same
+family of techniques. Supercompilation is a partial evaluator that can generalise,
+so it also handles divergence, deforestation and loop fusion that a straightforward
+partial evaluator cannot.
+</details>
+
+<details>
+<summary><b>Why Rust?</b></summary>
+
+For one toolchain, from the front door to the back: the compiler, the corpus and
+the tooling that draws the README's diagrams are all Rust. Rust's ownership model
+also makes the machine's shared-arena representation of a Refal expression
+(a variable binds a *range* of a shared view field, not a copy) cheap to express
+without garbage collection.
+</details>
+
+<details>
+<summary><b>Is it usable today?</b></summary>
+
+The **compiler is finished and gated**; the *supersystem* is being completed and
+is at about **91.5%**. `refal compile`, `refal run`, `refal check`, `refal reflect`,
+`refal prove`, `refal invert` and `refal project2` all work and are exercised by
+tests. What remains is named row by row in
+[What is left](#what-is-left).
+</details>
+
+<details>
+<summary><b>How does this differ from other Refal implementations?</b></summary>
+
+Most Refal implementations are **interpreters or conventional compilers**. This one
+is built the way Turchin's 1980 monograph sets it out — compilation *is* driving a
+configuration into a graph of states — and it carries a **Tier 1 verifier**, a
+**meta-prover** and **function inversion** on the same engine. It is measured
+against Turchin's own papers, not against another implementation.
+</details>
+
+<details>
+<summary><b>How do I cite it?</b></summary>
+
+See [`CITATION.cff`](CITATION.cff). A `CITATION.cff` file lets GitHub render a
+**"Cite this repository"** button and feeds citation managers and Google Scholar.
+</details>
+
 ## Reporting rules
 
 Every status claim in this repository must be backed by a test. No milestone is
@@ -803,6 +962,7 @@ and a new workstream carries zero credit until a gate behind it is green.
 | [RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md) | Release gates, supported scope, compatibility guarantees |
 | [REFAL-FIRST-COMPLETION.md](docs/REFAL-FIRST-COMPLETION.md) | Self-hosting completion contract and scorecard |
 | [CLEANROOM.md](docs/CLEANROOM.md) | Clean-room authorship policy |
+| [SEO.md](docs/SEO.md) | Discoverability: the keyword map, the tactics, and what is deliberately not done |
 | [CHANGELOG.md](CHANGELOG.md) | What has changed, release by release |
 | [crates/xtask](crates/xtask) | The repository's tooling, in Rust: regenerates the theme-aware SVG diagrams (each emitted as a light/dark pair from one description, so the two themes cannot drift), and carries the corpus sweep, the profiler, the performance suite, packaging and the source fetch. Run as `cargo xtask <task>` |
 
