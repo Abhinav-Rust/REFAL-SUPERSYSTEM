@@ -58,10 +58,21 @@ course of action I recommend.** The Chief Architect's convention for this repo:
   would have to move with it.
 - **The partition is ported to `compiler.ref`** (2026-10-10) as
   `RESIDUALIZE-DRIVEN-PATTERN` (+ `-COMPILATIVE`/`-INTERPRETIVE`), byte-identical
-  to `--split pattern` on the 4 examples it covers. **The partition rides in the
-  strategy character** (lowercase = pattern), so the driver state's 14 fields and
-  the default `'C'`/`'I'` path are untouched — do not thread a 15th field. Not
-  ported yet: the **complement branch** and the `pattern_splits` registry.
+  to `--split pattern` on **75 of the 77** corpus examples. **The partition rides
+  in the strategy character** (lowercase = pattern), so the driver state's 14
+  fields and the default `'C'`/`'I'` path are untouched — do not thread a 15th
+  field. The complement branch is ported; not ported yet: the `pattern_splits`
+  registry (needed for `equiv-append-assoc`, `equiv-append-right-id`).
+- **NEVER compare terms with the derived `==` in the driver** (2026-10-10):
+  `CoreTerm`'s `PartialEq` includes the source `span`, so `previous != slice`
+  silently failed a repeated-variable match and `Pair { s.A s.a = ...; }` called
+  as `<Pair 'q' 'q'>` folded to the *next* sentence — **a wrong program**. Fixed
+  in `match_ground_pattern` and twice in `match_at`; use
+  `same_term_sequence`/`term_sequences_same_kind`. Gate:
+  `a_repeated_variable_matches_by_value_not_by_source_position`.
+- **The compiler's own output is 111,600 bytes** (`refal compile
+  examples/compiler.ref`), up from 102,436 — the old figure came from that
+  mis-fold. Any published byte figure must be re-measured after a driver change.
 - **A block sentence carrying a condition now runs on the work list** (2026-10-10,
   runtime row closed). `ConditionEval` carries a `ConditionOwner` (`Function` or
   `Block`) so a failing chain continues into the right next sentence;

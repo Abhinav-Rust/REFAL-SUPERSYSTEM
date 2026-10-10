@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+**The complement branch is ported — and it found a soundness defect in the Rust
+driver.**
+
+- **The complement, in Refal.** A sentence whose component at the split position
+  is a bare variable names no shape, so its branch *is* the configuration and
+  cannot be driven; it is the complement of the shapes the other sentences
+  demand, so it is **emitted** with the sentence's own result as its body and the
+  callee is eliminated. Declines as the Rust does: a conditional sentence, a
+  leading pattern term naming a variable, or every sentence bare. Port coverage
+  **52 → 69 of 77**.
+- **A soundness defect, found by the differential.** `match_ground_pattern`
+  compared a repeated variable's binding with `CoreTerm`'s derived equality,
+  which includes the source `span`, so `Pair { s.A s.a = ...; }` called as
+  `<Pair 'q' 'q'>` folded to the *next* sentence — the source printed `folded` and
+  the residue printed `did-not-fold`. **A wrong program, on the default path.**
+  The symbolic matcher (`match_at`) had the same defect at two more sites. All
+  three now use `same_term_sequence` / `term_sequences_same_kind`, which ignore
+  spans. The Refal side was already correct, so the two now agree.
+- **The compiler's own output moves 102,436 → 111,600 bytes** — the old figure was
+  the size of a residue produced by the mis-fold. Updated in the README, the
+  generated `demonstrations` panel, and the hand-committed `fixpoint` panel.
+- **Coverage after both changes: 75 of 77.** The two that remain
+  (`equiv-append-assoc`, `equiv-append-right-id`) need the `pattern_splits`
+  registry.
+- **The figure does not move** — the compiler row withholds credit for speed on
+  very large inputs and for a fixpoint over arbitrary programs, and neither
+  changed.
+
 **The constructor-entering partition is ported into the Refal-authored driver —
 and it is a differential.**
 

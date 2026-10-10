@@ -68,7 +68,7 @@ mock-up. (`refal` below is `cargo run -p refal --`, or the built
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/demonstrations-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/demonstrations-light.svg">
-  <img alt="Four result cards: the self-hosting fixpoint at 102,436 bytes, the metasystem transition at 172 to 4 steps, the strict checker catching a proven defect, and the meta-prover proving associativity" src="docs/images/demonstrations-light.svg" width="100%">
+  <img alt="Four result cards: the self-hosting fixpoint at 111,600 bytes, the metasystem transition at 172 to 4 steps, the strict checker catching a proven defect, and the meta-prover proving associativity" src="docs/images/demonstrations-light.svg" width="100%">
 </picture>
 
 </div>
@@ -81,7 +81,7 @@ compiled again, and the two generations compared byte for byte:
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/fixpoint-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/fixpoint-light.svg">
-  <img alt="The compiler's own source is compiled to gen1.ref, then compiled again to gen2.ref; the two are identical byte for byte at 102,436 bytes." src="docs/images/fixpoint-light.svg" width="100%">
+  <img alt="The compiler's own source is compiled to gen1.ref, then compiled again to gen2.ref; the two are identical byte for byte at 111,600 bytes." src="docs/images/fixpoint-light.svg" width="100%">
 </picture>
 
 </div>
@@ -98,7 +98,7 @@ $ cmp gen1.ref gen2.ref && echo "fixpoint: gen1 == gen2, byte for byte"
 fixpoint: gen1 == gen2, byte for byte
 ```
 
-Both generations are **102,436 bytes**, identical. And this is a *supercompilation*,
+Both generations are **111,600 bytes**, identical. And this is a *supercompilation*,
 not a re-print: `Go` in the output is `<Split1 e.Input>`, and `Split1` is the
 compile-time dispatch over the token stream that the driver discovered.
 
@@ -552,20 +552,31 @@ The ordered work list lives in
    driving the forward definition against a known output (Glück & Turchin, ISSAC
    '90): `refal invert` emits the inverse as a checked program whose patterns are
    the forward function's outputs, and the gate round-trips the emitted inverse.
-4. ~~**The partition that can enter a constructor (E-11)**~~ — **built, and the
-   compiler-side defect it exposed is closed.** `SplitStrategy::Pattern`
-   partitions a configuration component by the *callee's own sentence patterns*,
-   and it now carries the **negative** half of the partition as well: a sentence
-   whose component at the split position is a bare variable names no shape, but it
-   is exactly the complement of the shapes the other sentences demand, so it is
-   emitted as the ordered catch-all — `e.X ≠ ('A')` — and the callee is
-   **eliminated** rather than left residual. The **non-tail-recursion** half is
-   closed too: a kind-blind homeomorphic embedding treated a `s.` variable as
-   embedding into a bracket, so the partition's two disjoint branches looked like
-   growth of each other and the whistle fired — fixed in both implementations, and
-   the compiler's own compiled output shrank from 105,078 to **102,436 bytes**.
-   Still open: **nested accumulators**, which need an explicit two-level stack
-   configuration.
+4. ~~**The partition that can enter a constructor (E-11)**~~ — **built, ported to
+   the Refal-authored driver, and the matcher defect it exposed is closed.**
+   `SplitStrategy::Pattern` partitions a configuration component by the *callee's
+   own sentence patterns*, and it carries the **negative** half of the partition
+   as well: a sentence whose component at the split position is a bare variable
+   names no shape, but it is exactly the complement of the shapes the other
+   sentences demand, so it is emitted as the ordered catch-all — `e.X ≠ ('A')` —
+   and the callee is **eliminated** rather than left residual. The
+   **non-tail-recursion** half is closed too: a kind-blind homeomorphic embedding
+   treated a `s.` variable as embedding into a bracket, so the partition's two
+   disjoint branches looked like growth of each other and the whistle fired —
+   fixed in both implementations. **The nested accumulator folds** under
+   `--split pattern` — residual-work 37 → 9, `Rev` eliminated — reached by
+   *entering the constructor* rather than by the explicit two-level stack
+   configuration the row expected. And the partition is **no longer Rust-only**:
+   it is ported to `examples/compiler.ref` as `RESIDUALIZE-DRIVEN-PATTERN`, where
+   the two drivers agree byte for byte on **75 of the 77** corpus examples.
+   Porting it found and closed a **soundness defect in the Rust driver**: a
+   repeated variable was compared with `CoreTerm`'s derived equality, which
+   includes the source span, so `Pair { s.A s.a = ...; }` called as
+   `<Pair 'q' 'q'>` folded to the *next* sentence — a wrong program, not a slow
+   one. With it fixed the compiler's own output is **111,600 bytes**, up from
+   102,436: the old figure was produced by that mis-fold. Still open: the
+   `pattern_splits` registry, and then making the constructor-entering partition
+   the compiler's **default**.
 5. **The projections as artifacts (E-14)** — the self-application now **emits a
    working compiler** and is gated by *running* it on the corpus; `refal project2`
    exists and the partition it needed is built, but its artifact is the *driven

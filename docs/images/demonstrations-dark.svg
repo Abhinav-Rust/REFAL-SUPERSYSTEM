@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 504" width="1200" height="504" role="img" aria-labelledby="t d">
   <title id="t">See it work</title>
-  <desc id="d">Four result cards: the self-hosting fixpoint at 102,436 bytes, the metasystem transition at 172 to 4 steps, the strict checker catching a proven defect, and the meta-prover proving associativity.</desc>
+  <desc id="d">Four result cards: the self-hosting fixpoint at 111,600 bytes, the metasystem transition at 172 to 4 steps, the strict checker catching a proven defect, and the meta-prover proving associativity.</desc>
   <rect x="0.5" y="0.5" width="1199" height="503" rx="16" fill="#0D1117" stroke="#30363D" stroke-width="1"/>
   <text x="40" y="52" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="3.2" fill="#0F766E">SEE IT WORK</text>
   <text x="40" y="90" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="-0.3" fill="#E6EDF3">Four results — each one a command in this checkout</text>
@@ -8,7 +8,7 @@
   <rect x="40" y="140" width="540" height="142" rx="14" fill="#0B1B19" stroke="#134E4A" stroke-width="1.5"/>
   <rect x="40" y="140" width="4" height="142" rx="2" fill="#2DD4BF"/>
   <text x="64" y="168" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="600" letter-spacing="1.6" fill="#2DD4BF">SELF-HOSTING FIXPOINT</text>
-  <text x="64" y="204" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="24" font-weight="600" fill="#E6EDF3">102,436 bytes</text>
+  <text x="64" y="204" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="24" font-weight="600" fill="#E6EDF3">111,600 bytes</text>
   <text x="64" y="228" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#8B949E">gen1 == gen2, byte for byte</text>
   <text x="64" y="250" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#8B949E">The compiler compiles its own source, and compiling the</text>
   <text x="64" y="265" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#8B949E">result again changes nothing at all.</text>

@@ -2629,8 +2629,13 @@ fn match_shape_pattern(
                 let mut saw_unknown = false;
                 for end in (input_index..=input.len()).rev() {
                     let slice = input[input_index..end].to_vec();
+                    // Compared by **kind**, not by the derived equality: a
+                    // `CoreTerm`'s `PartialEq` includes its source span, so `==`
+                    // reports two occurrences of the same subterm as different
+                    // and a repeated variable never matches. See
+                    // `match_ground_pattern`, which carried the same defect.
                     if let Some(previous) = bindings.get(&key)
-                        && previous != &slice
+                        && !term_sequences_same_kind(previous, &slice)
                     {
                         continue;
                     }
@@ -2660,7 +2665,7 @@ fn match_shape_pattern(
                 None => return (SymbolicMatch::Unknown, None),
             }
             if let Some(previous) = bindings.get(&key)
-                && previous != &vec![input_term.clone()]
+                && !term_sequences_same_kind(previous, std::slice::from_ref(input_term))
             {
                 return (SymbolicMatch::No, None);
             }
@@ -2991,7 +2996,16 @@ fn match_ground_pattern(
                     continue;
                 }
                 if let Some(previous) = bindings.get(&key) {
-                    if previous != slice {
+                    // A repeated variable constrains the two positions to the
+                    // same *value*, and `CoreTerm`'s derived equality compares
+                    // its `span` as well -- so two occurrences of the same
+                    // symbol written in different places compared unequal and
+                    // the repeated variable never matched. `F { s.A s.a = ...; }`
+                    // called as `<F 'q' 'q'>` therefore folded to the *next*
+                    // sentence: a wrong program, not a slow one. Every
+                    // structural comparison in this crate goes through
+                    // `same_term_sequence` for exactly this reason.
+                    if !same_term_sequence(previous, slice) {
                         continue;
                     }
                     if match_from(pattern, input, pattern_index + 1, end, bindings) {

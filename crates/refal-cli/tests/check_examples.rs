@@ -7671,17 +7671,17 @@ fn the_pattern_partition_folds_a_nested_accumulator() {
 /// callee's own patterns, and the identification of a split by the **sentences
 /// it emits**, which is what lets a recurrence inside a branch reuse `Split1`
 /// instead of making a second split — the mechanism that folds the accumulator.
-/// Not ported: the **complement branch** (reached only where a sentence's
-/// component at the split position is a bare variable) and the `pattern_splits`
-/// registry keyed by canonical input as well as by sentences. Measured
-/// 2026-10-10: **52 of 77 examples agree exactly**. The gate is therefore a
-/// **non-regression** one — the witness must fold and the count must not fall —
-/// because demanding agreement everywhere would demand the two unported halves.
+/// Not ported: the `pattern_splits` registry keyed by canonical input as well as
+/// by sentences. Measured 2026-10-10, after the complement landed: **75 of 77
+/// examples agree exactly**; `equiv-append-assoc` and `equiv-append-right-id` are
+/// the two the registry is needed for. The gate is therefore a **non-regression**
+/// one — the witness must fold and the count must not fall — because demanding
+/// agreement everywhere would demand that last half.
 #[test]
 fn the_pattern_partition_is_ported_to_the_refal_authored_driver() {
     /// The measurement this gate pins. Re-derive it, do not lower it, when the
     /// port grows: see `docs/PROGRESS.md`.
-    const AGREED_ON_2026_10_10: usize = 52;
+    const AGREED_ON_2026_10_10: usize = 75;
 
     let mut names: Vec<String> = fs::read_dir(workspace_path("examples"))
         .expect("read the examples directory")
@@ -7733,6 +7733,61 @@ fn the_pattern_partition_is_ported_to_the_refal_authored_driver() {
         "the port lost coverage: {} agreed, {AGREED_ON_2026_10_10} did before\n\
          matched: {matched:?}\ndiverged: {diverged:?}",
         matched.len()
+    );
+}
+
+/// A repeated variable constrains two positions to the same **value** — and the
+/// ground matcher compared its bindings with `CoreTerm`'s derived equality,
+/// which includes the source `span`.
+///
+/// Two occurrences of the same symbol written in different places therefore
+/// compared unequal, the repeated variable never matched, and the driver folded
+/// the call to the **next sentence**: a wrong program, not a slow one.
+/// `<Pair 'q' 'q'>` is the witness — the source prints `folded`, and the residue
+/// printed `did-not-fold`. The same defect sat in the symbolic matcher
+/// (`match_at`) at two more sites, where it changed the compiler's own residue.
+/// Every structural comparison now goes through `same_term_sequence` /
+/// `term_sequences_same_kind`, which ignore spans — the trap `same_term_kind`
+/// was written for.
+///
+/// The residue must still agree with its source: the *unequal* pair must keep
+/// falling through to the catch-all.
+#[test]
+fn a_repeated_variable_matches_by_value_not_by_source_position() {
+    let source = "$EXTERN Prout;\n\
+                  $ENTRY Go { = <Pair 'q' 'q'> <Pair 'q' 'r'>; }\n\
+                  Pair { s.A s.a = <Prout 'folded'>; e.Other = <Prout 'did-not-fold'>; }\n";
+    let residue = compile_residue("refal-repeated-variable", source);
+
+    assert!(
+        residue.contains("'f' 'o' 'l' 'd' 'e' 'd'"),
+        "the equal pair folds to the repeated-variable sentence:\n{residue}"
+    );
+    assert!(
+        residue.contains("'d' 'i' 'd' '-' 'n' 'o' 't'"),
+        "the unequal pair still falls through to the catch-all:\n{residue}"
+    );
+
+    // The fold must not change what the program does.
+    let source_path = scratch_source("refal-repeated-variable-src", source);
+    let residue_path = scratch_source("refal-repeated-variable-res", &residue);
+    let from_source = Command::new(refal_bin())
+        .args(["run"])
+        .arg(&source_path)
+        .output()
+        .expect("run the source");
+    let from_residue = Command::new(refal_bin())
+        .args(["run"])
+        .arg(&residue_path)
+        .output()
+        .expect("run the residue");
+    assert_eq!(
+        from_source.stdout, from_residue.stdout,
+        "the residue must agree with its source"
+    );
+    assert!(
+        !from_source.stdout.is_empty(),
+        "the program prints, so the comparison is not vacuous"
     );
 }
 

@@ -3689,26 +3689,111 @@ DsPatTarget {
 * pattern is shorter than the position declines the whole partition, which is
 * the Rust implementation's `return Ok(None)` for the same case.
 DsPatCollect {
-  (e.Ctx) (e.Fn) (e.In) s.P () (e.Branches) = <DsPatGo (e.Ctx) (e.Fn) (e.In) s.P (e.Branches)>;
+  (e.Ctx) (e.Fn) (e.In) s.P () (e.Entries) = <DsPatGo (e.Ctx) (e.Fn) (e.In) (e.Entries)>;
   (e.Ctx) (e.Fn) (e.In) s.P
-  ((ST s.Id (e.N) s.J (SENT (e.Pat) (e.C) (e.R))) e.Rest) (e.Branches),
+  ((ST s.Id (e.N) s.J (SENT (e.Pat) (e.C) (e.R))) e.Rest) (e.Entries),
     <SameChars (<Upper e.N>) (<Upper e.Fn>)> : '1' =
-      <DsPatAdd (e.Ctx) (e.Fn) (e.In) s.P (e.Rest) (e.Branches) (e.Pat)>;
-  (e.Ctx) (e.Fn) (e.In) s.P (t.S e.Rest) (e.Branches) =
-    <DsPatCollect (e.Ctx) (e.Fn) (e.In) s.P (e.Rest) (e.Branches)>;
+      <DsPatAdd (e.Ctx) (e.Fn) (e.In) s.P (e.Rest) (e.Entries) (e.Pat) (e.C) (e.R)>;
+  (e.Ctx) (e.Fn) (e.In) s.P (t.S e.Rest) (e.Entries) =
+    <DsPatCollect (e.Ctx) (e.Fn) (e.In) s.P (e.Rest) (e.Entries)>;
 }
 
 DsPatAdd {
-  (e.Ctx) (e.Fn) (e.In) s.P (e.Rest) (e.Branches) (e.Pat) =
-    <DsPatAdd2 (e.Ctx) (e.Fn) (e.In) s.P (e.Rest) (e.Branches)
-      <DsPatBranch (e.In) s.P (e.Pat)>>;
+  (e.Ctx) (e.Fn) (e.In) s.P (e.Rest) (e.Entries) (e.Pat) (e.C) (e.R) =
+    <DsPatAdd2 (e.Ctx) (e.Fn) (e.In) s.P (e.Rest) (e.Entries)
+      <DsPatEntry (e.In) s.P (e.Pat) (e.C) (e.R)>>;
 }
 
 DsPatAdd2 {
-  (e.Ctx) (e.Fn) (e.In) s.P (e.Rest) (e.Branches) (OK (e.Branch)) =
+  (e.Ctx) (e.Fn) (e.In) s.P (e.Rest) (e.Entries) (OK (e.Branch) (e.Comp)) =
     <DsPatCollect (e.Ctx) (e.Fn) (e.In) s.P (e.Rest)
-      <DsPatPush (e.Branches) (e.Branch)>>;
-  (e.Ctx) (e.Fn) (e.In) s.P (e.Rest) (e.Branches) (SHORT) = (NONE (e.Ctx));
+      <DsPatPush (e.Entries) (e.Branch) (e.Comp)>>;
+  (e.Ctx) (e.Fn) (e.In) s.P (e.Rest) (e.Entries) (SHORT) = (NONE (e.Ctx));
+  (e.Ctx) (e.Fn) (e.In) s.P (e.Rest) (e.Entries) (BARE) = (NONE (e.Ctx));
+}
+
+* One entry per distinct branch: the branch, and the **complement body** when
+* the sentence's component at the split position is a bare variable.
+DsPatEntry {
+  (e.In) s.P (e.Pat) (e.C) (e.R) =
+    <DsPatEntry2 (e.In) s.P (e.Pat) (e.C) (e.R) <DsPatAt (e.Pat) s.P>>;
+}
+
+DsPatEntry2 {
+  (e.In) s.P (e.Pat) (e.C) (e.R) (SOME (VAR 'e' e.N)),
+    <DsPatBareOk (e.Pat) s.P (e.C)> : '1' =
+      <DsPatEntry3 (e.In) s.P (e.Pat) (SOME (e.R))>;
+  (e.In) s.P (e.Pat) (e.C) (e.R) (SOME (VAR 't' e.N)),
+    <DsPatBareOk (e.Pat) s.P (e.C)> : '1' =
+      <DsPatEntry3 (e.In) s.P (e.Pat) (SOME (e.R))>;
+  (e.In) s.P (e.Pat) (e.C) (e.R) (SOME (VAR 'e' e.N)) = (BARE);
+  (e.In) s.P (e.Pat) (e.C) (e.R) (SOME (VAR 't' e.N)) = (BARE);
+  (e.In) s.P (e.Pat) (e.C) (e.R) (SOME t.X) = <DsPatEntry3 (e.In) s.P (e.Pat) (NONE)>;
+  (e.In) s.P (e.Pat) (e.C) (e.R) (NONE) = (SHORT);
+}
+
+DsPatEntry3 {
+  (e.In) s.P (e.Pat) (e.Comp) = <DsPatEntry4 <DsPatBranch (e.In) s.P (e.Pat)> (e.Comp)>;
+}
+
+DsPatEntry4 {
+  (OK (e.Branch)) (e.Comp) = (OK (e.Branch) (e.Comp));
+  (SHORT) (e.Comp) = (SHORT);
+}
+
+* The component of a pattern at the split position, or `(NONE)` when the pattern
+* is shorter than the position -- which declines the whole partition, as the
+* Rust implementation's `return Ok(None)` does for the same case.
+DsPatAt {
+  (e.Pat) 0 = <DsPatAt0 (e.Pat)>;
+  (t.T e.Rest) s.P = <DsPatAt (e.Rest) <Sub s.P 1>>;
+  (e.Pat) s.P = (NONE);
+}
+
+DsPatAt0 {
+  (t.C e.Rest) = (SOME t.C);
+  () = (NONE);
+}
+
+* A complement branch's body is the sentence's own result, and that result may
+* name variables bound by the callee's pattern *before* the split position --
+* which this branch does not bind. Only a position whose leading pattern terms
+* are variable-free is safe. A conditional sentence is refused for the same
+* reason: a branch carrying no conditions cannot reproduce its fall-through.
+DsPatBareOk {
+  (e.Pat) s.P (e.C), <Compare <DsLen (e.C)> 0> : '0' = <DsNoLeadVar (e.Pat) s.P>;
+  (e.Pat) s.P (e.C) = ;
+}
+
+DsNoLeadVar {
+  (e.Pat) 0 = '1';
+  (t.T e.Rest) s.P, <DsTermHasVar t.T> : '1' = ;
+  (t.T e.Rest) s.P = <DsNoLeadVar (e.Rest) <Sub s.P 1>>;
+  (e.Pat) s.P = '1';
+}
+
+* Whether a term names a variable anywhere inside it, mirroring
+* `term_has_variable`.
+DsTermHasVar {
+  (VAR s.K e.N) = '1';
+  (BR e.X), <DsAnyVar (e.X)> : '1' = '1';
+  (CALL (ID e.N) e.Args), <DsAnyVar (e.Args)> : '1' = '1';
+  (BLK (e.Arg) e.Sents), <DsAnyVar (e.Arg)> : '1' = '1';
+  (BLK (e.Arg) e.Sents), <DsSentsVar (e.Sents)> : '1' = '1';
+  t.T = ;
+}
+
+DsAnyVar {
+  () = ;
+  (t.T e.Rest), <DsTermHasVar t.T> : '1' = '1';
+  (t.T e.Rest) = <DsAnyVar (e.Rest)>;
+}
+
+DsSentsVar {
+  () = ;
+  ((SENT (e.P) (e.C) (e.R)) e.Rest), <DsAnyVar (e.P)> : '1' = '1';
+  ((SENT (e.P) (e.C) (e.R)) e.Rest), <DsAnyVar (e.R)> : '1' = '1';
+  (t.S e.Rest) = <DsSentsVar (e.Rest)>;
 }
 
 * `input[..s.P]` followed by `pattern[s.P..]`.
@@ -3723,15 +3808,15 @@ DsPatBranchL {
     <DsPatBranchL (e.Rest) <Sub s.P 1> (e.Acc t.T) (e.Ps)>;
 }
 
-* One branch per distinct shape, as `term_sequences_same_kind` decides it.
+* One entry per distinct shape, as `term_sequences_same_kind` decides it.
 DsPatPush {
-  (e.Branches) (e.Branch), <DsPatHas (e.Branches) (e.Branch)> : '1' = (e.Branches);
-  (e.Branches) (e.Branch) = (e.Branches (e.Branch));
+  (e.Entries) (e.Branch) (e.Comp), <DsPatHas (e.Entries) (e.Branch)> : '1' = (e.Entries);
+  (e.Entries) (e.Branch) (e.Comp) = (e.Entries ((e.Branch) (e.Comp)));
 }
 
 DsPatHas {
   () (e.Branch) = ;
-  ((e.B) e.Rest) (e.Branch), <DsSameKind (e.B) (e.Branch)> : '1' = '1';
+  (((e.B) (e.C)) e.Rest) (e.Branch), <DsSameKind (e.B) (e.Branch)> : '1' = '1';
   (t.S e.Rest) (e.Branch) = <DsPatHas (e.Rest) (e.Branch)>;
 }
 
@@ -3757,14 +3842,23 @@ DsSameTerm {
 }
 
 DsPatGo {
-  (e.Ctx) (e.Fn) (e.In) s.P () = (NONE (e.Ctx));
-  (e.Ctx) (e.Fn) (e.In) s.P (e.Branches),
-    <DsPatFindSent (e.Ctx) (e.Branches)> : (SOME (e.Name)) =
+  (e.Ctx) (e.Fn) (e.In) () = (NONE (e.Ctx));
+* Nothing to be the complement *of*: with every sentence a bare variable the
+* partition would only rename the call, which is the case the decline covers.
+  (e.Ctx) (e.Fn) (e.In) (e.Entries), <DsPatAllBare (e.Entries)> : '1' = (NONE (e.Ctx));
+  (e.Ctx) (e.Fn) (e.In) (e.Entries),
+    <DsPatFindSent (e.Ctx) (e.Entries)> : (SOME (e.Name)) =
       (SOME <DsCallSeq (e.Name) (e.In)> (e.Ctx));
-  (e.Ctx) (e.Fn) (e.In) s.P (e.Branches),
+  (e.Ctx) (e.Fn) (e.In) (e.Entries),
     <DsSplitCount (e.Ctx)> : s.N, <Compare s.N 16> : '-' =
-      <DsPatMake (e.Ctx) (e.Fn) (e.In) (e.Branches) <Add s.N 1>>;
-  (e.Ctx) (e.Fn) (e.In) s.P (e.Branches) = (NONE (e.Ctx));
+      <DsPatMake (e.Ctx) (e.Fn) (e.In) (e.Entries) <Add s.N 1>>;
+  (e.Ctx) (e.Fn) (e.In) (e.Entries) = (NONE (e.Ctx));
+}
+
+DsPatAllBare {
+  () = '1';
+  (((e.B) (SOME (e.R))) e.Rest) = <DsPatAllBare (e.Rest)>;
+  (t.S e.Rest) = ;
 }
 
 * A split is identified by the **sentences it emits**, not by the configuration
@@ -3773,14 +3867,14 @@ DsPatGo {
 * which is what makes the recursion fold. `DsSetSents` already stores the
 * emitted sentences, so the test reads them there.
 DsPatFindSent {
-  (e.Ctx) (e.Branches) = <DsPatFindSentL <DsSplits (e.Ctx)> (e.Branches)>;
+  (e.Ctx) (e.Entries) = <DsPatFindSentL <DsSplits (e.Ctx)> (e.Entries)>;
 }
 
 DsPatFindSentL {
-  () (e.Branches) = (NONE);
-  ((SP (e.Name) (e.F) (e.Can) (e.Sents)) e.Rest) (e.Branches),
-    <DsSentsMatch (e.Sents) (e.Branches)> : '1' = (SOME (e.Name));
-  (t.S e.Rest) (e.Branches) = <DsPatFindSentL (e.Rest) (e.Branches)>;
+  () (e.Entries) = (NONE);
+  ((SP (e.Name) (e.F) (e.Can) (e.Sents)) e.Rest) (e.Entries),
+    <DsSentsMatch (e.Sents) (e.Entries)> : '1' = (SOME (e.Name));
+  (t.S e.Rest) (e.Entries) = <DsPatFindSentL (e.Rest) (e.Entries)>;
 }
 
 * A split's fourth field is its **branches** until the drive finishes and
@@ -3788,23 +3882,49 @@ DsPatFindSentL {
 * a sentence's pattern is the branch it was built from.
 DsSentsMatch {
   () () = '1';
-  ((SENT (e.B) (e.C) (e.R)) e.R1) ((e.Br) e.R2), <DsSameKind (e.B) (e.Br)> : '1' =
-    <DsSentsMatch (e.R1) (e.R2)>;
-  ((e.B) e.R1) ((e.Br) e.R2), <DsSameKind (e.B) (e.Br)> : '1' =
-    <DsSentsMatch (e.R1) (e.R2)>;
+  ((SENT (e.B) (e.C) (e.R)) e.R1) (((e.Br) (e.C2)) e.R2),
+    <DsSameKind (e.B) (e.Br)> : '1' = <DsSentsMatch (e.R1) (e.R2)>;
+  (((e.B) (e.C)) e.R1) (((e.Br) (e.C2)) e.R2),
+    <DsSameKind (e.B) (e.Br)> : '1' = <DsSentsMatch (e.R1) (e.R2)>;
   (e.A) (e.B) = ;
 }
 
 DsPatMake {
-  (e.Ctx) (e.Fn) (e.In) (e.Branches) s.Index =
+  (e.Ctx) (e.Fn) (e.In) (e.Entries) s.Index =
     <DsPatMake2 <DsAddSplitWith (e.Ctx) (e.Fn) (<DsCanonical (e.In)>) (e.In) s.Index
-                  (e.Branches)>
-      (e.Fn) (e.In) s.Index (e.Branches)>;
+                  (e.Entries)>
+      (e.Fn) (e.In) s.Index (e.Entries)>;
 }
 
 DsPatMake2 {
-  (e.Ctx) (e.Fn) (e.In) s.Index (e.Branches) =
-    <DsSplitLoop (e.Ctx) (e.Fn) (e.In) s.Index (e.Branches) ()>;
+  (e.Ctx) (e.Fn) (e.In) s.Index (e.Entries) =
+    <DsPatLoop (e.Ctx) (e.Fn) (e.In) s.Index (e.Entries) ()>;
+}
+
+* A complement branch carries its body already, so it is **emitted** rather than
+* driven: driving it would re-enter the configuration it *is* and fold straight
+* back to the split. Every other branch is driven, and a branch no sentence
+* matches keeps a call to the original function, so the residue fails exactly
+* where the source fails instead of inventing an answer.
+DsPatLoop {
+  (e.Ctx) (e.Fn) (e.In) s.Index () (e.Acc) =
+    <DsSplitFinish (e.Ctx) s.Index (e.Acc) (e.In)>;
+  (e.Ctx) (e.Fn) (e.In) s.Index (((e.B) (SOME (e.R))) e.More) (e.Acc) =
+    <DsPatLoop (e.Ctx) (e.Fn) (e.In) s.Index (e.More) (e.Acc (SENT (e.B) () (e.R)))>;
+  (e.Ctx) (e.Fn) (e.In) s.Index (((e.B) (NONE)) e.More) (e.Acc) =
+    <DsPatOne <DsInvoke (e.Ctx) (e.Fn) (e.B)> (e.Fn) (e.In) s.Index (e.B) (e.More) (e.Acc)>;
+}
+
+DsPatOne {
+  (RED (e.Out) (e.Ctx)) (e.Fn) (e.In) s.Index (e.B) (e.More) (e.Acc) =
+    <DsPatLoop (e.Ctx) (e.Fn) (e.In) s.Index (e.More) (e.Acc (SENT (e.B) () (e.Out)))>;
+  (RES (e.Ctx)) (e.Fn) (e.In) s.Index (e.B) (e.More) (e.Acc) =
+    <DsPatLoop (e.Ctx) (e.Fn) (e.In) s.Index (e.More)
+      (e.Acc (SENT (e.B) () <DsCallSeq (e.Fn) (e.B)>))>;
+  (FAILS (e.Ctx)) (e.Fn) (e.In) s.Index (e.B) (e.More) (e.Acc) =
+    <DsPatLoop (e.Ctx) (e.Fn) (e.In) s.Index (e.More)
+      (e.Acc (SENT (e.B) () <DsCallSeq (e.Fn) (e.B)>))>;
+  (ERR) (e.Fn) (e.In) s.Index (e.B) (e.More) (e.Acc) = (ERR);
 }
 
 * Whether a name is one the driver generates for a case split: `Split` followed
