@@ -21,3 +21,18 @@ docs/images/*.svg text eol=lf
 # Test fixtures that must stay byte-exact.
 *.ref text eol=lf
 *.manifest text eol=lf
+
+# GitHub Linguist — the repository is Rust, and only Rust.
+#
+# The tooling, the crates and the build are Rust; nothing else here is a
+# programming language Linguist should count. The Refal corpus (`.ref`) is the
+# artifact the compiler is tested *against*, not a host language of this
+# repository, and it has no Linguist language of its own; the Markdown is
+# documentation; and the SVG diagram family is generated. Pinned explicitly so
+# the language bar is a property of this file rather than of Linguist's
+# heuristics — which is what stops a future asset from silently re-entering the
+# breakdown the way the removed `scripts/*.py` and `*.sh` once did.
+*.ref linguist-documentation
+*.md linguist-documentation
+*.manifest linguist-documentation
+docs/images/*.svg linguist-generated linguist-documentation

@@ -920,6 +920,94 @@ fn layerstack(p: &Palette) -> String {
 }
 
 // --------------------------------------------------------------------------
+// At a glance -- the whole project on one screen, for the first ten seconds
+// --------------------------------------------------------------------------
+fn glance(p: &Palette) -> String {
+    let h = 372.0;
+    let mut out = header(p, "AT A GLANCE", "The whole project on one screen", h);
+    // (eyebrow, value, sub, tone) -- the five facts that place the project.
+    let tiles: [(&str, &str, &str, &str); 5] = [
+        (
+            "LAYERS",
+            "4",
+            "L0 \u{2192} L4 over one shared expression space",
+            "a1",
+        ),
+        (
+            "COMPLETION",
+            "~91.5%",
+            "of the supersystem, one method, one table",
+            "part",
+        ),
+        (
+            "LANGUAGE",
+            "100%",
+            "Rust \u{2014} one toolchain, front to back",
+            "ok",
+        ),
+        (
+            "SELF-HOSTING",
+            "C1=C2=C3",
+            "byte-identical at 12,599 bytes",
+            "ok",
+        ),
+        (
+            "CONFORMANCE",
+            "19 / 25",
+            "ecosystem rows closed, in scope",
+            "part",
+        ),
+    ];
+    let (tw, gap, left, top, th) = (211.0_f64, 16.0_f64, 40.0_f64, 140.0_f64, 150.0_f64);
+    for (i, (eyebrow, value, sub, tone_key)) in tiles.iter().enumerate() {
+        let x = left + i as f64 * (tw + gap);
+        let accent = match *tone_key {
+            "ok" => p.ok,
+            "part" => p.part,
+            _ => p.a1,
+        };
+        out.push(rect(x, top, tw, th, p.cardbg, Some(p.cardbd), 14.0, 1.5));
+        out.push(rect(x, top, tw, 5.0, accent, None, 2.5, 0.0));
+        out.push(text(
+            x + 20.0,
+            top + 38.0,
+            eyebrow,
+            11.0,
+            p.a1,
+            Txt::ws("600", "2.0"),
+        ));
+        out.push(text(
+            x + 20.0,
+            top + 88.0,
+            value,
+            28.0,
+            p.ink,
+            Txt::w("700"),
+        ));
+        for (j, ln) in wrap_lines(sub, 26).iter().take(3).enumerate() {
+            out.push(t(
+                x + 20.0,
+                top + 112.0 + j as f64 * 16.0,
+                ln,
+                11.5,
+                p.muted,
+            ));
+        }
+    }
+    out.extend(footer(
+        p,
+        316.0,
+        "Every number here is a command you can run in this checkout \u{2014} nothing is a mock-up.",
+    ));
+    wrap(
+        h,
+        "At a glance",
+        "Five tiles: four layers over one shared expression space; about 91.5% of the supersystem complete by one method; 100% Rust; a byte-identical self-hosting fixpoint at 12,599 bytes; and 19 of 25 in-scope conformance rows closed.",
+        &out,
+    )
+}
+
+// --------------------------------------------------------------------------
 // See it work -- the four demonstrations as result cards
 // --------------------------------------------------------------------------
 fn demonstrations(p: &Palette) -> String {
@@ -1135,7 +1223,8 @@ pub fn run() {
         eprintln!("cannot create {}: {err}", outdir.display());
         std::process::exit(1);
     }
-    let diagrams: [Diagram; 8] = [
+    let diagrams: [Diagram; 9] = [
+        ("glance", glance),
         ("projections", projections),
         ("conformance", conformance),
         ("timeline", timeline),

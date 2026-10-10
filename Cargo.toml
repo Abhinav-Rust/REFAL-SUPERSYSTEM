@@ -15,7 +15,11 @@ version = "0.10.0"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/Abhinav-Rust/REFAL-SUPERSYSTEM"
+homepage = "https://github.com/Abhinav-Rust/REFAL-SUPERSYSTEM"
 authors = ["Abhinav"]
+description = "Valentin Turchin's four-layer Refal supersystem in Rust: a self-hosting Refal-5 compiler that drives (supercompilation over a graph of states), a reflection engine, and a meta-prover. Metacomputation, term rewriting, partial evaluation and the Futamura projections."
+keywords = ["refal", "supercompilation", "turchin", "metacomputation", "compiler"]
+categories = ["compilers", "development-tools"]
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
