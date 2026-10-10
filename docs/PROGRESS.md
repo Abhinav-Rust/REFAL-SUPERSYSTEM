@@ -48,7 +48,7 @@ See `README.md` §"What Theorem 5.1 does and does not forbid" and
 
 | | |
 |---|---|
-| Honest completion | **~91.7%** (supersystem completeness — one method, one table, in `README.md`) |
+| Honest completion | **~91.8%** (supersystem completeness — one method, one table, in `README.md`) |
 | Tests | 417 (73 core + 177 CLI integration + 167 across the other four crates), 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
@@ -71,6 +71,42 @@ Rust oracle at budgets 1, 2, 5 and 12. The T-4/T-6 differential
 corpus gate is green at `cases: 71`, `positive: 31`, `check-failure: 6`,
 `runtime-failure: 1`, `residual: 33`, `cleaned-sentences: 1`, and
 `clippy --all-targets -D warnings` and `cargo fmt --check` are clean.
+
+### Done — the file-backed I/O clauses are bound to a runnable fixture, and the conformance row closes (2026-10-10)
+
+**The premise that kept this open was half wrong.** The conformance/release row
+withheld 0.14 because the reference's file-backed input/output clauses (`c1.4`,
+`c1.6`, `c1.7`) were bound to `reads_and_writes_descriptor_backed_files` — a unit
+test — rather than to a fixture, on the reasoning that "a committed program cannot
+carry a path that is valid wherever the suite runs". An **absolute** path cannot,
+but a **relative** one is valid if the process's working directory is one the
+suite owns, and the harness can own it.
+
+**What changed.** `run_with_closed_stdin` now creates a fresh temporary working
+directory per fixture, sets it as the process's `current_dir`, and removes it
+afterwards — so a fixture that writes a file leaves nothing in the checkout, and
+the fixture path (absolute, via `workspace_path`) is unaffected.
+`examples/builtin-file-io-conformance.ref` then opens a file by a relative name
+and exercises `Put` (which returns its expression), `Putout` (which returns the
+empty expression) and `Get` on descriptors 7 and 8 — inside the reference's 1–19
+range, which is `c1.4`'s own statement. The manifest gains the fixture's `run` row
+and a `run` binding for each of the three clauses.
+
+**The unit rows stay, and why.** A fixture proves the builtin is *reachable from a
+program*; the runtime test can look at what a program cannot print — the exact
+bytes the file received (`fs::read_to_string` equals `"ok"`). The manifest's
+header now says so. Neither evidence is weaker than the other, so the clause
+carries both.
+
+**Gates.** `every_builtin_clause_has_a_traceable_fixture` is green; the fixture
+passes `check --strict` and `lower`; the harness leaves no stray
+`refal-file-io-conformance.tmp` and no `refal-fixture-*` directory behind
+(checked). The seven `refal_authored_*` corpus differentials, which scan
+`examples/*.ref`, are green with the new fixture in the corpus.
+
+**The figure moves `~91.7% → ~91.8%`** — again an *earning*: the row's withheld
+credit was for exactly this, and the gate behind it is green. The row's credit
+rises **2.66 → 2.80**, the table sums to **91.80**.
 
 ### Done — a block sentence carrying a condition runs on the work list, and the runtime row closes (2026-10-10)
 

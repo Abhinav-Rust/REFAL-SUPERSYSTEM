@@ -743,7 +743,7 @@ fn accounting(p: &Palette) -> String {
         ("L3 \u{00b7} meta-prover", 13.00, 11.40),
         ("L4 \u{00b7} projections as artifacts", 5.00, 3.50),
         ("L2 \u{00b7} function inversion", 3.00, 3.00),
-        ("Conformance / release evidence", 2.80, 2.66),
+        ("Conformance / release evidence", 2.80, 2.80),
     ];
     let label_x = 40.0;
     let track_x = 400.0;
@@ -784,7 +784,7 @@ fn accounting(p: &Palette) -> String {
     out.extend(footer(
         p,
         396.0,
-        "One number, one method: ~91.7 of 100, from one table. A row carries zero credit until a gate behind it is green.",
+        "One number, one method: ~91.8 of 100, from one table. A row carries zero credit until a gate behind it is green.",
     ));
     wrap(
         h,
@@ -935,7 +935,7 @@ fn glance(p: &Palette) -> String {
         ),
         (
             "COMPLETION",
-            "~91.7%",
+            "~91.8%",
             "of the supersystem, one method, one table",
             "part",
         ),
@@ -1002,7 +1002,7 @@ fn glance(p: &Palette) -> String {
     wrap(
         h,
         "At a glance",
-        "Five tiles: four layers over one shared expression space; about 91.7% of the supersystem complete by one method; 100% Rust; a byte-identical self-hosting fixpoint at 12,599 bytes; and 19 of 25 in-scope conformance rows closed.",
+        "Five tiles: four layers over one shared expression space; about 91.8% of the supersystem complete by one method; 100% Rust; a byte-identical self-hosting fixpoint at 12,599 bytes; and 19 of 25 in-scope conformance rows closed.",
         &out,
     )
 }
@@ -1122,7 +1122,7 @@ fn roadmap(p: &Palette) -> String {
     let mut out = header(
         p,
         "WHAT IS LEFT",
-        "Six rows stand between ~91.7% and 100% \u{2014} each with a named gap",
+        "Six rows stand between ~91.8% and 100% \u{2014} each with a named gap",
         h,
     );
     let rows = [

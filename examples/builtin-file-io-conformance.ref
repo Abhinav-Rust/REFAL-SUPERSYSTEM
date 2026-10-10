@@ -1,0 +1,30 @@
+* The file-backed half of the input/output builtins (reference section C.1):
+* Open, Put, Putout and Get on a real file.
+*
+* C.1.4  A file descriptor is a macrodigit in the range 1-19; descriptor 0 is
+*        the terminal. This fixture uses descriptors 7 and 8, so the range is
+*        exercised rather than described.
+* C.1.6  <Get s.D> acts like <Card> on the file the descriptor names.
+* C.1.7  <Put s.D e.Expr> writes e.Expr to the descriptor's file and returns
+*        e.Expr.
+* C.1.8  <Putout s.D e.Expr> returns the empty expression; otherwise it is Put.
+*
+* The file name is *relative*, which is what lets a committed fixture do file
+* I/O at all: a name valid wherever the suite runs cannot be baked into the
+* source, so `every_builtin_clause_has_a_traceable_fixture` runs every `run` row
+* in a fresh temporary directory -- the file is created there and the directory
+* is removed afterwards, so nothing leaks into the checkout.
+*
+* The suite runs the program with its standard input closed, so the terminal
+* descriptor reads end of input; that is why the descriptor here is a real one.
+* The terminal half of C.1 is `examples/builtin-io-conformance.ref`.
+
+$EXTERN Open, Get, Put, Putout, Prout;
+
+$ENTRY Go {
+  = <Open 'w' 7 'refal-file-io-conformance.tmp'>
+    <Prout 'c1.7.put-returns [' <Put 7 'ok'> ']'>
+    <Prout 'c1.8.putout-returns [' <Putout 7 '!'> ']'>
+    <Open 'r' 8 'refal-file-io-conformance.tmp'>
+    <Prout 'c1.6.get-line [' <Get 8> ']'>;
+}
