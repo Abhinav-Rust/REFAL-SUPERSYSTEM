@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 660" width="1200" height="660" role="img" aria-labelledby="t d">
+  <title id="t">The command surface</title>
+  <desc id="d">Nine commands across four layers: run and check for layer 0, reflect for layer 1, compile and metasystem for layer 2, prove for layer 3, and invert, project2 and differential for layer 4.</desc>
+  <rect x="0.5" y="0.5" width="1199" height="659" rx="16" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1"/>
+  <text x="40" y="52" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="3.2" fill="#0F766E">THE COMMAND SURFACE</text>
+  <text x="40" y="90" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="-0.3" fill="#1F2328">One command per layer capability — each one backed by a gate</text>
+  <line x1="40" y1="112" x2="1160" y2="112" stroke="#D0D7DE" stroke-width="1"/>
+  <rect x="40" y="136" width="1120" height="44" rx="10" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1"/>
+  <rect x="56" y="144" width="44" height="28" rx="8" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1.2"/>
+  <text x="78" y="163" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="13" font-weight="600" text-anchor="middle" fill="#0F766E">L0</text>
+  <text x="116" y="164" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="600" fill="#1F2328">refal run</text>
+  <text x="400" y="164" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#57606A">execute a Refal-5 program on the bootstrap machine</text>
+  <rect x="40" y="186" width="1120" height="44" rx="10" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1"/>
+  <rect x="56" y="194" width="44" height="28" rx="8" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1.2"/>
+  <text x="78" y="213" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="13" font-weight="600" text-anchor="middle" fill="#0F766E">L0</text>
+  <text x="116" y="214" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="600" fill="#1F2328">refal check --strict</text>
+  <text x="400" y="214" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#57606A">refuse a provable defect before it ever runs</text>
+  <rect x="40" y="236" width="1120" height="44" rx="10" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1"/>
+  <rect x="56" y="244" width="44" height="28" rx="8" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1.2"/>
+  <text x="78" y="263" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="13" font-weight="600" text-anchor="middle" fill="#0F766E">L1</text>
+  <text x="116" y="264" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="600" fill="#1F2328">refal reflect</text>
+  <text x="400" y="264" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#57606A">freeze the active configuration and return it as data</text>
+  <rect x="40" y="286" width="1120" height="44" rx="10" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1"/>
+  <rect x="56" y="294" width="44" height="28" rx="8" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1.2"/>
+  <text x="78" y="313" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="13" font-weight="600" text-anchor="middle" fill="#0F766E">L2</text>
+  <text x="116" y="314" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="600" fill="#1F2328">refal compile</text>
+  <text x="400" y="314" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#57606A">drive → clean → emit — the compiler's default path</text>
+  <rect x="40" y="336" width="1120" height="44" rx="10" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1"/>
+  <rect x="56" y="344" width="44" height="28" rx="8" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1.2"/>
+  <text x="78" y="363" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="13" font-weight="600" text-anchor="middle" fill="#0F766E">L2</text>
+  <text x="116" y="364" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="600" fill="#1F2328">refal metasystem</text>
+  <text x="400" y="364" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#57606A">drive an interpreter over a program; the interpreter disappears</text>
+  <rect x="40" y="386" width="1120" height="44" rx="10" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1"/>
+  <rect x="56" y="394" width="44" height="28" rx="8" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1.2"/>
+  <text x="78" y="413" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="13" font-weight="600" text-anchor="middle" fill="#B45309">L3</text>
+  <text x="116" y="414" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="600" fill="#1F2328">refal prove</text>
+  <text x="400" y="414" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#57606A">decide a predicate, or an equation, by complete tree reduction</text>
+  <rect x="40" y="436" width="1120" height="44" rx="10" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1"/>
+  <rect x="56" y="444" width="44" height="28" rx="8" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1.2"/>
+  <text x="78" y="463" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="13" font-weight="600" text-anchor="middle" fill="#B45309">L4</text>
+  <text x="116" y="464" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="600" fill="#1F2328">refal invert</text>
+  <text x="400" y="464" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#57606A">synthesise f⁻¹ from f by driving the forward definition</text>
+  <rect x="40" y="486" width="1120" height="44" rx="10" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1"/>
+  <rect x="56" y="494" width="44" height="28" rx="8" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1.2"/>
+  <text x="78" y="513" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="13" font-weight="600" text-anchor="middle" fill="#B45309">L4</text>
+  <text x="116" y="514" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="600" fill="#1F2328">refal project2</text>
+  <text x="400" y="514" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#57606A">drive an interpreter with its object program left open</text>
+  <rect x="40" y="536" width="1120" height="44" rx="10" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1"/>
+  <rect x="56" y="544" width="44" height="28" rx="8" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1.2"/>
+  <text x="78" y="563" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="13" font-weight="600" text-anchor="middle" fill="#B45309">L4</text>
+  <text x="116" y="564" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="600" fill="#1F2328">refal differential</text>
+  <text x="400" y="564" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#57606A">run a residue and require the source's output — truth as efficacy</text>
+  <rect x="40" y="594" width="1120" height="44" rx="12" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1.5"/>
+  <text x="64" y="622" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#134E4A">Run any of them as `cargo run -p refal -- &lt;command&gt;`. The full reference, with every flag, is further down the README.</text>
+</svg>

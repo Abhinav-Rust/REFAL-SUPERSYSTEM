@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 356" width="1200" height="356" role="img" aria-labelledby="t d">
+  <title id="t">Quickstart</title>
+  <desc id="d">Three steps: clone the repository, build with cargo, and compile an example program.</desc>
+  <rect x="0.5" y="0.5" width="1199" height="355" rx="16" fill="#0D1117" stroke="#30363D" stroke-width="1"/>
+  <text x="40" y="52" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="3.2" fill="#0F766E">QUICKSTART</text>
+  <text x="40" y="90" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="-0.3" fill="#E6EDF3">One toolchain, three commands</text>
+  <line x1="40" y1="112" x2="1160" y2="112" stroke="#30363D" stroke-width="1"/>
+  <rect x="40" y="150" width="360" height="116" rx="14" fill="#0B1B19" stroke="#134E4A" stroke-width="1.5"/>
+  <circle cx="76.0" cy="186.0" r="18" fill="#062925"/>
+  <text x="76" y="192" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="17" font-weight="700" text-anchor="middle" fill="#2DD4BF">1</text>
+  <text x="106" y="191" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#E6EDF3">Clone</text>
+  <rect x="60" y="208" width="320" height="46" rx="8" fill="#062925" stroke="#134E4A" stroke-width="1"/>
+  <text x="72" y="224" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" fill="#99F6E4">git clone https://github.com/</text>
+  <text x="72" y="240" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" fill="#99F6E4">Abhinav-Rust/REFAL-SUPERSYSTEM.git</text>
+  <rect x="420" y="150" width="360" height="116" rx="14" fill="#0B1B19" stroke="#134E4A" stroke-width="1.5"/>
+  <circle cx="456.0" cy="186.0" r="18" fill="#062925"/>
+  <text x="456" y="192" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="17" font-weight="700" text-anchor="middle" fill="#2DD4BF">2</text>
+  <text x="486" y="191" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#E6EDF3">Build</text>
+  <rect x="440" y="208" width="320" height="46" rx="8" fill="#062925" stroke="#134E4A" stroke-width="1"/>
+  <text x="452" y="235" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" fill="#99F6E4">cargo build</text>
+  <rect x="800" y="150" width="360" height="116" rx="14" fill="#0B1B19" stroke="#134E4A" stroke-width="1.5"/>
+  <circle cx="836.0" cy="186.0" r="18" fill="#062925"/>
+  <text x="836" y="192" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="17" font-weight="700" text-anchor="middle" fill="#2DD4BF">3</text>
+  <text x="866" y="191" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#E6EDF3">Compile a program</text>
+  <rect x="820" y="208" width="320" height="46" rx="8" fill="#062925" stroke="#134E4A" stroke-width="1"/>
+  <text x="832" y="235" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" fill="#99F6E4">refal compile examples/hello.ref</text>
+  <rect x="40" y="292" width="1120" height="44" rx="12" fill="#062925" stroke="#134E4A" stroke-width="1.5"/>
+  <text x="64" y="320" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#99F6E4">Prerequisite: a stable Rust toolchain (rustup). Nothing else — the compiler, the corpus and the tooling are all Rust.</text>
+</svg>
