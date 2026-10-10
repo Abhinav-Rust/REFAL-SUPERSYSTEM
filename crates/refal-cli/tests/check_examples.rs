@@ -7574,6 +7574,88 @@ fn a_non_tail_recursion_folds_whether_or_not_the_bracket_case_is_named() {
     }
 }
 
+/// E-11's accumulator case, and the partition that closes it.
+///
+/// `Rev` carries a second argument it **rebuilds** at every step, so the
+/// recursion is not a descent on one argument. The compiler's sequence partition
+/// cannot decide it: it partitions the argument list into `[]` / `s.H e.T` /
+/// `(e.B) e.T`, then peels the *tail*, and never enters the bracket `(e.B)` — so
+/// `Rev` stays entirely residual at **residual-work 37**, worse than the source's
+/// own structure. The constructor-entering partition (`--split pattern`)
+/// partitions the bracket's *contents* by the callee's own patterns, so `Rev`
+/// folds into a `Split1` that carries its recursion: **residual-work 9**, `Rev`
+/// eliminated.
+///
+/// This is the behaviour SCP4 1999 attributes to the two-level stack
+/// configuration, reached by entering the constructor rather than by adding an
+/// explicit control stack. The default partition is deliberately *not* changed —
+/// the pattern partition also changes `clean-graph.ref` (12 → 3), so making it
+/// the default would move corpus residues and needs the Refal-authored driver in
+/// `compiler.ref` to move with it. The residue must still **agree with its
+/// source**: a residue that folds by guessing is a wrong program, not a fast one.
+#[test]
+fn the_pattern_partition_folds_a_nested_accumulator() {
+    // The gap, stated as a measurement: the default partition leaves the callee
+    // residual, which is what makes the option meaningful rather than decorative.
+    let default = residualize_driven_file("examples/accumulator-reverse.ref", &[]);
+    let default_stdout = String::from_utf8_lossy(&default.stdout);
+    assert!(
+        default.status.success(),
+        "the driver runs:\n{default_stdout}"
+    );
+    assert!(
+        driven_residue(&default_stdout).contains("\nRev {"),
+        "the sequence partition leaves Rev residual, which is the gap:\n{default_stdout}"
+    );
+    assert!(
+        default_stdout.contains("residual-work 37"),
+        "and the residue is worse than the source's own structure:\n{default_stdout}"
+    );
+
+    let output =
+        residualize_driven_file("examples/accumulator-reverse.ref", &["--split", "pattern"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "the driver runs:\n{stdout}");
+    let residue = driven_residue(&stdout);
+
+    assert!(
+        !residue.contains("\nRev {"),
+        "the pattern partition eliminates Rev:\n{residue}"
+    );
+    assert!(
+        residue.contains("Split1 {") && residue.contains("<Split1 (e.T) (t.H e.A)>"),
+        "the split carries the accumulator's own recursion:\n{residue}"
+    );
+    assert!(
+        stdout.contains("residual-work 9"),
+        "the fold reaches the source's own structure:\n{stdout}"
+    );
+
+    // The fold must not change what the program does.
+    let residue_path = scratch_source("refal-accumulator-res", &residue);
+    let source_path = workspace_path("examples/accumulator-reverse.ref");
+    for argument in ["abc", "a", "xyz"] {
+        let from_source = Command::new(refal_bin())
+            .args(["run", &source_path, argument])
+            .output()
+            .expect("run the source");
+        let from_residue = Command::new(refal_bin())
+            .args(["run"])
+            .arg(&residue_path)
+            .arg(argument)
+            .output()
+            .expect("run the residue");
+        assert_eq!(
+            from_source.stdout, from_residue.stdout,
+            "the residue must agree with its source on {argument:?}"
+        );
+        assert!(
+            !from_source.stdout.is_empty(),
+            "the program prints its result, so the comparison is not vacuous"
+        );
+    }
+}
+
 /// The compiler's sequence partition must not grow without bound on a
 /// bracket-pattern callee (E-11).
 ///

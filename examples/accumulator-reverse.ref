@@ -1,0 +1,25 @@
+* A nested accumulator: `Rev` carries a second argument that it *rebuilds* at
+* every step, so the recursion is not a descent on one argument.
+*
+*   <Rev (a b c) ()>  =  (c b a)
+*
+* Driving it with the compiler's sequence partition (`[]` / `s.H e.T` /
+* `(e.B) e.T`) leaves `Rev` entirely residual: the partition peels the *tail*
+* of the argument list and never enters the bracket `(e.B)`, so nothing folds —
+* measured at residual-work 37, worse than the source's own structure. The
+* constructor-entering partition (`--split pattern`) partitions the bracket's
+* *contents* by the callee's own patterns, so `Rev` folds into a `Split1` that
+* carries its recursion — measured at residual-work 9 with `Rev` eliminated.
+*
+* This is E-11's accumulator case: the behaviour SCP4 1999 attributes to the
+* two-level stack configuration, reached here by entering the constructor
+* rather than by adding an explicit control stack.
+
+$ENTRY Go {
+  e.X = <Rev e.X ()>;
+}
+
+Rev {
+  () (e.A) = (e.A);
+  (t.H e.T) (e.A) = <Rev (e.T) (t.H e.A)>;
+}

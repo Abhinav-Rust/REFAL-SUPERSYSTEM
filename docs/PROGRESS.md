@@ -49,7 +49,7 @@ See `README.md` §"What Theorem 5.1 does and does not forbid" and
 | | |
 |---|---|
 | Honest completion | **~91.8%** (supersystem completeness — one method, one table, in `README.md`) |
-| Tests | 417 (73 core + 177 CLI integration + 167 across the other four crates), 0 clippy, fmt clean |
+| Tests | 418 (72 core + 178 CLI integration + 168 across the other four crates), 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
 
@@ -71,6 +71,65 @@ Rust oracle at budgets 1, 2, 5 and 12. The T-4/T-6 differential
 corpus gate is green at `cases: 71`, `positive: 31`, `check-failure: 6`,
 `runtime-failure: 1`, `residual: 33`, `cleaned-sentences: 1`, and
 `clippy --all-targets -D warnings` and `cargo fmt --check` are clean.
+
+### Measured — E-11's accumulator is folded by the constructor-entering partition, and the row's stated reason for withholding is refuted (2026-10-10)
+
+**The measurement first, because it is the finding.** The row recorded that
+nested accumulators need an explicit two-level stack configuration
+(`⟨active redex⟩ : control stack : environment constraints`). Reproduced exactly
+as recorded: `Rev { () (e.A) = (e.A); (t.H e.T) (e.A) = <Rev (e.T) (t.H e.A)>; }`
+driven from `Go { e.X = <Rev e.X ()>; }` reaches **one** configuration, whistles
+not at all, emits three splits, and leaves `Rev` entirely residual at
+**residual-work 37** — worse than the source's own structure.
+
+**It does not need a stack configuration.** The constructor-entering partition
+already folds it. `residualize-driven examples/accumulator-reverse.ref --split
+pattern` reaches **residual-work 9** with `Rev` **eliminated**:
+
+```refal
+$ENTRY Go { e.Input = <Split1 e.Input ()>; }
+Split1 {
+  () (e.A) = (e.A);
+  (t.H e.T) (e.A) = <Split1 (e.T) (t.H e.A)>;
+}
+```
+
+`Split1` is the callee's own two sentences carrying its recursion — the partition
+*is* the function, which is what compiling pattern matching means. The sequence
+partition cannot get there because it splits the argument list into `[]` /
+`s.H e.T` / `(e.B) e.T` and then peels the **tail**, never entering the bracket
+`(e.B)`; the pattern partition partitions the bracket's **contents** by the
+callee's own patterns, so the branch matches outright.
+
+**What was built.** The partition is now selectable on the compiler-facing
+command: `refal drive-symbolic|residualize-driven <file> --split
+sequence|pattern`, default `sequence`. In `refal-core`,
+`drive_entry_configuration_with_split` and `residualize_entry_graph_with_split`
+thread a [`SplitStrategy`] through the same code the default uses, so the
+partition and the §4.4 axis search are independent dimensions. Gated by
+`the_pattern_partition_folds_a_nested_accumulator` (`refal-cli`), which pins the
+gap as a measurement (the default leaves `Rev` residual at residual-work 37),
+pins the fold (residual-work 9, `Rev` eliminated, `Split1` carrying the
+recursion), and **runs** the artifact against its source on three arguments — a
+residue that folds by guessing is a wrong program, not a fast one.
+
+**Why the default is deliberately not switched.** A scan of the corpus found
+**13 examples** where the pattern partition is strictly better on residual-work:
+`accumulator-reverse` 37 → 9, `clean-graph` 12 → 3, `condition` 9 → 2,
+`driven-strategy-search` 19 → 8, `equiv-partial-domain` 28 → 10,
+`equiv-tree-reversal` 15 → 8, `projection-bracket-callee` 24 → 2,
+`projection-complement` 9 → 2, `prove-append-reach` 6 → 3,
+`prove-predicate-true` 7 → 2, `prove-predicate` 9 → 2, `symbolic-branch` 6 → 2,
+`variable-index-equivalence` 3 → 2. So switching the default would move corpus
+residues, and the Refal-authored driver in `examples/compiler.ref` would have to
+move with it — a port, not a flag. The row therefore stays Partial and its
+remaining gap is **restated**: not a stack configuration, but making the
+constructor-entering partition the compiler's default.
+
+**The figure does not move.** The capability is delivered behind an explicit
+option; the product's default path is unchanged (fast gate: `differential-corpus:
+equal`, 72 cases). Moving the E-11 share of the graph-of-states row is a
+re-weighting, which is the Chief Architect's call.
 
 ### Done — the file-backed I/O clauses are bound to a runnable fixture, and the conformance row closes (2026-10-10)
 

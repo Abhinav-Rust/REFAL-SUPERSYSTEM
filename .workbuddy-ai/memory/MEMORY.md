@@ -47,6 +47,15 @@ course of action I recommend.** The Chief Architect's convention for this repo:
   (set as `current_dir`, removed after), so a fixture may use a **relative** file
   name. `examples/builtin-file-io-conformance.ref` is the pattern; the `unit` row
   stays for assertions a program cannot print (exact file bytes).
+- **The partition is selectable** (2026-10-10): `refal drive-symbolic|residualize-driven
+  --split sequence|pattern` (default `sequence`); core entry
+  `residualize_entry_graph_with_split` / `drive_entry_configuration_with_split`.
+  **`pattern` folds a nested accumulator** (`examples/accumulator-reverse.ref`:
+  residual-work 37 → 9, `Rev` eliminated) — E-11's accumulator case, reached
+  *without* a two-level stack configuration. **Do not switch the default**: a
+  corpus scan found 13 examples where `pattern` is strictly better on
+  residual-work, so the default would move corpus residues and `compiler.ref`
+  would have to move with it.
 - **A block sentence carrying a condition now runs on the work list** (2026-10-10,
   runtime row closed). `ConditionEval` carries a `ConditionOwner` (`Function` or
   `Block`) so a failing chain continues into the right next sentence;

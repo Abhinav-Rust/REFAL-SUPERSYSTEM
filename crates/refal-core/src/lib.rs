@@ -737,6 +737,21 @@ pub fn drive_symbolic_with_strategy(
     drive_symbolic_inner(graph, input, max_steps, strategy, false)
 }
 
+/// [`drive_symbolic_with_strategy`] with an explicit partition.
+///
+/// The partition is a property of the caller, not of the program; see
+/// [`SplitStrategy`]. The default is the compiler's sequence partition, and this
+/// is how a caller selects the constructor-entering one instead.
+pub fn drive_symbolic_with_split(
+    graph: &StateGraph,
+    input: Vec<CoreTerm>,
+    max_steps: usize,
+    strategy: DriveStrategy,
+    split: SplitStrategy,
+) -> Result<SymbolicDriveReport, DriveError> {
+    drive_symbolic_inner_with_split(graph, input, max_steps, strategy, false, split)
+}
+
 /// Drive a graph whose entry is a *predicate under proof* rather than a program.
 ///
 /// The only difference from [`drive_symbolic_with_strategy`] is that the entry
@@ -4441,25 +4456,37 @@ pub fn drive_entry_configuration_with_strategy(
     max_steps: usize,
     strategy: DriveStrategy,
 ) -> Result<SymbolicDriveReport, DriveError> {
+    drive_entry_configuration_with_split(graph, max_steps, strategy, SplitStrategy::Sequence)
+}
+
+/// [`drive_entry_configuration_with_strategy`] with an explicit partition.
+///
+/// The partition is a property of the caller, not of the program (see
+/// [`SplitStrategy`]): the compiler emits a residue with the sequence partition,
+/// and a caller that wants a *constructor entered* — a projection, or a program
+/// whose recursion is an accumulator — selects the pattern partition instead.
+pub fn drive_entry_configuration_with_split(
+    graph: &StateGraph,
+    max_steps: usize,
+    strategy: DriveStrategy,
+    split: SplitStrategy,
+) -> Result<SymbolicDriveReport, DriveError> {
     let closed = graph
         .entry
         .and_then(|entry| graph.states.get(entry.0))
         .is_some_and(|state| state.pattern.is_empty());
-    if closed {
-        return drive_symbolic_with_strategy(graph, Vec::new(), max_steps, strategy);
-    }
-    drive_symbolic_with_strategy(
-        graph,
+    let input = if closed {
+        Vec::new()
+    } else {
         vec![CoreTerm {
             kind: CoreTermKind::Variable {
                 kind: VariableKind::Expression,
                 name: "Input".to_string(),
             },
             span: Span { start: 0, end: 0 },
-        }],
-        max_steps,
-        strategy,
-    )
+        }]
+    };
+    drive_symbolic_inner_with_split(graph, input, max_steps, strategy, false, split)
 }
 
 /// Residualise the entry configuration into a checked Core Refal program.
@@ -4510,12 +4537,29 @@ pub fn residualize_entry_graph_with_strategy(
     max_steps: usize,
     strategy: DriveStrategy,
 ) -> Result<DrivenResidualization, DriveError> {
+    residualize_entry_graph_with_split(program, graph, max_steps, strategy, SplitStrategy::Sequence)
+}
+
+/// [`residualize_entry_graph_with_strategy`] with an explicit partition.
+///
+/// The search over the compilation axis (§4.4) and the partition are
+/// independent: the axis chooses *when to fold*, the partition chooses *what to
+/// split on*. A caller that needs the partition to enter a constructor — the
+/// accumulator case in E-11 — selects [`SplitStrategy::Pattern`] and keeps the
+/// axis search.
+pub fn residualize_entry_graph_with_split(
+    program: &CoreProgram,
+    graph: &StateGraph,
+    max_steps: usize,
+    strategy: DriveStrategy,
+    split: SplitStrategy,
+) -> Result<DrivenResidualization, DriveError> {
     if strategy != DriveStrategy::Search {
-        return residualize_entry_graph_at(program, graph, max_steps, strategy);
+        return residualize_entry_graph_at(program, graph, max_steps, strategy, split);
     }
 
     let compilative =
-        residualize_entry_graph_at(program, graph, max_steps, DriveStrategy::Compilative);
+        residualize_entry_graph_at(program, graph, max_steps, DriveStrategy::Compilative, split);
     let compilative_outcome = match &compilative {
         Ok(residual) => EndOutcome::Residue(residue_cost(&residual.program)),
         Err(_) => EndOutcome::Failed,
@@ -4538,8 +4582,13 @@ pub fn residualize_entry_graph_with_strategy(
         });
     }
 
-    let interpretive =
-        residualize_entry_graph_at(program, graph, max_steps, DriveStrategy::Interpretive);
+    let interpretive = residualize_entry_graph_at(
+        program,
+        graph,
+        max_steps,
+        DriveStrategy::Interpretive,
+        split,
+    );
     let interpretive_outcome = match &interpretive {
         Ok(residual) => EndOutcome::Residue(residue_cost(&residual.program)),
         Err(_) => EndOutcome::Failed,
@@ -4590,8 +4639,9 @@ fn residualize_entry_graph_at(
     graph: &StateGraph,
     max_steps: usize,
     strategy: DriveStrategy,
+    split: SplitStrategy,
 ) -> Result<DrivenResidualization, DriveError> {
-    let report = drive_entry_configuration_with_strategy(graph, max_steps, strategy)?;
+    let report = drive_entry_configuration_with_split(graph, max_steps, strategy, split)?;
     let residual_program = residualize_symbolic_program(program, &report);
     let generalized_states = generalized_residual_states(&report);
     Ok(DrivenResidualization {

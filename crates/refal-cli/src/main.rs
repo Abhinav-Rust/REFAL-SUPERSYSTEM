@@ -818,11 +818,12 @@ fn drive_program(program: &refal_ast::Program, args: &[String]) {
 struct DriveOptions {
     max_steps: usize,
     strategy: refal_core::DriveStrategy,
+    split: refal_core::SplitStrategy,
     show_configurations: bool,
     show_neighborhoods: bool,
 }
 
-const DRIVE_USAGE: &str = "Usage: refal <drive-symbolic|residualize-driven> <file.ref> [--steps N]      [--strategy search|compilative|interpretive] [--configurations] [--neighborhoods]";
+const DRIVE_USAGE: &str = "Usage: refal <drive-symbolic|residualize-driven> <file.ref> [--steps N]      [--strategy search|compilative|interpretive] [--split sequence|pattern]      [--configurations] [--neighborhoods]";
 
 const PROVE_USAGE: &str = "Usage: refal prove <file.ref> <Predicate> [--steps N] [--strategy search|compilative|interpretive]";
 const EQUIV_USAGE: &str = "Usage: refal prove <file.ref> --equiv <Left> <Right> [--steps N]";
@@ -833,6 +834,7 @@ fn drive_options(args: &[String]) -> Result<DriveOptions, String> {
     let mut options = DriveOptions {
         max_steps: 10_000,
         strategy: refal_core::DriveStrategy::Search,
+        split: refal_core::SplitStrategy::Sequence,
         show_configurations: false,
         show_neighborhoods: false,
     };
@@ -856,6 +858,17 @@ fn drive_options(args: &[String]) -> Result<DriveOptions, String> {
                     "search" => refal_core::DriveStrategy::Search,
                     "compilative" => refal_core::DriveStrategy::Compilative,
                     "interpretive" => refal_core::DriveStrategy::Interpretive,
+                    _ => return Err(DRIVE_USAGE.to_string()),
+                };
+                cursor += 2;
+            }
+            "--split" => {
+                let Some(name) = args.get(cursor + 1) else {
+                    return Err(DRIVE_USAGE.to_string());
+                };
+                options.split = match name.as_str() {
+                    "sequence" => refal_core::SplitStrategy::Sequence,
+                    "pattern" => refal_core::SplitStrategy::Pattern,
                     _ => return Err(DRIVE_USAGE.to_string()),
                 };
                 cursor += 2;
@@ -884,11 +897,12 @@ fn drive_symbolic_program(program: &refal_ast::Program, args: &[String]) {
     };
     let core = refal_core::lower_program(program);
     let graph = refal_core::clean_unreachable_states(&refal_core::build_seed_graph(&core));
-    let report = match refal_core::drive_symbolic_with_strategy(
+    let report = match refal_core::drive_symbolic_with_split(
         &graph,
         vec![refal_core::input_expression_variable()],
         options.max_steps,
         options.strategy,
+        options.split,
     ) {
         Ok(report) => report,
         Err(error) => {
@@ -1063,11 +1077,12 @@ fn residualize_driven_program(program: &refal_ast::Program, args: &[String]) {
     };
     let core = refal_core::lower_program(program);
     let graph = refal_core::clean_unreachable_states(&refal_core::build_seed_graph(&core));
-    let residual = match refal_core::residualize_entry_graph_with_strategy(
+    let residual = match refal_core::residualize_entry_graph_with_split(
         &core,
         &graph,
         options.max_steps,
         options.strategy,
+        options.split,
     ) {
         Ok(residual) => residual,
         Err(error) => {

@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+**E-11's accumulator folds under the constructor-entering partition — and the
+row's stated reason for withholding is refuted.**
+
+- **The gap, reproduced as recorded:** `Rev { () (e.A) = (e.A); (t.H e.T) (e.A) =
+  <Rev (e.T) (t.H e.A)>; }` driven from `Go { e.X = <Rev e.X ()>; }` reaches one
+  configuration, whistles not at all, emits three splits, and leaves `Rev`
+  residual at **residual-work 37**.
+- **It does not need a two-level stack configuration.** `residualize-driven
+  examples/accumulator-reverse.ref --split pattern` reaches **residual-work 9**
+  with `Rev` **eliminated**: the artifact is `Split1` = `Rev`'s own two sentences
+  carrying its recursion. The sequence partition peels the argument list's *tail*
+  and never enters the bracket; the pattern partition partitions the bracket's
+  *contents* by the callee's own patterns.
+- **What is built:** `--split sequence|pattern` on `drive-symbolic` and
+  `residualize-driven` (default `sequence`), with `drive_entry_configuration_with_split`
+  and `residualize_entry_graph_with_split` in `refal-core`. Gated by
+  `the_pattern_partition_folds_a_nested_accumulator`, which **runs** the artifact
+  against its source.
+- **The default is deliberately not switched:** a corpus scan found **13
+  examples** where the pattern partition is strictly better (including
+  `clean-graph.ref` 12 → 3), so it would move corpus residues and needs the
+  Refal-authored driver to move with it.
+- **The figure does not move.** The capability is behind an option and the
+  default path is unchanged; the E-11 share is a re-weighting, which is the Chief
+  Architect's call.
+
 **The file-backed I/O clauses are bound to a runnable fixture — and the
 conformance row closes.**
 
