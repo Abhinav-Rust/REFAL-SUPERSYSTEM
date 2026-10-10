@@ -72,6 +72,43 @@ corpus gate is green at `cases: 71`, `positive: 31`, `check-failure: 6`,
 `runtime-failure: 1`, `residual: 33`, `cleaned-sentences: 1`, and
 `clippy --all-targets -D warnings` and `cargo fmt --check` are clean.
 
+### Done — the language bar is 100% Rust, and the README gains an at-a-glance dashboard (2026-10-10)
+
+**The reported language breakdown was stale, not wrong.** GitHub showed `Rust
+97.1% / Python 2.4% / Shell 0.5%`, but no Python or Shell is tracked at `HEAD`:
+the six files that produced those percentages — `scripts/*.py`, `scripts/*.sh`
+and `docs/turchin/fetch-sources.sh` — were deleted in `8151ce1` ("the
+repository's tooling is Rust, so the repository is 100% Rust"), which moved every
+task into `crates/xtask`. Linguist recomputes on the next push to the default
+branch, so the bar was a cache of the pre-`8151ce1` tree.
+
+**Pinned, so it cannot drift back.** `.gitattributes` now carries an explicit
+Linguist section: the Refal corpus (`.ref`) is the artifact the compiler is tested
+*against* rather than a host language, the Markdown and manifests are
+documentation, and the generated SVG family is generated. The bar is now a
+property of that file rather than of Linguist's heuristics, which is what stops a
+future asset from silently re-entering the breakdown the way the removed scripts
+once did.
+
+**SEO.** The headline `refal` package now carries a `description`, `keywords`
+(`refal`, `supercompilation`, `turchin`, `metacomputation`, `compiler`),
+`categories` and a `homepage` in the workspace manifest; the repository already
+holds GitHub's maximum of 20 topics, led by `refal`, `refal-5`,
+`valentin-turchin` and `supercompilation`, and its description already leads with
+the same terms. The README tagline now names `Refal-5`, `supercompilation` and
+`Valentin Turchin` in its first line of prose.
+
+**The README's tenth generated panel.** `cargo xtask gen-readme-diagrams` now
+emits `docs/images/glance-{light,dark}.svg` — a five-tile dashboard (layers,
+completion, language, self-hosting, conformance) placed under the hero so a
+reviewer grasps the project in one screen. It is generated from one description
+like the other nine, so the two themes cannot drift, and regenerating leaves the
+other sixteen SVGs byte-identical (verified by an empty `git diff docs/images`).
+
+**The figure does not move.** This step is presentation and packaging; it adds no
+capability behind a gate, so it carries zero credit and the honest completion
+stays **~91.5%**.
+
 ### Measured — E-14's derivation now closes, and the blocker was already removed (2026-10-09)
 
 **The E-14 note of 2026-10-05 recorded that the self-application's derivation

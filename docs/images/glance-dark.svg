@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 372" width="1200" height="372" role="img" aria-labelledby="t d">
+  <title id="t">At a glance</title>
+  <desc id="d">Five tiles: four layers over one shared expression space; about 91.5% of the supersystem complete by one method; 100% Rust; a byte-identical self-hosting fixpoint at 12,599 bytes; and 19 of 25 in-scope conformance rows closed.</desc>
+  <rect x="0.5" y="0.5" width="1199" height="371" rx="16" fill="#0D1117" stroke="#30363D" stroke-width="1"/>
+  <text x="40" y="52" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="3.2" fill="#0F766E">AT A GLANCE</text>
+  <text x="40" y="90" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="-0.3" fill="#E6EDF3">The whole project on one screen</text>
+  <line x1="40" y1="112" x2="1160" y2="112" stroke="#30363D" stroke-width="1"/>
+  <rect x="40" y="140" width="211" height="150" rx="14" fill="#0B1B19" stroke="#134E4A" stroke-width="1.5"/>
+  <rect x="40" y="140" width="211" height="5" rx="2.5" fill="#0F766E"/>
+  <text x="60" y="178" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" letter-spacing="2.0" fill="#0F766E">LAYERS</text>
+  <text x="60" y="228" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="28" font-weight="700" fill="#E6EDF3">4</text>
+  <text x="60" y="252" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#8B949E">L0 → L4 over one shared</text>
+  <text x="60" y="268" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#8B949E">expression space</text>
+  <rect x="267" y="140" width="211" height="150" rx="14" fill="#0B1B19" stroke="#134E4A" stroke-width="1.5"/>
+  <rect x="267" y="140" width="211" height="5" rx="2.5" fill="#F59E0B"/>
+  <text x="287" y="178" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" letter-spacing="2.0" fill="#0F766E">COMPLETION</text>
+  <text x="287" y="228" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="28" font-weight="700" fill="#E6EDF3">~91.5%</text>
+  <text x="287" y="252" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#8B949E">of the supersystem, one</text>
+  <text x="287" y="268" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#8B949E">method, one table</text>
+  <rect x="494" y="140" width="211" height="150" rx="14" fill="#0B1B19" stroke="#134E4A" stroke-width="1.5"/>
+  <rect x="494" y="140" width="211" height="5" rx="2.5" fill="#2DD4BF"/>
+  <text x="514" y="178" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" letter-spacing="2.0" fill="#0F766E">LANGUAGE</text>
+  <text x="514" y="228" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="28" font-weight="700" fill="#E6EDF3">100%</text>
+  <text x="514" y="252" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#8B949E">Rust — one toolchain,</text>
+  <text x="514" y="268" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#8B949E">front to back</text>
+  <rect x="721" y="140" width="211" height="150" rx="14" fill="#0B1B19" stroke="#134E4A" stroke-width="1.5"/>
+  <rect x="721" y="140" width="211" height="5" rx="2.5" fill="#2DD4BF"/>
+  <text x="741" y="178" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" letter-spacing="2.0" fill="#0F766E">SELF-HOSTING</text>
+  <text x="741" y="228" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="28" font-weight="700" fill="#E6EDF3">C1=C2=C3</text>
+  <text x="741" y="252" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#8B949E">byte-identical at 12,599</text>
+  <text x="741" y="268" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#8B949E">bytes</text>
+  <rect x="948" y="140" width="211" height="150" rx="14" fill="#0B1B19" stroke="#134E4A" stroke-width="1.5"/>
+  <rect x="948" y="140" width="211" height="5" rx="2.5" fill="#F59E0B"/>
+  <text x="968" y="178" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" letter-spacing="2.0" fill="#0F766E">CONFORMANCE</text>
+  <text x="968" y="228" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="28" font-weight="700" fill="#E6EDF3">19 / 25</text>
+  <text x="968" y="252" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#8B949E">ecosystem rows closed, in</text>
+  <text x="968" y="268" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#8B949E">scope</text>
+  <rect x="40" y="316" width="1120" height="44" rx="12" fill="#062925" stroke="#134E4A" stroke-width="1.5"/>
+  <text x="64" y="344" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#99F6E4">Every number here is a command you can run in this checkout — nothing is a mock-up.</text>
+</svg>

@@ -6,7 +6,7 @@
   <img alt="REFAL-SUPERSYSTEM — four layers of cybernetic control over a single shared expression space" src="docs/images/hero-light.svg" width="100%">
 </picture>
 
-**A compiler that compiles itself. A prover that decides by supercompilation.**
+**A Refal-5 compiler that compiles itself. A prover that decides by supercompilation. Valentin Turchin's supersystem, rebuilt in Rust.**
 
 [![CI](https://github.com/Abhinav-Rust/REFAL-SUPERSYSTEM/actions/workflows/ci.yml/badge.svg)](https://github.com/Abhinav-Rust/REFAL-SUPERSYSTEM/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE-MIT)
@@ -32,6 +32,16 @@
 > `Append`, right identity and the correctness of binary tree reversals by folding
 > a branch to a renaming of the claim — Turchin's loop edge. What remains of layer
 > 3 is the *general* relational form. [What 100% means ↓](#what-100-means)
+
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/glance-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/glance-light.svg">
+  <img alt="At a glance: four layers over one shared expression space; about 91.5% of the supersystem complete by one method; 100% Rust; a byte-identical self-hosting fixpoint at 12,599 bytes; and 19 of 25 in-scope conformance rows closed" src="docs/images/glance-light.svg" width="100%">
+</picture>
+
+</div>
 
 ---
 
