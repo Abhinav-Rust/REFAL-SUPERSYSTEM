@@ -734,7 +734,7 @@ fn accounting(p: &Palette) -> String {
     let rows: [(&str, f64, f64); 12] = [
         ("L0 \u{00b7} frontend", 5.95, 5.60),
         ("L0 \u{00b7} semantics", 4.20, 3.15),
-        ("L0 \u{00b7} machine / runtime", 13.65, 13.51),
+        ("L0 \u{00b7} machine / runtime", 13.65, 13.65),
         ("L1 \u{00b7} reflection engine", 9.00, 9.00),
         ("L2 \u{00b7} graph of states", 5.95, 5.35),
         ("Tier 1 static verification", 10.50, 9.50),
@@ -784,7 +784,7 @@ fn accounting(p: &Palette) -> String {
     out.extend(footer(
         p,
         396.0,
-        "One number, one method: ~91.5 of 100, from one table. A row carries zero credit until a gate behind it is green.",
+        "One number, one method: ~91.7 of 100, from one table. A row carries zero credit until a gate behind it is green.",
     ));
     wrap(
         h,
@@ -935,7 +935,7 @@ fn glance(p: &Palette) -> String {
         ),
         (
             "COMPLETION",
-            "~91.5%",
+            "~91.7%",
             "of the supersystem, one method, one table",
             "part",
         ),
@@ -1002,7 +1002,7 @@ fn glance(p: &Palette) -> String {
     wrap(
         h,
         "At a glance",
-        "Five tiles: four layers over one shared expression space; about 91.5% of the supersystem complete by one method; 100% Rust; a byte-identical self-hosting fixpoint at 12,599 bytes; and 19 of 25 in-scope conformance rows closed.",
+        "Five tiles: four layers over one shared expression space; about 91.7% of the supersystem complete by one method; 100% Rust; a byte-identical self-hosting fixpoint at 12,599 bytes; and 19 of 25 in-scope conformance rows closed.",
         &out,
     )
 }
@@ -1122,7 +1122,7 @@ fn roadmap(p: &Palette) -> String {
     let mut out = header(
         p,
         "WHAT IS LEFT",
-        "Six rows stand between ~91.5% and 100% \u{2014} each with a named gap",
+        "Six rows stand between ~91.7% and 100% \u{2014} each with a named gap",
         h,
     );
     let rows = [

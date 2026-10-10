@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 372" width="1200" height="372" role="img" aria-labelledby="t d">
   <title id="t">At a glance</title>
-  <desc id="d">Five tiles: four layers over one shared expression space; about 91.5% of the supersystem complete by one method; 100% Rust; a byte-identical self-hosting fixpoint at 12,599 bytes; and 19 of 25 in-scope conformance rows closed.</desc>
+  <desc id="d">Five tiles: four layers over one shared expression space; about 91.7% of the supersystem complete by one method; 100% Rust; a byte-identical self-hosting fixpoint at 12,599 bytes; and 19 of 25 in-scope conformance rows closed.</desc>
   <rect x="0.5" y="0.5" width="1199" height="371" rx="16" fill="#0D1117" stroke="#30363D" stroke-width="1"/>
   <text x="40" y="52" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="3.2" fill="#0F766E">AT A GLANCE</text>
   <text x="40" y="90" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="-0.3" fill="#E6EDF3">The whole project on one screen</text>
@@ -14,7 +14,7 @@
   <rect x="267" y="140" width="211" height="150" rx="14" fill="#0B1B19" stroke="#134E4A" stroke-width="1.5"/>
   <rect x="267" y="140" width="211" height="5" rx="2.5" fill="#F59E0B"/>
   <text x="287" y="178" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" letter-spacing="2.0" fill="#0F766E">COMPLETION</text>
-  <text x="287" y="228" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="28" font-weight="700" fill="#E6EDF3">~91.5%</text>
+  <text x="287" y="228" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="28" font-weight="700" fill="#E6EDF3">~91.7%</text>
   <text x="287" y="252" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#8B949E">of the supersystem, one</text>
   <text x="287" y="268" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#8B949E">method, one table</text>
   <rect x="494" y="140" width="211" height="150" rx="14" fill="#0B1B19" stroke="#134E4A" stroke-width="1.5"/>
