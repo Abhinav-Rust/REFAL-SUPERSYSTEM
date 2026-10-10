@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" width="1200" height="320" role="img" aria-labelledby="fix-title fix-desc">
   <title id="fix-title">The compiler compiles its own source and the output is a fixpoint</title>
-  <desc id="fix-desc">Three stages: the compiler's own 152 KB source, compiled once to gen1.ref, then compiled again to gen2.ref. A verdict band states that the two are identical byte for byte at 102,436 bytes, and that this is a supercompilation rather than a re-print.</desc>
+  <desc id="fix-desc">Three stages: the compiler's own 152 KB source, compiled once to gen1.ref, then compiled again to gen2.ref. A verdict band states that the two are identical byte for byte at 111,600 bytes, and that this is a supercompilation rather than a re-print.</desc>
 
   <rect x="0.5" y="0.5" width="1199" height="319" rx="16" fill="#0D1117" stroke="#30363D"/>
 
@@ -43,7 +43,7 @@
     <rect x="70" y="262" width="1060" height="46" rx="12" fill="#062925" stroke="#0F766E" stroke-width="1.5"/>
     <circle cx="98" cy="285" r="9" fill="#2DD4BF"/>
     <path d="M 93.5 285 L 96.5 288 L 102.5 281" stroke="#0D1117" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-    <text x="118" y="284" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#5EEAD4">gen1 == gen2, byte for byte &#8212; 102,436 bytes.</text>
+    <text x="118" y="284" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#5EEAD4">gen1 == gen2, byte for byte &#8212; 111,600 bytes.</text>
     <text x="118" y="302" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#CCFBF1">And it is a supercompilation, not a re-print: the output&#8217;s entry is a generated <tspan font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#5EEAD4">Split</tspan>, not the original dispatch.</text>
   </g>
 </svg>

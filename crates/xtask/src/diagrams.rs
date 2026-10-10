@@ -1021,7 +1021,7 @@ fn demonstrations(p: &Palette) -> String {
     let cards = [
         (
             "SELF-HOSTING FIXPOINT",
-            "102,436 bytes",
+            "111,600 bytes",
             "gen1 == gen2, byte for byte",
             "ok",
             "Built",
@@ -1109,7 +1109,7 @@ fn demonstrations(p: &Palette) -> String {
     wrap(
         h,
         "See it work",
-        "Four result cards: the self-hosting fixpoint at 102,436 bytes, the metasystem transition at 172 to 4 steps, the strict checker catching a proven defect, and the meta-prover proving associativity.",
+        "Four result cards: the self-hosting fixpoint at 111,600 bytes, the metasystem transition at 172 to 4 steps, the strict checker catching a proven defect, and the meta-prover proving associativity.",
         &out,
     )
 }

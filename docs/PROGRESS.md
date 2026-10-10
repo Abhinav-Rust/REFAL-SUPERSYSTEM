@@ -72,6 +72,63 @@ corpus gate is green at `cases: 71`, `positive: 31`, `check-failure: 6`,
 `runtime-failure: 1`, `residual: 33`, `cleaned-sentences: 1`, and
 `clippy --all-targets -D warnings` and `cargo fmt --check` are clean.
 
+### Done — the complement branch is ported, and it exposed a soundness defect in the Rust driver (2026-10-10)
+
+**The complement (Refal).** A sentence whose component at the split position is a
+bare variable names no shape, so the branch it produces *is* the configuration and
+cannot be driven — driving it folds straight back to the split. It is exactly the
+**complement** of the shapes the other sentences demand, and Refal's ordered
+sentences express that with no negation operator, so the branch is **emitted**
+with the sentence's own result as its body and the callee is eliminated. The
+declines mirror the Rust exactly: a conditional sentence, a leading pattern term
+that names a variable, and the case where *every* sentence is a bare variable
+(there is nothing for the complement to be the complement of). Coverage of the
+Refal port: **52 → 69 of 77**.
+
+One Refal trap cost a cycle: `DsLen` returns a **number**, so `<DsLen (e.C)> :
+'0'` never matches — the emptiness test is `<Compare <DsLen (e.C)> 0> : '0'`.
+
+**A soundness defect in the Rust driver, found by the differential.**
+`match_ground_pattern` compared a repeated variable's binding with
+`previous != slice` — `CoreTerm`'s **derived** equality, which includes the source
+`span`. Two occurrences of the same symbol written in different places therefore
+compared unequal, the repeated variable never matched, and the driver folded the
+call to the *next sentence*:
+
+```refal
+Pair { s.A s.a = <Prout 'folded'>; e.Other = <Prout 'did-not-fold'>; }
+```
+
+`<Pair 'q' 'q'>` — the source prints `folded`, and the residue printed
+`did-not-fold`. That is a **wrong program, not a slow one**, and it was on the
+*default* path: `refal residualize-driven` on a closed entry produced it. The
+identical defect sat in the symbolic matcher (`match_at`) at two more sites, where
+it changed the compiler's own residue. All three now go through
+`same_term_sequence` / `term_sequences_same_kind`, which ignore spans — the trap
+`same_term_kind` was written for and documents. The Refal side was already correct
+(`DsMSVarBind` compares through `SameChars`, and Refal terms carry no spans), so
+the fix makes the two **agree**.
+
+**Consequence: the compiler's own output moves 102,436 → 111,600 bytes.** Both
+drivers now produce that figure and agree on it byte for byte (measured). The old
+number was produced by the mis-fold, so it was the size of a compiler built from a
+wrongly folded residue. Every surface that published it is updated: the README's
+prose and both `alt` texts, the generated `demonstrations` panel, and the
+hand-committed `fixpoint` panel's `<desc>` and label.
+
+**Gates.** `a_repeated_variable_matches_by_value_not_by_source_position` pins the
+witness: the equal pair must fold, the *unequal* pair must still fall through, and
+the residue must **agree with its source**. `the_pattern_partition_is_ported_to_the_refal_authored_driver`
+now requires **75 of 77** (up from 52). Green: the 45 `refal_authored_*` corpus
+differentials, `compile_command_compiles_the_compiler_itself`,
+`the_refal_driver_reaches_a_fixpoint_on_the_compiler_itself`,
+`the_self_applied_compiler_compiles_every_example_the_compiler_accepts`,
+`strict_mode_has_no_false_positives_on_the_corpus`, `differential-corpus: equal`.
+
+**The figure does not move.** The compiler's output is larger and slower to
+compile, but the withheld credit in the compiler row is for speed on very large
+inputs and for a fixpoint over arbitrary programs, and neither changed.
+
 ### Done — the constructor-entering partition is ported into the Refal-authored driver, and it is a differential (2026-10-10)
 
 **The partition is no longer a Rust-only capability.** `examples/compiler.ref` now
