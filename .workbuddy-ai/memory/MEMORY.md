@@ -34,10 +34,25 @@ course of action I recommend.** The Chief Architect's convention for this repo:
 
 ## Current state
 
-- **Honest completion ~91.5%** of the four-layer supersystem (one number, one
-  table, in `README.md`). The table's twelve credits sum to 91.52 — **the
-  published figure must always equal the table's sum**; a 0.27 discrepancy was
-  found and fixed on 2026-10-09.
+- **Honest completion ~91.7%** of the four-layer supersystem (one number, one
+  table, in `README.md`). The table's twelve credits sum to **91.66** — **the
+  published figure must always equal the table's sum** (a 0.27 discrepancy was
+  found and fixed on 2026-10-09; the runtime row earned 13.51 → 13.65 on
+  2026-10-10). The **`status` SVG pair is hand-committed**, so moving the figure
+  means editing it by hand too (headline, desc, and the L0 bar — L0's grouping is
+  `(frontend + semantics + runtime)`).
+- **A block sentence carrying a condition now runs on the work list** (2026-10-10,
+  runtime row closed). `ConditionEval` carries a `ConditionOwner` (`Function` or
+  `Block`) so a failing chain continues into the right next sentence;
+  `terms_are_worklist_safe` no longer rejects a block with conditions, which is
+  what had pushed every function containing one off the work list. Gate:
+  `a_block_sentence_that_carries_a_condition_runs_on_the_work_list` (100,000
+  steps; overflows the stack against the old code).
+- **The README is visual-first** (2026-10-10, `1429e8f`): 13 generated panels
+  (`cargo xtask gen-readme-diagrams`), narrative in diagrams with one-line
+  captions, detailed prose collapsed into `<details>`. `docs/SEO.md` holds the
+  keyword strategy. **Canva is deliberately not used** — code-generated
+  theme-aware SVG is the repo's convention and is strictly better here.
 - **`refal feasibility <file.ref> [--certificate]`** (2026-10-09) — Tier 1
   feasibility and termination with certificates. Per sentence: `feasible` (ground
   witness, re-checked by `verify`) / `infeasible` (shadowing proof) / `unproven`
@@ -63,7 +78,19 @@ course of action I recommend.** The Chief Architect's convention for this repo:
   collected only self-calls and so reported mutual loops as terminating; it was
   replaced, and the unproven count rose 129 → 439. Record the worse number.
 - **The repository is 100% Rust** (2026-10-09) — no Python, no Shell; tooling is
-  `crates/xtask` via `cargo xtask <task>`.
+  `crates/xtask` via `cargo xtask <task>`. **The GitHub language bar is pinned to
+  match** (2026-10-10, `7319800`): `.gitattributes` marks `.ref`/`.md`/`.manifest`
+  as `linguist-documentation` and `docs/images/*.svg` as
+  `linguist-generated`, so the bar is a property of the file, not of Linguist's
+  heuristics. The `Rust 97.1% / Python 2.4% / Shell 0.5%` the Chief Architect saw
+  was stale cache from before `8151ce1`; Linguist recomputes on push.
+- **README visuals are code-generated** (2026-10-10): `cargo xtask
+  gen-readme-diagrams` emits ten panels (was nine) as light/dark SVG pairs from
+  one description; the tenth, `glance`, is the five-tile at-a-glance dashboard
+  under the hero. **Rule: edit `crates/xtask/src/diagrams.rs`, never the SVGs;
+  regeneration must leave `git diff docs/images` empty.** Seven older panels
+  (`hero`, `status`, `layers`, `pipeline`, `prover`, `fixpoint`, `metasystem`) are
+  still hand-committed SVG, not generated.
 - **Conformance ledger: 19 closed / 6 partial / 1 out of scope** (`E-1 … E-26`;
   `E-26` is the Principia Cybernetica network, out of scope). Source of truth:
   `docs/TURCHIN-ECOSYSTEM-CONFORMANCE.md`.

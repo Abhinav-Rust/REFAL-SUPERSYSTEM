@@ -15,8 +15,8 @@
   <text x="1052" y="173" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="600" fill="#1F2328">3.15 / 4.2</text>
   <text x="40" y="194" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#57606A">L0 · machine / runtime</text>
   <rect x="400" y="182" width="640" height="14" rx="7" fill="#E6EDF3"/>
-  <rect x="400" y="182" width="86.464" height="14" rx="7" fill="#0D9488"/>
-  <text x="1052" y="194" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="600" fill="#1F2328">13.51 / 13.65</text>
+  <rect x="400" y="182" width="87.36" height="14" rx="7" fill="#0D9488"/>
+  <text x="1052" y="194" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="600" fill="#1F2328">13.65 / 13.65</text>
   <text x="40" y="215" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#57606A">L1 · reflection engine</text>
   <rect x="400" y="203" width="640" height="14" rx="7" fill="#E6EDF3"/>
   <rect x="400" y="203" width="57.6" height="14" rx="7" fill="#0D9488"/>
@@ -54,5 +54,5 @@
   <rect x="400" y="371" width="17.024" height="14" rx="7" fill="#0D9488"/>
   <text x="1052" y="383" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="600" fill="#1F2328">2.66 / 2.8</text>
   <rect x="40" y="396" width="1120" height="44" rx="12" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1.5"/>
-  <text x="64" y="424" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#134E4A">One number, one method: ~91.5 of 100, from one table. A row carries zero credit until a gate behind it is green.</text>
+  <text x="64" y="424" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#134E4A">One number, one method: ~91.7 of 100, from one table. A row carries zero credit until a gate behind it is green.</text>
 </svg>

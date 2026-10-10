@@ -186,6 +186,41 @@ enum PendingTerm<'a> {
     BlockResult,
 }
 
+/// What a sentence belongs to. A condition chain that fails has to continue
+/// into the *next sentence of the same owner*, and an owner is either a named
+/// function or an anonymous block, so the task carries which one it is rather
+/// than a name that only makes sense for the first.
+enum ConditionOwner<'a> {
+    Function {
+        name: String,
+        args: ViewField,
+    },
+    Block {
+        sentences: &'a [refal_ast::Sentence],
+        args: ViewField,
+    },
+}
+
+impl<'a> ConditionOwner<'a> {
+    /// The task that tries the owner's sentence at `sentence_index`.
+    fn next_sentence(self, sentence_index: usize, depth: usize) -> WorkTask<'a> {
+        match self {
+            ConditionOwner::Function { name, args } => WorkTask::Function {
+                name,
+                args,
+                depth,
+                sentence_index,
+            },
+            ConditionOwner::Block { sentences, args } => WorkTask::Block {
+                sentences,
+                args,
+                depth,
+                sentence_index,
+            },
+        }
+    }
+}
+
 enum WorkTask<'a> {
     Function {
         name: String,
@@ -203,9 +238,10 @@ enum WorkTask<'a> {
         sentence_index: usize,
     },
     Terms(WorkTermsFrame<'a>),
+    /// A sentence's condition chain, evaluated on the work list so that a block
+    /// sentence carrying conditions no longer falls back to host recursion.
     ConditionEval {
-        function_name: String,
-        function_args: ViewField,
+        owner: ConditionOwner<'a>,
         sentence_index: usize,
         conditions: &'a [Condition],
         result_terms: &'a [Term],
@@ -515,8 +551,7 @@ impl<'a> Evaluator<'a> {
                         }
                     },
                     WorkTask::ConditionEval {
-                        function_name,
-                        function_args,
+                        owner,
                         sentence_index,
                         conditions,
                         result_terms,
@@ -546,8 +581,7 @@ impl<'a> Evaluator<'a> {
                             Err(error) => return Err(EvalError::Match(error)),
                         }
                         tasks.push(WorkTask::ConditionEval {
-                            function_name,
-                            function_args,
+                            owner,
                             sentence_index,
                             conditions,
                             result_terms,
@@ -645,8 +679,7 @@ impl<'a> Evaluator<'a> {
                             candidates.into_iter().map(Rc::new).collect();
                         pending_bindings.reverse();
                         tasks.push(WorkTask::ConditionEval {
-                            function_name: name,
-                            function_args: args,
+                            owner: ConditionOwner::Function { name, args },
                             sentence_index,
                             conditions: &sentence.conditions,
                             result_terms: &sentence.result,
@@ -677,9 +710,16 @@ impl<'a> Evaluator<'a> {
                         )));
                         continue;
                     };
-                    // Block sentences carrying conditions still take the
-                    // recursive path; the common case is a plain sentence.
-                    if !sentence.conditions.is_empty() || !terms_are_worklist_safe(&sentence.result)
+                    // A block is an anonymous function, so it takes the same
+                    // work-list path a named call does -- conditions included.
+                    // Only a result or a condition the work list cannot carry
+                    // falls back to the recursive evaluator, which is the one
+                    // place a deeply nested block still uses the host stack.
+                    if !terms_are_worklist_safe(&sentence.result)
+                        || sentence.conditions.iter().any(|condition| {
+                            !terms_are_worklist_safe(&condition.result)
+                                || !condition_pattern_is_matchable(&condition.pattern)
+                        })
                     {
                         returned = Some(
                             self.evaluate_sentences(BLOCK_SENTINEL, sentences, &args, depth)
@@ -687,29 +727,56 @@ impl<'a> Evaluator<'a> {
                         );
                         continue;
                     }
-                    match match_pattern_first(&sentence.pattern, &args) {
-                        Ok(bindings) => {
-                            tasks.push(WorkTask::Terms(WorkTermsFrame::new(
-                                &sentence.result,
-                                Rc::new(bindings),
-                                depth,
-                                None,
-                            )));
+                    let candidates = if sentence.conditions.is_empty() {
+                        match match_pattern_first(&sentence.pattern, &args) {
+                            Ok(bindings) => vec![bindings],
+                            Err(MatchError::NoMatch) => Vec::new(),
+                            Err(error) => return Err(EvalError::Match(error)),
                         }
-                        Err(MatchError::NoMatch) => {
-                            tasks.push(WorkTask::Block {
-                                sentences,
-                                args,
-                                depth,
-                                sentence_index: sentence_index + 1,
-                            });
+                    } else {
+                        match match_pattern_candidates(&sentence.pattern, &args) {
+                            Ok(candidates) => candidates,
+                            Err(MatchError::NoMatch) => Vec::new(),
+                            Err(error) => return Err(EvalError::Match(error)),
                         }
-                        Err(error) => return Err(EvalError::Match(error)),
+                    };
+                    if candidates.is_empty() {
+                        tasks.push(WorkTask::Block {
+                            sentences,
+                            args,
+                            depth,
+                            sentence_index: sentence_index + 1,
+                        });
+                    } else if sentence.conditions.is_empty() {
+                        let bindings = candidates
+                            .into_iter()
+                            .next()
+                            .expect("candidates was checked non-empty");
+                        tasks.push(WorkTask::Terms(WorkTermsFrame::new(
+                            &sentence.result,
+                            Rc::new(bindings),
+                            depth,
+                            None,
+                        )));
+                    } else {
+                        let mut pending_bindings: Vec<SharedBindings> =
+                            candidates.into_iter().map(Rc::new).collect();
+                        pending_bindings.reverse();
+                        tasks.push(WorkTask::ConditionEval {
+                            owner: ConditionOwner::Block { sentences, args },
+                            sentence_index,
+                            conditions: &sentence.conditions,
+                            result_terms: &sentence.result,
+                            condition_index: 0,
+                            pending_bindings,
+                            matched_bindings: Vec::new(),
+                            current_bindings: None,
+                            depth,
+                        });
                     }
                 }
                 WorkTask::ConditionEval {
-                    function_name,
-                    function_args,
+                    owner,
                     sentence_index,
                     conditions,
                     result_terms,
@@ -721,8 +788,7 @@ impl<'a> Evaluator<'a> {
                 } => {
                     if let Some(bindings) = pending_bindings.pop() {
                         tasks.push(WorkTask::ConditionEval {
-                            function_name,
-                            function_args,
+                            owner,
                             sentence_index,
                             conditions,
                             result_terms,
@@ -739,12 +805,7 @@ impl<'a> Evaluator<'a> {
                             None,
                         )));
                     } else if matched_bindings.is_empty() {
-                        tasks.push(WorkTask::Function {
-                            name: function_name,
-                            args: function_args,
-                            depth,
-                            sentence_index: sentence_index + 1,
-                        });
+                        tasks.push(owner.next_sentence(sentence_index + 1, depth));
                     } else if condition_index + 1 == conditions.len() {
                         tasks.push(WorkTask::Terms(WorkTermsFrame::new(
                             result_terms,
@@ -755,8 +816,7 @@ impl<'a> Evaluator<'a> {
                     } else {
                         matched_bindings.reverse();
                         tasks.push(WorkTask::ConditionEval {
-                            function_name,
-                            function_args,
+                            owner,
                             sentence_index,
                             conditions,
                             result_terms,
@@ -1381,13 +1441,19 @@ fn terms_are_worklist_safe(terms: &[Term]) -> bool {
             argument,
             sentences,
         } => {
+            // A block is an anonymous function, so it is worklist-safe exactly
+            // when every one of its sentences is: a result and a set of
+            // conditions the work list can carry, and no condition whose
+            // *pattern* is itself a block (that form applies the block to the
+            // condition's value and stays on the recursive evaluator).
             terms_are_worklist_safe(argument)
                 && sentences.iter().all(|sentence| {
-                    // A block sentence carrying conditions still takes the
-                    // recursive path; the work list handles the plain case.
-                    sentence.conditions.is_empty()
-                        && terms_are_worklist_safe(&sentence.pattern)
+                    terms_are_worklist_safe(&sentence.pattern)
                         && terms_are_worklist_safe(&sentence.result)
+                        && sentence.conditions.iter().all(|condition| {
+                            terms_are_worklist_safe(&condition.result)
+                                && condition_pattern_is_matchable(&condition.pattern)
+                        })
                 })
         }
     })
@@ -3079,6 +3145,69 @@ mod tests {
             evaluator.evaluate_entry(&[Value::Char('B')]).unwrap(),
             vec![Value::identifier("Fail")]
         );
+    }
+
+    /// A block sentence carrying a condition used to fall back to the recursive
+    /// evaluator -- and, because `terms_are_worklist_safe` rejected such a block,
+    /// so did every function whose result contained one. Both now go on the work
+    /// list. The same program, driven to a depth no host stack survives, must
+    /// finish: on the work list the depth costs heap, not frames.
+    #[test]
+    fn a_block_sentence_that_carries_a_condition_runs_on_the_work_list() {
+        let block = term(TermKind::Block {
+            argument: vec![var(VariableKind::Expression, "T")],
+            sentences: vec![Sentence {
+                pattern: vec![var(VariableKind::Expression, "Rest")],
+                conditions: vec![Condition {
+                    result: vec![term(TermKind::Symbol(Symbol::Char('o')))],
+                    pattern: vec![term(TermKind::Symbol(Symbol::Char('o')))],
+                    span: span(),
+                }],
+                result: vec![call("Loop", vec![var(VariableKind::Expression, "Rest")])],
+                span: span(),
+            }],
+        });
+        let program = program(vec![
+            function(
+                "Go",
+                Visibility::Entry,
+                vec![Sentence {
+                    pattern: vec![var(VariableKind::Expression, "Input")],
+                    conditions: vec![],
+                    result: vec![call("Loop", vec![var(VariableKind::Expression, "Input")])],
+                    span: span(),
+                }],
+            ),
+            function(
+                "Loop",
+                Visibility::Local,
+                vec![
+                    Sentence {
+                        pattern: vec![],
+                        conditions: vec![],
+                        result: vec![term(TermKind::Symbol(Symbol::Identifier(
+                            "Done".to_string(),
+                        )))],
+                        span: span(),
+                    },
+                    Sentence {
+                        pattern: vec![
+                            var(VariableKind::Symbol, "H"),
+                            var(VariableKind::Expression, "T"),
+                        ],
+                        conditions: vec![],
+                        result: vec![block],
+                        span: span(),
+                    },
+                ],
+            ),
+        ]);
+        let evaluator = Evaluator::new(&program);
+        let input: Vec<Value> = (0..100_000).map(|_| Value::Char('a')).collect();
+        let output = evaluator
+            .evaluate_entry(&input)
+            .expect("the deep block recursion should finish");
+        assert_eq!(output, vec![Value::identifier("Done")]);
     }
 
     #[test]

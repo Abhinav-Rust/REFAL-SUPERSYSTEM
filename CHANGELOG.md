@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+**A block sentence carrying a condition runs on the work list — and the runtime
+row closes.**
+
+- **The one gap the work list did not cover.** A block sentence carrying
+  conditions fell back to the recursive evaluator, and `terms_are_worklist_safe`
+  rejected such a block, so *every function whose result contained one* was pushed
+  off the work list too. With `DEFAULT_MAX_CALL_DEPTH = usize::MAX`, a recursion
+  through one ran on the host stack with no depth guard at all.
+- **The fix:** `ConditionEval` now carries a `ConditionOwner` — a named function
+  or an anonymous block — so a failing chain continues into the right kind of next
+  sentence. The `Block` handler mirrors the `Function` handler exactly, and the
+  function path shares the one handler.
+- **The gate is non-vacuous:**
+  `a_block_sentence_that_carries_a_condition_runs_on_the_work_list` drives
+  100,000 block-conditioned steps and **aborts with `STATUS_STACK_OVERFLOW`**
+  against the old `terms_are_worklist_safe`. The differential corpus is unchanged
+  (`differential-corpus: equal`, 72 cases).
+- **The figure moves `~91.5% → ~91.7%`** — an *earning*, not a re-attribution:
+  the row's withheld credit was for exactly this behaviour and the gate behind it
+  is green. The runtime row rises **13.51 → 13.65**; the table sums to **91.66**.
+
 **E-14's derivation closes — and it was blocked by a capability another row
 removed while the note was being written.**
 

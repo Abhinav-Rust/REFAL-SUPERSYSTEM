@@ -16,7 +16,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/status-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/status-light.svg">
-  <img alt="Status: about 91.5% of the supersystem — L0, L1 and the Refal-authored compiler are near complete, L2 is close, and L3 and L4 are partial" src="docs/images/status-light.svg" width="100%">
+  <img alt="Status: about 91.7% of the supersystem — L0, L1 and the Refal-authored compiler are near complete, L2 is close, and L3 and L4 are partial" src="docs/images/status-light.svg" width="100%">
 </picture>
 
 </div>
@@ -38,7 +38,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/glance-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/glance-light.svg">
-  <img alt="At a glance: four layers over one shared expression space; about 91.5% of the supersystem complete by one method; 100% Rust; a byte-identical self-hosting fixpoint at 12,599 bytes; and 19 of 25 in-scope conformance rows closed" src="docs/images/glance-light.svg" width="100%">
+  <img alt="At a glance: four layers over one shared expression space; about 91.7% of the supersystem complete by one method; 100% Rust; a byte-identical self-hosting fixpoint at 12,599 bytes; and 19 of 25 in-scope conformance rows closed" src="docs/images/glance-light.svg" width="100%">
 </picture>
 
 </div>
@@ -369,7 +369,7 @@ operations at the centre of the language.
 
 ## Project status
 
-### Honest completion: ~91.5%
+### Honest completion: ~91.7%
 
 This figure measures **the whole supersystem** — all four layers — not the compiler
 alone. The compiler is finished; the supersystem is not, and publishing the
@@ -396,7 +396,7 @@ compiler's own number as the project's would misdescribe what this repository is
 |---|---:|---:|---:|---|
 | L0 · Bootstrap frontend | 5.95 | 5.60 | 0.35 | the corpus cites the *syntax* reference rather than the Programming Guide's longer treatment |
 | L0 · Bootstrap semantics | 4.20 | 3.15 | 1.05 | exhaustiveness lives in Tier 1 rather than here |
-| L0 · Refal machine / runtime | 13.65 | 13.51 | 0.14 | block sentences carrying conditions take the recursive path |
+| **L0 · Refal machine / runtime** | **13.65** | **13.65** | **0.00** | closed — a block sentence carrying a condition now runs on the work list exactly as a named call does, so a recursion through one no longer uses the host stack. The gate drives 100,000 such steps, which overflowed the stack before the fix |
 | **L1 · Reflection engine** | **9.00** | **9.00** | **0.00** | closed — the service is exposed as `refal reflect`, with four shape gates |
 | L2 · Graph of states / emission | 5.95 | 5.35 | 0.60 | **§4.4's other half (E-7)** — 0.45, a Tier-2 research item — and **E-11's stack configuration** — 0.15. E-11's other behaviours (positive information, negative information, the non-tail bracket context) are built and gated, so they carry credit |
 | Tier 1 static verification | 10.50 | 9.50 | 1.00 | the decidable checks, **and a sound, incomplete, certificate-carrying feasibility and termination analysis** (`refal feasibility`, see below). What is withheld is termination where a call passes something no measure ranks — a computed argument, `<DsScan <DsBump …>>` — which is what still bounds the compiler's 480-function component, and feasibility beyond the witness budget |
@@ -406,9 +406,24 @@ compiler's own number as the project's would misdescribe what this repository is
 | L4 · Projections as artifacts | 5.00 | 3.50 | 1.50 | the 1st and 2nd both emit target code with gates, and the self-application emits a working compiler. **Driving the supercompiler's own dispatcher now *closes*** — 147 steps, 51 configurations, one split — and emits a `Dispatch`-free program that **checks as Refal**, so the derivation is real rather than authored. What is withheld is that the residue has not been **run**: as a compiler it does not complete under the bootstrap, and the row's gate requires it to agree with `refal compile` on every example |
 | **L2 · Function inversion** | **3.00** | **3.00** | **0.00** | closed — `refal invert` drives the forward definition and emits the synthesised inverse, round-tripped in a gate |
 | Conformance / release evidence | 2.80 | 2.66 | 0.14 | three file-backed I/O clauses bind to the runtime's own test rather than a fixture |
-| **Total** | **100.00** | **~91.5** | **~8.5** | |
+| **Total** | **100.00** | **~91.7** | **~8.3** | |
 
 </details>
+
+**The 2026-10-10 move, and it is an *earning* rather than a re-attribution.** The
+runtime row's withheld credit was for the one thing the work list did not cover:
+a **block sentence carrying conditions** still fell back to the recursive
+evaluator, and `terms_are_worklist_safe` rejected such a block, so every function
+whose result contained one was pushed off the work list too — a recursion through
+it ran on the host stack, where the default depth limit is `usize::MAX`. The
+condition task now carries its **owner** (a named function or an anonymous
+block), so both go on the work list; the gate
+`a_block_sentence_that_carries_a_condition_runs_on_the_work_list` drives 100,000
+block-conditioned steps and **overflowed the stack before the fix** — the
+evidence is that the same test aborts with `STATUS_STACK_OVERFLOW` against the
+old `terms_are_worklist_safe`. The row's credit rises **13.51 → 13.65**, the
+table's sum moves **91.52 → 91.66**, and the published figure moves
+**~91.5% → ~91.7%**.
 
 **The 2026-10-09 re-attribution, and an arithmetic defect it exposed.** The
 Tier-1 row's withheld credit was for a *sound, incomplete, certificate-carrying
@@ -913,7 +928,7 @@ without garbage collection.
 <summary><b>Is it usable today?</b></summary>
 
 The **compiler is finished and gated**; the *supersystem* is being completed and
-is at about **91.5%**. `refal compile`, `refal run`, `refal check`, `refal reflect`,
+is at about **91.7%**. `refal compile`, `refal run`, `refal check`, `refal reflect`,
 `refal prove`, `refal invert` and `refal project2` all work and are exercised by
 tests. What remains is named row by row in
 [What is left](#what-is-left).

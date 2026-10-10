@@ -48,8 +48,8 @@ See `README.md` §"What Theorem 5.1 does and does not forbid" and
 
 | | |
 |---|---|
-| Honest completion | **~91.5%** (supersystem completeness — one method, one table, in `README.md`) |
-| Tests | 416 (72 core + 177 CLI integration + 167 across the other four crates), 0 clippy, fmt clean |
+| Honest completion | **~91.7%** (supersystem completeness — one method, one table, in `README.md`) |
+| Tests | 417 (73 core + 177 CLI integration + 167 across the other four crates), 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
 
@@ -71,6 +71,40 @@ Rust oracle at budgets 1, 2, 5 and 12. The T-4/T-6 differential
 corpus gate is green at `cases: 71`, `positive: 31`, `check-failure: 6`,
 `runtime-failure: 1`, `residual: 33`, `cleaned-sentences: 1`, and
 `clippy --all-targets -D warnings` and `cargo fmt --check` are clean.
+
+### Done — a block sentence carrying a condition runs on the work list, and the runtime row closes (2026-10-10)
+
+**The one thing the work list did not cover is covered.** The runtime row's
+withheld credit was exactly this: a **block sentence carrying conditions** fell
+back to the recursive evaluator. The cause was in two places, and the second is
+the one that mattered — `terms_are_worklist_safe` returned `false` for a block
+whose sentences carried conditions, so *every function whose result contained
+such a block* was pushed off the work list as well. With
+`DEFAULT_MAX_CALL_DEPTH = usize::MAX`, a recursion through one ran on the host
+stack and had no depth guard at all.
+
+**The fix is one idea: the condition task carries its owner.** `ConditionEval`
+used to hold `function_name`/`function_args`, which only names a function. It now
+holds a `ConditionOwner` — `Function { name, args }` or `Block { sentences, args }`
+— and a failing chain continues into the right kind of next sentence through
+`owner.next_sentence`. The `Block` handler then mirrors the `Function` handler
+exactly: `match_pattern_candidates` when conditions exist, the same
+worklist-safety test, and a `ConditionEval` whose owner is the block. The
+function path shares the one handler, so there is no second copy of the protocol
+to drift.
+
+**Evidence, and the gate is non-vacuous.** `a_block_sentence_that_carries_a_condition_runs_on_the_work_list`
+drives 100,000 block-conditioned steps. Against the old `terms_are_worklist_safe`
+the same test **aborts with `STATUS_STACK_OVERFLOW`** (`0xc00000fd`); against the
+fix it finishes, because the depth costs heap rather than frames. The differential
+corpus is unchanged (`differential-corpus: equal`, 72 cases), the runtime suite is
+green at 84 tests, and the six block-shaped CLI differentials pass.
+
+**The figure moves `~91.5% → ~91.7%`.** This is an *earning*, not a
+re-attribution: the row's withheld credit was for exactly this behaviour, and the
+gate behind it is green. The runtime row's credit rises **13.51 → 13.65**, the
+table's twelve credits sum to **91.66**, and the published figure is the table's
+sum as the rule requires.
 
 ### Done — the language bar is 100% Rust, and the README gains an at-a-glance dashboard (2026-10-10)
 
