@@ -56,6 +56,12 @@ course of action I recommend.** The Chief Architect's convention for this repo:
   corpus scan found 13 examples where `pattern` is strictly better on
   residual-work, so the default would move corpus residues and `compiler.ref`
   would have to move with it.
+- **The partition is ported to `compiler.ref`** (2026-10-10) as
+  `RESIDUALIZE-DRIVEN-PATTERN` (+ `-COMPILATIVE`/`-INTERPRETIVE`), byte-identical
+  to `--split pattern` on the 4 examples it covers. **The partition rides in the
+  strategy character** (lowercase = pattern), so the driver state's 14 fields and
+  the default `'C'`/`'I'` path are untouched — do not thread a 15th field. Not
+  ported yet: the **complement branch** and the `pattern_splits` registry.
 - **A block sentence carrying a condition now runs on the work list** (2026-10-10,
   runtime row closed). `ConditionEval` carries a `ConditionOwner` (`Function` or
   `Block`) so a failing chain continues into the right next sentence;

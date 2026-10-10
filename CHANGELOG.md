@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+**The constructor-entering partition is ported into the Refal-authored driver —
+and it is a differential.**
+
+- **`examples/compiler.ref` carries the partition now:** `RESIDUALIZE-DRIVEN-PATTERN`
+  (the search) and `RESIDUALIZE-DRIVEN-PATTERN-{COMPILATIVE,INTERPRETIVE}` (one end
+  each). On `examples/accumulator-reverse.ref` the Refal driver's residue is
+  **byte-identical** to `refal residualize-driven --split pattern` — report,
+  strategy lines and artifact.
+- **The partition rides in the strategy character**, so the driver state's
+  fourteen fields are untouched: lowercase selects the constructor-entering
+  partition, `DsSplit` dispatches on it, and `DsStratC (e.M)` / `DsStratI (e.M)`
+  give the search its two characters. The axis and the partition stay independent
+  dimensions and the default `'C'`/`'I'` path is reached exactly as before.
+- **The mechanism that folds the accumulator** is the identification of a split
+  by the **sentences it emits**: a recurrence inside a branch reuses `Split1`
+  rather than making `Split2`. `DsAddSplitWith` registers the branches before the
+  drive, as the Rust does.
+- **The port is partial and its coverage is measured:** the complement branch and
+  the `pattern_splits` registry are not ported, so **52 of 77** examples agree
+  exactly (measured; `compiler.ref` excluded). The gate
+  `the_pattern_partition_is_ported_to_the_refal_authored_driver` sweeps the
+  corpus, requires the accumulator to fold and the count not to fall — a
+  non-regression gate, because agreement everywhere would need the two unported
+  halves.
+- **The figure does not move** — the product's default path is still the sequence
+  partition.
+
 **E-11's accumulator folds under the constructor-entering partition — and the
 row's stated reason for withholding is refuted.**
 

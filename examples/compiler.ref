@@ -86,6 +86,16 @@ Dispatch {
     <Prout <DsRdRunAt 'C' e.Source>>;
   ('RESIDUALIZE-DRIVEN-INTERPRETIVE') (e.Source) =
     <Prout <DsRdRunAt 'I' e.Source>>;
+* The same two ends with the **constructor-entering** partition (E-11). The
+* partition is a property of the caller, not of the program, and the strategy
+* character carries it: lowercase selects it, so the default 'C'/'I' path is
+* untouched and the two cannot be confused.
+  ('RESIDUALIZE-DRIVEN-PATTERN') (e.Source) =
+    <Prout <DsRdRunP e.Source>>;
+  ('RESIDUALIZE-DRIVEN-PATTERN-COMPILATIVE') (e.Source) =
+    <Prout <DsRdRunAt 'c' e.Source>>;
+  ('RESIDUALIZE-DRIVEN-PATTERN-INTERPRETIVE') (e.Source) =
+    <Prout <DsRdRunAt 'i' e.Source>>;
   ('NORMALIZE') (e.Source) =
     <Normalize <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>;
   ('SPECIALISE') (e.Interpreter) (e.Program) =
@@ -1985,6 +1995,20 @@ DsStrategy {
   (e.Mode) = 'C';
 }
 
+* The two strategy characters the *search* uses. The partition and the axis are
+* independent, so the partition is carried in the same character: lowercase
+* means the constructor-entering partition (E-11), and every other mode keeps
+* the default 'C'/'I' exactly as before.
+DsStratC {
+  (PAT) = 'c';
+  (e.M) = 'C';
+}
+
+DsStratI {
+  (PAT) = 'i';
+  (e.M) = 'I';
+}
+
 DsRun2 {
   (e.Mode) s.Strat (CG () (e.States) (e.Trans)) = "symbolic drive error: no entry";
   (e.Mode) s.Strat (CG (s.E) (e.States) (e.Trans)) =
@@ -2038,6 +2062,14 @@ DsRdRun {
 
 DsRdRun2 {
   (PROG e.Items) = <DsRdRender <DsRdSearch (REPORT) (PROG e.Items)>>;
+}
+
+* The same search with the constructor-entering partition (E-11). The mode
+* `(PAT)` is what the search reads its two strategy characters from, so the
+* default `(REPORT)` path is untouched.
+DsRdRunP {
+  e.Source =
+    <DsRdRender <DsRdSearch (PAT) <Parse <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>>>;
 }
 
 * The program a driven graph denotes, with no report. `Compile` uses this, and
@@ -2101,7 +2133,7 @@ DsRdBoth {
 * residue. Without the search the compiler refuses a legal program.
 DsRdSearch {
   (e.M) (PROG e.Items) =
-    <DsRdSearch2 (e.M) (PROG e.Items) <DsRdAt (e.M) 'C' (PROG e.Items)>>;
+    <DsRdSearch2 (e.M) (PROG e.Items) <DsRdAt (e.M) <DsStratC (e.M)> (PROG e.Items)>>;
 }
 
 * One end of the axis, driven: the mode picks the report, the strategy
@@ -2116,7 +2148,7 @@ DsRdSearch2 {
     <DsRdSearch2C (e.M) (PROG e.Items) (RD e.RepC (PROG e.C) s.StepsC) s.StepsC
       <DsCost (PROG e.C)>>;
   (e.M) (PROG e.Items) (ERR) =
-    <DsRdSearchI (e.M) (ERR) (NONE) <DsRdAt (e.M) 'I' (PROG e.Items)>>;
+    <DsRdSearchI (e.M) (ERR) (NONE) <DsRdAt (e.M) <DsStratI (e.M)> (PROG e.Items)>>;
   (e.M) (PROG e.Items) e.Other = e.Other;
 }
 
@@ -2134,36 +2166,36 @@ DsRdSearch2 {
 DsRdSearch2C {
   (e.M) (PROG e.Items) (RD e.RepC (PROG e.C) s.StepsC) s.StepsC (s.WC s.SC),
     <Compare s.WC 0> : '0' =
-    (RD e.RepC (PROG e.C) s.StepsC 'C' s.WC s.SC (SKIPPED));
+    (RD e.RepC (PROG e.C) s.StepsC <DsStratC (e.M)> s.WC s.SC (SKIPPED));
   (e.M) (PROG e.Items) (RD e.RepC (PROG e.C) s.StepsC) s.StepsC (s.WC s.SC) =
     <DsRdSearchI (e.M) (RD e.RepC (PROG e.C) s.StepsC) (SOME (s.WC s.SC))
-      <DsRdAt (e.M) 'I' (PROG e.Items)>>;
+      <DsRdAt (e.M) <DsStratI (e.M)> (PROG e.Items)>>;
 }
 
 DsRdSearchI {
   (e.M) (RD e.RepC (PROG e.C) s.StepsC) (e.CC) (RD e.RepI (PROG e.I) s.StepsI) =
-    <DsRdSearchI2 (RD e.RepC (PROG e.C) s.StepsC) (e.CC)
+    <DsRdSearchI2 (e.M) (RD e.RepC (PROG e.C) s.StepsC) (e.CC)
       (RD e.RepI (PROG e.I) s.StepsI) <DsCost (PROG e.I)>>;
   (e.M) (RD e.RepC (PROG e.C) s.StepsC) (SOME (s.WC s.SC)) (ERR) =
-    (RD e.RepC (PROG e.C) s.StepsC 'C' s.WC s.SC (FAILED));
+    (RD e.RepC (PROG e.C) s.StepsC <DsStratC (e.M)> s.WC s.SC (FAILED));
   (e.M) (ERR) (NONE) (ERR) = (ERR);
   (e.M) (e.C) (NONE) (RD e.RepI (PROG e.I) s.StepsI),
     <DsCost (PROG e.I)> : (s.WI s.SI) =
-    (RD e.RepI (PROG e.I) s.StepsI 'I' s.WI s.SI (FAILED));
+    (RD e.RepI (PROG e.I) s.StepsI <DsStratI (e.M)> s.WI s.SI (FAILED));
   (e.M) (e.C) (NONE) e.Other = e.Other;
 }
 
 * A tie goes to the compilative end, so the choice is deterministic.
 DsRdSearchI2 {
-  (RD e.RepC (PROG e.C) s.StepsC) (SOME (s.WC s.SC))
+  (e.M) (RD e.RepC (PROG e.C) s.StepsC) (SOME (s.WC s.SC))
   (RD e.RepI (PROG e.I) s.StepsI) (s.WI s.SI),
     <DsCostLt (s.WI s.SI) (s.WC s.SC)> : '1' =
-    (RD e.RepI (PROG e.I) s.StepsI 'I' s.WI s.SI (SOME (s.WC s.SC)));
-  (RD e.RepC (PROG e.C) s.StepsC) (SOME (s.WC s.SC))
+    (RD e.RepI (PROG e.I) s.StepsI <DsStratI (e.M)> s.WI s.SI (SOME (s.WC s.SC)));
+  (e.M) (RD e.RepC (PROG e.C) s.StepsC) (SOME (s.WC s.SC))
   (RD e.RepI (PROG e.I) s.StepsI) (s.WI s.SI) =
-    (RD e.RepC (PROG e.C) s.StepsC 'C' s.WC s.SC (SOME (s.WI s.SI)));
-  (RD e.RepC (PROG e.C) s.StepsC) (NONE) (RD e.RepI (PROG e.I) s.StepsI) (s.WI s.SI) =
-    (RD e.RepI (PROG e.I) s.StepsI 'I' s.WI s.SI (FAILED));
+    (RD e.RepC (PROG e.C) s.StepsC <DsStratC (e.M)> s.WC s.SC (SOME (s.WI s.SI)));
+  (e.M) (RD e.RepC (PROG e.C) s.StepsC) (NONE) (RD e.RepI (PROG e.I) s.StepsI) (s.WI s.SI) =
+    (RD e.RepI (PROG e.I) s.StepsI <DsStratI (e.M)> s.WI s.SI (FAILED));
 }
 
 * Is the first cost strictly smaller than the second? Lexicographic on
@@ -2195,12 +2227,16 @@ DsRdPlain {
 
 DsStratName {
   'C' = "compilative";
+  'c' = "compilative";
   'I' = "interpretive";
+  'i' = "interpretive";
 }
 
 DsOtherName {
   'C' = "interpretive";
+  'c' = "interpretive";
   'I' = "compilative";
+  'i' = "compilative";
 }
 
 DsOtherReport {
@@ -2366,6 +2402,12 @@ DsRdOut {
 * not decide a call at all.
 DsRdEmit {
   (REPORT) (PROG e.Items) (e.Fn) (e.Residual) (LOOP (e.Ctx)) =
+    (RD <DsRdReport (e.Ctx)> <DsRdBuild (e.Items) (e.Fn) (e.Residual) (e.Ctx)>
+        <DsSteps (e.Ctx)>);
+* The pattern-partition search reports exactly as the default one does: the
+* partition is a different dimension from the axis, so the report is the same
+* shape and the same names.
+  (PAT) (PROG e.Items) (e.Fn) (e.Residual) (LOOP (e.Ctx)) =
     (RD <DsRdReport (e.Ctx)> <DsRdBuild (e.Items) (e.Fn) (e.Residual) (e.Ctx)>
         <DsSteps (e.Ctx)>);
   (PLAIN) (PROG e.Items) (e.Fn) (e.Residual) (LOOP (e.Ctx)) =
@@ -2811,6 +2853,9 @@ DsEntry {
 
 DsInterpretive {
   (SX s.E 'I' (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE)) = '1';
+* 'i' is the interpretive end with the constructor-entering partition: the axis
+* and the partition are independent, so this is the same end.
+  (SX s.E 'i' (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE)) = '1';
   (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE)) = ;
 }
 
@@ -3577,6 +3622,11 @@ DsBlkSymD {
 * residual instead, which is what the source does with it. This is the same
 * characterisability test the entering restrictions use, for the same reason.
 DsSplit {
+* The partition is a property of the caller: a lowercase strategy character
+* selects the constructor-entering partition (E-11), and the default 'C'/'I'
+* path below is reached exactly as before.
+  (e.Ctx) (e.Fn) (e.In), <DsStrat (e.Ctx)> : 'c' = <DsSplitPat (e.Ctx) (e.Fn) (e.In)>;
+  (e.Ctx) (e.Fn) (e.In), <DsStrat (e.Ctx)> : 'i' = <DsSplitPat (e.Ctx) (e.Fn) (e.In)>;
 * A generated `SplitN` is the driver's own partition: re-partitioning it decides
 * nothing, and the fresh split would share its name, so a residual branch would
 * emit `Split1 { = <Split1>; }` -- an infinite self-loop. Declining leaves the
@@ -3586,6 +3636,175 @@ DsSplit {
   (e.Ctx) (e.Fn) (e.In), <DsCharisable (e.In)> : '1' =
     <DsSplitPos (e.Ctx) (e.Fn) (e.In) <DsExprVarPos (e.In) 0 ()>>;
   (e.Ctx) (e.Fn) (e.In) = (NONE (e.Ctx));
+}
+
+* ---- the pattern partition (E-11's nested accumulator) ---------------------
+*
+* The component at the leftmost pattern-split variable -- or a bracket whose
+* contents are exactly one -- is partitioned by the **callee's own sentence
+* patterns** at that position, taken verbatim, so the branch matches outright
+* and the partition can ENTER A CONSTRUCTOR. That is what folds an accumulator
+* whose recursion rebuilds its second argument, where the sequence partition
+* peels the argument list's tail and never enters the bracket.
+*
+* Mirrors `DriveContext::pattern_split_configuration` in `refal-core`. What is
+* deliberately not ported yet is the **complement branch** and the
+* `pattern_splits` registry keyed by the split's own sentences: the first is
+* only reached when a sentence's component at the split position is a bare
+* variable, and the accumulator has no such sentence; the second is replaced by
+* the equivalent test against the sentences `DsSetSents` already stores.
+
+* The strategy character the driver was entered with. `DsSteps` and its
+* neighbours read the rest of the state; this reads the axis.
+DsStrat {
+  (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE)) = s.T;
+}
+
+DsSplitPat {
+  (e.Ctx) (e.Fn) (e.In), <DsGenerated e.Fn> : '1' = (NONE (e.Ctx));
+  (e.Ctx) (e.Fn) (e.In) = <DsPatTarget (e.Ctx) (e.Fn) (e.In) <DsPatPos (e.In) 0>>;
+}
+
+* The split target: the leftmost component that is a pattern-split variable, or
+* a bracket whose contents are exactly one. The second case is what lets the
+* partition enter a constructor the callee discriminates.
+DsPatPos {
+  () s.I = (NONE);
+  ((VAR 'e' e.N) e.Rest) s.I = (SOME s.I);
+  ((VAR 't' e.N) e.Rest) s.I = (SOME s.I);
+  ((BR (VAR 'e' t.N)) e.Rest) s.I = (SOME s.I);
+  ((BR (VAR 't' t.N)) e.Rest) s.I = (SOME s.I);
+  (t.T e.Rest) s.I = <DsPatPos (e.Rest) <Add s.I 1>>;
+}
+
+DsPatTarget {
+  (e.Ctx) (e.Fn) (e.In) (NONE) = (NONE (e.Ctx));
+  (e.Ctx) (e.Fn) (e.In) (SOME s.P), <DsHasFunc (e.Ctx) (e.Fn)> : '1' =
+    <DsPatCollect (e.Ctx) (e.Fn) (e.In) s.P <DsStates (e.Ctx)> ()>;
+  (e.Ctx) (e.Fn) (e.In) (SOME s.P) = (NONE (e.Ctx));
+}
+
+* Every state of the callee contributes one branch: the input up to the split
+* position, then the state's own pattern from that position on. A sentence whose
+* pattern is shorter than the position declines the whole partition, which is
+* the Rust implementation's `return Ok(None)` for the same case.
+DsPatCollect {
+  (e.Ctx) (e.Fn) (e.In) s.P () (e.Branches) = <DsPatGo (e.Ctx) (e.Fn) (e.In) s.P (e.Branches)>;
+  (e.Ctx) (e.Fn) (e.In) s.P
+  ((ST s.Id (e.N) s.J (SENT (e.Pat) (e.C) (e.R))) e.Rest) (e.Branches),
+    <SameChars (<Upper e.N>) (<Upper e.Fn>)> : '1' =
+      <DsPatAdd (e.Ctx) (e.Fn) (e.In) s.P (e.Rest) (e.Branches) (e.Pat)>;
+  (e.Ctx) (e.Fn) (e.In) s.P (t.S e.Rest) (e.Branches) =
+    <DsPatCollect (e.Ctx) (e.Fn) (e.In) s.P (e.Rest) (e.Branches)>;
+}
+
+DsPatAdd {
+  (e.Ctx) (e.Fn) (e.In) s.P (e.Rest) (e.Branches) (e.Pat) =
+    <DsPatAdd2 (e.Ctx) (e.Fn) (e.In) s.P (e.Rest) (e.Branches)
+      <DsPatBranch (e.In) s.P (e.Pat)>>;
+}
+
+DsPatAdd2 {
+  (e.Ctx) (e.Fn) (e.In) s.P (e.Rest) (e.Branches) (OK (e.Branch)) =
+    <DsPatCollect (e.Ctx) (e.Fn) (e.In) s.P (e.Rest)
+      <DsPatPush (e.Branches) (e.Branch)>>;
+  (e.Ctx) (e.Fn) (e.In) s.P (e.Rest) (e.Branches) (SHORT) = (NONE (e.Ctx));
+}
+
+* `input[..s.P]` followed by `pattern[s.P..]`.
+DsPatBranch {
+  (e.In) s.P (e.Pat) = <DsPatBranchL (e.In) s.P () (e.Pat)>;
+}
+
+DsPatBranchL {
+  (e.In) 0 (e.Acc) (e.Pat) = (OK (e.Acc e.Pat));
+  (e.In) s.P (e.Acc) () = (SHORT);
+  (t.T e.Rest) s.P (e.Acc) (t.Hd e.Ps) =
+    <DsPatBranchL (e.Rest) <Sub s.P 1> (e.Acc t.T) (e.Ps)>;
+}
+
+* One branch per distinct shape, as `term_sequences_same_kind` decides it.
+DsPatPush {
+  (e.Branches) (e.Branch), <DsPatHas (e.Branches) (e.Branch)> : '1' = (e.Branches);
+  (e.Branches) (e.Branch) = (e.Branches (e.Branch));
+}
+
+DsPatHas {
+  () (e.Branch) = ;
+  ((e.B) e.Rest) (e.Branch), <DsSameKind (e.B) (e.Branch)> : '1' = '1';
+  (t.S e.Rest) (e.Branch) = <DsPatHas (e.Rest) (e.Branch)>;
+}
+
+* Structural equality of two term sequences. The AST carries no source position,
+* so this is the whole of `term_sequences_same_kind` / `same_term_kind` here.
+DsSameKind {
+  () () = '1';
+  (t.A e.R) (t.B e.S), <DsSameTerm t.A t.B> : '1' = <DsSameKind (e.R) (e.S)>;
+  (e.A) (e.B) = ;
+}
+
+DsSameTerm {
+  (VAR s.K e.N) (VAR s.K2 e.N2),
+    <SameChars (s.K) (s.K2)> : '1', <SameChars (<Upper e.N>) (<Upper e.N2>)> : '1' = '1';
+  (ID e.N) (ID e.N2), <SameChars (<Upper e.N>) (<Upper e.N2>)> : '1' = '1';
+  (NUM e.D) (NUM e.D2), <SameChars (e.D) (e.D2)> : '1' = '1';
+  (SYM s.C) (SYM s.C) = '1';
+  (BR e.X) (BR e.Y), <DsSameKind (e.X) (e.Y)> : '1' = '1';
+  (CALL (ID e.N) e.Args) (CALL (ID e.N2) e.Args2),
+    <SameChars (<Upper e.N>) (<Upper e.N2>)> : '1',
+    <DsSameKind (e.Args) (e.Args2)> : '1' = '1';
+  t.A t.B = ;
+}
+
+DsPatGo {
+  (e.Ctx) (e.Fn) (e.In) s.P () = (NONE (e.Ctx));
+  (e.Ctx) (e.Fn) (e.In) s.P (e.Branches),
+    <DsPatFindSent (e.Ctx) (e.Branches)> : (SOME (e.Name)) =
+      (SOME <DsCallSeq (e.Name) (e.In)> (e.Ctx));
+  (e.Ctx) (e.Fn) (e.In) s.P (e.Branches),
+    <DsSplitCount (e.Ctx)> : s.N, <Compare s.N 16> : '-' =
+      <DsPatMake (e.Ctx) (e.Fn) (e.In) (e.Branches) <Add s.N 1>>;
+  (e.Ctx) (e.Fn) (e.In) s.P (e.Branches) = (NONE (e.Ctx));
+}
+
+* A split is identified by the **sentences it emits**, not by the configuration
+* that asked for it: `<Rev (e.T) (t.H e.A)>` asks for the same two branches
+* `<Rev e.X ()>` did, so it must reuse `Split1` rather than make `Split2` --
+* which is what makes the recursion fold. `DsSetSents` already stores the
+* emitted sentences, so the test reads them there.
+DsPatFindSent {
+  (e.Ctx) (e.Branches) = <DsPatFindSentL <DsSplits (e.Ctx)> (e.Branches)>;
+}
+
+DsPatFindSentL {
+  () (e.Branches) = (NONE);
+  ((SP (e.Name) (e.F) (e.Can) (e.Sents)) e.Rest) (e.Branches),
+    <DsSentsMatch (e.Sents) (e.Branches)> : '1' = (SOME (e.Name));
+  (t.S e.Rest) (e.Branches) = <DsPatFindSentL (e.Rest) (e.Branches)>;
+}
+
+* A split's fourth field is its **branches** until the drive finishes and
+* `DsSetSents` replaces them with the sentences, so both forms are compared here:
+* a sentence's pattern is the branch it was built from.
+DsSentsMatch {
+  () () = '1';
+  ((SENT (e.B) (e.C) (e.R)) e.R1) ((e.Br) e.R2), <DsSameKind (e.B) (e.Br)> : '1' =
+    <DsSentsMatch (e.R1) (e.R2)>;
+  ((e.B) e.R1) ((e.Br) e.R2), <DsSameKind (e.B) (e.Br)> : '1' =
+    <DsSentsMatch (e.R1) (e.R2)>;
+  (e.A) (e.B) = ;
+}
+
+DsPatMake {
+  (e.Ctx) (e.Fn) (e.In) (e.Branches) s.Index =
+    <DsPatMake2 <DsAddSplitWith (e.Ctx) (e.Fn) (<DsCanonical (e.In)>) (e.In) s.Index
+                  (e.Branches)>
+      (e.Fn) (e.In) s.Index (e.Branches)>;
+}
+
+DsPatMake2 {
+  (e.Ctx) (e.Fn) (e.In) s.Index (e.Branches) =
+    <DsSplitLoop (e.Ctx) (e.Fn) (e.In) s.Index (e.Branches) ()>;
 }
 
 * Whether a name is one the driver generates for a case split: `Split` followed
@@ -3756,11 +3975,23 @@ DsSplitFinish {
 }
 
 DsAddSplit {
+  (e.Ctx) (e.Fn) (e.Can) (e.In) s.Index =
+    <DsAddSplitWith (e.Ctx) (e.Fn) (e.Can) (e.In) s.Index ()>;
+}
+
+* The split's fourth field starts as the **branches** and `DsSetSents` replaces
+* it with the sentences once the branches have been driven. The pattern
+* partition needs the branches there from the start: a recurrence *inside* a
+* branch -- `<Rev (e.T) (t.H e.A)>` reached while driving `Split1`'s second
+* branch -- has to find the split it is inside and reuse it, which is what folds
+* the recursion instead of leaving it residual. Mirrors the Rust registration
+* before the branches are driven.
+DsAddSplitWith {
   (SX s.E s.T (e.St) s.S (e.V) (e.VI) (e.AP) (e.SP) (e.CP) (e.CF) (e.CT) t.A s.N (e.WE))
-      (e.Fn) (e.Can) (e.In) s.Index =
+      (e.Fn) (e.Can) (e.In) s.Index (e.Sents) =
     (SX s.E s.T (e.St) s.S (e.V) (e.VI)
         (e.AP (AP (e.Fn) (e.Can) (e.In) <DsNeigh (e.In)> (SOME (<DsSplitName s.Index>))))
-        (e.SP (SP (<DsSplitName s.Index>) (e.Fn) (e.Can) ()))
+        (e.SP (SP (<DsSplitName s.Index>) (e.Fn) (e.Can) (e.Sents)))
         (e.CP) (e.CF) (e.CT) t.A s.N (e.WE));
 }
 
