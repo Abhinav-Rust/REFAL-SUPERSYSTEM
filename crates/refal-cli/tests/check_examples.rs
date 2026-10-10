@@ -7656,6 +7656,86 @@ fn the_pattern_partition_folds_a_nested_accumulator() {
     }
 }
 
+/// The constructor-entering partition is **not a Rust-only capability**: the
+/// Refal-authored driver in `examples/compiler.ref` produces the same residue,
+/// byte for byte, on every example the port covers.
+///
+/// `RESIDUALIZE-DRIVEN-PATTERN` is the search with the pattern partition, and it
+/// is compared against `residualize-driven --split pattern`. The partition is
+/// carried in the strategy character — lowercase selects it — so the default
+/// `'C'`/`'I'` path is untouched and the two cannot be confused.
+///
+/// **The port is partial, and its coverage is measured rather than asserted
+/// complete.** Ported: the target selection (a pattern-split variable, or a
+/// bracket whose contents are exactly one), the branch emission from the
+/// callee's own patterns, and the identification of a split by the **sentences
+/// it emits**, which is what lets a recurrence inside a branch reuse `Split1`
+/// instead of making a second split — the mechanism that folds the accumulator.
+/// Not ported: the **complement branch** (reached only where a sentence's
+/// component at the split position is a bare variable) and the `pattern_splits`
+/// registry keyed by canonical input as well as by sentences. Measured
+/// 2026-10-10: **52 of 77 examples agree exactly**. The gate is therefore a
+/// **non-regression** one — the witness must fold and the count must not fall —
+/// because demanding agreement everywhere would demand the two unported halves.
+#[test]
+fn the_pattern_partition_is_ported_to_the_refal_authored_driver() {
+    /// The measurement this gate pins. Re-derive it, do not lower it, when the
+    /// port grows: see `docs/PROGRESS.md`.
+    const AGREED_ON_2026_10_10: usize = 52;
+
+    let mut names: Vec<String> = fs::read_dir(workspace_path("examples"))
+        .expect("read the examples directory")
+        .filter_map(|entry| {
+            let path = entry.ok()?.path();
+            let name = path.file_name()?.to_string_lossy().into_owned();
+            (name.ends_with(".ref") && name != "compiler.ref").then_some(name)
+        })
+        .collect();
+    names.sort();
+
+    let compiler = workspace_path("examples/compiler.ref");
+    let mut matched: Vec<String> = Vec::new();
+    let mut diverged: Vec<String> = Vec::new();
+    for name in names {
+        let path = format!("examples/{name}");
+        let oracle = residualize_driven_file(&path, &["--split", "pattern"]);
+        // A fixture the bootstrap refuses to drive is out of scope here exactly
+        // as it is for the other sweeps.
+        if !oracle.status.success() {
+            continue;
+        }
+        let expected = String::from_utf8_lossy(&oracle.stdout).into_owned();
+        if expected.trim().is_empty() {
+            continue;
+        }
+        let refal = Command::new(refal_bin())
+            .args(["run", &compiler, "RESIDUALIZE-DRIVEN-PATTERN"])
+            .args(["--input-file", &workspace_path(&path)])
+            .output()
+            .expect("run the Refal-authored driver");
+        let actual = String::from_utf8_lossy(&refal.stdout).into_owned();
+        let stem = name.trim_end_matches(".ref").to_string();
+        if actual == expected {
+            matched.push(stem);
+        } else {
+            diverged.push(stem);
+        }
+    }
+
+    // The witness: E-11's accumulator, where the partition is the whole point.
+    assert!(
+        matched.iter().any(|m| m == "accumulator-reverse"),
+        "the accumulator must fold in the Refal-authored driver\nmatched: {matched:?}\n\
+         diverged: {diverged:?}"
+    );
+    assert!(
+        matched.len() >= AGREED_ON_2026_10_10,
+        "the port lost coverage: {} agreed, {AGREED_ON_2026_10_10} did before\n\
+         matched: {matched:?}\ndiverged: {diverged:?}",
+        matched.len()
+    );
+}
+
 /// The compiler's sequence partition must not grow without bound on a
 /// bracket-pattern callee (E-11).
 ///

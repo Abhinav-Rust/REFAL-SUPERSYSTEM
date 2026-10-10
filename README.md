@@ -719,6 +719,11 @@ cargo run -p refal -- residualize-driven examples/runtime-recursion.ref
 # entirely residual:
 cargo run -p refal -- residualize-driven examples/accumulator-reverse.ref --split pattern
 
+# The same partition in the compiler written in Refal — a differential, not a
+# second implementation to trust: the residue is byte-identical to the line above.
+cargo run -p refal -- run examples/compiler.ref RESIDUALIZE-DRIVEN-PATTERN \
+  --input-file examples/accumulator-reverse.ref
+
 # Residualization is total: the budget bounds how much is driven, not whether a
 # program comes out.
 cargo run -p refal -- residualize-driven examples/runtime-recursion.ref --steps 3

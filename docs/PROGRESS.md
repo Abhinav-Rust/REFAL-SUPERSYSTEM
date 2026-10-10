@@ -72,6 +72,56 @@ corpus gate is green at `cases: 71`, `positive: 31`, `check-failure: 6`,
 `runtime-failure: 1`, `residual: 33`, `cleaned-sentences: 1`, and
 `clippy --all-targets -D warnings` and `cargo fmt --check` are clean.
 
+### Done — the constructor-entering partition is ported into the Refal-authored driver, and it is a differential (2026-10-10)
+
+**The partition is no longer a Rust-only capability.** `examples/compiler.ref` now
+carries it: `RESIDUALIZE-DRIVEN-PATTERN` is the search with the pattern
+partition, and `RESIDUALIZE-DRIVEN-PATTERN-{COMPILATIVE,INTERPRETIVE}` are one
+end each. On `examples/accumulator-reverse.ref` the Refal driver emits the same
+residue as `refal residualize-driven --split pattern`, **byte for byte** — the
+report, the strategy lines, the artifact and all.
+
+**How the partition travels without touching the default path.** The driver state
+`(SX …)` has fourteen fields and every accessor pattern-matches all of them, so
+threading a fifteenth is the change the record warned would turn the six
+byte-identity gates red. It is not needed: the partition rides in the
+**strategy character**. Lowercase means the constructor-entering partition, so
+`DsSplit` dispatches on it, `DsInterpretive` accepts `'i'`, `DsStratName` /
+`DsOtherName` map both cases to the same names, and `DsStratC (e.M)` /
+`DsStratI (e.M)` give the search its two characters — `'C'`/`'I'` for every mode
+but `(PAT)`. The axis and the partition are therefore independent dimensions,
+and the default `'C'`/`'I'` path is reached exactly as before.
+
+**What is ported, and the one mechanism that mattered.** The target selection (a
+pattern-split variable, or a bracket whose contents are exactly one) and the
+branch emission from the callee's own patterns are a transcription of
+`pattern_split_configuration`. The mechanism that folds the accumulator is the
+**identification of a split by the sentences it emits**: `<Rev (e.T) (t.H e.A)>`,
+reached while driving `Split1`'s second branch, asks for the same two branches
+`<Rev e.X ()>` did, so it must reuse `Split1` rather than make `Split2`. The Rust
+registers the branches *before* driving, and the Refal now does too —
+`DsAddSplitWith` stores them in the split record's fourth field, which
+`DsSetSents` later replaces with the sentences, and `DsSentsMatch` compares
+either form.
+
+**The port is partial, and its coverage is measured rather than claimed
+complete.** Not yet ported: the **complement branch** (reached only where a
+sentence's component at the split position is a bare variable) and the
+`pattern_splits` registry keyed by canonical input as well as by sentences.
+Measured over the whole corpus: **52 of 77 examples agree exactly** (all 77 the
+bootstrap will drive, `compiler.ref` excluded). The 25 that diverge are the ones
+those two halves are needed for — `case-split`, `clean-graph`, `condition`,
+`driven-call-argument`, `driven-strategy-search`, the `equiv-*` family,
+`invert-list-encoder`, `lexer`, `parser`, `projection-complement`,
+`prove-append-reach`, `prove-predicate` and the `compiler-refal-*-subset`
+fixtures. `the_pattern_partition_is_ported_to_the_refal_authored_driver` sweeps
+the corpus, requires the **witness** (`accumulator-reverse`) to fold and the
+agreed count not to fall below 52, so the gate is a **non-regression** one:
+demanding agreement everywhere would demand the two unported halves.
+
+**The figure does not move.** The port is at parity for the four examples it
+covers and the product's default path is still the sequence partition.
+
 ### Measured — E-11's accumulator is folded by the constructor-entering partition, and the row's stated reason for withholding is refuted (2026-10-10)
 
 **The measurement first, because it is the finding.** The row recorded that
