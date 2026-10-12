@@ -1,0 +1,8 @@
+$EXTERN Prout;
+
+* Restricted compiler-in-Refal slice: compile a function name supplied as characters
+* into a valid one-sentence identity entry function.
+$ENTRY Go {
+  (e.Name) = <Prout "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { e.Input = e.Input; }">;
+}
+

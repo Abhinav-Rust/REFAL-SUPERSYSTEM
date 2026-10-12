@@ -1,0 +1,11 @@
+$ENTRY Go {
+  =;
+}
+
+FOO-BAR {
+  =;
+}
+
+FOO_BAR {
+  =;
+}

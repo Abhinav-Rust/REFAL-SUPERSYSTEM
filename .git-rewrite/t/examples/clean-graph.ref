@@ -1,0 +1,45 @@
+* Clean graphs: removing the sentences no call site can select (Turchin 1980 4.3).
+*
+* Turchin defines a *path* as feasible when the quasiinput set it corresponds to
+* is not empty, and calls a graph clean when no unfeasible path remains:
+*
+*   "A path is called feasible if the corresponding quasiinput set is not
+*    empty, otherwise it is unfeasible. A graph in which there are no
+*    unfeasible paths will be called clean."
+*
+*   "Now we know how to clean the graph of states; we remove all vertices to
+*    which empty quasiinput sets correspond; we also remove dynamic arcs
+*    leading to these vertices."          -- Theorem 4.4: an algorithm exists.
+*
+* In a Refal residue the quasiinput set of a function is written down in the
+* program itself. Every call term `<F a>` is a contraction in Turchin's sense
+* (1980 p. 90), and the value handed to `F` is always an instance of the
+* pattern `a`. So a sentence whose pattern matches no instance of any argument
+* the program can supply is a vertex with an empty quasiinput set, and 4.3 says
+* to remove it.
+*
+* `Pick` below is entered only as `<Pick 'k' ...>`, because `Go` hands it `'k'`
+* and the split branches keep that head. Its second sentence matches a single
+* bracket and nothing else -- not a two-term argument, and certainly not one
+* that starts with a symbol. No execution of this program can select it, so
+* `refal clean` removes it and the residue answers exactly as the source does.
+* The T-4 corpus gate re-runs both and compares.
+*
+* The check is a refutation, never a guess. When a call argument contains an
+* unevaluated call or a block its value is not an instance of its text, so
+* nothing is removed and the function is reported as uncharacterised instead.
+* `symbolic-branch.ref` is the other half of the story: there the one call site
+* cannot select *any* sentence of `Choose`, so the residue is clean but not
+* perfect (4.5), and the command says so rather than claiming otherwise.
+
+$EXTERN Prout;
+
+$ENTRY Go {
+  e.Input = <Prout <Pick 'k' e.Input>>;
+}
+
+Pick {
+  s.C 'x' = 'matched';
+  (e.B) = 'bracket';
+  e.R = 'fallback';
+}

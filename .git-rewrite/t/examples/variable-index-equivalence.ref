@@ -1,0 +1,13 @@
+$EXTERN Prout;
+
+* Variable indices are case-insensitive: `e.X` and `e.x` denote the same Refal
+* object (reference 1.3). The same holds for repeated-variable equality, so
+* `s.A s.a` constrains both positions to the same symbol.
+$ENTRY Go {
+  (e.Text) = <Prout e.text> <Pair 'q' 'q'>;
+}
+
+Pair {
+  s.A s.a = <Prout 'repeated variable folded case'>;
+  e.Other = <Prout 'repeated variable did not fold case'>;
+}

@@ -1,0 +1,9 @@
+$EXTERN Prout;
+
+* Restricted checked source grammar: two definitions of the form
+* Name = Name; Name = Name; with exact repeated-name validation.
+$ENTRY Go {
+  (e.First " = " e.First "; " e.Second " = " e.Second ";") =
+    <Prout "$ENTRY Go { e.Input = <" e.First " e.Input>; } " e.First " { e.Input = e.Input; } " e.Second " { e.Input = e.Input; }">;
+}
+

@@ -1,0 +1,8 @@
+$EXTERN Prout;
+
+* Restricted source grammar: Name = 'Text'; Name = 'Text';
+$ENTRY Go {
+  (e.Name1 " = '" e.Text1 "'; " e.Name2 " = '" e.Text2 "';") =
+    <Prout "$ENTRY Go { e.Input = <" e.Name1 " e.Input>; } " e.Name1 " { e.Input = '" e.Text1 "'; } " e.Name2 " { e.Input = '" e.Text2 "'; }">;
+}
+

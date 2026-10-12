@@ -1,0 +1,8 @@
+* One-character variable indices may omit the dot, and may be written with no
+* separator: `s1s2s3` is equivalent to `s1 s2 s3` (reference 1.4).
+*
+* Each command-line argument arrives as a bracket term, so the pattern unwraps
+* one bracket and reverses the three symbols inside it.
+$ENTRY Go {
+  (s1s2s3) = s3 s2 s1;
+}

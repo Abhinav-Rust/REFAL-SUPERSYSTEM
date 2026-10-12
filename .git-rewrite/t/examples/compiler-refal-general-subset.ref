@@ -1,0 +1,23 @@
+$EXTERN Prout;
+* Refal-authored recursive compiler slice.
+* Accepted source grammar: one or more definitions, each of the form
+* Name = Name; or Name = 'literal';, separated by one space.
+* The first definition becomes the generated Go dispatch target; the
+* remaining definitions are emitted recursively by Definitions.
+$ENTRY Go {
+  (e.Source) = <Prout <Compile e.Source>>;
+}
+
+Compile {
+  e.Name " = " e.Name "; " e.Rest = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { e.Input = e.Input; } " <Definitions e.Rest>;
+  e.Name " = '" e.Text "'; " e.Rest = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { e.Input = '" e.Text "'; } " <Definitions e.Rest>;
+  e.Name " = " e.Name ";" = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { e.Input = e.Input; }";
+  e.Name " = '" e.Text "';" = "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { e.Input = '" e.Text "'; }";
+}
+
+Definitions {
+  e.Name " = " e.Name "; " e.Rest = e.Name " { e.Input = e.Input; } " <Definitions e.Rest>;
+  e.Name " = '" e.Text "'; " e.Rest = e.Name " { e.Input = '" e.Text "'; } " <Definitions e.Rest>;
+  e.Name " = " e.Name ";" = e.Name " { e.Input = e.Input; }";
+  e.Name " = '" e.Text "';" = e.Name " { e.Input = '" e.Text "'; }";
+}

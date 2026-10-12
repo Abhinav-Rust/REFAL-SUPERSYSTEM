@@ -1,0 +1,48 @@
+* The arithmetic builtins of the Refal-5 reference, clause by clause (section C.2).
+*
+* C.2.1  An integer is a sequence of macrodigits in base 2^32, a negative number
+*        carries a leading '-' symbol, and every result is in standard form:
+*        '-' and the macrodigits for a negative number, no '+' for zero or for
+*        a positive one.
+* C.2.2  A real number is a single symbol.
+* C.2.3  The basic format is <ar-function (e.N1) e.N2>, and the brackets may be
+*        omitted -- then the first argument takes one macrodigit, possibly with
+*        a preceding sign, while the remainder goes into the second.
+* C.2.4  If both operands are integers the result is an integer; otherwise it is
+*        a real number.
+* C.2.5-C.2.11  Add, Sub, Mul, Div, Divmod, Mod and Compare. Divmod returns
+*        (e.Quotient) e.Remainder with the remainder taking the sign of e.N1;
+*        Compare returns '-', '+' or '0'.
+* C.2.13, C.2.14  Trunc and Real convert between the two representations.
+* C.2.15  Realfun applies a named C function to one or two real arguments.
+*
+* Every line is prefixed with the clause it exercises, so a failure names the
+* clause rather than only the fixture.
+
+$EXTERN Add, Compare, Div, Divmod, Mod, Mul, Prout, Real, Realfun, Sub, Trunc;
+
+$ENTRY Go {
+  = <Prout 'c2.1.wrap ' <Add 4294967295 1>>
+    <Prout 'c2.1.neg ' <Sub 0 1>>
+    <Prout 'c2.1.zero ' <Add 0 0>>
+    <Prout 'c2.1.mul ' <Mul 4294967295 4294967295>>
+    <Prout 'c2.3.spread ' <Add 1 2 3>>
+    <Prout 'c2.3.bracket ' <Add (1 2) 3>>
+    <Prout 'c2.4.int ' <Add 1 2>>
+    <Prout 'c2.4.real ' <Add 1.5 2>>
+    <Prout 'c2.5 ' <Add 12 5>>
+    <Prout 'c2.6 ' <Sub 12 5>>
+    <Prout 'c2.7 ' <Mul 12 5>>
+    <Prout 'c2.8.int ' <Div 7 2>>
+    <Prout 'c2.8.real ' <Div 7.0 2>>
+    <Prout 'c2.9 ' <Divmod 7 2>>
+    <Prout 'c2.9.sign ' <Divmod '-' 7 2>>
+    <Prout 'c2.10 ' <Mod 7 2>>
+    <Prout 'c2.11.lt ' <Compare 1 2>>
+    <Prout 'c2.11.gt ' <Compare 2 1>>
+    <Prout 'c2.11.eq ' <Compare 1 1>>
+    <Prout 'c2.13 ' <Trunc 3>>
+    <Prout 'c2.14 ' <Real 3>>
+    <Prout 'c2.15.one ' <Realfun ('log') 1.0>>
+    <Prout 'c2.15.two ' <Realfun ('pow') 2.0 10.0>>;
+}

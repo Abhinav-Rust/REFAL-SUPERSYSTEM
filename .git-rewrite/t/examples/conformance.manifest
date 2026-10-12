@@ -1,0 +1,103 @@
+# The clause-by-clause conformance corpus for the Classic Refal-5 front end.
+#
+# Every row binds a clause of the syntax reference to the fixture that exercises
+# it: `clause|fixture|mode`, where the mode is `accept` (the compiler must
+# accept the fixture) or `reject` (it must refuse it, with a diagnostic).
+#
+# The reference is the Refal-5 syntax reference, cited section by section:
+#   http://www.refal.net/refer_r5.html
+#
+# Clauses 1.1-1.4 are lexical, 2 is the expression grammar, 3 is the sentence
+# and program grammar, and 4 is comments. A clause that states a rule is covered
+# in both directions wherever the rule has two: what it admits, and what it
+# forbids. The negative half is what makes this a conformance corpus rather than
+# a smoke test -- a lexer that accepts everything passes every `accept` row.
+#
+# `every_reference_clause_has_a_traceable_fixture` reads this file, requires the
+# clause set below to match the clauses the reference defines, requires every
+# fixture to exist, and runs every row.
+
+# --- 1.1 Special characters: quotes, separators, brackets, variable indicators
+#         and the system keywords $ENTRY / $EXTERNAL / $EXTERN / $EXTRN.
+1.1|classic-syntax.ref|accept
+1.1|hello.ref|accept
+1.1|extern-equivalence.ref|accept
+1.1|bad-unsupported-directive.ref|reject
+
+# --- 1.2 Symbols: identifiers, macrodigits, reals and keyboard characters.
+1.2|classic-syntax.ref|accept
+
+# --- 1.2.1 An identifier is alphanumeric, starts with an uppercase letter, is at
+#           most 15 characters, treats `-` and `_` as equivalent, and treats
+#           upper and lower case as equivalent.
+1.2.1|identifier-equivalence.ref|accept
+1.2.1|bad-lowercase-identifier.ref|reject
+1.2.1|bad-long-identifier.ref|reject
+
+# --- 1.2.2 Macrodigits are non-negative integers whose largest value is 2^32-1.
+1.2.2|metacode-macrodigit.ref|accept
+1.2.2|bad-signed-macrodigit.ref|reject
+
+# --- 1.2.3 Real numbers, to the reference's BNF: unsigned, or signed with `-` or
+#           `+`, and containing a decimal point, an `E`, or both.
+1.2.3|classic-syntax.ref|accept
+1.2.3|bad-malformed-real.ref|reject
+1.2.3|bad-malformed-exponent.ref|reject
+
+# --- 1.2.4 Character symbols are quoted with `'` or `"`, a string may not cross
+#           a line break, and a doubled quote embeds the delimiter.
+1.2.4|quote-escape.ref|accept
+1.2.4|runtime-character-codes.ref|accept
+1.2.4|bad-empty-character-literal.ref|reject
+
+# --- 1.3 A variable is a type indicator, a dot, and an index. The dot may be
+#         dropped for a one-character identifier or a single-digit number, and
+#         the index is case-insensitive.
+1.3|shorthand-variables.ref|accept
+1.3|variable-index-equivalence.ref|accept
+1.3|bad-missing-variable-name.ref|reject
+1.3|bad-variable-kind-conflict.ref|reject
+
+# --- 1.4 Invisible characters are ignored between lexical units and act as
+#         separators; `s1s2s3` is `s1 s2 s3`, while `s.1s.2s.3` is an error
+#         because the dotted form is not self-delimiting.
+1.4|shorthand-variables.ref|accept
+1.4|bad-juxtaposed-dotted-variables.ref|reject
+
+# --- 2 Expressions: term ::= symbol | variable | (expression) | <f-name expression>;
+#       a pattern contains no call brackets.
+2|hello.ref|accept
+2|runtime-bracket.ref|accept
+2|bad-call-in-pattern.ref|reject
+2|bad-unclosed-structural-bracket.ref|reject
+2|bad-unclosed-call.ref|reject
+
+# --- 3 Sentences and programs: definitions, external declarations with one or
+#       more names, sentence and block separators, conditions, and a
+#       sentence-ending block.
+3|hello.ref|accept
+3|classic-syntax.ref|accept
+3|multiple-entry.ref|accept
+3|extern.ref|accept
+3|extern-equivalence.ref|accept
+3|condition.ref|accept
+3|block-ending.ref|accept
+3|condition-block.ref|accept
+3|bad-missing-equals.ref|reject
+3|bad-missing-colon.ref|reject
+3|bad-top-level-sentence.ref|reject
+3|bad-empty-function.ref|reject
+3|bad-missing-entry.ref|reject
+3|bad-extern-missing-semicolon.ref|reject
+3|bad-duplicate-function.ref|reject
+3|bad-duplicate-extern.ref|reject
+3|bad-unresolved-call.ref|reject
+3|bad-unbound-variable.ref|reject
+3|bad-condition-unbound-variable.ref|reject
+3|bad-unclosed-block.ref|reject
+
+# --- 4 Comments: a line beginning with `*`, and a substring between `/*` and
+#       `*/` standing between lexical units.
+4|classic-syntax.ref|accept
+4|conformance-block-comment.ref|accept
+4|bad-unterminated-block-comment.ref|reject

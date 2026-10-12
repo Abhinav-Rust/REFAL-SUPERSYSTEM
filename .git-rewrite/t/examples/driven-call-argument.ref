@@ -1,0 +1,31 @@
+* Driving a configuration whose argument still contains an unevaluated call.
+*
+* `Chr` is an extern, so `<Chr 10>` cannot be contracted: it stays a residual
+* call, and it is handed to `F` as part of its argument. `F` is entered with
+* `(<Chr 10>) e.Args`, whose expression variable matching cannot decide, so the
+* driver would partition it -- and a partition's sentences use the input as
+* their *pattern*, where `<Chr 10>` is not a term a Refal pattern may contain.
+* The split is refused, the call stays residual, and the residue is the program
+* the source would have run.
+*
+* This is the same characterisability test `entering_restrictions` applies to a
+* call argument (Turchin 1980 4.3): a restriction whose text contains an
+* unevaluated call or a block does not characterise the value handed to the
+* callee, so nothing about it can be concluded -- including how to partition it.
+*
+* The fixture is the corpus's witness for that refusal. Without it the driver
+* emits a residue with a call in a pattern, which `refal check` rejects, and
+* `refal_authored_residualize_driven_matches_the_rust_oracle` would compare two
+* equally invalid programs.
+
+$EXTERN Chr;
+
+$ENTRY Go {
+  e.Args = <F (<Chr 10>) e.Args>;
+}
+
+F {
+  (e.X) = 'empty';
+  (e.X) s.H e.T = 'symbol';
+  (e.X) (e.Y) e.T = 'bracket';
+}

@@ -1,0 +1,6 @@
+$EXTERN Prout;
+$EXTRN Prout;
+
+$ENTRY Go {
+  =;
+}

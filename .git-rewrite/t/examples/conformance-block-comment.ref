@@ -1,0 +1,13 @@
+* Reference 4: an inline comment is the substring between `/*` and `*/`, it
+* stands between lexical units, and the compiler ignores it. The line-comment
+* half of the clause is exercised by every fixture that opens with `*`; this one
+* is the inline half, and it puts the comment in all three positions a comment
+* can take -- before the pattern, between the pattern and the result, and inside
+* a call -- because a comment that is dropped in one position and not another is
+* the failure this fixture is for.
+$EXTERN Prout;
+
+$ENTRY Go {
+  /* before the pattern */
+  e.X /* between the pattern and the result */ = <Prout /* inside a call */ 'block-comment-ok'>;
+};

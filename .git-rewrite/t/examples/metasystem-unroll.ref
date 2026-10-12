@@ -1,0 +1,46 @@
+* T-9: the metasystem transition over a recursive object program.
+*
+* Same interpreter as `metasystem-fuse.ref`, extended with a repetition node.
+* The object program below is
+*
+*   Times(3, Seq(Lit 'a' (End), In))
+*
+* whose counter is GROUND while its input is unknown. Driving therefore has
+* everything it needs to unwind the interpreter's own recursion: it walks the
+* counter to the bottom, and what comes out is the object program with the
+* loop already unrolled -- three copies of the body, and no interpreter left.
+*
+* This is the case that shows supercompilation is not merely inlining. The
+* interpreter's recursion is structural and data-dependent; the residual has
+* collapsed it into straight-line Refal, which is a new level of control
+* rather than a rearrangement of the old one (Turchin 1980 4.6, 5.5).
+*
+* The distinction that makes this work is Turchin's own: a configuration that
+* recurs on the path being expanded is a cycle and must be folded, whereas a
+* configuration that recurs *after* completing is separate work with the same
+* answer and must be reused. Confusing the two stops the unrolling at the
+* second turn and leaves the loop residual.
+*
+* Object language (Turchin 1980 1.3):
+*   (End)                 contribute nothing more
+*   (In)                  contribute the rest of the input
+*   (Lit c (P))           contribute the symbol c, then run P
+*   (Seq (P) (Q))         run P, then run Q
+*   (Times (Count) (P))   run P once for each mark in Count
+
+$ENTRY Go {
+  e.In = <Run (Times ('*' '*' '*') (Seq (Lit 'a' (End)) (In))) e.In>;
+}
+
+Run {
+  (End) e.In = ;
+  (In) e.In = e.In;
+  (Lit s.C t.P) e.In = s.C <Run t.P e.In>;
+  (Seq t.P t.Q) e.In = <Run t.P e.In> <Run t.Q e.In>;
+  (Times t.Count t.P) e.In = <Times t.Count t.P e.In>;
+}
+
+Times {
+  () t.P e.In = ;
+  ('*' e.Rest) t.P e.In = <Run t.P e.In> <Times (e.Rest) t.P e.In>;
+}

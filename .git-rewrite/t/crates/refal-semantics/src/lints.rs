@@ -1,0 +1,586 @@
+//! Tier 1 decidable analyses: the checks the README promises in `--strict`
+//! mode.
+//!
+//! Every analysis here must be **sound**: it may miss a problem, but it must
+//! never report one that is not real. The Phase 3 gate is zero false positives
+//! across the conformance corpus, so each entry point below states the
+//! argument for why a diagnostic it emits is a genuine defect.
+
+use std::collections::HashMap;
+
+use refal_ast::{
+    Function, Item, Program, Sentence, Span, Symbol, Term, TermKind, VariableKind,
+    canonical_identifier, canonical_variable_index,
+};
+
+use crate::{Diagnostic, Formats, Lint, Severity, infer_formats};
+
+/// Reports sentences that can never be reached.
+///
+/// Refal tries a function's sentences in order and commits to the first one
+/// whose pattern matches: once the left side has matched and its conditions
+/// have succeeded, the result is evaluated, and a failure inside that result
+/// propagates out instead of falling through to a later sentence. So a
+/// sentence is dead when some *earlier* sentence has no conditions and a
+/// pattern that matches everything the later one matches.
+///
+/// Only earlier sentences are considered, and only when they carry no
+/// conditions, because a condition that fails lets control reach the later
+/// sentence. Both restrictions keep the analysis on the safe side.
+pub fn dead_sentences(program: &Program, out: &mut Vec<Diagnostic>) {
+    for item in &program.items {
+        let Item::Function(function) = item else {
+            continue;
+        };
+        report_dead(&function.name, &function.sentences, out);
+        for sentence in &function.sentences {
+            walk_terms(&sentence.pattern, &function.name, out);
+            for condition in &sentence.conditions {
+                walk_terms(&condition.result, &function.name, out);
+                walk_terms(&condition.pattern, &function.name, out);
+            }
+            walk_terms(&sentence.result, &function.name, out);
+        }
+    }
+}
+
+/// Reports builtin calls whose arguments make failure certain.
+///
+/// This only fires when every argument is a literal, so the value the builtin
+/// will see is known at compile time and the failure is proven rather than
+/// guessed. A call with a variable argument is left alone.
+pub fn builtin_domains(program: &Program, out: &mut Vec<Diagnostic>) {
+    for item in &program.items {
+        let Item::Function(function) = item else {
+            continue;
+        };
+        for sentence in &function.sentences {
+            for condition in &sentence.conditions {
+                check_terms(&condition.result, out);
+            }
+            check_terms(&sentence.result, out);
+        }
+    }
+}
+
+/// Reports calls that are certain to fail because no sentence of the callee
+/// matches the argument.
+///
+/// *Recognition impossible* is Refal's dominant runtime failure. It is proven
+/// here only when every argument is a literal, so the callee's argument is
+/// known exactly and `pattern_subsumes` can decide each sentence's pattern
+/// against it. A sentence whose pattern matches but whose conditions fail is
+/// treated as matching, which is why this under-approximates: it never reports
+/// a call that actually succeeds.
+pub fn recognition_impossible(program: &Program, out: &mut Vec<Diagnostic>) {
+    let defined: HashMap<String, &Function> = program
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            Item::Function(function) => Some((canonical_identifier(&function.name), function)),
+            Item::Declaration(_) => None,
+        })
+        .collect();
+    let formats = infer_formats(program);
+
+    for item in &program.items {
+        let Item::Function(function) = item else {
+            continue;
+        };
+        for sentence in &function.sentences {
+            for condition in &sentence.conditions {
+                check_call_sites(&condition.result, &defined, &formats, out);
+            }
+            check_call_sites(&sentence.result, &defined, &formats, out);
+        }
+    }
+}
+
+fn check_call_sites(
+    terms: &[Term],
+    defined: &HashMap<String, &Function>,
+    formats: &Formats,
+    out: &mut Vec<Diagnostic>,
+) {
+    for term in terms {
+        match &term.kind {
+            TermKind::Call { name, args } => {
+                check_recognised(name, args, term.span, defined, formats, out);
+                check_call_sites(args, defined, formats, out);
+            }
+            TermKind::Bracket(inner) => check_call_sites(inner, defined, formats, out),
+            TermKind::Block {
+                argument,
+                sentences,
+            } => {
+                check_call_sites(argument, defined, formats, out);
+                for sentence in sentences {
+                    for condition in &sentence.conditions {
+                        check_call_sites(&condition.result, defined, formats, out);
+                    }
+                    check_call_sites(&sentence.result, defined, formats, out);
+                }
+            }
+            TermKind::Symbol(_) | TermKind::Variable(_) => {}
+        }
+    }
+}
+
+/// Two independent proofs of the same failure, in increasing order of reach.
+///
+/// The first is exact: every argument is a literal, so each sentence's pattern
+/// can be decided against it. The second is coarser but sees past literals,
+/// comparing the format of the argument against the format the callee accepts;
+/// if the two cannot overlap, no argument can be accepted. Both under-approximate
+/// -- a sentence whose conditions would fail still counts as matching -- so
+/// neither can report a call that actually succeeds.
+fn check_recognised(
+    name: &str,
+    args: &[Term],
+    span: Span,
+    defined: &HashMap<String, &Function>,
+    formats: &Formats,
+    out: &mut Vec<Diagnostic>,
+) {
+    let exact = args
+        .iter()
+        .all(|term| matches!(term.kind, TermKind::Symbol(_)));
+    let Some(callee) = defined.get(&canonical_identifier(name)) else {
+        return;
+    };
+
+    if exact
+        && callee
+            .sentences
+            .iter()
+            .any(|sentence| pattern_subsumes(&sentence.pattern, args))
+    {
+        return;
+    }
+
+    if let Some(accepted) = formats.arguments_of(name) {
+        let argument = formats.format_of(args);
+        if argument.disjoint(accepted) {
+            out.push(Diagnostic {
+                severity: Severity::Deny,
+                message: format!(
+                    "`<{name} ...>` always fails: `{name}` accepts {accepted}, but this call passes {argument}"
+                ),
+                span,
+                lint: Some(Lint::RecognitionImpossible),
+            });
+            return;
+        }
+    }
+
+    if exact {
+        out.push(Diagnostic {
+            severity: Severity::Deny,
+            message: format!(
+                "`<{name} ...>` always fails: no sentence of `{name}` matches this argument"
+            ),
+            span,
+            lint: Some(Lint::RecognitionImpossible),
+        });
+    }
+}
+
+/// Reports patterns whose `e.`-variables can make matching expensive.
+///
+/// An `e.`-variable is *open* when the grammar does not pin down where it ends,
+/// so the matcher has to guess and backtrack. Two of them in one pattern is
+/// where the cost stops being linear: each split point of the first is tried
+/// against each split point of the second.
+///
+/// This is opt-in pedantry, not a defect. It is reported at [`Severity::Allow`]
+/// so it is visible under `--strict` and silent otherwise.
+pub fn open_expression_complexity(program: &Program, out: &mut Vec<Diagnostic>) {
+    for item in &program.items {
+        let Item::Function(function) = item else {
+            continue;
+        };
+        for sentence in &function.sentences {
+            let count = count_open_expression_variables(&sentence.pattern);
+            if count >= 2 {
+                out.push(Diagnostic {
+                    severity: Severity::Allow,
+                    lint: Some(Lint::OpenExpressionComplexity),
+                    message: format!(
+                        "sentence of `{name}` has {count} `e.`-variables in its pattern; \
+                         matching may backtrack proportionally to the argument length \
+                         to the power {count}",
+                        name = function.name
+                    ),
+                    span: sentence.span,
+                });
+            }
+        }
+    }
+}
+
+fn count_open_expression_variables(terms: &[Term]) -> usize {
+    terms
+        .iter()
+        .map(|term| match &term.kind {
+            TermKind::Variable(variable) => usize::from(variable.kind == VariableKind::Expression),
+            TermKind::Bracket(inner) => count_open_expression_variables(inner),
+            TermKind::Block { .. } | TermKind::Call { .. } | TermKind::Symbol(_) => 0,
+        })
+        .sum()
+}
+
+fn report_dead(owner: &str, sentences: &[Sentence], out: &mut Vec<Diagnostic>) {
+    for (index, sentence) in sentences.iter().enumerate() {
+        let shadowed = sentences[..index]
+            .iter()
+            .enumerate()
+            .find(|(_, earlier)| {
+                earlier.conditions.is_empty()
+                    && pattern_subsumes(&earlier.pattern, &sentence.pattern)
+            })
+            .map(|(earlier_index, _)| earlier_index);
+
+        if let Some(earlier_index) = shadowed {
+            out.push(Diagnostic {
+                severity: Severity::Deny,
+                message: format!(
+                    "sentence {} of `{owner}` is unreachable: sentence {} has no conditions \
+                     and already matches every argument this one matches",
+                    index + 1,
+                    earlier_index + 1
+                ),
+                span: sentence.span,
+                lint: Some(Lint::DeadSentence),
+            });
+        }
+    }
+}
+
+fn walk_terms(terms: &[Term], owner: &str, out: &mut Vec<Diagnostic>) {
+    for term in terms {
+        match &term.kind {
+            TermKind::Bracket(inner) => walk_terms(inner, owner, out),
+            TermKind::Call { args, .. } => walk_terms(args, owner, out),
+            TermKind::Block {
+                argument,
+                sentences,
+            } => {
+                walk_terms(argument, owner, out);
+                report_dead(&format!("a block in `{owner}`"), sentences, out);
+                for sentence in sentences {
+                    walk_terms(&sentence.pattern, owner, out);
+                    for condition in &sentence.conditions {
+                        walk_terms(&condition.result, owner, out);
+                        walk_terms(&condition.pattern, owner, out);
+                    }
+                    walk_terms(&sentence.result, owner, out);
+                }
+            }
+            TermKind::Symbol(_) | TermKind::Variable(_) => {}
+        }
+    }
+}
+
+fn check_terms(terms: &[Term], out: &mut Vec<Diagnostic>) {
+    for term in terms {
+        match &term.kind {
+            TermKind::Call { name, args } => {
+                check_call(name, args, term.span, out);
+                check_terms(args, out);
+            }
+            TermKind::Bracket(inner) => check_terms(inner, out),
+            TermKind::Block {
+                argument,
+                sentences,
+            } => {
+                check_terms(argument, out);
+                for sentence in sentences {
+                    for condition in &sentence.conditions {
+                        check_terms(&condition.result, out);
+                    }
+                    check_terms(&sentence.result, out);
+                }
+            }
+            TermKind::Symbol(_) | TermKind::Variable(_) => {}
+        }
+    }
+}
+
+fn check_call(name: &str, args: &[Term], span: Span, out: &mut Vec<Diagnostic>) {
+    let canonical = canonical_identifier(name);
+
+    if matches!(
+        canonical.as_str(),
+        "ADD" | "SUB" | "MUL" | "DIV" | "MOD" | "DIVMOD" | "COMPARE"
+    ) && let Some(reason) = arithmetic_literal_failure(&canonical, args)
+    {
+        out.push(fails(name, reason, span));
+        return;
+    }
+
+    if canonical == "NUMB"
+        && let Some(text) = literal_chars(args)
+        && (text.is_empty() || !text.chars().all(|ch| ch.is_ascii_digit()))
+    {
+        out.push(fails(
+            name,
+            "expected a non-empty character string of decimal digits",
+            span,
+        ));
+    }
+}
+
+fn fails(name: &str, reason: &str, span: Span) -> Diagnostic {
+    Diagnostic {
+        severity: Severity::Deny,
+        message: format!("`<{name} ...>` always fails: {reason}"),
+        span,
+        lint: Some(Lint::BuiltinDomain),
+    }
+}
+
+/// The reason an arithmetic call with literal arguments is proven to fail.
+///
+/// The operand decoding mirrors the runtime's (§C.2 of the reference): an
+/// integer operand is an optional sign symbol followed by one or more
+/// macrodigit literals, most significant first, and when the round brackets
+/// around the first operand are omitted one macrodigit -- with its optional
+/// sign -- is taken from the front of the call's argument while the rest forms
+/// the second operand. So `<Add 1 2 3>` is the legal call `1 + (2 3)` and must
+/// not be reported, while `<Add 1>` has no second operand and always fails.
+///
+/// `None` means "not decidable here": a bracketed operand, a variable, or any
+/// argument that is not a literal macrodigit is left to the runtime.
+fn arithmetic_literal_failure(name: &str, args: &[Term]) -> Option<&'static str> {
+    let head = usize::from(matches!(
+        args.first().map(|term| &term.kind),
+        Some(TermKind::Symbol(Symbol::Char('-' | '+')))
+    )) + 1;
+    let split = head.min(args.len());
+    let first = literal_integer_operand(&args[..split])?;
+    let second = literal_integer_operand(&args[split..])?;
+    if first.is_empty() || second.is_empty() {
+        return Some("expected exactly two integer numbers");
+    }
+    if matches!(name, "DIV" | "MOD" | "DIVMOD") && second.iter().all(|digit| *digit == 0) {
+        return Some("division by zero");
+    }
+    None
+}
+
+/// The macrodigits of one literal integer operand (§C.2): an optional sign
+/// symbol followed by macrodigit literals, most significant first.
+fn literal_integer_operand(terms: &[Term]) -> Option<Vec<u32>> {
+    let digits = match terms.first() {
+        Some(Term {
+            kind: TermKind::Symbol(Symbol::Char('-')) | TermKind::Symbol(Symbol::Char('+')),
+            ..
+        }) => &terms[1..],
+        _ => terms,
+    };
+    digits.iter().map(literal_macrodigit).collect()
+}
+
+/// The macrodigit a literal term denotes, when the term is exactly one number
+/// symbol holding a value in `0..=2^32 - 1` (reference 1.2.2). Mirrors
+/// `parse_macrodigit` in the runtime so the static verdict and the runtime
+/// verdict cannot disagree about what an integer literal denotes.
+fn literal_macrodigit(term: &Term) -> Option<u32> {
+    let TermKind::Symbol(Symbol::Number(text)) = &term.kind else {
+        return None;
+    };
+    if text.is_empty() || !text.chars().all(|ch| ch.is_ascii_digit()) {
+        return None;
+    }
+    let value = text.parse::<u64>().ok()?;
+    (value <= u32::MAX as u64).then_some(value as u32)
+}
+
+/// The characters of an all-character-literal argument list, or `None` when
+/// any argument is not a character literal.
+fn literal_chars(args: &[Term]) -> Option<String> {
+    let mut text = String::new();
+    for term in args {
+        let TermKind::Symbol(Symbol::Char(ch)) = &term.kind else {
+            return None;
+        };
+        text.push(*ch);
+    }
+    Some(text)
+}
+
+/// A binding of a pattern variable to the run of terms it matched.
+type Bindings = HashMap<(VariableKind, String), Vec<Term>>;
+
+/// True when every argument matched by `specific` is also matched by `general`.
+///
+/// This is ordinary Refal matching run in reverse: `general`'s variables are
+/// the pattern variables, and `specific` is matched against them as if it were
+/// an expression, with `specific`'s own variables standing for opaque values.
+/// An `s.`-variable therefore matches a symbol or an `s.`-variable, a `t.`-one
+/// matches any single term, and an `e.`-one matches any run; a `t.`- or
+/// `e.`-variable in `specific` is opaque because at run time it may denote a
+/// bracket, which an `s.`-variable cannot match.
+///
+/// The converse discipline matters just as much, and was missing: an `s.`- or
+/// `t.`-variable in `general` consumes exactly one term, so the term it is
+/// bound to in `specific` must itself be guaranteed to denote one term. An
+/// `e.`-variable is not, whatever position it occupies. Without that check
+/// `[(t.X)]` was reported to subsume `[(e.A)]`, and `DvSingle`'s second sentence
+/// — which exists precisely to catch a bracket that holds more than one term —
+/// was reported as dead.
+///
+/// Literals are compared conservatively — numbers by their exact text, since
+/// deciding that `1` and `1.0` denote the same value is a different question —
+/// so this under-approximates subsumption rather than over-approximating it.
+pub fn pattern_subsumes(general: &[Term], specific: &[Term]) -> bool {
+    match_terms(general, specific, &mut Bindings::new())
+}
+
+fn match_terms(general: &[Term], specific: &[Term], bindings: &mut Bindings) -> bool {
+    if general.is_empty() {
+        return specific.is_empty();
+    }
+    let (head, rest) = (&general[0], &general[1..]);
+
+    match &head.kind {
+        TermKind::Variable(variable) => {
+            let key = (variable.kind, canonical_variable_index(&variable.name));
+            if let Some(bound) = bindings.get(&key).cloned() {
+                if specific.len() < bound.len()
+                    || !terms_identical(&bound, &specific[..bound.len()])
+                {
+                    return false;
+                }
+                return match_terms(rest, &specific[bound.len()..], bindings);
+            }
+
+            match variable.kind {
+                VariableKind::Symbol => {
+                    if !specific.first().is_some_and(is_symbol_like) {
+                        return false;
+                    }
+                    try_bind(key, &specific[..1], rest, &specific[1..], bindings)
+                }
+                VariableKind::Term => {
+                    if !specific
+                        .first()
+                        .is_some_and(|term| is_single_term(term, bindings))
+                    {
+                        return false;
+                    }
+                    try_bind(key, &specific[..1], rest, &specific[1..], bindings)
+                }
+                VariableKind::Expression => (0..=specific.len()).any(|len| {
+                    try_bind(
+                        key.clone(),
+                        &specific[..len],
+                        rest,
+                        &specific[len..],
+                        bindings,
+                    )
+                }),
+            }
+        }
+        TermKind::Symbol(symbol) => {
+            let matches = specific.first().is_some_and(|term| {
+                matches!(&term.kind, TermKind::Symbol(other) if symbols_identical(symbol, other))
+            });
+            matches && match_terms(rest, &specific[1..], bindings)
+        }
+        TermKind::Bracket(inner) => {
+            let Some(TermKind::Bracket(inner_specific)) = specific.first().map(|term| &term.kind)
+            else {
+                return false;
+            };
+            let mut nested = bindings.clone();
+            if match_terms(inner, inner_specific, &mut nested) {
+                *bindings = nested;
+                return match_terms(rest, &specific[1..], bindings);
+            }
+            false
+        }
+        // Neither calls nor blocks are legal in a pattern, so a pattern that
+        // somehow carries one is not something this analysis will judge.
+        TermKind::Call { .. } | TermKind::Block { .. } => false,
+    }
+}
+
+fn try_bind(
+    key: (VariableKind, String),
+    taken: &[Term],
+    rest_general: &[Term],
+    rest_specific: &[Term],
+    bindings: &mut Bindings,
+) -> bool {
+    let mut next = bindings.clone();
+    next.insert(key, taken.to_vec());
+    if match_terms(rest_general, rest_specific, &mut next) {
+        *bindings = next;
+        return true;
+    }
+    false
+}
+
+/// A term an `s.`-variable can match: a literal symbol, or another `s.`-variable
+/// standing for whatever single symbol it will have matched.
+fn is_symbol_like(term: &Term) -> bool {
+    match &term.kind {
+        TermKind::Symbol(_) => true,
+        TermKind::Variable(variable) => variable.kind == VariableKind::Symbol,
+        TermKind::Bracket(_) | TermKind::Call { .. } | TermKind::Block { .. } => false,
+    }
+}
+
+/// A term guaranteed to denote exactly **one** term, which is what a `t.`- or
+/// `s.`-variable in `general` consumes from `specific`.
+///
+/// The distinction this draws is the one the whole analysis turns on: an
+/// *occurrence* of a variable in a pattern is one term, but the *value* it binds
+/// need not be. `t.X` against `e.A` cannot be decided by position — `e.A` may
+/// bind any run, including the empty one and a run of two or more — so binding
+/// `t.X` to `e.A` would claim that `[(t.X)]` subsumes `[(e.A)]`, which is false
+/// for every argument of length other than one. A repeated `e.`-variable is the
+/// one case where the length *is* known, because the earlier occurrence already
+/// fixed it.
+fn is_single_term(term: &Term, bindings: &Bindings) -> bool {
+    match &term.kind {
+        TermKind::Symbol(_) | TermKind::Bracket(_) => true,
+        TermKind::Variable(variable) => match variable.kind {
+            VariableKind::Symbol | VariableKind::Term => true,
+            VariableKind::Expression => {
+                let key = (variable.kind, canonical_variable_index(&variable.name));
+                bindings.get(&key).is_some_and(|bound| bound.len() == 1)
+            }
+        },
+        TermKind::Call { .. } | TermKind::Block { .. } => false,
+    }
+}
+
+fn terms_identical(left: &[Term], right: &[Term]) -> bool {
+    left.len() == right.len() && left.iter().zip(right).all(|(a, b)| term_identical(a, b))
+}
+
+fn term_identical(left: &Term, right: &Term) -> bool {
+    match (&left.kind, &right.kind) {
+        (TermKind::Symbol(a), TermKind::Symbol(b)) => symbols_identical(a, b),
+        (TermKind::Variable(a), TermKind::Variable(b)) => {
+            a.kind == b.kind
+                && canonical_variable_index(&a.name) == canonical_variable_index(&b.name)
+        }
+        (TermKind::Bracket(a), TermKind::Bracket(b)) => terms_identical(a, b),
+        _ => false,
+    }
+}
+
+fn symbols_identical(left: &Symbol, right: &Symbol) -> bool {
+    match (left, right) {
+        (Symbol::Char(a), Symbol::Char(b)) => a == b,
+        // Identifiers compare under Classic name equivalence (reference 1.2.1).
+        (Symbol::Identifier(a), Symbol::Identifier(b)) => {
+            canonical_identifier(a) == canonical_identifier(b)
+        }
+        (Symbol::Number(a), Symbol::Number(b)) => a == b,
+        _ => false,
+    }
+}

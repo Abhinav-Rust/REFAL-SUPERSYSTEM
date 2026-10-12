@@ -1,0 +1,74 @@
+cff-version: 1.2.0
+message: "If you use this software or its measurements, please cite it as below."
+title: "REFAL-SUPERSYSTEM — Valentin Turchin's four-layer Refal supersystem, implemented"
+abstract: >-
+  An implementation of the architecture Valentin Turchin set out in A Supersystem
+  of Language Refal (1991): a Refal-5 machine (L0), a reflection engine (L1), a
+  supercompiler core (L2) and a meta-prover (L3) over one shared expression space,
+  with self-application (L4) as the headline capability. The Refal-5 compiler is
+  written in Refal, compiles its own source, and drives rather than re-prints.
+  Every capability carries a gate; the completion figure is measured, not claimed.
+authors:
+  - family-names: Sharma
+    given-names: Abhinav
+type: software
+license: MIT
+repository-code: "https://github.com/Abhinav-Rust/REFAL-SUPERSYSTEM"
+keywords:
+  - Refal
+  - Refal-5
+  - Valentin Turchin
+  - supercompilation
+  - metasystem transition
+  - metacomputation
+  - partial evaluation
+  - Futamura projections
+  - program transformation
+  - term rewriting
+  - symbolic computation
+  - self-hosting compiler
+  - automated theorem proving
+  - program verification
+  - metaprogramming
+  - homoiconic language
+  - graph of states
+  - residual program synthesis
+  - cybernetics
+  - Principia Cybernetica
+references:
+  - type: report
+    title: "A Supersystem of Language Refal"
+    authors:
+      - family-names: Turchin
+        given-names: Valentin F.
+    year: 1991
+    notes: >-
+      The design this repository implements: four layers realized as specialized
+      configurations of a single universal reflective engine.
+  - type: report
+    title: "The Concept of a Supercompiler"
+    authors:
+      - family-names: Turchin
+        given-names: Valentin F.
+    year: 1986
+    notes: >-
+      §6 states the proof criterion this repository implements: a predicate's
+      configuration graph reduces to the single terminal node 'True'.
+  - type: book
+    title: "Semantics Definitions in Refal and Automatic Production of Compilers"
+    authors:
+      - family-names: Turchin
+        given-names: Valentin F.
+    year: 1980
+    notes: >-
+      The driving, cleaning, generalization and residualization rules (§4.2-§4.6),
+      and Theorem 5.1 (§5.8) on the limits of perfection.
+  - type: report
+    title: "The Supercompiler SCP4: General Outline"
+    authors:
+      - family-names: Turchin
+        given-names: Valentin F.
+    year: 1999
+    notes: >-
+      §4 names the three theorems this repository gates: associativity of Append,
+      correctness of binary tree reversals, and equality of sorting algorithms.

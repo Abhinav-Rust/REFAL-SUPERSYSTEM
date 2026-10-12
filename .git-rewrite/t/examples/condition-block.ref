@@ -1,0 +1,21 @@
+$EXTERN Prout;
+
+* Classic Refal-5 allows a block in condition position, not only as a
+* sentence-ending expression. The condition argument is passed to the block as
+* an anonymous function; if no sentence of the block matches, the condition
+* fails and the next sentence of `Classify` is tried. Variables bound inside
+* the block stay local to it.
+$ENTRY Go {
+  = <Prout <Classify 'accepted'>>
+    <Prout <Classify 'rejected'>>;
+}
+
+Classify {
+  e.Word , <Approve e.Word> : { 'yes' = ; } = 'ACCEPTED';
+  e.Word = 'REJECTED';
+}
+
+Approve {
+  'accepted' = 'yes';
+  e.Other = 'no';
+}

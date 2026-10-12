@@ -1,0 +1,29 @@
+/* A theorem-shaped program: a predicate whose reduction is a proof.
+
+   Turchin's test of a proof (1986 6, *The Concept of a Supercompiler*): "If a
+   predicate function P(x) is supercompiled and its configuration graph reduces
+   to the single terminal node 'True', this constitutes an automated mathematical
+   proof that P(x) holds for all inputs x." The same mechanism is layer 3 of the
+   1991 CCNY report *A Supersystem of Language Refal*.
+
+   `Marked` is the theorem: a non-empty text is not empty. Its only sentence
+   succeeds for every input that has a head, so every path through its
+   configuration graph terminates in the single node 'True'. The prover reports a
+   proof for it, and the exit status is zero.
+
+   The claim is deliberately stated the way the corpus states its theorems: a
+   predicate over a wholly unknown expression, with the decision inside the
+   predicate rather than in the entry. Driving the entry would reduce `Go` and
+   leave the predicate invisible -- which is why the prover enters at the
+   *predicate* and why `refal prove <file> <Predicate>` takes a name. */
+
+$EXTERN Prout;
+
+$ENTRY Go {
+  e.Input = <Prout <Marked e.Input>>;
+}
+
+/* The predicate under proof. True whenever the text has a head. */
+Marked {
+  s.First e.Rest = 'True';
+}

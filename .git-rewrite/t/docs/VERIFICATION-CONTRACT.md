@@ -1,0 +1,276 @@
+# Verification Contract
+
+This document defines what the compiler promises to reject, how a diagnostic is
+classified, and what each classification costs the user. It is the normative
+reference for `--classic` and `--strict`; `PLAN.md` §2 is the rationale.
+
+## The guarantee
+
+> In `--strict` mode the compiler statically rejects every program in which a
+> *recognition impossible*, a builtin domain error, or a dead sentence is
+> reachable.
+>
+> It does not and cannot prove absence of logic errors or non-termination — see
+> Turchin 1980, §5.8, Theorem 5.1.
+
+The second paragraph is not boilerplate. Turchin proves there is no algorithm
+that transforms any graph of states into an equivalent perfect graph, by
+modelling formal arithmetic in Refal and reducing to Church's theorem. A tool
+claiming to certify a Refal program free of bugs is claiming to have refuted
+Church. This one claims something narrower and mechanically checkable.
+
+## Severity model
+
+Strict checking rejects some valid Classic Refal-5 programs. That conflicts with
+the conformance goal, so it is resolved with severity levels rather than by
+changing the language.
+
+| Severity | Meaning | `--classic` | `--strict` |
+|---|---|---|---|
+| `semantic error` | A Classic Refal-5 spec violation | fails | fails |
+| `proven defect` | A statically **proven** runtime failure, or provably dead code | reported | **fails** |
+| `warning` | A **possible** failure under approximation | reported | reported |
+| `note` | Opt-in pedantry: termination hints, open-`e` complexity | hidden | reported |
+
+`--classic` accepts exactly what Turchin's Refal-5 accepts. **The language is
+never modified — only the diagnostics differ.**
+
+### Per-lint control
+
+The mode sets the default level for every lint at once. `-W`, `-D` and `-A`
+override one lint at a time, or all of them with `all`:
+
+| Flag | Effect |
+|---|---|
+| `-W <lint>` | report as a `warning` |
+| `-D <lint>` | raise to a `proven defect`, which `--strict` fails on |
+| `-A <lint>` | suppress the diagnostic entirely |
+
+The lints are `dead-sentence`, `recognition-impossible`, `builtin-domain` and
+`open-expression-complexity`. Both `-W dead-sentence` and `-Wdead-sentence` are
+accepted, and a later flag for the same lint wins.
+
+**A lint flag cannot touch a spec violation.** Only diagnostics that carry a
+lint are affected, and spec violations carry none, so no combination of flags
+can make the compiler accept a program the reference rejects. A test asserts
+this directly across `-A all`, `-W all` and `--strict -A all`.
+
+Suppressing with `-A` is distinct from a lint whose *default* is `note`: the
+open-`e` lint is hidden in `--classic` and visible under `--strict`, because
+silencing opt-in pedantry by default would remove the reason to pass
+`--strict`.
+
+## Soundness rule
+
+Every analysis in `crates/refal-semantics/src/lints.rs` must be **sound**: it may
+miss a defect, but it must never report one that is not real. The gate is
+`strict_mode_has_no_false_positives_on_the_corpus`, which runs `--strict` over
+every non-`bad-*` example and fails on any rejection that is not already known
+to be genuine.
+
+Soundness is bought by under-approximating rather than over-approximating:
+
+- Numeric literals are compared by their exact text. Deciding that `1` and `1.0`
+  denote the same value is a separate question, so a subsumption check that
+  cannot prove it says no.
+- A `t.`- or `e.`-variable in the *specific* pattern is opaque. At run time it
+  may denote a bracket, which an `s.`-variable cannot match, so an `s.`-variable
+  is never assumed to cover it.
+- The shape lattice keeps the three literal kinds apart — `C` character, `N`
+  number, `I` identifier — because they can never coincide, and joins them back
+  to `S` (any symbol) when they disagree. An `s.`-variable is `S`, never one of
+  the three, so a callee that accepts only numbers does **not** refute it. That
+  is the direction that matters: the widening has to buy precision without
+  inventing a disjointness that is not there.
+
+## Implemented checks
+
+### Dead sentences — `proven defect`
+
+Refal tries a function's sentences in order and commits to the first one whose
+pattern matches. Once the left side has matched and its conditions have
+succeeded, a failure inside the result propagates out rather than falling
+through to a later sentence. So a sentence is dead when an **earlier** sentence
+has **no conditions** and a pattern that matches everything the later one
+matches.
+
+Both restrictions are load-bearing. An earlier sentence with conditions lets
+control through whenever a condition fails, and only earlier sentences can
+shadow a later one.
+
+Subsumption is decided by `pattern_subsumes`, which is Refal matching run
+backwards: the general pattern's variables are the pattern variables, and the
+specific pattern is matched against them as if it were an expression, with the
+specific pattern's own variables standing for opaque values.
+
+This check has already earned its place. It found a genuine ordering bug in
+`examples/compiler-refal-lexer-subset.ref`, where `" "` preceded the more
+specific `" = "` it shadowed.
+
+### Recognition impossible — `proven defect`
+
+*Recognition impossible* — no sentence matched — is Refal's dominant runtime
+failure. A call is reported in two ways.
+
+**Exact.** Every argument is a literal, so each sentence's pattern can be
+decided against it; if none matches, the call cannot succeed.
+
+**By format.** The argument's *format* is compared against the format the
+callee accepts, and if the two cannot overlap then no argument can be accepted.
+This sees past literals: `<OnlyBracket s.A>` is rejected because `s.` can only
+denote a symbol while `OnlyBracket` accepts `[B]`. `Format::disjoint` answers
+"definitely disjoint", never "definitely overlapping", so `?` overlaps with
+everything and length ranges that merely might miss each other do not count.
+
+The shape lattice keeps the three literal kinds apart — `C` character, `N`
+number, `I` identifier — because they can never coincide, and joins them back to
+`S` (any symbol) when they disagree. So `<F 'a'>` is refuted when `F` only
+accepts numbers: `'a'` is `[C]`, `F` accepts `[N]`, and a character is never a
+number. An `s.`-variable is `S`, never one of the three, so it is **not**
+refuted by any single literal kind — which is the direction that keeps the
+widening sound. A test pins that directly.
+
+Both under-approximate: a sentence whose conditions would fail at run time is
+still counted as matching, so neither can report a call that succeeds.
+
+### Open-`e` complexity — `note`
+
+Two `e.`-variables in one pattern is where matching stops being cheap: the
+matcher has to guess where each one ends, and each split point of the first is
+tried against each split point of the second. This is reported at `Allow`
+severity, so it is opt-in pedantry — visible under `--strict`, silent
+otherwise, and never fatal. No other Refal toolchain reports it.
+
+### Builtin domain errors — `proven defect`
+
+A call is only judged when **every** argument is a literal, so the value the
+builtin will see is known at compile time and the failure is proven rather than
+guessed. A call with a variable argument is left to the runtime.
+
+| Call | Rejected when |
+|---|---|
+| `Add` `Sub` `Mul` `Compare` `Div` `Mod` `Divmod` | the literal argument leaves no second operand (`<Add 1>`) |
+| `Div` `Mod` `Divmod` | the divisor is the literal `0` |
+| `Numb` | the argument is not a non-empty string of decimal digits |
+
+The static verdict mirrors the runtime's operand decoding
+(`split_arithmetic_operands` and `parse_macrodigit` in
+`crates/refal-runtime/src/interpreter.rs`), so the two cannot disagree about
+what an integer operand denotes. §C.2 takes one macrodigit from the front of the
+argument and gives the rest to the second operand when the round brackets are
+omitted, so `<Add 1 2 3>` is the legal call `1 + (2 3)` and is not reported; a
+bracketed, variable, or otherwise non-literal operand is left to the runtime.
+
+A **real** literal is outside this check, because the decoder above reads
+macrodigits only: `<Divmod 1.5 2>` and `<Div 1.0 0.0>` are refused when the
+program runs (naming the builtin) rather than when it is checked. The guarantee
+is one-directional — nothing is reported that is not proven — so leaving them to
+the runtime cannot make a sound program fail `--strict`; it does mean a real
+operand defect is not caught statically.
+
+## Feasibility and termination, with certificates
+
+`--strict` decides defects. It does not answer Turchin's §4.5 question — *is
+every walk in this program feasible?* — and §5.8 Theorem 5.1 says no algorithm
+can answer it universally: he proves it by reducing formal arithmetic in Refal to
+Church's theorem, so it is a computability bound, not a tooling gap.
+
+`refal feasibility <file.ref>` is the **sound, incomplete** answer. For every
+sentence it decides one of three things and never guesses:
+
+| Verdict | Meaning | Certificate |
+|---|---|---|
+| `feasible` | an input selects this sentence | the input itself |
+| `infeasible` | no input selects it | the earlier sentence that shadows it |
+| `unproven` | neither proven | — |
+
+**A witness is a certificate, not a claim.** The synthesised input is *ground*,
+and matching a ground expression against a pattern is decidable, so
+`refal feasibility --certificate` re-checks every `feasible` line against the
+source and exits non-zero if any claim fails. A ground input selects sentence *i*
+exactly when it matches sentence *i*'s pattern and no earlier sentence's — and
+earlier sentences are compared **ignoring their conditions**, which is the
+conservative direction: a witness that fails to match an earlier pattern reaches
+this sentence whether or not that sentence's conditions would have succeeded.
+
+**Termination is decided by size change over the call graph, under a family of
+measures.** Which "something" a call must shrink is the *measure*, and there is
+one measure per argument position:
+
+| Measure | What it ranks |
+|---|---|
+| `0` | the length of the **whole argument** |
+| `k > 0` | the length of the argument's **k-th top-level term** |
+
+Under a fixed measure every call is classified by where its argument comes from:
+`strict` (a proper sub-expression — the measure shrinks), `nonstrict` (a
+sub-expression — it cannot grow), or `unknown` (neither, so nothing bounds it).
+Termination is then a property of the **strongly connected components**, because
+an infinite call sequence traverses a cycle infinitely often while an edge that
+is not on a cycle is traversed only finitely often. A component terminates when
+no call inside it is `unknown` **under that measure** and its non-decreasing
+calls cannot form a cycle, so every cycle contains a call that shrinks the
+measure. Every measure is tried and the first that proves the function is the
+one reported: a proof under any of them is a proof, because each is a
+well-founded ranking in its own right.
+
+**The second measure is what settles a function that rebuilds its argument.** A
+compiler pass that carries a context along — `<DsBlkCondL (e.Ctx) (e.B) (e.Val)
+(e.Sents) (e.More) '0'>` — *grows* its argument by one term, so measure 0 can
+never prove it; but its fourth component `(e.Sents)` becomes `(e.Rest)`, a
+proper sub-expression, so measure 4 can.
+
+**A ranking may also be a lexicographic pair.** Measures are tried singly and
+then in pairs, `k+l` meaning "the k-th position, and the l-th only where the k-th
+does not fall". A product of well-founded rankings is well-founded, so a pair is
+a proof for exactly the same reason a single measure is. Measured: these took
+`examples/compiler.ref` from 439 unproven functions to **330**, and the corpus
+from 537 to **417**.
+
+**And the pair closes a direction rather than opening one.** A pair is `unknown`
+wherever its first measure is — the pair's ranking *contains* the first measure,
+so if that may grow, so may the pair. A lexicographic combination can therefore
+break a non-decreasing **cycle**, by turning a non-strict edge strict, but it can
+**never bound a call that no measure bounds**. That is pinned as a property
+(`a_pair_can_never_bound_a_call_its_first_measure_cannot`), and it is why the
+compiler's remaining calls are untouched by it: **more measures, in any
+combination, is not the answer.** The measure has to bound the call itself, and a
+call in argument position has no static size to bound. The witness is the component's members in an order in which every
+non-decreasing call goes forward — a proof a third party checks by re-deriving
+the calls and walking the order, with no search and no trust.
+
+**Mutual recursion is covered**, which is the point of taking the closure over
+the call graph instead of looking at one function at a time: `F` may call `G`
+non-strictly while `G` calls `F` strictly, and the pair terminates. A call that
+is `unknown` *between* components is harmless — it is not on a cycle — which is
+what keeps an entry point that calls a function with a fresh literal argument
+from being reported as non-terminating.
+
+**A defect an earlier step found, in its own predecessor.** The first version of
+the termination analysis collected only **self**-calls, so mutual recursion was
+invisible to it: `F { s.H e.T = <G e.T>; } G { e.X = <F e.X>; }` was reported
+`non-recursive` — that is, *terminating* — and it loops. It was replaced rather
+than patched, and the honest count was worse than the flattering one: 129
+unproven functions on `examples/compiler.ref` became 439. **A count that
+flatters is the failure mode this project exists to refuse.**
+
+**What is not decided is named, not hidden.** The command prints its `unproven`
+set, and its reach is bounded by the measures it has. A call **in argument
+position** — `<DsScan <DsBump <DsRecCall (e.Ctx) (e.Fn) (e.In)>> (e.Fn) (e.In)
+('0' '0') …>` — has no static size at any position, so no measure applies, and
+inside a cycle that makes the component `Unproven`. That is what still bounds the
+compiler: its 480 functions form one large component in which such calls occur,
+and **343** of them remain unproven. The named next rung is a norm over the
+**driven graph** rather than over the source text, which is what Turchin's own
+whistle supplies.
+
+Measured on the corpus: **zero infeasible sentences across the 77 non-`bad-*`
+examples** (no false positives — the soundness property holds end to end), with
+the unproven set printed for each.
+
+## Not yet implemented
+
+- Bracket *contents* in the format lattice. `Shape::Bracket` is opaque, so
+  `<F ('a')>` against a callee that only accepts `(1)` is not refuted. The
+  contents would need their own format, which is a recursive extension of the
+  lattice rather than another shape.

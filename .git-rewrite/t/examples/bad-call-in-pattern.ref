@@ -1,0 +1,7 @@
+$ENTRY Go {
+  <Helper> =;
+}
+
+Helper {
+  =;
+}

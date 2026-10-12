@@ -1,0 +1,10 @@
+* Classic Refal-5 frontend coverage fixture.
+$EXTRN Prout;
+
+$ENTRY Go {
+  sX t1 e.Rest = <Prout "OK" '!' 12.5 -3.25 +4E2 6.0E3>;
+};
+
+Helper {
+  =;
+}

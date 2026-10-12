@@ -1,0 +1,28 @@
+* Bracket contents in the format lattice (Turchin 1980 2.3).
+*
+* A bracket is a term whose *contents* are themselves an expression, so a
+* format that stops at "it is a bracket" is leaving information on the table.
+* With the contents described, `refal check --strict` can refute this call
+* without knowing anything about the run:
+*
+*   OnlyNumber accepts  [([N])]   -- a bracket whose contents are a number
+*   this call passes    [([C])]   -- a bracket whose contents are a character
+*
+* The two sets cannot overlap, so no argument this program can supply will ever
+* be accepted. `--classic` still accepts the program, because nothing about the
+* language changed -- only the diagnosis did. That separation is the whole point
+* of the mode switch: `--classic` is a pure Refal-5 conformance mode.
+*
+* A character, a number and an identifier are three different symbols, which is
+* what makes `[C]` and `[N]` disjoint. An `s.`-variable widens to `[S]` and is
+* never refuted by a literal kind -- the safe direction.
+
+$EXTERN Prout;
+
+$ENTRY Go {
+  = <Prout <OnlyNumber ('a')>>;
+}
+
+OnlyNumber {
+  (1) = 'number';
+}

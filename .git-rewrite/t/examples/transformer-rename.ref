@@ -1,0 +1,34 @@
+* A program transformer written in Refal -- objective T-1.
+*
+* T-1 asks for a transformer that is not itself a compiler, and the metacode of
+* Chapter 6 is what makes one expressible: a program is data, so a Refal
+* function can take one apart and put a different one back.
+*
+* The shape follows Turchin's own section 1.3 example, which replaces the symbol
+* '+' by '-' "on all levels of parenthesis structure". That example transforms
+* an expression; this one transforms a program -- the input is a metacoded
+* program, the rewrite runs at every level of bracket nesting, and Up lifts the
+* result back out of metacode.
+*
+* In this dialect the marker for the object asterisk is the two-term sequence
+* `*` `V`, so the program below carries one deliberately: it shows the
+* transformer walking metacode rather than plain syntax, and it shows Up
+* collapsing the marker back to a bare asterisk on the way out.
+
+$EXTERNAL Dn, Prout, Up;
+
+$ENTRY Go {
+  = <Prout <Up <Rename Plus Minus <Dn (Plus '*' (Plus 'a'))>>>>;
+}
+
+* Replace every occurrence of one symbol by another, at every bracket level.
+* The recursion is structural: a bracket is rebuilt around its rewritten
+* contents, and the marker terms are ordinary symbols that simply fail to
+* match, which is what keeps the metacode intact.
+Rename {
+  s.Old s.New = ;
+  s.Old s.New s.Old e.Rest = s.New <Rename s.Old s.New e.Rest>;
+  s.Old s.New (e.Inner) e.Rest =
+      (<Rename s.Old s.New e.Inner>) <Rename s.Old s.New e.Rest>;
+  s.Old s.New s.Other e.Rest = s.Other <Rename s.Old s.New e.Rest>;
+}

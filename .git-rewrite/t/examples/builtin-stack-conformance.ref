@@ -1,0 +1,27 @@
+* The buried-data stack builtins of the Refal-5 reference, clause by clause
+* (section C.3).
+*
+* C.3.1  <Br e.Name'=' e.Expr> buries e.Expr under e.Name. The name is
+*        everything before the first '=' at the top level, so a name can never
+*        itself contain one.
+* C.3.2  <Dg e.Name> returns the newest expression buried under e.Name and
+*        removes it; it returns the empty expression when none is buried.
+* C.3.3  <Cp e.Name> is Dg without the removal.
+* C.3.4  <Rp e.Name'=' e.Expr> replaces the buried expression.
+* C.3.5  <Dgall> returns the whole stack as (e.Name'=' e.Value) terms.
+* C.3.6  Br adds to the *left* part of the stack, so Dgall returns the newest
+*        burial first and the oldest last.
+
+$EXTERN Br, Cp, Dg, Dgall, Prout, Rp;
+
+$ENTRY Go {
+  = <Prout 'c3.5.empty [' <Dgall> ']'>
+    <Prout 'c3.1.name ' <Br 'a' '=' 1> <Dg 'a'>>
+    <Prout 'c3.2.newest ' <Br 'x' '=' 1> <Br 'x' '=' 2> <Dg 'x'>>
+    <Prout 'c3.2.absent [' <Dg 'nosuch'> ']'>
+    <Prout 'c3.3.copy ' <Br 'y' '=' 8> <Cp 'y'> ' / ' <Dg 'y'>>
+    <Prout 'c3.4.replace ' <Br 'z' '=' 1> <Rp 'z' '=' 2> <Dg 'z'>>
+    <Prout 'c3.5.whole ' <Br 'p' '=' 1> <Br 'q' '=' 2> <Dgall>>
+    <Prout 'c3.5.after [' <Dgall> ']'>
+    <Prout 'c3.6.order ' <Br 'a' '=' 1> <Br 'b' '=' 2> <Br 'c' '=' 3> <Dgall>>;
+}

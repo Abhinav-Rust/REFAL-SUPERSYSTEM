@@ -1,0 +1,5 @@
+$EXTERN Numb;
+
+$ENTRY Go {
+  = <Numb '12x'>;
+}

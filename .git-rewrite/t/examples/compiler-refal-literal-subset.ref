@@ -1,0 +1,9 @@
+$EXTERN Prout;
+
+* Restricted source compiler for one definition: Name = 'literal';
+* The literal is limited to characters that do not contain a double quote.
+$ENTRY Go {
+  (e.Name " = '" e.Text "';") =
+    <Prout "$ENTRY Go { e.Input = <" e.Name " e.Input>; } " e.Name " { e.Input = " """" e.Text """" "; }">;
+}
+

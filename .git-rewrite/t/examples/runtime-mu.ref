@@ -1,0 +1,10 @@
+$EXTERNAL Mu, Prout;
+
+$ENTRY Go {
+  = <Prout <Mu Echo 'Z'>>;
+}
+
+Echo {
+  e.X = e.X;
+}
+

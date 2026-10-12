@@ -1,0 +1,11 @@
+$EXTERN First, Last, Lenw, Lower, Upper, Arg, Prout;
+
+$ENTRY Go {
+  e.Input = <Prout <First 2 'a' 'b' 'c'>>
+    <Prout <Last 2 'a' 'b' 'c'>>
+    <Prout <Lenw 'a' 'b' 'c'>>
+    <Prout <Lower 'A' 'B'>>
+    <Prout <Upper 'a' 'b'>>
+    <Prout <Arg 1>>;
+}
+

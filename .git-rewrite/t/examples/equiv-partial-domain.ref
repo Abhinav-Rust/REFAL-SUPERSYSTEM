@@ -1,0 +1,46 @@
+/* A soundness gate for the equivalence prover (E-12/E-13): a claim the program
+   does **not** satisfy, which the prover must refuse to call `proved`.
+
+   `Rev` is written with **expression** field patterns -- `(Node e.L e.R)` --
+   because that is the form the prover's own reduction can unfold: the field is a
+   term, so a field that is itself a call binds directly, and the double
+   application reduces to `(Node <Rev <Rev e.L>> <Rev <Rev e.R>>)`.
+
+   The claim `Rev(Rev(T)) = T` is **false** for this program. `Rev` accepts any
+   `(Node X Y)`, but evaluating `Rev((Node Foo Foo))` calls `<Rev Foo>`, and
+   `Foo` matches neither `(Leaf)` nor `(Node ..)` -- measured, `refal run`
+   reports `no sentence matched in function Rev`. So `Rev(Rev((Node Foo Foo)))`
+   is not `(Node Foo Foo)`, and a prover that reports `proved` is wrong.
+
+   **What the gate pins.** Before 2026-10-07 the prover reported `proved`, by
+   folding the induction hypothesis at the field variable `e.L`. `e.L` is a
+   *field* of a callee-driven split -- the prover split `e.T` by `Rev`'s own
+   patterns -- and nothing established that `e.L` is itself a tree. The fix,
+   `pair_is_in_domain`, lets the hypothesis be applied only where the terms come
+   from an **exhaustive** split (Turchin's `[]` / `s.H e.T` / `(e.B) e.T`, which
+   covers every expression) or from the claim's own variables. The verdict is now
+   `open`, which is the honest one: the claim is not proved, and it is not
+   refuted either, because the prover cannot reach a counterexample it can close.
+
+   The bracket-field statement of the same theorem, where the domain restriction
+   is real and the prover's reduction stalls one level higher, is
+   `examples/equiv-tree-reversal.ref` -- also `open`, and also gated. */
+
+$EXTERN Prout;
+
+$ENTRY Go {
+  e.Input = <Prout <Rev e.Input>>;
+}
+
+Rev-Left {
+  e.T = <Rev <Rev e.T>>;
+}
+
+Rev-Right {
+  e.T = e.T;
+}
+
+Rev {
+  (Leaf) = (Leaf);
+  (Node e.L e.R) = (Node <Rev e.R> <Rev e.L>);
+}

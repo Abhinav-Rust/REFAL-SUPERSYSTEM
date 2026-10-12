@@ -1,0 +1,88 @@
+$EXTERN Prout, Chr;
+
+* Refal-authored Core Refal emitter subset.
+* Accepted source grammar (space-separated definitions, optional leading extern):
+*   [$EXTERN Name; ] Name = Name;
+*   [$EXTERN Name; ] Name = 'literal';
+*   [$EXTERN Name; ] Name = <Callee e.Input>;
+* The first definition becomes the generated Go dispatch target.
+* Character literals are exploded into Core form ('ab' -> 'a' 'b').
+* Layout matches the Rust bootstrap `refal lower` formatter for this subset:
+* blank line between functions, two-space indented sentences; CLI println
+* supplies the final newline.
+$ENTRY Go {
+  (e.Source) = <Prout <EmitCore <Compile e.Source>>>;
+}
+
+Compile {
+  "$EXTERN " e.Ext "; " e.Rest = ('x') (e.Ext) <CompileDefs e.Rest>;
+  e.Rest = ('x') () <CompileDefs e.Rest>;
+}
+
+CompileDefs {
+  e.Name " = " e.Name "; " e.Rest =
+    (e.Name) ('i') () <CompileRest e.Rest>;
+  e.Name " = '" e.Text "'; " e.Rest =
+    (e.Name) ('l') (<Explode e.Text>) <CompileRest e.Rest>;
+  e.Name " = <" e.Callee " e.Input>; " e.Rest =
+    (e.Name) ('c') (e.Callee) <CompileRest e.Rest>;
+  e.Name " = " e.Name ";" =
+    (e.Name) ('i') ();
+  e.Name " = '" e.Text "';" =
+    (e.Name) ('l') (<Explode e.Text>);
+  e.Name " = <" e.Callee " e.Input>;" =
+    (e.Name) ('c') (e.Callee);
+}
+
+CompileRest {
+  e.Name " = " e.Name "; " e.Rest =
+    (e.Name) ('i') () <CompileRest e.Rest>;
+  e.Name " = '" e.Text "'; " e.Rest =
+    (e.Name) ('l') (<Explode e.Text>) <CompileRest e.Rest>;
+  e.Name " = <" e.Callee " e.Input>; " e.Rest =
+    (e.Name) ('c') (e.Callee) <CompileRest e.Rest>;
+  e.Name " = " e.Name ";" =
+    (e.Name) ('i') ();
+  e.Name " = '" e.Text "';" =
+    (e.Name) ('l') (<Explode e.Text>);
+  e.Name " = <" e.Callee " e.Input>;" =
+    (e.Name) ('c') (e.Callee);
+}
+
+Explode {
+  = ;
+  s.C e.Rest = "'" s.C "'" <ExplodeSep e.Rest>;
+}
+
+ExplodeSep {
+  = ;
+  s.C e.Rest = ' ' "'" s.C "'" <ExplodeSep e.Rest>;
+}
+
+EmitCore {
+  ('x') (e.Ext) (e.First) t.Kind (e.Payload) e.Rest =
+    <EmitExtern e.Ext>
+    "$ENTRY Go {" <Chr 10> "  e.Input = <" e.First " e.Input>;" <Chr 10> "}" <Chr 10> <Chr 10>
+    <EmitFunction e.First t.Kind (e.Payload)>
+    <EmitRest e.Rest>;
+}
+
+EmitExtern {
+  = ;
+  e.Name = "$EXTERN " e.Name ";" <Chr 10> <Chr 10>;
+}
+
+EmitRest {
+  = ;
+  (e.Name) t.Kind (e.Payload) e.Rest =
+    <Chr 10> <Chr 10> <EmitFunction e.Name t.Kind (e.Payload)> <EmitRest e.Rest>;
+}
+
+EmitFunction {
+  e.Name ('i') () =
+    e.Name " {" <Chr 10> "  e.Input = e.Input;" <Chr 10> "}";
+  e.Name ('l') (e.Chars) =
+    e.Name " {" <Chr 10> "  e.Input = " e.Chars ";" <Chr 10> "}";
+  e.Name ('c') (e.Callee) =
+    e.Name " {" <Chr 10> "  e.Input = <" e.Callee " e.Input>;" <Chr 10> "}";
+}

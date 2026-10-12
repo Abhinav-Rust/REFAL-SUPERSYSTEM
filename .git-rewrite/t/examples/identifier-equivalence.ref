@@ -1,0 +1,12 @@
+$EXTERN Prout;
+
+* Identifiers fold case, and `-` and `_` are equivalent, for data as well as for
+* function names (reference 1.2.1).
+$ENTRY Go {
+  = <Classify ABC>;
+}
+
+Classify {
+  Abc = <Prout 'identifier equivalence holds'>;
+  e.Other = <Prout 'identifier equivalence broken'>;
+}

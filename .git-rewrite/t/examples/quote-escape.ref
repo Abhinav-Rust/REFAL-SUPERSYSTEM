@@ -1,0 +1,7 @@
+$EXTERN Prout;
+
+* A quote is embedded in a same-delimiter string by doubling it, so both of
+* these print the same text (reference 1.2.4).
+$ENTRY Go {
+  = <Prout 'Jimmy''s Pizza'> <Prout "Jimmy's Pizza">;
+}

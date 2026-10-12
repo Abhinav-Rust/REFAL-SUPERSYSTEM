@@ -1,0 +1,5 @@
+$EXTERN Prout;
+
+$ENTRY Go {
+  = <Prout 'Hello, Refal'>;
+}

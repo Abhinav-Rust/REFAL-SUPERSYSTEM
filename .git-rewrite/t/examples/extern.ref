@@ -1,0 +1,6 @@
+$EXTERN Prout, Card;
+
+$ENTRY Go {
+  = <Prout 'Ready'>;
+}
+

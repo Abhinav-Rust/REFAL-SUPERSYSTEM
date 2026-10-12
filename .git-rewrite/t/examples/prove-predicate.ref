@@ -1,0 +1,32 @@
+/* A theorem-shaped program: a predicate whose reduction is a proof.
+
+   Turchin's test of a proof (1986 6, *The Concept of a Supercompiler*): "If a
+   predicate function P(x) is supercompiled and its configuration graph reduces
+   to the single terminal node 'True', this constitutes an automated mathematical
+   proof that P(x) holds for all inputs x." The same mechanism is layer 3 of the
+   1991 CCNY report *A Supersystem of Language Refal*.
+
+   `Always` is the theorem. Its two sentences are the two possible outcomes of a
+   comparison that is *decided by structure*: a text either contains `'x'` or it
+   does not. Every path through its configuration graph therefore terminates in
+   one of two nodes, and the prover's job is to report which -- proving the claim
+   when only `'True'` is reachable and refuting it with a witness when `'False'`
+   is.
+
+   The claim is deliberately stated the way the corpus states its theorems: a
+   predicate over a wholly unknown expression, with the decision inside the
+   predicate rather than in the entry. Driving the entry would reduce `Go` and
+   leave the predicate invisible -- which is why the prover enters at the
+   *predicate* and why `refal prove <file> <Predicate>` takes a name. */
+
+$EXTERN Prout;
+
+$ENTRY Go {
+  e.Input = <Prout <Always e.Input>>;
+}
+
+/* The predicate under proof. 'True' when the text carries the marker. */
+Always {
+  e.Text, e.Text : e.Left 'x' e.Right = 'True';
+  e.Text = 'False';
+}

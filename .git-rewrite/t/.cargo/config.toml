@@ -1,0 +1,6 @@
+# `cargo xtask <task>` runs the repository's own tooling (crates/xtask).
+#
+# The tooling is Rust, like the rest of the project, so there is one toolchain
+# and one language from the front door to the back: no Python, no shell.
+[alias]
+xtask = "run --quiet --package xtask --"
