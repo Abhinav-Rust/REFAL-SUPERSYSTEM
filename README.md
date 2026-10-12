@@ -869,12 +869,12 @@ compiler** that compiles its own source.
 </details>
 
 <details>
-<summary><b>Does the compiler really compile itself?</b></summary>
+<summary><b>What is a self-hosting compiler, and does this one really compile itself?</b></summary>
 
-Yes, and the fixpoint is checked: compiling the compiler's own source, then
-compiling the output again, gives **byte-identical** files (`C1 = C2 = C3`). It is
-a *supercompilation*, not a re-print — the output's `Go` is a compile-time
-dispatch the driver discovered.
+A **self-hosting compiler** is one written in the language it compiles. Yes, and the
+fixpoint is checked: compiling the compiler's own source, then compiling the output
+again, gives **byte-identical** files (`C1 = C2 = C3`). It is a *supercompilation*,
+not a re-print — the output's `Go` is a compile-time dispatch the driver discovered.
 </details>
 
 <details>
@@ -934,6 +934,22 @@ is built the way Turchin's 1980 monograph sets it out — compilation *is* drivi
 configuration into a graph of states — and it carries a **Tier 1 verifier**, a
 **meta-prover** and **function inversion** on the same engine. It is measured
 against Turchin's own papers, not against another implementation.
+</details>
+
+<details>
+<summary><b>Is Refal a logic language? How does it relate to Prolog?</b></summary>
+
+Refal and **Prolog** are the two best-known languages that compute by **pattern
+matching over terms**, and they are usually named together — but they match
+differently. A Prolog clause **unifies** its head with a goal, so a call may bind
+variables on either side and **backtrack**; Refal matches **one-directionally and
+deterministically**, with ordered sentences and no backtracking, and a variable in
+a result is bound by the pattern above it rather than solved for. Refal's home is
+**metacomputation**: a program is an ordinary term, so the language is *homoiconic*
+by construction and supercompilation is a program that transforms programs. That is
+what lets one engine here carry a self-hosting compiler, a reflection engine and a
+meta-prover; Prolog's nearest analogue is a meta-interpreter, whose search is a
+different mechanism from this project's graph of states.
 </details>
 
 <details>

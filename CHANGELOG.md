@@ -2,13 +2,15 @@
 
 ## Unreleased
 
-**Docs — the README drops its dated work journal, and SEO notes leave the repository.**
+**Docs — the README drops its dated work journal, and the FAQ gains two entries.**
 
 - The README's per-day "how the figure moved" narrative is removed. The table, its
   sum and the method statement stay; the dated accounting history belongs in
   `docs/PROGRESS.md` and here, not in the README.
-- `docs/SEO.md` is no longer in the repository — discoverability notes live on the
-  local machine instead — and the README's documentation index drops the entry.
+- A local-only planning note that had been committed under `docs/` is removed from
+  the repository; notes of that kind live on the author's machine.
+- The FAQ answers **"Is Refal a logic language? How does it relate to Prolog?"**,
+  and its self-hosting question now leads with the term.
 
 **The last two examples were not the registry — they were a name-binding defect.**
 
