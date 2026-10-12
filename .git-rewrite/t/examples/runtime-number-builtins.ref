@@ -1,5 +1,0 @@
-$EXTERN Numb, Prout, Symb;
-
-$ENTRY Go {
-  = <Prout <Symb <Numb '0042'>>>;
-}

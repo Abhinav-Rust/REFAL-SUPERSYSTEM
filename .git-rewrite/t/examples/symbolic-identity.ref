@@ -1,8 +1,0 @@
-$ENTRY Go {
-  e.Input = <Identity e.Input>;
-}
-
-Identity {
-  e.Value = e.Value;
-}
-

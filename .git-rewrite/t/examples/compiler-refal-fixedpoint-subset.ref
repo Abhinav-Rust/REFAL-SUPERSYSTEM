@@ -1,8 +1,0 @@
-$EXTERN Prout;
-
-* Restricted canonical-output compiler: every accepted source is normalized to
-* the same checked identity program, making the bounded transformation idempotent.
-$ENTRY Go {
-  (e.Source) = <Prout "$ENTRY Go { e.Input = e.Input; }">;
-}
-

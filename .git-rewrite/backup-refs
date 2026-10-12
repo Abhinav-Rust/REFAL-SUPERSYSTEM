@@ -1,7 +1,0 @@
-8470294d07160aa9b8686367b386fbb0e418567d commit	refs/heads/backup/pre-purge
-2f44146dcd26283e5412ca71172d00bf045a7df9 commit	refs/heads/main
-8470294d07160aa9b8686367b386fbb0e418567d commit	refs/remotes/origin/HEAD
-82bb663a4b4c7305c621ca971c2989a0d790a76b commit	refs/remotes/origin/feat/lsp-skeleton-16270557229900248660
-8470294d07160aa9b8686367b386fbb0e418567d commit	refs/remotes/origin/main
-1c0efc155eb0130166e26470d195c189b45f3b85 commit	refs/remotes/origin/stage0-seed-compiler-12681467640618495855
-8470294d07160aa9b8686367b386fbb0e418567d commit	refs/tags/pre-purge-backup

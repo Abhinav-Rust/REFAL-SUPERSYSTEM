@@ -1,3 +1,0 @@
-$ENTRY Go {
-  e.Input = , e.Input : { e.Input = e.Input;
-}

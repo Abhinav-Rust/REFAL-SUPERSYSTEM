@@ -1,5 +1,0 @@
-$EXTERN MissingExternal;
-
-$ENTRY Go {
-  = <MissingExternal>;
-}

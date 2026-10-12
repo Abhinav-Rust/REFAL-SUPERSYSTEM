@@ -1,5 +1,0 @@
-$EXTERN Chr, Ord, Prout;
-
-$ENTRY Go {
-  = <Prout <Chr <Ord 'AZ'>>>;
-}

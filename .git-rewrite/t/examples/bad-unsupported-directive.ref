@@ -1,4 +1,0 @@
-$IMPORT Other;
-$ENTRY Go {
-  =;
-}

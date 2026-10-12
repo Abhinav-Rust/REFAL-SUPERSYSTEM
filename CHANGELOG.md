@@ -140,7 +140,7 @@ row's stated reason for withholding is refuted.**
   `clean-graph.ref` 12 → 3), so it would move corpus residues and needs the
   Refal-authored driver to move with it.
 - **The figure does not move.** The capability is behind an option and the
-  default path is unchanged; the E-11 share is a re-weighting, which is the the maintainer's call.
+  default path is unchanged; the E-11 share is a re-weighting, which is the maintainer's call.
 
 **The file-backed I/O clauses are bound to a runnable fixture — and the
 conformance row closes.**

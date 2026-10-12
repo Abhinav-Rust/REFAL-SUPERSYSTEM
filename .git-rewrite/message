@@ -1,9 +1,0 @@
-docs: keep local session state out of the repository, and neutralise working notes
-
-The local editor's session notes are not project content. They were tracked by a
-.gitignore exception and are now ignored and untracked, while staying on disk.
-
-Working-relationship framing and a local machine path that had crept into
-CODEBUDDY.md, docs/PLAN.md, docs/PROGRESS.md, the Turchin conformance and
-objectives docs, docs/turchin/README.md and .gitignore are rewritten in neutral
-terms. No technical content changes.

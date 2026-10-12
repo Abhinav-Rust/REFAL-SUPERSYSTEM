@@ -1,4 +1,0 @@
-$EXTERN Prout
-$ENTRY Go {
-  = <Prout 'x'>;
-}

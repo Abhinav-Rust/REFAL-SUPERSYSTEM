@@ -1,6 +1,0 @@
-$EXTERNAL Dn, Prout, Up;
-
-$ENTRY Go {
-  = <Prout <Up <Dn 'ab'>>>;
-}
-

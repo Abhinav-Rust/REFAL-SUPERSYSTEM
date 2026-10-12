@@ -1,5 +1,0 @@
-$EXTERNAL Trunc, Real, Prout;
-
-$ENTRY Go {
-  = <Prout <Real <Trunc 42>>>;
-}

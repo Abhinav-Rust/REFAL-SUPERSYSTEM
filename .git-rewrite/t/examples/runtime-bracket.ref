@@ -1,5 +1,0 @@
-$EXTERN Prout;
-
-$ENTRY Go {
-  (e.Text) = <Prout e.Text>;
-}

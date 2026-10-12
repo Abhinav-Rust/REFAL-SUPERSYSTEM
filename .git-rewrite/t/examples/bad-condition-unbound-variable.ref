@@ -1,3 +1,0 @@
-$ENTRY Go {
-  , e.Missing : e.Value = e.Value;
-}

@@ -3,7 +3,7 @@
 **Status: APPROVED 2026-08-05 — Phase 0 in progress**
 Maintainer: Abhinav Sharma
 
-All seven decisions in section 7 were approved, with standing authority for the the maintainer to take judgement calls inside the approved direction.
+All seven decisions in section 7 were approved, with standing authority for the maintainer to take judgement calls inside the approved direction.
 
 ---
 
@@ -356,7 +356,7 @@ confirmed Classic Refal-5 conformance defects. All eight are fixed: six in `641f
 
 ## 7. Decisions taken
 
-All seven were approved by the the maintainer on 2026-08-05.
+All seven were approved by the maintainer on 2026-08-05.
 
 | # | Decision | Status |
 | ---: | --- | --- |

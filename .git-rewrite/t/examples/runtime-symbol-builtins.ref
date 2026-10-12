@@ -1,5 +1,0 @@
-$EXTERN Explode, Implode, Print, Prout;
-
-$ENTRY Go {
-  = <Prout <Explode Hello>> <Print '!'> <Prout <Implode 'W' 'o' 'r' 'l' 'd'>>;
-}
