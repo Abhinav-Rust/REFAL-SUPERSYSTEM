@@ -4936,8 +4936,29 @@ fn driving_a_closed_entry_collapses_a_recursive_program() {
 /// A residue is a program, so it has to check. Driving stops at calls it
 /// cannot decide and leaves them in the residue; every user function those
 /// calls reach must come with them, or the residue is not Refal.
+///
+/// **Which functions those are depends on the partition, and the default now
+/// searches.** Under the sequence partition the argument is split and it is the
+/// *branches* that still call `ContainsX`; under the constructor-entering one the
+/// call is left whole at the entry and `ContainsX` is carried unpartitioned. Both
+/// are pinned, and the invariant the test exists for — a call in the residue
+/// implies its definition — is checked on whichever the default keeps.
 #[test]
 fn a_residue_retains_the_user_functions_it_still_calls() {
+    // The sequence partition splits the argument, so the branches carry the call.
+    let sequence = residualize_driven_file("examples/condition.ref", &["--split", "sequence"]);
+    let sequence = String::from_utf8_lossy(&sequence.stdout).to_string();
+    assert!(
+        sequence.contains("<ContainsX s.H1 e.T1>"),
+        "the sequence partition leaves an undecidable branch a call:\n{sequence}"
+    );
+    assert!(
+        sequence.contains("ContainsX {"),
+        "the residue calls ContainsX, so it must carry its definition:\n{sequence}"
+    );
+
+    // The default searches. Whatever it keeps, a call it still makes must come
+    // with its definition, and the residue has to check.
     let output = residualize_driven_file("examples/condition.ref", &[]);
     assert!(
         output.status.success(),
@@ -4945,17 +4966,12 @@ fn a_residue_retains_the_user_functions_it_still_calls() {
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-
-    // The argument is partitioned first, so it is the branches that still call
-    // `ContainsX` rather than the entry.
-    assert!(
-        stdout.contains("<ContainsX s.H1 e.T1>"),
-        "an undecidable branch should stay a call:\n{stdout}"
-    );
-    assert!(
-        stdout.contains("ContainsX {"),
-        "the residue calls ContainsX, so it must carry its definition:\n{stdout}"
-    );
+    if stdout.contains("<ContainsX") {
+        assert!(
+            stdout.contains("ContainsX {"),
+            "the residue calls ContainsX, so it must carry its definition:\n{stdout}"
+        );
+    }
     // And the residue has to pass the checker the CLI applies to everything.
     let residue = stdout
         .split_once("$EXTERN")
@@ -7588,15 +7604,33 @@ fn a_non_tail_recursion_folds_whether_or_not_the_bracket_case_is_named() {
 ///
 /// This is the behaviour SCP4 1999 attributes to the two-level stack
 /// configuration, reached by entering the constructor rather than by adding an
-/// explicit control stack. The default partition is deliberately *not* changed —
-/// the pattern partition also changes `clean-graph.ref` (12 → 3), so making it
-/// the default would move corpus residues and needs the Refal-authored driver in
-/// `compiler.ref` to move with it. The residue must still **agree with its
-/// source**: a residue that folds by guessing is a wrong program, not a fast one.
+/// explicit control stack. **The partition is now searched, so this fold is the
+/// compiler's default**: `SplitStrategy::Search` drives with both partitions and
+/// keeps the cheaper residue, and a tie goes to the sequence one, so the search
+/// can only ever improve. The sequence partition's own result is still the gap
+/// this row is about, and it is pinned under `--split sequence`. The residue must
+/// still **agree with its source**: a residue that folds by guessing is a wrong
+/// program, not a fast one.
 #[test]
 fn the_pattern_partition_folds_a_nested_accumulator() {
-    // The gap, stated as a measurement: the default partition leaves the callee
-    // residual, which is what makes the option meaningful rather than decorative.
+    // The gap, stated as a measurement, under the partition that has it.
+    let sequence =
+        residualize_driven_file("examples/accumulator-reverse.ref", &["--split", "sequence"]);
+    let sequence_stdout = String::from_utf8_lossy(&sequence.stdout);
+    assert!(
+        sequence.status.success(),
+        "the driver runs:\n{sequence_stdout}"
+    );
+    assert!(
+        driven_residue(&sequence_stdout).contains("\nRev {"),
+        "the sequence partition leaves Rev residual, which is the gap:\n{sequence_stdout}"
+    );
+    assert!(
+        sequence_stdout.contains("residual-work 37"),
+        "and the residue is worse than the source's own structure:\n{sequence_stdout}"
+    );
+
+    // The default searches, and here the constructor-entering partition wins.
     let default = residualize_driven_file("examples/accumulator-reverse.ref", &[]);
     let default_stdout = String::from_utf8_lossy(&default.stdout);
     assert!(
@@ -7604,12 +7638,12 @@ fn the_pattern_partition_folds_a_nested_accumulator() {
         "the driver runs:\n{default_stdout}"
     );
     assert!(
-        driven_residue(&default_stdout).contains("\nRev {"),
-        "the sequence partition leaves Rev residual, which is the gap:\n{default_stdout}"
+        !driven_residue(&default_stdout).contains("\nRev {"),
+        "the searched default keeps the fold:\n{default_stdout}"
     );
     assert!(
-        default_stdout.contains("residual-work 37"),
-        "and the residue is worse than the source's own structure:\n{default_stdout}"
+        default_stdout.contains("residual-work 9"),
+        "and it is the cheaper residue:\n{default_stdout}"
     );
 
     let output =

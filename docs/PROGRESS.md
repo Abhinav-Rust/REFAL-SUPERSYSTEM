@@ -77,6 +77,62 @@ and is now **exact**: `RESIDUALIZE-DRIVEN-PATTERN` agrees with
 `residualize-driven --split pattern` byte for byte on **every example the oracle
 drives** (77 of 77, 2026-10-12), with the gate requiring `diverged.is_empty()`.
 
+### Done — the partition is searched rather than fixed, and it is the compiler's default (2026-10-12)
+
+**E-11's remaining gap was restated as "make the constructor-entering partition
+the compiler's default". Scoping it first found that a literal switch is wrong.**
+
+**The measurement.** The whole corpus through `residualize-driven` twice, default
+vs `--split pattern`: **41 of 71 byte-identical, 30 differ.** On `residual-work`
+the pattern partition is **strictly better on 13** (`accumulator-reverse` 37 → 9,
+`clean-graph` 12 → 3, `projection-bracket-callee` 24 → 2, `condition` 9 → 2,
+`symbolic-branch` 6 → 2, `prove-predicate` 9 → 2, …) and **strictly worse on six**
+— `identity` 0 → 2, `classic-syntax` 0 → 2, `runtime-bracket` 0 → 2,
+`shorthand-variables` 0 → 2, `invert-list-encoder` 4 → 6, `lexer` 259 → 261. The
+six share one mechanism: where the callee does not discriminate the constructor,
+entering it emits a `SplitN` that merely re-states the entry's own pattern and
+eliminates nothing. So **neither partition dominates**, and a fixed default either
+way loses work.
+
+**What was built — the search, and it cannot regress.** `SplitStrategy::Search`
+drives with **both** partitions and keeps the residue with the lower cost: the
+rule the compilation axis already used (`DriveStrategy::Search`), one level out.
+It is now `SplitStrategy::default()`, and the axis and the partition remain
+independent dimensions. Two properties make it safe:
+
+- **A tie goes to `SplitStrategy::Sequence`** — the partition the compiler shipped
+  with — so the search can only ever be a *strict* improvement, and a program the
+  pattern partition cannot improve is byte-identical to what the compiler produced
+  before the strategy existed.
+- **The zero-residual-work short circuit applies here too.** A residue with no
+  call left for run time cannot be beaten, so the other partition is not driven.
+
+`SplitStrategy::point()` resolves the search for a pass that cannot compare
+residues — a bare driving pass produces no program to measure — exactly as
+`DriveStrategy::point()` does on the axis.
+
+**Ported to the Refal-authored driver, and it is a differential.** `DsRdSearch`
+now runs `DsRdAxis` with the caller's mode and with its pattern counterpart
+(`DsPatMode`, and `(PATN s.N)` so a *budgeted* searched run drives both partitions
+under the same limit), keeping the cheaper with the same short circuit and the
+same tie rule. `RESIDUALIZE-DRIVEN`, `RESIDUALIZE-DRIVEN n` and the compiler's own
+`Compile` all search now; `RESIDUALIZE-DRIVEN-PATTERN` still selects the pattern
+partition outright. A defect the port paid for: `DsRdPick2`'s arms had to be
+ordered so the "both produced a residue" arm precedes the "only the pattern did"
+arm, or a pattern residue that merely *failed to beat* the caller's was kept —
+which is what the first run did to `identity`.
+
+**Measured after the change.** `refal_authored_residualize_driven_matches_the_rust_oracle`
+green (the Refal driver agrees with the Rust default byte for byte over the
+corpus). **The compiler's own output is unchanged at 111,600 bytes** — the search
+picks the sequence partition for `compiler.ref` — so the published figure and the
+self-hosting fixpoint do not move. `--split search|sequence|pattern` selects
+explicitly.
+
+**The figure does not move.** The capability is now the default, but the compiler's
+own residue and the corpus's *semantics* are unchanged; what changed is that the
+driver can no longer leave the constructor-entering fold on the table.
+
 ### Done — the pattern-partition port is exact: 75 → 77 of 77, and the last two were a name-binding defect (2026-10-12)
 
 **The record's diagnosis was wrong, and finding that out is the finding.** The two

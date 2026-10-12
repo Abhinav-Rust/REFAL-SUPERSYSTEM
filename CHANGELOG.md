@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+**The partition is searched, not fixed — and it is the compiler's default.**
+
+- **Neither split dominates, and that is measured.** Over the corpus the
+  constructor-entering partition is strictly better on **13** examples
+  (`accumulator-reverse` residual-work 37 → 9, `clean-graph` 12 → 3,
+  `projection-bracket-callee` 24 → 2, …) and strictly worse on **six**
+  (`identity`, `classic-syntax`, `runtime-bracket`, `shorthand-variables` 0 → 2;
+  `invert-list-encoder` 4 → 6; `lexer` 259 → 261), where entering the constructor
+  emits a `SplitN` that merely re-states the entry's own pattern.
+- **`SplitStrategy::Search` is the default.** The driver drives with both
+  partitions and keeps the cheaper residue — the rule the compilation axis already
+  used, one level out. **A tie goes to the sequence partition**, so the search can
+  only ever be a strict improvement and a program the pattern partition cannot
+  improve is byte-identical to what the compiler produced before. The
+  zero-residual-work short circuit applies here too.
+- **Ported to the Refal-authored driver**, so the differential holds:
+  `RESIDUALIZE-DRIVEN`, `RESIDUALIZE-DRIVEN n` and `Compile` search, and
+  `RESIDUALIZE-DRIVEN-PATTERN` still selects the pattern partition outright.
+  `DsPatMode` gives a mode its pattern counterpart, and `(PATN s.N)` carries the
+  budget so a searched budgeted run drives both partitions under one limit.
+- **The compiler's own output does not move — 111,600 bytes** — because the search
+  picks the sequence partition for `compiler.ref`. The self-hosting fixpoint and
+  the published completion figure are unchanged.
+- `--split search|sequence|pattern` selects explicitly.
+
 **Docs — the README drops its dated work journal, and the FAQ gains two entries.**
 
 - The README's per-day "how the figure moved" narrative is removed. The table, its

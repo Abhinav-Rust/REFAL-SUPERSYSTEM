@@ -824,7 +824,7 @@ fn drive_symbolic_inner(
         max_steps,
         strategy,
         proof_entry,
-        SplitStrategy::Sequence,
+        SplitStrategy::default(),
     )
 }
 
@@ -843,6 +843,9 @@ fn drive_symbolic_inner_with_split(
     // A driving pass has no residue to compare, so `Search` resolves to the
     // finer end here rather than running twice.
     let strategy = strategy.point();
+    // Likewise for the partition: a driving pass produces no program to measure,
+    // so `Search` resolves to the sequence partition rather than driving twice.
+    let split_strategy = split_strategy.point();
     let entry = graph.entry.ok_or(DriveError::NoEntry)?;
     let function = graph
         .states
@@ -1134,7 +1137,7 @@ struct CompletedConfiguration {
 /// blocked configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SplitStrategy {
-    /// The compiler's partition, and the default:
+    /// The compiler's original partition:
     ///
     /// ```text
     /// e.X   is   []   or   s.H e.T   or   (e.B) e.T
@@ -1144,7 +1147,6 @@ pub enum SplitStrategy {
     /// exhaustive and pairwise disjoint and no value is lost. It is the right
     /// partition for a program whose entry is `F { e.X = ...; }`, because the
     /// residue has to keep that entry shape.
-    #[default]
     Sequence,
     /// The projection's partition: the component is partitioned by the shapes
     /// the **callee's own sentence patterns** require at that position, so the
@@ -1167,10 +1169,50 @@ pub enum SplitStrategy {
     /// ("What Theorem 5.1 does and does not forbid"): a residual call is sound,
     /// and it is strictly better than an unbounded residue that decides nothing.
     ///
-    /// Only the projections use it. The compiler keeps [`SplitStrategy::Sequence`]
-    /// so its residues — and therefore the Refal-authored counterpart in
-    /// `examples/compiler.ref` — are byte-identical.
+    /// It is **not uniformly better than [`SplitStrategy::Sequence`]**, and that
+    /// is measured rather than assumed: where the callee does not discriminate
+    /// the constructor, entering it emits a `SplitN` that merely re-states the
+    /// entry's own pattern and eliminates nothing. On `identity.ref`
+    /// (`Go { (e.1) = e.1; }`) the sequence partition leaves the source untouched
+    /// at residual-work 0, while the pattern partition wraps it in a needless
+    /// `Split1` at residual-work 2; the same regression appears on
+    /// `classic-syntax`, `runtime-bracket`, `shorthand-variables`,
+    /// `invert-list-encoder` and `lexer`.
     Pattern,
+    /// Drive with both partitions and keep the residue with the lower cost — the
+    /// **default**, and the same rule the compilation axis already uses
+    /// (§4.4's "evaluate both ends and keep the better residue").
+    ///
+    /// Neither partition dominates: the pattern partition is strictly better on
+    /// 13 corpus examples (`accumulator-reverse` 37 → 9, `clean-graph` 12 → 3,
+    /// `projection-bracket-callee` 24 → 2, …) and strictly worse on six
+    /// (`identity` 0 → 2, `lexer` 259 → 261, …), so a fixed choice either way
+    /// loses work. Searching cannot regress against either end: ties go to
+    /// [`SplitStrategy::Sequence`], which is the partition the compiler shipped
+    /// with, so a program the pattern partition cannot improve is byte-identical
+    /// to what the compiler produced before.
+    ///
+    /// It costs a second drive. The zero-residual-work short circuit applies
+    /// here exactly as it does on the axis: a residue with no call left for run
+    /// time cannot be beaten, so the other partition is not run.
+    #[default]
+    Search,
+}
+
+impl SplitStrategy {
+    /// The partition this value denotes, for a pass that **cannot compare
+    /// residues** — a bare driving pass produces no program to measure.
+    ///
+    /// [`SplitStrategy::Search`] names no partition, so it resolves to
+    /// [`SplitStrategy::Sequence`], the partition the compiler shipped with.
+    /// This mirrors [`DriveStrategy::point`], and the two are independent: the
+    /// axis resolves its own search at its own entry points.
+    pub fn point(self) -> SplitStrategy {
+        match self {
+            SplitStrategy::Search => SplitStrategy::Sequence,
+            other => other,
+        }
+    }
 }
 
 /// The most case splits one driving pass will generate.
@@ -4470,7 +4512,7 @@ pub fn drive_entry_configuration_with_strategy(
     max_steps: usize,
     strategy: DriveStrategy,
 ) -> Result<SymbolicDriveReport, DriveError> {
-    drive_entry_configuration_with_split(graph, max_steps, strategy, SplitStrategy::Sequence)
+    drive_entry_configuration_with_split(graph, max_steps, strategy, SplitStrategy::default())
 }
 
 /// [`drive_entry_configuration_with_strategy`] with an explicit partition.
@@ -4551,7 +4593,13 @@ pub fn residualize_entry_graph_with_strategy(
     max_steps: usize,
     strategy: DriveStrategy,
 ) -> Result<DrivenResidualization, DriveError> {
-    residualize_entry_graph_with_split(program, graph, max_steps, strategy, SplitStrategy::Sequence)
+    residualize_entry_graph_with_split(
+        program,
+        graph,
+        max_steps,
+        strategy,
+        SplitStrategy::default(),
+    )
 }
 
 /// [`residualize_entry_graph_with_strategy`] with an explicit partition.
@@ -4568,6 +4616,9 @@ pub fn residualize_entry_graph_with_split(
     strategy: DriveStrategy,
     split: SplitStrategy,
 ) -> Result<DrivenResidualization, DriveError> {
+    if split == SplitStrategy::Search {
+        return residualize_entry_graph_searching_split(program, graph, max_steps, strategy);
+    }
     if strategy != DriveStrategy::Search {
         return residualize_entry_graph_at(program, graph, max_steps, strategy, split);
     }
@@ -4624,6 +4675,64 @@ pub fn residualize_entry_graph_with_split(
         residual.strategy_choice = Some(choice);
         residual
     })
+}
+
+/// [`residualize_entry_graph_with_split`] at [`SplitStrategy::Search`]: drive with
+/// **both** partitions and keep the residue with the lower cost.
+///
+/// Neither partition dominates the other, and that is measured rather than
+/// assumed — see [`SplitStrategy::Pattern`]. The pattern partition is strictly
+/// better on 13 corpus examples and strictly worse on six, so a fixed choice
+/// either way leaves work on the table.
+///
+/// The rule and the short circuit are the axis search's, one level out. A residue
+/// with **zero** residual work has no call left for run time, so nothing can beat
+/// it and the second partition is not driven. A **tie goes to
+/// [`SplitStrategy::Sequence`]** — the partition the compiler shipped with — so
+/// the search can only ever be an improvement, and a program the pattern
+/// partition cannot improve comes out byte-identical to what the compiler
+/// produced before this strategy existed.
+fn residualize_entry_graph_searching_split(
+    program: &CoreProgram,
+    graph: &StateGraph,
+    max_steps: usize,
+    strategy: DriveStrategy,
+) -> Result<DrivenResidualization, DriveError> {
+    let pattern = residualize_entry_graph_with_split(
+        program,
+        graph,
+        max_steps,
+        strategy,
+        SplitStrategy::Pattern,
+    );
+    let pattern_cost = pattern
+        .as_ref()
+        .ok()
+        .map(|residual| residue_cost(&residual.program));
+    if pattern_cost.is_some_and(|cost| cost.residual_work == 0) {
+        return pattern;
+    }
+
+    let sequence = residualize_entry_graph_with_split(
+        program,
+        graph,
+        max_steps,
+        strategy,
+        SplitStrategy::Sequence,
+    );
+    let sequence_cost = sequence
+        .as_ref()
+        .ok()
+        .map(|residual| residue_cost(&residual.program));
+
+    // Strict improvement only: a tie is the sequence partition's, so this can
+    // never change a residue that the pattern partition does not strictly beat.
+    let pattern_wins = match (pattern_cost, sequence_cost) {
+        (Some(pattern), Some(sequence)) => pattern < sequence,
+        (Some(_), None) => true,
+        _ => false,
+    };
+    if pattern_wins { pattern } else { sequence }
 }
 
 /// Which end a search keeps: the smaller cost, ties to the compilative end.

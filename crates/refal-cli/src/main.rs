@@ -823,7 +823,7 @@ struct DriveOptions {
     show_neighborhoods: bool,
 }
 
-const DRIVE_USAGE: &str = "Usage: refal <drive-symbolic|residualize-driven> <file.ref> [--steps N]      [--strategy search|compilative|interpretive] [--split sequence|pattern]      [--configurations] [--neighborhoods]";
+const DRIVE_USAGE: &str = "Usage: refal <drive-symbolic|residualize-driven> <file.ref> [--steps N]      [--strategy search|compilative|interpretive] [--split search|sequence|pattern]      [--configurations] [--neighborhoods]";
 
 const PROVE_USAGE: &str = "Usage: refal prove <file.ref> <Predicate> [--steps N] [--strategy search|compilative|interpretive]";
 const EQUIV_USAGE: &str = "Usage: refal prove <file.ref> --equiv <Left> <Right> [--steps N]";
@@ -834,7 +834,7 @@ fn drive_options(args: &[String]) -> Result<DriveOptions, String> {
     let mut options = DriveOptions {
         max_steps: 10_000,
         strategy: refal_core::DriveStrategy::Search,
-        split: refal_core::SplitStrategy::Sequence,
+        split: refal_core::SplitStrategy::Search,
         show_configurations: false,
         show_neighborhoods: false,
     };
@@ -867,6 +867,7 @@ fn drive_options(args: &[String]) -> Result<DriveOptions, String> {
                     return Err(DRIVE_USAGE.to_string());
                 };
                 options.split = match name.as_str() {
+                    "search" => refal_core::SplitStrategy::Search,
                     "sequence" => refal_core::SplitStrategy::Sequence,
                     "pattern" => refal_core::SplitStrategy::Pattern,
                     _ => return Err(DRIVE_USAGE.to_string()),

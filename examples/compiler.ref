@@ -1999,13 +1999,18 @@ DsStrategy {
 * independent, so the partition is carried in the same character: lowercase
 * means the constructor-entering partition (E-11), and every other mode keeps
 * the default 'C'/'I' exactly as before.
+* The pattern partition rides in a lowercase strategy character. `(PATN s.N)` is
+* the same partition under a seeded budget, so a searched budgeted run can drive
+* both partitions with the same limit.
 DsStratC {
   (PAT) = 'c';
+  (PATN s.N) = 'c';
   (e.M) = 'C';
 }
 
 DsStratI {
   (PAT) = 'i';
+  (PATN s.N) = 'i';
   (e.M) = 'I';
 }
 
@@ -2131,7 +2136,58 @@ DsRdBoth {
 * and that end produces nothing at all. The interpretive end stops for
 * Turchin's own reason (finitely many first-order neighborhoods) and emits a
 * residue. Without the search the compiler refuses a legal program.
+* The partition search (E-11). Neither partition dominates the other -- the
+* constructor-entering one is strictly better on some programs and strictly worse
+* on others -- so the driver drives with BOTH and keeps the cheaper residue: the
+* same rule the compilation axis already uses, one level out. `(PAT)` is the
+* pattern variant of the caller's own mode, so the report and the budget travel
+* with it, and a tie goes to the caller's partition -- the sequence one -- so a
+* program the pattern partition cannot improve comes out exactly as before.
+* Mirrors `residualize_entry_graph_searching_split` in `refal-core`.
 DsRdSearch {
+  (PAT) (PROG e.Items) = <DsRdAxis (PAT) (PROG e.Items)>;
+  (e.M) (PROG e.Items) =
+    <DsRdPick (e.M) (PROG e.Items) <DsRdAxis <DsPatMode (e.M)> (PROG e.Items)>>;
+}
+
+* The pattern counterpart of a mode, so both runs report and budget alike.
+DsPatMode {
+  (SEED s.N) = (PATN s.N);
+  (e.M) = (PAT);
+}
+
+* The short circuit, exactly as on the axis: a pattern residue with ZERO residual
+* work leaves no call for run time, so nothing is cheaper and the other partition
+* is not driven.
+DsRdPick {
+  (e.M) (PROG e.Items) (RD e.RepP (PROG e.P) s.StP s.ChP s.WP s.SP (e.OP)),
+    <Compare s.WP 0> : '0' =
+    (RD e.RepP (PROG e.P) s.StP s.ChP s.WP s.SP (e.OP));
+  (e.M) (PROG e.Items) (e.Pattern) =
+    <DsRdPick2 (e.Pattern) <DsRdAxis (e.M) (PROG e.Items)>>;
+}
+
+* A strict improvement only, so a tie is the caller's partition's. The order
+* matters: the "both produced a residue" arm must come before the "only the
+* pattern did" arm, or a pattern residue that merely fails to beat the caller's
+* would be kept. This mirrors `residualize_entry_graph_searching_split`'s match
+* on `(pattern_cost, sequence_cost)` exactly.
+DsRdPick2 {
+  (RD e.RepP (PROG e.P) s.StP s.ChP s.WP s.SP (e.OP))
+  (RD e.RepS (PROG e.S) s.StS s.ChS s.WS s.SS (e.OS)),
+    <DsCostLt (s.WP s.SP) (s.WS s.SS)> : '1' =
+    (RD e.RepP (PROG e.P) s.StP s.ChP s.WP s.SP (e.OP));
+  (RD e.RepP (PROG e.P) s.StP s.ChP s.WP s.SP (e.OP))
+  (RD e.RepS (PROG e.S) s.StS s.ChS s.WS s.SS (e.OS)) =
+    (RD e.RepS (PROG e.S) s.StS s.ChS s.WS s.SS (e.OS));
+  (RD e.RepP (PROG e.P) s.StP s.ChP s.WP s.SP (e.OP)) (e.Sequence) =
+    (RD e.RepP (PROG e.P) s.StP s.ChP s.WP s.SP (e.OP));
+  (e.Pattern) (e.Sequence) = (e.Sequence);
+}
+
+* One partition, driven: the caller's mode picks the report and the budget, the
+* strategy character picks the point on the axis.
+DsRdAxis {
   (e.M) (PROG e.Items) =
     <DsRdSearch2 (e.M) (PROG e.Items) <DsRdAt (e.M) <DsStratC (e.M)> (PROG e.Items)>>;
 }
@@ -2362,6 +2418,7 @@ DsRdGo {
 * and the budget runs out after `s.N` steps. Every other mode starts at zero.
 DsSeed {
   (SEED s.N) = <Sub 10000 s.N>;
+  (PATN s.N) = <Sub 10000 s.N>;
   (e.M) = 0;
 }
 
@@ -2414,6 +2471,11 @@ DsRdEmit {
     (RD () <DsRdBuild (e.Items) (e.Fn) (e.Residual) (e.Ctx)> <DsSteps (e.Ctx)>);
   (SEED s.N) (PROG e.Items) (e.Fn) (e.Residual) (LOOP (e.Ctx)) =
     (RD <DsRdReportFrom <DsSeed (SEED s.N)> (e.Ctx)>
+        <DsRdBuild (e.Items) (e.Fn) (e.Residual) (e.Ctx)> <DsSteps (e.Ctx)>);
+* The seeded budget under the pattern partition: same report shape, same offset,
+* different partition. The searched budgeted run needs both.
+  (PATN s.N) (PROG e.Items) (e.Fn) (e.Residual) (LOOP (e.Ctx)) =
+    (RD <DsRdReportFrom <DsSeed (PATN s.N)> (e.Ctx)>
         <DsRdBuild (e.Items) (e.Fn) (e.Residual) (e.Ctx)> <DsSteps (e.Ctx)>);
   (e.M) (PROG e.Items) (e.Fn) (e.Residual) (ERR) =
     (ERR);
