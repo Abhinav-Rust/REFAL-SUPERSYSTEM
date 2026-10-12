@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+**Docs — the README drops its dated work journal, and SEO notes leave the repository.**
+
+- The README's per-day "how the figure moved" narrative is removed. The table, its
+  sum and the method statement stay; the dated accounting history belongs in
+  `docs/PROGRESS.md` and here, not in the README.
+- `docs/SEO.md` is no longer in the repository — discoverability notes live on the
+  local machine instead — and the README's documentation index drops the entry.
+
 **The last two examples were not the registry — they were a name-binding defect.**
 
 - **The Refal-authored pattern partition now agrees with the oracle on every

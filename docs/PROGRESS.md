@@ -370,14 +370,6 @@ property of that file rather than of Linguist's heuristics, which is what stops 
 future asset from silently re-entering the breakdown the way the removed scripts
 once did.
 
-**SEO.** The headline `refal` package now carries a `description`, `keywords`
-(`refal`, `supercompilation`, `turchin`, `metacomputation`, `compiler`),
-`categories` and a `homepage` in the workspace manifest; the repository already
-holds GitHub's maximum of 20 topics, led by `refal`, `refal-5`,
-`valentin-turchin` and `supercompilation`, and its description already leads with
-the same terms. The README tagline now names `Refal-5`, `supercompilation` and
-`Valentin Turchin` in its first line of prose.
-
 **The README's tenth generated panel.** `cargo xtask gen-readme-diagrams` now
 emits `docs/images/glance-{light,dark}.svg` — a five-tile dashboard (layers,
 completion, language, self-hosting, conformance) placed under the hero so a
@@ -689,11 +681,8 @@ new capability's credit.
   CRLF while `cargo xtask gen-readme-diagrams` writes LF — a regenerated diagram
   would have shown a whole-file diff that is not a change. The worktree is now
   LF everywhere (0 files with CRLF in `git ls-files --eol`).
-- **Discoverability.** `docs/GLOSSARY.md` defines every term the project is
-  built on, with its Turchin source and the code that implements it — the
-  long-tail search surface ("what is supercompilation", "metasystem transition",
-  "Refal-5 pattern matching", "Valentin Turchin"). The GitHub description and
-  topics were refreshed to name the terms the project answers to.
+- **Glossary.** `docs/GLOSSARY.md` defines every term the project is built on,
+  with its Turchin source and the code that implements it.
 - **The README's keyword footer is one line again.** It was a multi-line block
   inside `<sub>`, which GitHub renders with the lines overlapping — two
   sentences drawn on top of each other. A single line is the shape GitHub

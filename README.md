@@ -410,56 +410,6 @@ compiler's own number as the project's would misdescribe what this repository is
 
 </details>
 
-**The 2026-10-10 conformance move.** The conformance/release row's withheld credit
-was its last part: the **file-backed input/output clauses** (`c1.4`, `c1.6`,
-`c1.7`) were bound to the runtime's own test rather than to a runnable fixture,
-because a committed program "cannot carry a path that is valid wherever the suite
-runs". That premise was half wrong — a path cannot be *absolute* and portable, but
-a **relative** one is valid if the process's working directory is one the suite
-owns, and the harness can own it.
-`every_builtin_clause_has_a_traceable_fixture` now runs every `run` row in a fresh
-temporary directory which it removes afterwards, so nothing leaks into the
-checkout, and `examples/builtin-file-io-conformance.ref` opens a file by a
-relative name and exercises `Put`, `Putout` and `Get` on it. The runtime test
-stays, because it can look at what a program cannot print — the exact bytes a
-file received. The row's credit rises **2.66 → 2.80**, the table's sum moves
-**91.66 → 91.80**, and the published figure moves **~91.7% → ~91.8%**.
-
-**The 2026-10-10 runtime move, an *earning* rather than a re-attribution.** The
-runtime row's withheld credit was for the one thing the work list did not cover:
-a **block sentence carrying conditions** still fell back to the recursive
-evaluator, and `terms_are_worklist_safe` rejected such a block, so every function
-whose result contained one was pushed off the work list too — a recursion through
-it ran on the host stack, where the default depth limit is `usize::MAX`. The
-condition task now carries its **owner** (a named function or an anonymous
-block), so both go on the work list; the gate
-`a_block_sentence_that_carries_a_condition_runs_on_the_work_list` drives 100,000
-block-conditioned steps and **overflowed the stack before the fix** — the
-evidence is that the same test aborts with `STATUS_STACK_OVERFLOW` against the
-old `terms_are_worklist_safe`. The row's credit rises **13.51 → 13.65**, the
-table's sum moves **91.52 → 91.66**, and the published figure moves
-**~91.5% → ~91.7%**.
-
-**The 2026-10-09 re-attribution, and an arithmetic defect it exposed.** The
-Tier-1 row's withheld credit was for a *sound, incomplete, certificate-carrying
-feasibility analysis*, and that is now built and gated: `refal feasibility`
-decides each sentence's selectability with a re-checked ground witness and each
-function's termination by structural descent. The row's credit rises
-**8.75 → 9.50**. **Landing it exposed a defect in this table:** the twelve
-credits sum to **90.77**, where the published figure said 90.5 — every row is
-consistent with its own weight and only the total disagreed, by 0.27. The
-published figure is now the table's own sum, so the total moves
-**~90.5% → ~91.5%**: **0.75 earned** by the new analysis and **0.27 corrected**.
-The row's remaining 1.00 is named above, and the analysis's own `unproven` set
-is published per program rather than hidden.
-
-**The 2026-10-08 re-attribution.** The graph-of-states row's withheld credit was
-attributed entirely to §4.4, and that was wrong: the row also carries E-11's stack
-configuration. The 0.70 is therefore split explicitly — **§4.4 0.45, E-11 0.15** —
-and E-11's three *built* behaviours (positive information, negative information,
-and the non-tail bracket context) now carry credit. The figure moves **~90.4% →
-~90.5%**. The E-11 share is a judgment, published here so it can be reviewed.
-
 **The figure is a judgment, published to one decimal and no finer.** A defensible
 re-weighting moves it by ±0.5 points; a single credit judgment by ±0.9. **A row
 carries zero credit until a gate behind it is green** — adding weighted rows for
@@ -1019,7 +969,6 @@ and a new workstream carries zero credit until a gate behind it is green.
 | [RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md) | Release gates, supported scope, compatibility guarantees |
 | [REFAL-FIRST-COMPLETION.md](docs/REFAL-FIRST-COMPLETION.md) | Self-hosting completion contract and scorecard |
 | [CLEANROOM.md](docs/CLEANROOM.md) | Clean-room authorship policy |
-| [SEO.md](docs/SEO.md) | Discoverability: the keyword map, the tactics, and what is deliberately not done |
 | [CHANGELOG.md](CHANGELOG.md) | What has changed, release by release |
 | [crates/xtask](crates/xtask) | The repository's tooling, in Rust: regenerates the theme-aware SVG diagrams (each emitted as a light/dark pair from one description, so the two themes cannot drift), and carries the corpus sweep, the profiler, the performance suite, packaging and the source fetch. Run as `cargo xtask <task>` |
 
