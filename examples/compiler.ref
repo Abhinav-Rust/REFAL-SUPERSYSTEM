@@ -3668,12 +3668,20 @@ DsSplitPat {
 * The split target: the leftmost component that is a pattern-split variable, or
 * a bracket whose contents are exactly one. The second case is what lets the
 * partition enter a constructor the callee discriminates.
+*
+* The variable's NAME is a character sequence, not one symbol (`Parse` builds
+* `(VAR s.K e.I)`), so the bracket branch must bind it with `e.N`. With `t.N`
+* the branch matched only a one-character name, and the driver's entry variable
+* is always named `Input` -- five characters -- so every entry-level bracket
+* silently declined the partition and the callee stayed residual. That is what
+* `equiv-append-assoc` and `equiv-append-right-id` were attributed to; the
+* registry was never the cause.
 DsPatPos {
   () s.I = (NONE);
   ((VAR 'e' e.N) e.Rest) s.I = (SOME s.I);
   ((VAR 't' e.N) e.Rest) s.I = (SOME s.I);
-  ((BR (VAR 'e' t.N)) e.Rest) s.I = (SOME s.I);
-  ((BR (VAR 't' t.N)) e.Rest) s.I = (SOME s.I);
+  ((BR (VAR 'e' e.N)) e.Rest) s.I = (SOME s.I);
+  ((BR (VAR 't' e.N)) e.Rest) s.I = (SOME s.I);
   (t.T e.Rest) s.I = <DsPatPos (e.Rest) <Add s.I 1>>;
 }
 

@@ -72,6 +72,46 @@ corpus gate is green at `cases: 71`, `positive: 31`, `check-failure: 6`,
 `runtime-failure: 1`, `residual: 33`, `cleaned-sentences: 1`, and
 `clippy --all-targets -D warnings` and `cargo fmt --check` are clean.
 
+The **constructor-entering partition** is ported into the Refal-authored driver
+and is now **exact**: `RESIDUALIZE-DRIVEN-PATTERN` agrees with
+`residualize-driven --split pattern` byte for byte on **every example the oracle
+drives** (77 of 77, 2026-10-12), with the gate requiring `diverged.is_empty()`.
+
+### Done — the pattern-partition port is exact: 75 → 77 of 77, and the last two were a name-binding defect (2026-10-12)
+
+**The record's diagnosis was wrong, and finding that out is the finding.** The two
+examples the port still diverged on — `equiv-append-assoc` and
+`equiv-append-right-id` — were attributed to the Rust's `pattern_splits` registry
+keyed by canonical input. They were not.
+
+**The defect.** `DsPatPos` — the target detector that picks the component a
+pattern split enters — has a branch for "a bracket whose contents are exactly
+one". It bound the pattern-split variable's **name** with `t.N`, which matches
+exactly one term. A variable name is a **character sequence** (`Parse` builds
+`(VAR s.K e.I)`), so the branch matched only a one-character name. The driver's
+entry variable is always named `Input` — five characters — so **every
+entry-level bracket declined the partition** and its callee stayed residual:
+`<Append-Contents (e.Input) ()>` came out as a call where the oracle emitted
+`Split1`. Binding with `e.N` fixes it.
+
+The defect was invisible on `accumulator-reverse`, which is why the port looked
+correct: there the split target is `Rev`'s **bare** first argument, reached by the
+branch that already used `e.N`. Only the bracket branch was wrong.
+
+**Reach is confined to the pattern strategy.** `DsPatPos` is called only from
+`DsSplitPat`, which `DsSplit` reaches only for the lowercase (pattern) strategy
+character, so the default `'C'`/`'I'` path and the compiler's own residue are
+untouched.
+
+**Measured.** `the_pattern_partition_is_ported_to_the_refal_authored_driver` now
+requires `diverged.is_empty()` and at least 77 matched, and it is green: the
+Refal-authored driver agrees with `residualize-driven --split pattern` byte for
+byte on **every example the oracle drives**. The gate is exact rather than a
+floor, so a new divergence is a regression.
+
+**The figure does not move.** The port is a differential of a Rust capability;
+the product's default path is still the sequence partition.
+
 ### Done — the complement branch is ported, and it exposed a soundness defect in the Rust driver (2026-10-10)
 
 **The complement (Refal).** A sentence whose component at the split position is a
@@ -119,7 +159,8 @@ hand-committed `fixpoint` panel's `<desc>` and label.
 **Gates.** `a_repeated_variable_matches_by_value_not_by_source_position` pins the
 witness: the equal pair must fold, the *unequal* pair must still fall through, and
 the residue must **agree with its source**. `the_pattern_partition_is_ported_to_the_refal_authored_driver`
-now requires **75 of 77** (up from 52). Green: the 45 `refal_authored_*` corpus
+now requires **75 of 77** (up from 52; raised to exact agreement, 77 of 77, on
+2026-10-12). Green: the 45 `refal_authored_*` corpus
 differentials, `compile_command_compiles_the_compiler_itself`,
 `the_refal_driver_reaches_a_fixpoint_on_the_compiler_itself`,
 `the_self_applied_compiler_compiles_every_example_the_compiler_accepts`,
@@ -162,9 +203,12 @@ registers the branches *before* driving, and the Refal now does too —
 either form.
 
 **The port is partial, and its coverage is measured rather than claimed
-complete.** Not yet ported: the **complement branch** (reached only where a
-sentence's component at the split position is a bare variable) and the
-`pattern_splits` registry keyed by canonical input as well as by sentences.
+complete.** *(Superseded 2026-10-12: the port is now exact at 77 of 77, and the
+two examples below were a name-binding defect in the target detector rather than
+the registry — see the Done section at the top of this file.)* Not yet ported:
+the **complement branch** (reached only where a sentence's component at the split
+position is a bare variable) and the `pattern_splits` registry keyed by canonical
+input as well as by sentences.
 Measured over the whole corpus: **52 of 77 examples agree exactly** (all 77 the
 bootstrap will drive, `compiler.ref` excluded). The 25 that diverge are the ones
 those two halves are needed for — `case-split`, `clean-graph`, `condition`,

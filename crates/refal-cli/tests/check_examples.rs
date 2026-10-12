@@ -7665,24 +7665,25 @@ fn the_pattern_partition_folds_a_nested_accumulator() {
 /// carried in the strategy character — lowercase selects it — so the default
 /// `'C'`/`'I'` path is untouched and the two cannot be confused.
 ///
-/// **The port is partial, and its coverage is measured rather than asserted
-/// complete.** Ported: the target selection (a pattern-split variable, or a
-/// bracket whose contents are exactly one), the branch emission from the
-/// callee's own patterns, and the identification of a split by the **sentences
-/// it emits**, which is what lets a recurrence inside a branch reuse `Split1`
-/// instead of making a second split — the mechanism that folds the accumulator.
-/// Not ported: the `pattern_splits` registry keyed by canonical input as well as
-/// by sentences. Measured 2026-10-10, after the complement landed: **75 of 77
-/// examples agree exactly**; `equiv-append-assoc` and `equiv-append-right-id` are
-/// the two the registry is needed for. The gate is therefore a **non-regression**
-/// one — the witness must fold and the count must not fall — because demanding
-/// agreement everywhere would demand that last half.
+/// **The port is complete on the corpus, and the last two examples were not
+/// what the record said they were.** Ported: the target selection (a
+/// pattern-split variable, or a bracket whose contents are exactly one), the
+/// branch emission from the callee's own patterns, the complement branch, and
+/// the identification of a split by the **sentences it emits**, which is what
+/// lets a recurrence inside a branch reuse `Split1` instead of making a second
+/// split — the mechanism that folds the accumulator.
+///
+/// `equiv-append-assoc` and `equiv-append-right-id` were attributed to the
+/// Rust's canonical-input registry. They were not. The bracket branch of the
+/// target detector bound the pattern-split variable's **name** with `t.N`,
+/// which matches one term — but a name is a character sequence, and the driver's
+/// entry variable is always named `Input`, five characters, so **every
+/// entry-level bracket silently declined the partition** and its callee stayed
+/// residual. The registry half is still unported and the sentence-identity test
+/// covers every corpus case, so the gate now demands agreement on **everything
+/// the oracle drives** rather than a floor.
 #[test]
 fn the_pattern_partition_is_ported_to_the_refal_authored_driver() {
-    /// The measurement this gate pins. Re-derive it, do not lower it, when the
-    /// port grows: see `docs/PROGRESS.md`.
-    const AGREED_ON_2026_10_10: usize = 75;
-
     let mut names: Vec<String> = fs::read_dir(workspace_path("examples"))
         .expect("read the examples directory")
         .filter_map(|entry| {
@@ -7728,10 +7729,16 @@ fn the_pattern_partition_is_ported_to_the_refal_authored_driver() {
         "the accumulator must fold in the Refal-authored driver\nmatched: {matched:?}\n\
          diverged: {diverged:?}"
     );
+    // Full agreement, not a floor: the port is measured byte-identical on every
+    // example the oracle drives. A new divergence is a regression.
     assert!(
-        matched.len() >= AGREED_ON_2026_10_10,
-        "the port lost coverage: {} agreed, {AGREED_ON_2026_10_10} did before\n\
-         matched: {matched:?}\ndiverged: {diverged:?}",
+        diverged.is_empty(),
+        "the Refal-authored pattern partition diverged from the oracle\n\
+         diverged: {diverged:?}\nmatched: {matched:?}"
+    );
+    assert!(
+        matched.len() >= 77,
+        "the corpus is 77 drivable examples; only {} agreed\nmatched: {matched:?}",
         matched.len()
     );
 }

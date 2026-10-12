@@ -568,15 +568,19 @@ The ordered work list lives in
    *entering the constructor* rather than by the explicit two-level stack
    configuration the row expected. And the partition is **no longer Rust-only**:
    it is ported to `examples/compiler.ref` as `RESIDUALIZE-DRIVEN-PATTERN`, where
-   the two drivers agree byte for byte on **75 of the 77** corpus examples.
-   Porting it found and closed a **soundness defect in the Rust driver**: a
-   repeated variable was compared with `CoreTerm`'s derived equality, which
-   includes the source span, so `Pair { s.A s.a = ...; }` called as
+   the two drivers agree byte for byte on **every example the oracle drives — 77
+   of 77**. Porting it found and closed a **soundness defect in the Rust
+   driver**: a repeated variable was compared with `CoreTerm`'s derived equality,
+   which includes the source span, so `Pair { s.A s.a = ...; }` called as
    `<Pair 'q' 'q'>` folded to the *next* sentence — a wrong program, not a slow
    one. With it fixed the compiler's own output is **111,600 bytes**, up from
-   102,436: the old figure was produced by that mis-fold. Still open: the
-   `pattern_splits` registry, and then making the constructor-entering partition
-   the compiler's **default**.
+   102,436: the old figure was produced by that mis-fold. The port's last two
+   divergences were a **name-binding defect**, not the registry: the target
+   detector bound a pattern-split variable's name with `t.N`, which matches one
+   term, while a name is a character sequence — and the driver's entry variable
+   is always `Input` — so every entry-level bracket silently declined the
+   partition. Still open: making the constructor-entering partition the
+   compiler's **default**.
 5. **The projections as artifacts (E-14)** — the self-application now **emits a
    working compiler** and is gated by *running* it on the corpus; `refal project2`
    exists and the partition it needed is built, but its artifact is the *driven

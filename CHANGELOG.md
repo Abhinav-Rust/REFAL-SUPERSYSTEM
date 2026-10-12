@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+**The last two examples were not the registry — they were a name-binding defect.**
+
+- **The Refal-authored pattern partition now agrees with the oracle on every
+  example the oracle drives: 75 → 77 of 77.** `equiv-append-assoc` and
+  `equiv-append-right-id` were attributed to the Rust's `pattern_splits` registry
+  keyed by canonical input. They were not.
+- **The defect.** The bracket branch of the target detector (`DsPatPos`) bound the
+  pattern-split variable's **name** with `t.N`, which matches exactly one term. A
+  variable name is a **character sequence** (`Parse` builds `(VAR s.K e.I)`), and
+  the driver's entry variable is always named `Input` — five characters — so the
+  branch matched only a one-character name. **Every entry-level bracket silently
+  declined the partition**, leaving its callee residual: `<Append-Contents
+  (e.Input) ()>` stayed a call where the oracle emitted `Split1`. Binding with
+  `e.N` fixes it. `DsPatPos` is reached only from `DsSplitPat` on the lowercase
+  (pattern) strategy, so the default `'C'`/`'I'` path and the compiler's own
+  residue are untouched.
+- **The gate is now exact, not a floor.**
+  `the_pattern_partition_is_ported_to_the_refal_authored_driver` requires
+  `diverged.is_empty()` and at least 77 matched, so a new divergence is a
+  regression rather than a tolerated one. The witness (E-11's accumulator) is
+  unchanged.
+- **The figure does not move** — the port is a differential of a Rust capability
+  and the product's default path is still the sequence partition.
+
 **The complement branch is ported — and it found a soundness defect in the Rust
 driver.**
 
@@ -25,7 +49,8 @@ driver.**
   generated `demonstrations` panel, and the hand-committed `fixpoint` panel.
 - **Coverage after both changes: 75 of 77.** The two that remain
   (`equiv-append-assoc`, `equiv-append-right-id`) need the `pattern_splits`
-  registry.
+  registry. *(Superseded: the cause was a name-binding defect in the target
+  detector, not the registry — see the entry at the top of this section.)*
 - **The figure does not move** — the compiler row withholds credit for speed on
   very large inputs and for a fixpoint over arbitrary programs, and neither
   changed.
