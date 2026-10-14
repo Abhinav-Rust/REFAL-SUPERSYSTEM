@@ -80,6 +80,32 @@ The partition is **searchable** — `--split search` drives both partitions and 
 the cheaper residue — but the search is an **opt-in**, not the default: the compiler
 ships the sequence partition. See the 2026-10-14 entry below.
 
+### Done — the repository's hygiene surfaces are set (2026-10-14)
+
+**The *final touches* left over from the 2026-10-12 handoff, done in one pass.**
+
+- **Security.** Dependabot vulnerability alerts and security updates are on, secret
+  scanning and push protection are on, and `main` is protected against force-pushes
+  and deletion. Direct pushes stay allowed and no reviews are required — the project
+  commits to `main` by design, so protection must not contradict that. `SECURITY.md`
+  states the scope: the interesting surface is what the tool does with the input it
+  is given, and a **wrong program** is a first-order defect here rather than a
+  nicety.
+- **Code scanning.** **Not applicable, and that is a finding rather than an
+  omission.** CodeQL has no Rust analyser, and this repository is 100% Rust, so a
+  CodeQL workflow would either find nothing or fail. `clippy --all-targets -- -D
+  warnings` is the static analysis, and it already runs on every push.
+- **Community files.** `CODE_OF_CONDUCT.md`, issue templates (bug report, feature
+  request) and a pull-request template, which together complete the profile GitHub
+  scores as community standards.
+- **CI.** A concurrency group cancels a superseded run — the suite is long, and only
+  the newest commit's verdict matters — the cargo build is cached, and
+  `actions/checkout` moves to `v5`, the first release on Node 24. The 90-minute
+  timeout is kept deliberately: the runtime is dominated by *running* tests, not by
+  building, so the timeout rather than the cache is what keeps a slow runner from
+  failing, and the job cannot be split because the serialization is a property of
+  the tests.
+
 ### Done — the searched partition is an opt-in, not the default: four pinned invariants said so (2026-10-14)
 
 **The suite was red on `main`, and the four failures were one cause.** The previous

@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
 
+# A push that supersedes an in-flight run cancels it. The branch's newest commit
+# is the only one whose verdict still matters, and this suite is long enough that
+# a stale run would otherwise hold a runner for up to 90 minutes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -14,10 +21,16 @@ jobs:
     # runner: 34-43 minutes. The limit was 45, which is a two-minute margin on a
     # slow runner -- a flake waiting to happen, and the margin shrinks with every
     # test added. 90 gives a slow runner room to finish rather than fail.
+    #
+    # The runtime is dominated by *running* tests, not by building, so the cache
+    # below is a small win; the timeout, not the cache, is what keeps a slow
+    # runner from failing. Splitting the job is not possible: the serialization
+    # is a property of the tests, not of the workflow.
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test --all -j 2 -- --test-threads=1
