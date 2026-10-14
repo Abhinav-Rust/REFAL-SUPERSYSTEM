@@ -25,10 +25,11 @@ jobs:
     # biggest lever. It is a 1.72x saving on the measured sweep, and the profile is
     # behaviourally identical to `dev`, so nothing the gates check is weakened.
     #
-    # 90 minutes stays: it is the timeout, not the cache, that keeps a slow runner
-    # from failing, and the job cannot be split because the serialization is a
-    # property of the tests rather than of the workflow.
-    timeout-minutes: 90
+    # The timeout is a backstop for a *hung* run, not a budget for a slow one, so
+    # it wants a comfortable multiple of the real time rather than a tight fit.
+    # Measured at 10m45s on the runner under `test-fast` (down from 50m28s in
+    # `dev`), which makes 45 minutes roughly a 4x margin.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable

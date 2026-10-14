@@ -1,0 +1,16 @@
+version: 2
+
+updates:
+  # The workspace has **no third-party crates**: `Cargo.lock` lists seven packages
+  # and every one of them is a crate in this repository, so a `cargo` ecosystem
+  # entry would have nothing to update. The GitHub Actions are the only real
+  # dependencies, and they do age -- `actions/checkout` and `Swatinem/rust-cache`
+  # both publish new majors.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "ci"
+    labels:
+      - dependencies

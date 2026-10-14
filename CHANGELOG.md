@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+**CI is 4.7x faster: 50m28s -> 10m45s.**
+
+- The runner measurement lands well above the 1.72x the single-sweep experiment
+  predicted, because the suite's cost is dominated by the four tests that compile
+  the compiler *with* the Refal-authored compiler -- pure computation, which
+  optimisation helps far more than the process-spawning sweeps that set that floor.
+  The CI timeout drops 90 -> 45 minutes, roughly a 4x margin.
+- **Dependabot version updates now watch the GitHub Actions.** `Cargo.lock` lists
+  seven packages and every one is a crate in this repository, so the workspace has
+  **no third-party dependencies** and a `cargo` entry would have nothing to do.
+- Discussions are enabled, and a **social preview card** is committed at
+  `docs/images/social-preview.png` with its source beside it.
+
 **The test suite runs in a `test-fast` profile — 1.72x, with every check kept.**
 
 - **A new workspace profile.** `[profile.test-fast]` inherits `release` and

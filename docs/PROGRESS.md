@@ -80,6 +80,32 @@ The partition is **searchable** — `--split search` drives both partitions and 
 the cheaper residue — but the search is an **opt-in**, not the default: the compiler
 ships the sequence partition. See the 2026-10-14 entry below.
 
+### Done — the suite is 4.7x faster on CI, and the last hygiene surfaces are set (2026-10-14)
+
+**Measured on the runner: `50m28s` before the `test-fast` profile, `10m45s` after.**
+The single-sweep measurement had predicted 1.72x, and the aggregate is far better
+than that because the suite's cost is dominated by the four tests that compile the
+compiler *with* the Refal-authored compiler -- pure computation, which optimisation
+helps enormously, rather than the process-spawning sweeps that set the 1.72x floor.
+The CI timeout drops 90 -> 45 minutes, now roughly a 4x margin.
+
+**Dependabot version updates are configured for the actions only**, and the reason
+is worth recording: `Cargo.lock` lists **seven packages and every one of them is a
+crate in this repository**. The workspace has **no third-party dependencies at
+all**, so a `cargo` ecosystem entry would have nothing to update; the GitHub Actions
+are the only real dependencies, and they do age.
+
+**Discussions enabled** — it is where "how do I use this?" belongs rather than the
+issue tracker, and it unlocks the Community insights GitHub surfaces.
+
+**A social preview card** is committed at `docs/images/social-preview.png`, with the
+source beside it so it can be re-rendered. It is the image every link to this
+repository shows, so it is the one asset that has to be legible as a thumbnail.
+
+**Declined, with reasons.** *Sponsorships* is a financial decision rather than a
+repository-quality one, and it is off. *Projects* stays off: `docs/PROGRESS.md` is
+this project's tracker by design, and a second one would drift from it.
+
 ### Done — the test suite runs in a `test-fast` profile (2026-10-14)
 
 **The suite is dominated by *running* tests, not by building them.** The tests
