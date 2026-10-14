@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+**The test suite runs in a `test-fast` profile — 1.72x, with every check kept.**
+
+- **A new workspace profile.** `[profile.test-fast]` inherits `release` and
+  re-enables `debug-assertions` and `overflow-checks`, so it is **behaviourally
+  identical to `dev`** and only faster. CI and `CODEBUDDY.md` now run
+  `cargo test --profile test-fast --all -j 2 -- --test-threads=1`.
+- **Measured on one representative corpus sweep**
+  (`refal_authored_residualize_driven_matches_the_rust_oracle`): `dev` **95.82 s**,
+  `release` **51.79 s**, `test-fast` **55.71 s**. The profile is therefore **1.72x**,
+  and the two checks cost only **7.6%** over plain `release` — which is why they are
+  kept. This project treats a *wrong program* as a first-order defect, and silently
+  wrapping arithmetic is exactly the failure mode the gates exist to catch.
+- **The suite is dominated by running tests, not by building them.** The tests
+  spawn `refal` thousands of times, so the optimisation level of the binary they
+  spawn is the largest single lever on the wall clock. Expect roughly
+  **50 → 29 minutes** on the runner.
+- **`dev` is untouched**, so a bare `cargo test` still means what it always meant.
+
 **The partition is searched, not fixed — but the search is an opt-in, not the default.**
 
 - **Neither split dominates, and that is measured.** Over the corpus the

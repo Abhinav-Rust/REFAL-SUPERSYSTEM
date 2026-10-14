@@ -17,15 +17,17 @@ jobs:
     runs-on: ubuntu-latest
     # The suite is serial by construction (`--test-threads=1`) because four of
     # its tests compile the compiler with the Refal-authored compiler, and the
-    # workspace does not tolerate them running concurrently. Measured on the
-    # runner: 34-43 minutes. The limit was 45, which is a two-minute margin on a
-    # slow runner -- a flake waiting to happen, and the margin shrinks with every
-    # test added. 90 gives a slow runner room to finish rather than fail.
+    # workspace does not tolerate them running concurrently.
     #
-    # The runtime is dominated by *running* tests, not by building, so the cache
-    # below is a small win; the timeout, not the cache, is what keeps a slow
-    # runner from failing. Splitting the job is not possible: the serialization
-    # is a property of the tests, not of the workflow.
+    # `--profile test-fast` is `release` code generation with `debug-assertions`
+    # and `overflow-checks` kept (see the workspace `Cargo.toml`): the runtime is
+    # dominated by *running* tests, not by building, so an optimised binary is the
+    # biggest lever. It is a 1.72x saving on the measured sweep, and the profile is
+    # behaviourally identical to `dev`, so nothing the gates check is weakened.
+    #
+    # 90 minutes stays: it is the timeout, not the cache, that keeps a slow runner
+    # from failing, and the job cannot be split because the serialization is a
+    # property of the tests rather than of the workflow.
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
@@ -33,4 +35,4 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo test --all -j 2 -- --test-threads=1
+      - run: cargo test --profile test-fast --all -j 2 -- --test-threads=1

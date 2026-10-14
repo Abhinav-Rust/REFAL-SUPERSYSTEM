@@ -80,6 +80,41 @@ The partition is **searchable** — `--split search` drives both partitions and 
 the cheaper residue — but the search is an **opt-in**, not the default: the compiler
 ships the sequence partition. See the 2026-10-14 entry below.
 
+### Done — the test suite runs in a `test-fast` profile (2026-10-14)
+
+**The suite is dominated by *running* tests, not by building them.** The tests
+spawn `refal` thousands of times, so the optimisation level of the binary they
+spawn is the largest single lever on the wall clock. A new workspace profile,
+`[profile.test-fast]`, inherits `release` and re-enables `debug-assertions` and
+`overflow-checks`, so it is **behaviourally identical to `dev`** — only faster.
+
+**Measured**, on `refal_authored_residualize_driven_matches_the_rust_oracle`:
+
+| Profile | Time | vs `dev` |
+|---|---|---|
+| `dev` | 95.82 s | — |
+| `release` | 51.79 s | 1.85x |
+| `test-fast` | **55.71 s** | **1.72x** |
+
+**Why the checks are kept.** Turning them off buys a further 7.6% and costs the
+project its overflow and invariant checking. This project's premise is that a
+*wrong program* is a first-order defect, and silently wrapping arithmetic is
+exactly the failure mode the gates exist to catch, so the 7.6% is not worth it.
+The profile is a pure speed change.
+
+**Wired in:** CI runs `cargo test --profile test-fast --all -j 2 --
+--test-threads=1`, and so does `CODEBUDDY.md`. The `dev` profile is untouched, so a
+bare `cargo test` still means what it always meant.
+
+**A correction worth recording.** The first hypothesis was that Windows Defender
+was the dominant cost, and exclusions were added for the repository, `target/`, the
+cargo and rustup homes, and the toolchain binaries. Measured before and after, they
+bought **3.4%** on `dev` and **8.4%** on `release` — and the
+`error deleting lock file … Access is denied` warnings **still fire**, so those
+handles are not the antivirus. The exclusions were kept (free, correct hygiene) but
+the claim was wrong, and the measurement is what caught it. The real lever was the
+one that had been argued against first.
+
 ### Done — the repository's hygiene surfaces are set (2026-10-14)
 
 **The *final touches* left over from the 2026-10-12 handoff, done in one pass.**

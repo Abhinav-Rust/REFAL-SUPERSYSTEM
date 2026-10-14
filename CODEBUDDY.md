@@ -30,11 +30,13 @@ only the second.
    commit as the work, so it is never stale by more than one commit.
 2. **Implement and verify.** `cargo check --quiet` for routine work; a targeted
    `cargo test -p <crate> -- <name>` for a change; the full suite only at a
-   milestone. The full suite takes roughly 35 minutes and **must** run as
-   `cargo test --all -j 2 -- --test-threads=1` — run in parallel, the four tests
-   that compile the compiler with the Refal-authored compiler exhaust memory and
-   abort with an allocation failure, which reads like a semantic regression and
-   is not one.
+   milestone. The full suite **must** run as
+   `cargo test --profile test-fast --all -j 2 -- --test-threads=1` — run in
+   parallel, the four tests that compile the compiler with the Refal-authored
+   compiler exhaust memory and abort with an allocation failure, which reads like
+   a semantic regression and is not one. `test-fast` is `release` code generation
+   with `debug-assertions` and `overflow-checks` kept, so it is behaviourally
+   identical to `dev` and only faster (see the workspace `Cargo.toml`).
 3. **Commit conventionally** (`feat:`, `fix:`, `perf:`, `refactor:`, `test:`,
    `docs:`) and push directly to `main`. No branches, no PRs.
 4. **Update `docs/PROGRESS.md` and `README.md` in the same commit as the work.**

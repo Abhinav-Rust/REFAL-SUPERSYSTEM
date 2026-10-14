@@ -23,3 +23,22 @@ categories = ["compilers", "development-tools"]
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
+
+# The test profile: `release` code generation with the two debug-only checks kept.
+#
+# The suite is dominated by *running* tests rather than by building them, and the
+# tests spawn `refal` thousands of times, so an optimised binary is the single
+# biggest lever on the wall clock. Measured on one representative corpus sweep
+# (`refal_authored_residualize_driven_matches_the_rust_oracle`): debug 95.82 s,
+# `release` 51.79 s, and this profile 55.71 s -- **1.72x** for 7.6% over plain
+# `release`.
+#
+# `debug-assertions` and `overflow-checks` are kept on purpose. This project's
+# premise is that a *wrong program* is a first-order defect, and silently wrapping
+# arithmetic is precisely the failure mode the gates exist to catch; the 7.6% that
+# turning them off would buy is not worth that. The profile is therefore
+# behaviourally identical to `dev` -- only faster.
+[profile.test-fast]
+inherits = "release"
+debug-assertions = true
+overflow-checks = true
