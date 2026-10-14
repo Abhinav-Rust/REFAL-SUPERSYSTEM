@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1280px; height: 640px; overflow: hidden; }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: #FFFFFF;
+    color: #16161A;
+    padding: 64px 72px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .rule { width: 96px; height: 5px; background: #534AB7; border-radius: 3px; margin-bottom: 26px; }
+  h1 { font-size: 64px; font-weight: 600; letter-spacing: -1.6px; line-height: 1.05; }
+  .sub { margin-top: 22px; font-size: 26px; line-height: 1.5; color: #4A4A52; max-width: 1000px; }
+  .layers { display: flex; gap: 12px; margin-top: 42px; }
+  .chip {
+    font-size: 18px; font-weight: 500; padding: 11px 19px; border-radius: 999px;
+    background: #F1EFF9; color: #3C3489; border: 1px solid #D9D4F0;
+  }
+  .chip .k { font-weight: 700; margin-right: 8px; color: #534AB7; }
+  .foot {
+    position: absolute; left: 72px; bottom: 62px;
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 17px; color: #6B6B73; letter-spacing: 0.2px;
+  }
+  .foot b { color: #16161A; font-weight: 600; }
+</style>
+</head>
+<body>
+  <div>
+    <div class="rule"></div>
+    <h1>REFAL-SUPERSYSTEM</h1>
+    <p class="sub">A Refal-5 compiler that compiles itself. Valentin Turchin's four-layer supersystem, rebuilt in Rust.</p>
+    <div class="layers">
+      <span class="chip"><span class="k">L0</span>Refal-5 machine</span>
+      <span class="chip"><span class="k">L1</span>Reflection engine</span>
+      <span class="chip"><span class="k">L2</span>Supercompiler</span>
+      <span class="chip"><span class="k">L3</span>Meta-prover</span>
+      <span class="chip"><span class="k">L4</span>Self-application</span>
+    </div>
+  </div>
+  <div class="foot"><b>100% Rust</b> &nbsp;·&nbsp; zero third-party dependencies &nbsp;·&nbsp; github.com/Abhinav-Rust/REFAL-SUPERSYSTEM</div>
+</body>
+</html>
