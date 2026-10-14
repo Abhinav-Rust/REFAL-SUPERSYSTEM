@@ -834,7 +834,7 @@ fn drive_options(args: &[String]) -> Result<DriveOptions, String> {
     let mut options = DriveOptions {
         max_steps: 10_000,
         strategy: refal_core::DriveStrategy::Search,
-        split: refal_core::SplitStrategy::Search,
+        split: refal_core::SplitStrategy::Sequence,
         show_configurations: false,
         show_neighborhoods: false,
     };

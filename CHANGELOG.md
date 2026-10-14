@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-**The partition is searched, not fixed — and it is the compiler's default.**
+**The partition is searched, not fixed — but the search is an opt-in, not the default.**
 
 - **Neither split dominates, and that is measured.** Over the corpus the
   constructor-entering partition is strictly better on **13** examples
@@ -11,20 +11,25 @@
   (`identity`, `classic-syntax`, `runtime-bracket`, `shorthand-variables` 0 → 2;
   `invert-list-encoder` 4 → 6; `lexer` 259 → 261), where entering the constructor
   emits a `SplitN` that merely re-states the entry's own pattern.
-- **`SplitStrategy::Search` is the default.** The driver drives with both
-  partitions and keeps the cheaper residue — the rule the compilation axis already
-  used, one level out. **A tie goes to the sequence partition**, so the search can
-  only ever be a strict improvement and a program the pattern partition cannot
-  improve is byte-identical to what the compiler produced before. The
-  zero-residual-work short circuit applies here too.
+- **`--split search` drives with both partitions and keeps the cheaper residue** —
+  the rule the compilation axis already uses, one level out. **A tie goes to the
+  sequence partition**, so the search can only ever be a strict improvement *on
+  cost*. The zero-residual-work short circuit applies here too.
+- **It is an explicit opt-in, not the default.** Cost is not the whole story: on
+  the merged `Rev { = ; t.H e.T = <Rev e.T> t.H; }` form the sequence split folds
+  the entry to `Split1` — eliminating `Rev` — at residual-work 6, while the pattern
+  split leaves the source unchanged at 4, so the search keeps the *unfolded*
+  residue; and the pattern split is deliberately incomplete, so the §4.5 perfection
+  verdict would be claimed for `symbolic-branch.ref`, whose bracket-headed call has
+  no sentence. The compiler therefore ships `SplitStrategy::Sequence`, and
+  `--split search` selects the search.
 - **Ported to the Refal-authored driver**, so the differential holds:
-  `RESIDUALIZE-DRIVEN`, `RESIDUALIZE-DRIVEN n` and `Compile` search, and
-  `RESIDUALIZE-DRIVEN-PATTERN` still selects the pattern partition outright.
-  `DsPatMode` gives a mode its pattern counterpart, and `(PATN s.N)` carries the
-  budget so a searched budgeted run drives both partitions under one limit.
-- **The compiler's own output does not move — 111,600 bytes** — because the search
-  picks the sequence partition for `compiler.ref`. The self-hosting fixpoint and
-  the published completion figure are unchanged.
+  `RESIDUALIZE-DRIVEN`, `RESIDUALIZE-DRIVEN n` and `Compile` keep the sequence
+  partition, and `RESIDUALIZE-DRIVEN-SEARCH` selects the search. `DsPatMode` gives
+  a mode its pattern counterpart, and `(PATN s.N)` carries the budget so a searched
+  budgeted run drives both partitions under one limit.
+- **The compiler's own output does not move — 111,600 bytes.** The self-hosting
+  fixpoint and the published completion figure are unchanged.
 - `--split search|sequence|pattern` selects explicitly.
 
 **Docs — the README drops its dated work journal, and the FAQ gains two entries.**

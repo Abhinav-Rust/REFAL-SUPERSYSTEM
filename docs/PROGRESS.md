@@ -76,8 +76,56 @@ The **constructor-entering partition** is ported into the Refal-authored driver
 and is now **exact**: `RESIDUALIZE-DRIVEN-PATTERN` agrees with
 `residualize-driven --split pattern` byte for byte on **every example the oracle
 drives** (77 of 77, 2026-10-12), with the gate requiring `diverged.is_empty()`.
+The partition is **searchable** — `--split search` drives both partitions and keeps
+the cheaper residue — but the search is an **opt-in**, not the default: the compiler
+ships the sequence partition. See the 2026-10-14 entry below.
 
-### Done — the partition is searched rather than fixed, and it is the compiler's default (2026-10-12)
+### Done — the searched partition is an opt-in, not the default: four pinned invariants said so (2026-10-14)
+
+**The suite was red on `main`, and the four failures were one cause.** The previous
+change made `SplitStrategy::Search` the default — drive both partitions, keep the
+cheaper residue. The search is sound, but the *comparison* it makes is
+`ResidueCost`, and cost is not every property the suite pins. Four tests failed on
+CI (`38279105429`, and the two runs after it):
+
+- `a_non_tail_recursion_folds_whether_or_not_the_bracket_case_is_named` — the
+  merged form `Rev { = ; t.H e.T = <Rev e.T> t.H; }` must **fold** (`Rev`
+  eliminated). Under the sequence partition it folds to `Split1` at
+  `residual_work 6`; under the pattern partition the residue is the **source
+  unchanged** at `4`, so the search keeps the unfolded one. Cost cannot see that
+  the sequence end is the one that eliminated `Rev`.
+- `the_perfection_verdict_is_reported_honestly` — **a soundness claim.**
+  `symbolic-branch.ref` calls `Choose` on a bracket-headed expression, and no
+  sentence of `Choose` takes one. The sequence partition generates that branch and
+  reports `perfect: no (undecided 0, uncovered 1)`. The pattern partition is
+  *deliberately incomplete* — it never generates the bracket-headed branch — so the
+  verdict came back `perfect: yes`. Claiming perfection for a program with an
+  unselectable call site is unsound, not merely optimistic.
+- `the_search_keeps_the_smaller_end` and
+  `the_searched_end_is_no_worse_than_either_fixed_end` — the axis search's
+  non-vacuity. The pattern partition improves the compilative end so much
+  (`driven-strategy-search.ref`: 68 → 8, tying the interpretive end at 8) that the
+  axis search never *strictly* keeps the interpretive end again, and the
+  non-vacuity assertions fail. An axis search that always picks the same end is
+  exactly the decoration the test exists to catch.
+
+**The fix: the search is kept, the default is not.** `SplitStrategy::Sequence` is
+`#[default]` again; `SplitStrategy::Search` stays and is reached by
+`--split search`. The Refal-authored driver follows: `RESIDUALIZE-DRIVEN`,
+`RESIDUALIZE-DRIVEN n` and `Compile` drive `DsRdAxis` (the sequence partition) and
+a new `RESIDUALIZE-DRIVEN-SEARCH` selects `DsRdSearch`.
+`refal_authored_residualize_driven_matches_the_rust_oracle` stays green — the two
+drivers agree byte for byte on the corpus. The compiler's own output is unchanged
+at **111,600 bytes**, so the self-hosting fixpoint and the published completion
+figure do not move.
+
+**What this leaves open, and precisely.** The search is worth having — the pattern
+partition is strictly better on 13 corpus examples and strictly worse on six — but
+it cannot be the default until the comparison sees what cost does not: whether the
+residue eliminated a source function, and whether the partition is complete enough
+for the §4.5 verdict. That is E-11's remaining half.
+
+### Done — the partition is searched rather than fixed (2026-10-12)
 
 **E-11's remaining gap was restated as "make the constructor-entering partition
 the compiler's default". Scoping it first found that a literal switch is wrong.**

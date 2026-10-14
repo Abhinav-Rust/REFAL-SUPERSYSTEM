@@ -96,6 +96,10 @@ Dispatch {
     <Prout <DsRdRunAt 'c' e.Source>>;
   ('RESIDUALIZE-DRIVEN-PATTERN-INTERPRETIVE') (e.Source) =
     <Prout <DsRdRunAt 'i' e.Source>>;
+* The partition **searched** rather than fixed -- both partitions driven, the
+* cheaper residue kept. An explicit opt-in; see `DsRdRunS`.
+  ('RESIDUALIZE-DRIVEN-SEARCH') (e.Source) =
+    <Prout <DsRdRunS e.Source>>;
   ('NORMALIZE') (e.Source) =
     <Normalize <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>;
   ('SPECIALISE') (e.Interpreter) (e.Program) =
@@ -2066,7 +2070,7 @@ DsRdRun {
 }
 
 DsRdRun2 {
-  (PROG e.Items) = <DsRdRender <DsRdSearch (REPORT) (PROG e.Items)>>;
+  (PROG e.Items) = <DsRdRender <DsRdAxis (REPORT) (PROG e.Items)>>;
 }
 
 * The same search with the constructor-entering partition (E-11). The mode
@@ -2077,13 +2081,24 @@ DsRdRunP {
     <DsRdRender <DsRdSearch (PAT) <Parse <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>>>;
 }
 
+* The partition **searched** rather than fixed: drive both partitions and keep
+* the cheaper residue. An explicit opt-in, not the default -- the search compares
+* only the residue's cost, which does not see every property the suite pins (the
+* merged `Rev` form folds only under the sequence partition, and the pattern
+* partition omits the bracket-headed branch the §4.5 verdict needs). Mirrors
+* `SplitStrategy::Search` in `refal-core`.
+DsRdRunS {
+  e.Source =
+    <DsRdRender <DsRdSearch (REPORT) <Parse <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>>>>;
+}
+
 * The program a driven graph denotes, with no report. `Compile` uses this, and
 * the separation is the point: the report is the driver's accounting of how the
 * residue was reached and the program is what it denotes. `RESIDUALIZE-DRIVEN`
 * prints both, because a reader wants to know which states were visited;
 * `Compile` emits only the program, because a report is not a program.
 DsRdProgram {
-  (PROG e.Items) = <DsRdPlain <DsRdSearch (PLAIN) (PROG e.Items)>>;
+  (PROG e.Items) = <DsRdPlain <DsRdAxis (PLAIN) (PROG e.Items)>>;
 }
 
 * Compile with a driving budget of `e.N` steps. `RESIDUALIZE-DRIVEN` alone uses
@@ -2099,7 +2114,7 @@ DsRdBudget {
 }
 
 DsRdBudget2 {
-  s.N (PROG e.Items) = <DsRdRender <DsRdSearch (SEED s.N) (PROG e.Items)>>;
+  s.N (PROG e.Items) = <DsRdRender <DsRdAxis (SEED s.N) (PROG e.Items)>>;
 }
 
 * One end named directly, with no search and therefore no strategy lines: there

@@ -1147,6 +1147,11 @@ pub enum SplitStrategy {
     /// exhaustive and pairwise disjoint and no value is lost. It is the right
     /// partition for a program whose entry is `F { e.X = ...; }`, because the
     /// residue has to keep that entry shape.
+    ///
+    /// It is the **default**: it is the partition the compiler shipped with, and
+    /// every property the suite pins — the §4.5 perfection verdict among them —
+    /// is stated over it. [`SplitStrategy::Search`] is an explicit opt-in.
+    #[default]
     Sequence,
     /// The projection's partition: the component is partitioned by the shapes
     /// the **callee's own sentence patterns** require at that position, so the
@@ -1180,22 +1185,38 @@ pub enum SplitStrategy {
     /// `invert-list-encoder` and `lexer`.
     Pattern,
     /// Drive with both partitions and keep the residue with the lower cost — the
-    /// **default**, and the same rule the compilation axis already uses
-    /// (§4.4's "evaluate both ends and keep the better residue").
+    /// same rule the compilation axis already uses (§4.4's "evaluate both ends
+    /// and keep the better residue").
+    ///
+    /// **An explicit opt-in (`--split search`), not the default.** The search
+    /// compares only [`ResidueCost`], and that is not the whole story the suite
+    /// pins:
+    ///
+    /// - On `Rev { = ; t.H e.T = <Rev e.T> t.H; }` the pattern partition leaves
+    ///   the source unchanged at `residual_work 4`, while the sequence partition
+    ///   folds the entry to `Split1` — eliminating `Rev` — at `residual_work 6`.
+    ///   The search keeps the *unfolded* residue, because 4 < 6.
+    /// - The pattern partition is deliberately **incomplete** (see
+    ///   [`SplitStrategy::Pattern`]): it never generates the bracket-headed
+    ///   branch, so the §4.5 perfection verdict is claimed for a program whose
+    ///   bracket-headed call has no sentence. That is a soundness regression, not
+    ///   a cost one.
+    ///
+    /// Neither partition dominates on cost, so the search is worth having — but
+    /// only once the comparison sees the properties above, and until then the
+    /// compiler ships [`SplitStrategy::Sequence`].
     ///
     /// Neither partition dominates: the pattern partition is strictly better on
     /// 13 corpus examples (`accumulator-reverse` 37 → 9, `clean-graph` 12 → 3,
     /// `projection-bracket-callee` 24 → 2, …) and strictly worse on six
     /// (`identity` 0 → 2, `lexer` 259 → 261, …), so a fixed choice either way
-    /// loses work. Searching cannot regress against either end: ties go to
-    /// [`SplitStrategy::Sequence`], which is the partition the compiler shipped
-    /// with, so a program the pattern partition cannot improve is byte-identical
-    /// to what the compiler produced before.
+    /// loses work. The search cannot regress against either end on cost: ties go
+    /// to [`SplitStrategy::Sequence`], so a program the pattern partition cannot
+    /// improve is byte-identical to what the compiler produced before.
     ///
     /// It costs a second drive. The zero-residual-work short circuit applies
     /// here exactly as it does on the axis: a residue with no call left for run
     /// time cannot be beaten, so the other partition is not run.
-    #[default]
     Search,
 }
 

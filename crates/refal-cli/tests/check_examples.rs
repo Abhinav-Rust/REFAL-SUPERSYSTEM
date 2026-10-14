@@ -7604,13 +7604,15 @@ fn a_non_tail_recursion_folds_whether_or_not_the_bracket_case_is_named() {
 ///
 /// This is the behaviour SCP4 1999 attributes to the two-level stack
 /// configuration, reached by entering the constructor rather than by adding an
-/// explicit control stack. **The partition is now searched, so this fold is the
-/// compiler's default**: `SplitStrategy::Search` drives with both partitions and
-/// keeps the cheaper residue, and a tie goes to the sequence one, so the search
-/// can only ever improve. The sequence partition's own result is still the gap
-/// this row is about, and it is pinned under `--split sequence`. The residue must
-/// still **agree with its source**: a residue that folds by guessing is a wrong
-/// program, not a fast one.
+/// explicit control stack. The partition is **searchable**: `--split search`
+/// drives with both partitions and keeps the cheaper residue, and here the
+/// constructor-entering end wins, so the fold is reached by asking for the
+/// search. The default is still the sequence partition — the search compares
+/// only cost, and on the merged `Rev` form that metric prefers the *unfolded*
+/// residue, so the search is an opt-in rather than the default. The sequence
+/// partition's own result is the gap this row is about, and it is pinned under
+/// `--split sequence`. The residue must still **agree with its source**: a
+/// residue that folds by guessing is a wrong program, not a fast one.
 #[test]
 fn the_pattern_partition_folds_a_nested_accumulator() {
     // The gap, stated as a measurement, under the partition that has it.
@@ -7630,20 +7632,23 @@ fn the_pattern_partition_folds_a_nested_accumulator() {
         "and the residue is worse than the source's own structure:\n{sequence_stdout}"
     );
 
-    // The default searches, and here the constructor-entering partition wins.
-    let default = residualize_driven_file("examples/accumulator-reverse.ref", &[]);
-    let default_stdout = String::from_utf8_lossy(&default.stdout);
+    // The search keeps the fold: here the constructor-entering partition wins on
+    // cost. The *default* is the sequence partition, so the choice is made by
+    // asking for `--split search`.
+    let searched =
+        residualize_driven_file("examples/accumulator-reverse.ref", &["--split", "search"]);
+    let searched_stdout = String::from_utf8_lossy(&searched.stdout);
     assert!(
-        default.status.success(),
-        "the driver runs:\n{default_stdout}"
+        searched.status.success(),
+        "the driver runs:\n{searched_stdout}"
     );
     assert!(
-        !driven_residue(&default_stdout).contains("\nRev {"),
-        "the searched default keeps the fold:\n{default_stdout}"
+        !driven_residue(&searched_stdout).contains("\nRev {"),
+        "the searched partition keeps the fold:\n{searched_stdout}"
     );
     assert!(
-        default_stdout.contains("residual-work 9"),
-        "and it is the cheaper residue:\n{default_stdout}"
+        searched_stdout.contains("residual-work 9"),
+        "and it is the cheaper residue:\n{searched_stdout}"
     );
 
     let output =
