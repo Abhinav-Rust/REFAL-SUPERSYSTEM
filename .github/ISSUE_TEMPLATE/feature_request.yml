@@ -1,0 +1,35 @@
+name: Feature request
+description: Propose a capability, a command, or a change in behaviour.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What can you not do today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: The proposal
+      description: What should the tool do instead?
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: How it would be checked
+      description: >
+        This project marks nothing complete without a test. What command would
+        demonstrate the new capability, and what would it print?
+    validations:
+      required: false
+  - type: input
+    id: source
+    attributes:
+      label: Source
+      description: If the idea comes from a paper or another implementation, name it.
+      placeholder: "Turchin 1986, §…"
+    validations:
+      required: false

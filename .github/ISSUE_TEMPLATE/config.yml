@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: How the project is built and tested
+    url: https://github.com/Abhinav-Rust/REFAL-SUPERSYSTEM/blob/main/CONTRIBUTING.md
+    about: The development loop, the gates, and the project's rules.
+  - name: What the project is, and what is finished
+    url: https://github.com/Abhinav-Rust/REFAL-SUPERSYSTEM/blob/main/README.md
+    about: The overview, the capability table, and the honest completion figure.

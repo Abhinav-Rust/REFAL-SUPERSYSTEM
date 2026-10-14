@@ -1,0 +1,45 @@
+name: Bug report
+description: Something does not do what the documentation says it does.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for the report. A **runnable** reproduction — a `.ref` file and
+        the exact command — is worth more than a paragraph, and it is what the fix
+        will be checked against.
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: The release tag, or the output of `git rev-parse --short HEAD`.
+      placeholder: "0.10.0 / a1b2c3d"
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: The command you ran, the output you got, and the output you expected.
+      render: console
+      placeholder: |
+        $ refal compile examples/foo.ref
+        ...
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: The Refal source, if the bug needs one
+      description: A minimal program that shows the defect.
+      render: text
+    validations:
+      required: false
+  - type: input
+    id: toolchain
+    attributes:
+      label: Toolchain
+      description: The output of `rustc --version`.
+      placeholder: "rustc 1.99.0 (…) 2026-…"
+    validations:
+      required: true
