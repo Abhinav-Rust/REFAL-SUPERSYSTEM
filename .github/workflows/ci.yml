@@ -31,7 +31,7 @@ jobs:
     # `dev`), which makes 45 minutes roughly a 4x margin.
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --check
