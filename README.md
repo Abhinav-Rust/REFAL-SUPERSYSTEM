@@ -16,7 +16,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/status-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/status-light.svg">
-  <img alt="Status: about 91.8% of the supersystem — L0, L1 and the Refal-authored compiler are near complete, L2 is close, and L3 and L4 are partial" src="docs/images/status-light.svg" width="100%">
+  <img alt="Status: about 91.9% of the supersystem — L0, L1 and the Refal-authored compiler are near complete, L2 is close, and L3 and L4 are partial" src="docs/images/status-light.svg" width="100%">
 </picture>
 
 </div>
@@ -38,7 +38,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/glance-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/glance-light.svg">
-  <img alt="At a glance: four layers over one shared expression space; about 91.8% of the supersystem complete by one method; 100% Rust; a byte-identical self-hosting fixpoint at 12,599 bytes; and 19 of 25 in-scope conformance rows closed" src="docs/images/glance-light.svg" width="100%">
+  <img alt="At a glance: four layers over one shared expression space; about 91.9% of the supersystem complete by one method; 100% Rust; a byte-identical self-hosting fixpoint at 12,599 bytes; and 20 of 25 in-scope conformance rows closed" src="docs/images/glance-light.svg" width="100%">
 </picture>
 
 </div>
@@ -384,7 +384,7 @@ operations at the centre of the language.
 
 ## Project status
 
-### Honest completion: ~91.8%
+### Honest completion: ~91.9%
 
 This figure measures **the whole supersystem** — all four layers — not the compiler
 alone. The compiler is finished; the supersystem is not, and publishing the
@@ -413,7 +413,7 @@ compiler's own number as the project's would misdescribe what this repository is
 | L0 · Bootstrap semantics | 4.20 | 3.15 | 1.05 | exhaustiveness lives in Tier 1 rather than here |
 | **L0 · Refal machine / runtime** | **13.65** | **13.65** | **0.00** | closed — a block sentence carrying a condition now runs on the work list exactly as a named call does, so a recursion through one no longer uses the host stack. The gate drives 100,000 such steps, which overflowed the stack before the fix |
 | **L1 · Reflection engine** | **9.00** | **9.00** | **0.00** | closed — the service is exposed as `refal reflect`, with four shape gates |
-| L2 · Graph of states / emission | 5.95 | 5.35 | 0.60 | **§4.4's other half (E-7)** — 0.45, a Tier-2 research item — and **E-11's remaining half** — 0.15. E-11's behaviours (positive information, negative information, the non-tail bracket context, **and now the nested accumulator**) are built and gated, so they carry credit. What is withheld is that the **constructor-entering partition is not the compiler's default**: `--split pattern` folds the accumulator — measured, residual-work 9 with `Rev` eliminated, against 37 with `Rev` residual — but a corpus scan found it strictly better on 13 examples and strictly worse on six, so a fixed switch loses either way; the search that keeps the cheaper residue (`--split search`) compares only cost, which does not see that the sequence split is the one that folds the merged `Rev` form, nor that the pattern split omits the branch the §4.5 verdict needs |
+| L2 · Graph of states / emission | 5.95 | 5.50 | 0.45 | **§4.4's other half (E-7)** — 0.45, a Tier-2 research item. **E-11 is closed**: the pattern partition is now **complete** — wherever the callee's own patterns cannot name the component it hands over to the sequence partition — so the merged `Rev` form folds under *both* partitions and the §4.5 verdict can no longer be claimed for a residue that is missing a branch. The search over both partitions is the **default**, and a corpus scan puts it strictly better on **8** examples (`accumulator-reverse` 37 → 9, `projection-bracket-callee` 24 → 2, …) and strictly worse on **none** |
 | Tier 1 static verification | 10.50 | 9.50 | 1.00 | the decidable checks, **and a sound, incomplete, certificate-carrying feasibility and termination analysis** (`refal feasibility`, see below). What is withheld is termination where a call passes something no measure ranks — a computed argument, `<DsScan <DsBump …>>` — which is what still bounds the compiler's 480-function component, and feasibility beyond the witness budget |
 | L2/L4 · Compiler implemented in Refal | 17.85 | 16.80 | 1.05 | not yet fast on very large inputs |
 | L4 · Verified self-hosting fixpoint | 9.10 | 8.05 | 1.05 | the fixpoint holds on the corpus and the compiler's own source, not on arbitrary programs |
@@ -421,7 +421,7 @@ compiler's own number as the project's would misdescribe what this repository is
 | L4 · Projections as artifacts | 5.00 | 3.50 | 1.50 | the 1st and 2nd both emit target code with gates, and the self-application emits a working compiler. **Driving the supercompiler's own dispatcher now *closes*** — 147 steps, 51 configurations, one split — and emits a `Dispatch`-free program that **checks as Refal**, so the derivation is real rather than authored. What is withheld is that the residue has not been **run**: as a compiler it does not complete under the bootstrap, and the row's gate requires it to agree with `refal compile` on every example |
 | **L2 · Function inversion** | **3.00** | **3.00** | **0.00** | closed — `refal invert` drives the forward definition and emits the synthesised inverse, round-tripped in a gate |
 | **Conformance / release evidence** | **2.80** | **2.80** | **0.00** | closed — the file-backed input/output clauses (`c1.4`, `c1.6`, `c1.7`) are bound to a runnable fixture, not only to the runtime's own test: `examples/builtin-file-io-conformance.ref` opens a file by a **relative** name, and the conformance harness runs every `run` row in a temporary directory it owns and removes, so a committed program can carry a path after all |
-| **Total** | **100.00** | **~91.8** | **~8.2** | |
+| **Total** | **100.00** | **~91.9** | **~8.1** | |
 
 </details>
 
@@ -440,15 +440,15 @@ verified by a test rather than estimated.
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/conformance-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/conformance-light.svg">
-  <img alt="A grid of the twenty-six conformance rows E-1 to E-26: nineteen are closed, six are partial (E-7, E-11, E-12, E-13, E-14, E-17), and E-26 is out of scope" src="docs/images/conformance-light.svg" width="100%">
+  <img alt="A grid of the twenty-six conformance rows E-1 to E-26: twenty are closed, five are partial (E-7, E-12, E-13, E-14, E-17), and E-26 is out of scope" src="docs/images/conformance-light.svg" width="100%">
 </picture>
 
 </div>
 
 | | Count |
 |---|---:|
-| Ecosystem rows closed | **19** |
-| Partially closed | 6 |
+| Ecosystem rows closed | **20** |
+| Partially closed | 5 |
 | Not started | 0 |
 | Out of scope | 1 |
 | In scope | 25 |
@@ -467,7 +467,7 @@ knowledge network and is out of scope, which is why 26 rows make 25 in scope.
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/roadmap-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/roadmap-light.svg">
-  <img alt="Six partial rows E-7, E-11, E-12, E-13, E-14 and E-17, each with the named gap that keeps it from being closed" src="docs/images/roadmap-light.svg" width="100%">
+  <img alt="Five partial rows E-7, E-12, E-13, E-14 and E-17, each with the named gap that keeps it from being closed" src="docs/images/roadmap-light.svg" width="100%">
 </picture>
 
 </div>
@@ -517,47 +517,22 @@ The ordered work list lives in
    driving the forward definition against a known output (Glück & Turchin, ISSAC
    '90): `refal invert` emits the inverse as a checked program whose patterns are
    the forward function's outputs, and the gate round-trips the emitted inverse.
-4. ~~**The partition that can enter a constructor (E-11)**~~ — **built, ported to
-   the Refal-authored driver, and the matcher defect it exposed is closed.**
-   `SplitStrategy::Pattern` partitions a configuration component by the *callee's
-   own sentence patterns*, and it carries the **negative** half of the partition
-   as well: a sentence whose component at the split position is a bare variable
-   names no shape, but it is exactly the complement of the shapes the other
-   sentences demand, so it is emitted as the ordered catch-all — `e.X ≠ ('A')` —
-   and the callee is **eliminated** rather than left residual. The
-   **non-tail-recursion** half is closed too: a kind-blind homeomorphic embedding
-   treated a `s.` variable as embedding into a bracket, so the partition's two
-   disjoint branches looked like growth of each other and the whistle fired —
-   fixed in both implementations. **The nested accumulator folds** under
-   `--split pattern` — residual-work 37 → 9, `Rev` eliminated — reached by
-   *entering the constructor* rather than by the explicit two-level stack
-   configuration the row expected. And the partition is **no longer Rust-only**:
-   it is ported to `examples/compiler.ref` as `RESIDUALIZE-DRIVEN-PATTERN`, where
-   the two drivers agree byte for byte on **every example the oracle drives — 77
-   of 77**. Porting it found and closed a **soundness defect in the Rust
-   driver**: a repeated variable was compared with `CoreTerm`'s derived equality,
-   which includes the source span, so `Pair { s.A s.a = ...; }` called as
-   `<Pair 'q' 'q'>` folded to the *next* sentence — a wrong program, not a slow
-   one. With it fixed the compiler's own output is **111,600 bytes**, up from
-   102,436: the old figure was produced by that mis-fold. The port's last two
-   divergences were a **name-binding defect**, not the registry: the target
-   detector bound a pattern-split variable's name with `t.N`, which matches one
-   term, while a name is a character sequence — and the driver's entry variable
-   is always `Input` — so every entry-level bracket silently declined the
-   partition. The partition is also **searchable**: `--split search` drives with
-   **both** partitions and keeps the cheaper residue — the rule the compilation
-   axis already uses, one level out — so `accumulator-reverse` folds at
-   residual-work 37 → 9 while `identity` stays at 0. **Both modes are gated on the
-   corpus**: `RESIDUALIZE-DRIVEN-SEARCH` agrees with `--split search` byte for byte
-   on 77 of 77. It is an **opt-in, not the
-   default**: the search compares only the residue's *cost*, and that is not the
-   whole story. On the merged `Rev { = ; t.H e.T = <Rev e.T> t.H; }` form the
-   sequence split folds the entry to `Split1`, eliminating `Rev`, at cost 6, while
-   the pattern split leaves the source unchanged at cost 4 — so the search keeps
-   the *unfolded* residue. And the pattern split is deliberately incomplete, so
-   the §4.5 perfection verdict would be claimed for a program whose bracket-headed
-   call has no sentence. The compiler therefore ships the sequence partition, and
-   `--split search` selects the search.
+4. ~~**The partition that can enter a constructor (E-11)**~~ — **closed.** The
+   partition that can *enter a constructor* is built, ported to the Refal-authored
+   driver, **complete**, and the compiler's **default**. Three defects fell out of
+   it, all fixed: a repeated variable compared with `CoreTerm`'s span-carrying
+   equality (`Pair { s.A s.a = ...; }` called as `<Pair 'q' 'q'>` folded to the
+   *next* sentence — a wrong program, not a slow one); a name-binding defect that
+   made every entry-level bracket silently decline the partition; and the
+   **canonical comparison**, which was span-sensitive, so a recurrence never found
+   the split it had already made. The partition now **falls back to the sequence
+   one** wherever the callee's own patterns cannot name the component, and that
+   fallback is what makes it complete — without it the §4.5 verdict came back
+   `perfect: yes` for `symbolic-branch.ref`, a program with an unselectable call
+   site. The search over both partitions is the default: `accumulator-reverse`
+   folds at residual-work 37 → 9, `identity` stays at 0, and a corpus scan puts it
+   strictly better on **8** examples and strictly worse on **none**. The
+   compiler's own output is unchanged at **111,600 bytes**.
 5. **The projections as artifacts (E-14)** — the self-application now **emits a
    working compiler** and is gated by *running* it on the corpus; `refal project2`
    exists and the partition it needed is built, but its artifact is the *driven
@@ -704,11 +679,13 @@ cargo run -p refal -- differential examples/differential-corpus.manifest --corpu
 # Drive the entry configuration and emit the residue for one program
 cargo run -p refal -- residualize-driven examples/runtime-recursion.ref
 
-# Choose the partition (Turchin's driving step, E-11). `sequence` (the default)
-# splits `[] / s.H e.T / (e.B) e.T`; `pattern` partitions the component by the
-# callee's own sentence patterns, so it can *enter a constructor*. That is what
-# folds a nested accumulator, where the sequence partition leaves the callee
-# entirely residual:
+# Choose the partition (Turchin's driving step, E-11). The default, `search`,
+# drives both and keeps the cheaper residue; `sequence` splits
+# `[] / s.H e.T / (e.B) e.T`; `pattern` partitions the component by the callee's
+# own sentence patterns, so it can *enter a constructor*, and falls back to the
+# sequence split where the callee's patterns cannot name the component. Entering
+# the constructor is what folds a nested accumulator, where the sequence
+# partition leaves the callee entirely residual:
 cargo run -p refal -- residualize-driven examples/accumulator-reverse.ref --split pattern
 
 # The same partition in the compiler written in Refal — a differential, not a
@@ -947,7 +924,7 @@ without garbage collection.
 <summary><b>Is it usable today?</b></summary>
 
 The **compiler is finished and gated**; the *supersystem* is being completed and
-is at about **91.8%**. `refal compile`, `refal run`, `refal check`, `refal reflect`,
+is at about **91.9%**. `refal compile`, `refal run`, `refal check`, `refal reflect`,
 `refal prove`, `refal invert` and `refal project2` all work and are exercised by
 tests. What remains is named row by row in
 [What is left](#what-is-left).

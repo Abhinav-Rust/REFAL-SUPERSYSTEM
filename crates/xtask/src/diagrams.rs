@@ -466,7 +466,7 @@ fn conformance(p: &Palette) -> String {
         "E-1 \u{2026} E-26 \u{2014} one row per named component or behaviour",
         h,
     );
-    let partial = [7u32, 11, 12, 13, 14, 17];
+    let partial = [7u32, 12, 13, 14, 17];
     let cw = 78.0;
     let gap = 6.0;
     for n in 1..=26u32 {
@@ -524,7 +524,7 @@ fn conformance(p: &Palette) -> String {
     wrap(
         h,
         "The conformance matrix",
-        "A grid of twenty-six cells, E-1 to E-26. Nineteen are closed, six are partial, and one, E-26, is out of scope.",
+        "A grid of twenty-six cells, E-1 to E-26. Twenty are closed, five are partial, and one, E-26, is out of scope.",
         &out,
     )
 }
@@ -736,7 +736,7 @@ fn accounting(p: &Palette) -> String {
         ("L0 \u{00b7} semantics", 4.20, 3.15),
         ("L0 \u{00b7} machine / runtime", 13.65, 13.65),
         ("L1 \u{00b7} reflection engine", 9.00, 9.00),
-        ("L2 \u{00b7} graph of states", 5.95, 5.35),
+        ("L2 \u{00b7} graph of states", 5.95, 5.50),
         ("Tier 1 static verification", 10.50, 9.50),
         ("L2/L4 \u{00b7} compiler in Refal", 17.85, 16.80),
         ("L4 \u{00b7} self-hosting fixpoint", 9.10, 8.05),
@@ -784,7 +784,7 @@ fn accounting(p: &Palette) -> String {
     out.extend(footer(
         p,
         396.0,
-        "One number, one method: ~91.8 of 100, from one table. A row carries zero credit until a gate behind it is green.",
+        "One number, one method: ~91.9 of 100, from one table. A row carries zero credit until a gate behind it is green.",
     ));
     wrap(
         h,
@@ -935,7 +935,7 @@ fn glance(p: &Palette) -> String {
         ),
         (
             "COMPLETION",
-            "~91.8%",
+            "~91.9%",
             "of the supersystem, one method, one table",
             "part",
         ),
@@ -1118,19 +1118,14 @@ fn demonstrations(p: &Palette) -> String {
 // What is left -- the six partial rows and their named gaps
 // --------------------------------------------------------------------------
 fn roadmap(p: &Palette) -> String {
-    let h = 546.0;
+    let h = 488.0;
     let mut out = header(
         p,
         "WHAT IS LEFT",
-        "Six rows stand between ~91.8% and 100% \u{2014} each with a named gap",
+        "Five rows stand between ~91.9% and 100% \u{2014} each with a named gap",
         h,
     );
     let rows = [
-        (
-            "E-11",
-            "Nested accumulators",
-            "the partition's complement and the non-tail bracket context are built; nested accumulators still need an explicit two-level stack configuration",
-        ),
         (
             "E-12",
             "The meta-prover's general relation",
@@ -1202,13 +1197,13 @@ fn roadmap(p: &Palette) -> String {
     }
     out.extend(footer(
         p,
-        494.0,
+        436.0,
         "Statuses are those of docs/TURCHIN-ECOSYSTEM-CONFORMANCE.md. A row is Closed only when a gate is green for the general case.",
     ));
     wrap(
         h,
         "What is left",
-        "Six partial rows E-7, E-11, E-12, E-13, E-14 and E-17, each with the named gap that keeps it from being closed.",
+        "Five partial rows E-7, E-12, E-13, E-14 and E-17, each with the named gap that keeps it from being closed.",
         &out,
     )
 }

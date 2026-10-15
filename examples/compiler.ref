@@ -97,7 +97,7 @@ Dispatch {
   ('RESIDUALIZE-DRIVEN-PATTERN-INTERPRETIVE') (e.Source) =
     <Prout <DsRdRunAt 'i' e.Source>>;
 * The partition **searched** rather than fixed -- both partitions driven, the
-* cheaper residue kept. An explicit opt-in; see `DsRdRunS`.
+* cheaper residue kept. This is the default; see `DsRdRunS`.
   ('RESIDUALIZE-DRIVEN-SEARCH') (e.Source) =
     <Prout <DsRdRunS e.Source>>;
   ('NORMALIZE') (e.Source) =
@@ -2070,7 +2070,7 @@ DsRdRun {
 }
 
 DsRdRun2 {
-  (PROG e.Items) = <DsRdRender <DsRdAxis (REPORT) (PROG e.Items)>>;
+  (PROG e.Items) = <DsRdRender <DsRdSearch (REPORT) (PROG e.Items)>>;
 }
 
 * The same search with the constructor-entering partition (E-11). The mode
@@ -2082,10 +2082,11 @@ DsRdRunP {
 }
 
 * The partition **searched** rather than fixed: drive both partitions and keep
-* the cheaper residue. An explicit opt-in, not the default -- the search compares
-* only the residue's cost, which does not see every property the suite pins (the
-* merged `Rev` form folds only under the sequence partition, and the pattern
-* partition omits the bracket-headed branch the §4.5 verdict needs). Mirrors
+* the cheaper residue. It is the default. It can only be a strict improvement,
+* because a tie goes to the caller's partition (the sequence one) and the pattern
+* partition is complete -- `DsSplit` hands over to `DsSplitSeq` wherever the
+* callee's own patterns cannot name the component, so a residue is never missing
+* the bracket-headed branch the §4.5 verdict needs. Mirrors
 * `SplitStrategy::Search` in `refal-core`.
 DsRdRunS {
   e.Source =
@@ -2098,7 +2099,7 @@ DsRdRunS {
 * prints both, because a reader wants to know which states were visited;
 * `Compile` emits only the program, because a report is not a program.
 DsRdProgram {
-  (PROG e.Items) = <DsRdPlain <DsRdAxis (PLAIN) (PROG e.Items)>>;
+  (PROG e.Items) = <DsRdPlain <DsRdSearch (PLAIN) (PROG e.Items)>>;
 }
 
 * Compile with a driving budget of `e.N` steps. `RESIDUALIZE-DRIVEN` alone uses
@@ -2114,7 +2115,7 @@ DsRdBudget {
 }
 
 DsRdBudget2 {
-  s.N (PROG e.Items) = <DsRdRender <DsRdAxis (SEED s.N) (PROG e.Items)>>;
+  s.N (PROG e.Items) = <DsRdRender <DsRdSearch (SEED s.N) (PROG e.Items)>>;
 }
 
 * One end named directly, with no search and therefore no strategy lines: there
@@ -3701,14 +3702,37 @@ DsBlkSymD {
 DsSplit {
 * The partition is a property of the caller: a lowercase strategy character
 * selects the constructor-entering partition (E-11), and the default 'C'/'I'
-* path below is reached exactly as before.
-  (e.Ctx) (e.Fn) (e.In), <DsStrat (e.Ctx)> : 'c' = <DsSplitPat (e.Ctx) (e.Fn) (e.In)>;
-  (e.Ctx) (e.Fn) (e.In), <DsStrat (e.Ctx)> : 'i' = <DsSplitPat (e.Ctx) (e.Fn) (e.In)>;
+* path is the sequence partition, reached exactly as before.
+  (e.Ctx) (e.Fn) (e.In), <DsStrat (e.Ctx)> : 'c' = <DsSplitPatSeq (e.Ctx) (e.Fn) (e.In)>;
+  (e.Ctx) (e.Fn) (e.In), <DsStrat (e.Ctx)> : 'i' = <DsSplitPatSeq (e.Ctx) (e.Fn) (e.In)>;
+  (e.Ctx) (e.Fn) (e.In) = <DsSplitSeq (e.Ctx) (e.Fn) (e.In)>;
+}
+
+* The pattern partition, with the sequence partition as its **fallback**: where
+* the callee's own patterns cannot name the component the pattern partition
+* declines, and the partition that is exhaustive by construction takes over, so
+* a decline is never a hole in the residue. Mirrors
+* `DriveContext::split_configuration` in `refal-core`.
+DsSplitPatSeq {
+  (e.Ctx) (e.Fn) (e.In) =
+    <DsSplitPatSeq2 (e.Fn) (e.In) <DsSplitPat (e.Ctx) (e.Fn) (e.In)>>;
+}
+
+DsSplitPatSeq2 {
+  (e.Fn) (e.In) (NONE (e.Ctx2)) = <DsSplitSeq (e.Ctx2) (e.Fn) (e.In)>;
+  (e.Fn) (e.In) e.Pat = e.Pat;
+}
+
+* The sequence partition: `e.X` is `[]`, `s.H e.T` or `(e.B) e.T`. It is
+* exhaustive and pairwise disjoint by construction, which is why it is the
+* fallback for the pattern partition.
+*
 * A generated `SplitN` is the driver's own partition: re-partitioning it decides
 * nothing, and the fresh split would share its name, so a residual branch would
 * emit `Split1 { = <Split1>; }` -- an infinite self-loop. Declining leaves the
 * call residual, which is sound and is what makes the driver a fixpoint on its
 * own residue. Mirrors `DriveContext::is_generated_split` in `refal-core`.
+DsSplitSeq {
   (e.Ctx) (e.Fn) (e.In), <DsGenerated e.Fn> : '1' = (NONE (e.Ctx));
   (e.Ctx) (e.Fn) (e.In), <DsCharisable (e.In)> : '1' =
     <DsSplitPos (e.Ctx) (e.Fn) (e.In) <DsExprVarPos (e.In) 0 ()>>;

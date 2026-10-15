@@ -823,7 +823,7 @@ struct DriveOptions {
     show_neighborhoods: bool,
 }
 
-const DRIVE_USAGE: &str = "Usage: refal <drive-symbolic|residualize-driven> <file.ref> [--steps N]      [--strategy search|compilative|interpretive] [--split search|sequence|pattern]      [--configurations] [--neighborhoods]";
+const DRIVE_USAGE: &str = "Usage: refal <drive-symbolic|residualize-driven> <file.ref> [--steps N]      [--strategy search|compilative|interpretive]      [--split search|sequence|pattern] (default: search)      [--configurations] [--neighborhoods]";
 
 const PROVE_USAGE: &str = "Usage: refal prove <file.ref> <Predicate> [--steps N] [--strategy search|compilative|interpretive]";
 const EQUIV_USAGE: &str = "Usage: refal prove <file.ref> --equiv <Left> <Right> [--steps N]";
@@ -834,7 +834,9 @@ fn drive_options(args: &[String]) -> Result<DriveOptions, String> {
     let mut options = DriveOptions {
         max_steps: 10_000,
         strategy: refal_core::DriveStrategy::Search,
-        split: refal_core::SplitStrategy::Sequence,
+        // The library default, so the CLI and the API cannot drift: both
+        // partitions are driven and the cheaper residue is kept.
+        split: refal_core::SplitStrategy::default(),
         show_configurations: false,
         show_neighborhoods: false,
     };

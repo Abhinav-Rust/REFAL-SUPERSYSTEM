@@ -671,7 +671,7 @@ pub fn drive_ground(
         max_steps,
         proof_entry: false,
         split_strategy: SplitStrategy::Sequence,
-        pattern_splits: Vec::new(),
+        split_branches: Vec::new(),
     };
     let output = context.invoke(&function, input)?;
     Ok(DriveReport {
@@ -740,8 +740,9 @@ pub fn drive_symbolic_with_strategy(
 /// [`drive_symbolic_with_strategy`] with an explicit partition.
 ///
 /// The partition is a property of the caller, not of the program; see
-/// [`SplitStrategy`]. The default is the compiler's sequence partition, and this
-/// is how a caller selects the constructor-entering one instead.
+/// [`SplitStrategy`]. The default is [`SplitStrategy::Search`] — both partitions
+/// driven, the cheaper residue kept — and this is how a caller fixes one of them
+/// instead.
 pub fn drive_symbolic_with_split(
     graph: &StateGraph,
     input: Vec<CoreTerm>,
@@ -793,8 +794,11 @@ pub fn drive_symbolic_proof_entry_with_strategy(
 /// This is the projection's entry into the driver: it enters a named function
 /// with a *multi-component* free configuration and partitions a chosen component
 /// by the callee's own pattern shapes, so the partition can enter a constructor.
-/// The compiler keeps the sequence partition; see [`SplitStrategy`] for why the
-/// two cannot be the same partition.
+/// The compiler's default is the search over both partitions; a projection
+/// *fixes* [`SplitStrategy::Pattern`] so the residue is derived by entering the
+/// constructor. That partition is complete — it hands over to the sequence
+/// partition wherever the callee's patterns cannot name the component — so a
+/// projection's residue is never missing a branch. See [`SplitStrategy`].
 pub fn drive_symbolic_pattern_entry(
     graph: &StateGraph,
     input: Vec<CoreTerm>,
@@ -872,7 +876,7 @@ fn drive_symbolic_inner_with_split(
         max_steps,
         proof_entry,
         split_strategy,
-        pattern_splits: Vec::new(),
+        split_branches: Vec::new(),
     };
     let residual = match context.invoke_symbolic(&function, &input)? {
         SymbolicInvoke::Reduced(output) => output,
@@ -1148,10 +1152,11 @@ pub enum SplitStrategy {
     /// partition for a program whose entry is `F { e.X = ...; }`, because the
     /// residue has to keep that entry shape.
     ///
-    /// It is the **default**: it is the partition the compiler shipped with, and
-    /// every property the suite pins — the §4.5 perfection verdict among them —
-    /// is stated over it. [`SplitStrategy::Search`] is an explicit opt-in.
-    #[default]
+    /// It is the partition the compiler shipped with, and it is the **fallback**
+    /// [`SplitStrategy::Pattern`] hands over to wherever the callee's own
+    /// patterns cannot name the component, so it is reached from every path.
+    /// [`SplitStrategy::Search`] — the default — drives both partitions and
+    /// keeps the cheaper residue.
     Sequence,
     /// The projection's partition: the component is partitioned by the shapes
     /// the **callee's own sentence patterns** require at that position, so the
@@ -1166,13 +1171,16 @@ pub enum SplitStrategy {
     /// `(End) e.In` — the callee's own pattern — as the branch, so the branch
     /// matches outright.
     ///
-    /// It is deliberately **incomplete**: where the callee's patterns cannot
-    /// name the component (a bare `e.` variable at the split position, or a
-    /// sentence whose pattern is shorter than the position), it declines and the
-    /// call stays residual. That is the "localise what you cannot settle" half
-    /// of the certificate-carrying analysis described in `README.md`
-    /// ("What Theorem 5.1 does and does not forbid"): a residual call is sound,
-    /// and it is strictly better than an unbounded residue that decides nothing.
+    /// Where the callee's patterns cannot name the component — a bare `e.`
+    /// variable at the split position, or a sentence whose pattern is shorter
+    /// than the position — it declines, and the decline **falls back to
+    /// [`SplitStrategy::Sequence`]**. The partition is therefore always
+    /// *complete*: a decline is a hand-over, never a hole. That matters because
+    /// a residue missing a branch is not merely less driven, it is a residue
+    /// whose §4.5 verdict can be wrong — on `symbolic-branch.ref` the
+    /// incomplete partition reported `perfect: yes` for a program with an
+    /// unselectable call site. An earlier revision declined outright, and that
+    /// was the soundness defect, not a missing optimisation.
     ///
     /// It is **not uniformly better than [`SplitStrategy::Sequence`]**, and that
     /// is measured rather than assumed: where the callee does not discriminate
@@ -1182,41 +1190,35 @@ pub enum SplitStrategy {
     /// at residual-work 0, while the pattern partition wraps it in a needless
     /// `Split1` at residual-work 2; the same regression appears on
     /// `classic-syntax`, `runtime-bracket`, `shorthand-variables`,
-    /// `invert-list-encoder` and `lexer`.
+    /// `invert-list-encoder` and `lexer`. Those six are why the *search* is the
+    /// default rather than this partition.
     Pattern,
     /// Drive with both partitions and keep the residue with the lower cost — the
     /// same rule the compilation axis already uses (§4.4's "evaluate both ends
-    /// and keep the better residue").
+    /// and keep the better residue"). **It is the default.**
     ///
-    /// **An explicit opt-in (`--split search`), not the default.** The search
-    /// compares only [`ResidueCost`], and that is not the whole story the suite
-    /// pins:
+    /// It can only ever be a strict improvement on cost, and the fallback is what
+    /// makes that safe rather than merely likely:
     ///
-    /// - On `Rev { = ; t.H e.T = <Rev e.T> t.H; }` the pattern partition leaves
-    ///   the source unchanged at `residual_work 4`, while the sequence partition
-    ///   folds the entry to `Split1` — eliminating `Rev` — at `residual_work 6`.
-    ///   The search keeps the *unfolded* residue, because 4 < 6.
-    /// - The pattern partition is deliberately **incomplete** (see
-    ///   [`SplitStrategy::Pattern`]): it never generates the bracket-headed
-    ///   branch, so the §4.5 perfection verdict is claimed for a program whose
-    ///   bracket-headed call has no sentence. That is a soundness regression, not
-    ///   a cost one.
-    ///
-    /// Neither partition dominates on cost, so the search is worth having — but
-    /// only once the comparison sees the properties above, and until then the
-    /// compiler ships [`SplitStrategy::Sequence`].
-    ///
-    /// Neither partition dominates: the pattern partition is strictly better on
-    /// 13 corpus examples (`accumulator-reverse` 37 → 9, `clean-graph` 12 → 3,
-    /// `projection-bracket-callee` 24 → 2, …) and strictly worse on six
-    /// (`identity` 0 → 2, `lexer` 259 → 261, …), so a fixed choice either way
-    /// loses work. The search cannot regress against either end on cost: ties go
-    /// to [`SplitStrategy::Sequence`], so a program the pattern partition cannot
-    /// improve is byte-identical to what the compiler produced before.
+    /// - **A tie goes to [`SplitStrategy::Sequence`]**, the partition the
+    ///   compiler shipped with, so a program the pattern partition cannot
+    ///   strictly improve comes out byte-identical to what the compiler produced
+    ///   before this strategy existed — `identity`, `lexer` and the other four
+    ///   regressions among them.
+    /// - **The pattern partition is complete** (see [`SplitStrategy::Pattern`]):
+    ///   where the callee's patterns cannot name the component it hands over to
+    ///   the sequence partition, so its residue is never *missing* a branch.
+    ///   Without the fallback the search kept a residue whose §4.5 verdict was
+    ///   wrong, which is why an earlier revision had to keep this an opt-in.
+    /// - **The merged `Rev` form folds.** On `Rev { = ; t.H e.T = <Rev e.T>
+    ///   t.H; }` the sequence partition folds the entry to `Split1` — eliminating
+    ///   `Rev` — at `residual_work 6`, and the fallback makes the pattern
+    ///   partition produce the identical residue, so the search keeps it.
     ///
     /// It costs a second drive. The zero-residual-work short circuit applies
     /// here exactly as it does on the axis: a residue with no call left for run
     /// time cannot be beaten, so the other partition is not run.
+    #[default]
     Search,
 }
 
@@ -1543,13 +1545,15 @@ struct DriveContext<'a> {
     /// change of meaning. The two callers want opposite residues from the same
     /// entry, so the choice is declared rather than guessed.
     proof_entry: bool,
-    /// How a blocked configuration's argument is partitioned. The compiler uses
-    /// the sequence partition; a projection uses the pattern partition so it can
-    /// enter a constructor. See [`SplitStrategy`].
+    /// How a blocked configuration's argument is partitioned. The default is
+    /// [`SplitStrategy::Search`]; a projection *fixes*
+    /// [`SplitStrategy::Pattern`] so it can enter a constructor. See
+    /// [`SplitStrategy`].
     split_strategy: SplitStrategy,
-    /// The branches each *pattern* split would emit, by split name.
+    /// The branches every split would emit, by split name — from **both**
+    /// partitions.
     ///
-    /// A pattern split is identified by the sentences it produces, not by the
+    /// A split is identified by the sentences it produces, not by the
     /// configuration that asked for it. `Times` called with a variable count
     /// (`t.Count`) and with a bracket count (`(e.Rest)`) produce the **same**
     /// sentences — the callee's own patterns — so they are one function. Without
@@ -1558,7 +1562,15 @@ struct DriveContext<'a> {
     /// separately from [`SplitFunction::sentences`] because those are filled only
     /// after the branches have been driven, and a recurrence inside a branch has
     /// to find the split *before* that.
-    pattern_splits: Vec<(String, Vec<Vec<CoreTerm>>)>,
+    ///
+    /// It carries the **sequence** partition's branches as well as the pattern
+    /// partition's, because the pattern partition falls back to the sequence one
+    /// (see [`SplitStrategy::Pattern`]): a configuration the callee's own
+    /// patterns cannot name is partitioned the sequence way, and the recurrence
+    /// that follows must find *that* split rather than make a second one. This
+    /// mirrors the Refal-authored driver, whose `DsPatFindSentL` scans every
+    /// entry of `DsSplits` and not only the pattern ones.
+    split_branches: Vec<(String, Vec<Vec<CoreTerm>>)>,
 }
 
 impl<'a> DriveContext<'a> {
@@ -1945,6 +1957,29 @@ impl<'a> DriveContext<'a> {
 
     /// Partition a configuration's argument and drive each branch.
     ///
+    /// The strategy selects *which* partition; the fallback is what makes the
+    /// result always a partition. [`SplitStrategy::Pattern`] is tried first
+    /// because it is the only one that can enter a constructor, and where it
+    /// declines -- the callee's own patterns cannot name the component -- the
+    /// sequence partition takes over. A decline is therefore never a hole in the
+    /// residue: it is a fallback to the partition that is exhaustive by
+    /// construction. See [`SplitStrategy::Pattern`] for why the incomplete
+    /// version was unsound.
+    fn split_configuration(
+        &mut self,
+        function: &str,
+        input: &[CoreTerm],
+    ) -> Result<Option<Vec<CoreTerm>>, DriveError> {
+        if self.split_strategy == SplitStrategy::Pattern
+            && let Some(call) = self.pattern_split_configuration(function, input)?
+        {
+            return Ok(Some(call));
+        }
+        self.sequence_split_configuration(function, input)
+    }
+
+    /// The compiler's partition: `e.X` is `[]`, `s.H e.T` or `(e.B) e.T`.
+    ///
     /// The partition used is the only one that is both exhaustive and pairwise
     /// disjoint for an expression variable:
     ///
@@ -1956,14 +1991,15 @@ impl<'a> DriveContext<'a> {
     /// none is counted twice. A branch that no sentence matches keeps a call to
     /// the original function, so the residue fails exactly where the source
     /// fails instead of inventing an answer.
-    fn split_configuration(
+    ///
+    /// It is also the **fallback** for [`SplitStrategy::Pattern`]: where the
+    /// callee's own patterns cannot name the component, this partition is what
+    /// keeps the residue complete.
+    fn sequence_split_configuration(
         &mut self,
         function: &str,
         input: &[CoreTerm],
     ) -> Result<Option<Vec<CoreTerm>>, DriveError> {
-        if self.split_strategy == SplitStrategy::Pattern {
-            return self.pattern_split_configuration(function, input);
-        }
         // Only a single top-level expression variable is partitioned. Splitting
         // one of several would leave the others undecided and grow the residue
         // without making progress, so it is not attempted.
@@ -2033,7 +2069,8 @@ impl<'a> DriveContext<'a> {
 
         let canonical = canonical_configuration(input);
         if let Some(existing) = self.splits.iter().find(|split| {
-            split.function.eq_ignore_ascii_case(function) && split.canonical_input == canonical
+            split.function.eq_ignore_ascii_case(function)
+                && term_sequences_same_kind(&split.canonical_input, &canonical)
         }) {
             let name = existing.name.clone();
             return Ok(Some(vec![call_term(&name, input)]));
@@ -2077,6 +2114,11 @@ impl<'a> DriveContext<'a> {
             // e.X starts with a bracket.
             with_replaced(input, position, vec![bracket, tail]),
         ];
+        // Registered with the pattern partition's branch registry too, so a
+        // recurrence that reaches this same partition finds it — the pattern
+        // partition falls back here, and the Refal-authored driver's
+        // `DsPatFindSentL` reads every split, not only the pattern ones.
+        self.split_branches.push((name.clone(), branches.to_vec()));
 
         let mut sentences = Vec::new();
         let mut drive_error = None;
@@ -2266,7 +2308,7 @@ impl<'a> DriveContext<'a> {
         // patterns -- so they are one function. Emitting both gives a chain of
         // near-duplicates that never folds and leaves the interpreter reachable
         // from the residue; this is what makes the recursion fold.
-        if let Some((name, _)) = self.pattern_splits.iter().find(|(_, existing)| {
+        if let Some((name, _)) = self.split_branches.iter().find(|(_, existing)| {
             existing.len() == branches.len()
                 && existing
                     .iter()
@@ -2279,7 +2321,8 @@ impl<'a> DriveContext<'a> {
 
         let canonical = canonical_configuration(input);
         if let Some(existing) = self.splits.iter().find(|split| {
-            split.function.eq_ignore_ascii_case(function) && split.canonical_input == canonical
+            split.function.eq_ignore_ascii_case(function)
+                && term_sequences_same_kind(&split.canonical_input, &canonical)
         }) {
             let name = existing.name.clone();
             return Ok(Some(vec![call_term(&name, input)]));
@@ -2287,7 +2330,7 @@ impl<'a> DriveContext<'a> {
 
         let index = self.splits.len() + 1;
         let name = format!("Split{index}");
-        self.pattern_splits.push((name.clone(), branches.clone()));
+        self.split_branches.push((name.clone(), branches.clone()));
         self.splits.push(SplitFunction {
             name: name.clone(),
             function: function.to_string(),
@@ -4539,9 +4582,9 @@ pub fn drive_entry_configuration_with_strategy(
 /// [`drive_entry_configuration_with_strategy`] with an explicit partition.
 ///
 /// The partition is a property of the caller, not of the program (see
-/// [`SplitStrategy`]): the compiler emits a residue with the sequence partition,
-/// and a caller that wants a *constructor entered* — a projection, or a program
-/// whose recursion is an accumulator — selects the pattern partition instead.
+/// [`SplitStrategy`]): the default is [`SplitStrategy::Search`], and a caller
+/// that wants a *fixed* partition — the constructor-entering one, so the residue
+/// is derived by entering a constructor — selects [`SplitStrategy::Pattern`].
 pub fn drive_entry_configuration_with_split(
     graph: &StateGraph,
     max_steps: usize,

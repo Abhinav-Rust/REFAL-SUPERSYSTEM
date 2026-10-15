@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+**E-11 is closed: the partition that can enter a constructor is complete, and the search is the compiler's default.**
+
+- **The pattern partition is now complete.** Where the callee's own sentence
+  patterns cannot name the component it **falls back to the sequence partition**,
+  so a decline is a hand-over rather than a hole. Without that fallback the §4.5
+  verdict came back `perfect: yes` for `symbolic-branch.ref`, a program with an
+  unselectable call site — a soundness claim, not an optimistic one.
+- **The merged `Rev { = ; t.H e.T = <Rev e.T> t.H; }` form folds under both
+  partitions**, so the search keeps the fold; previously it kept the unfolded
+  residue, because the pattern partition left the source unchanged at
+  `residual-work 4` against the sequence partition's folding `6`.
+- **`SplitStrategy::Search` is the default** — both partitions driven, the cheaper
+  residue kept, ties to the sequence partition. Corpus scan: **69 byte-identical,
+  8 strictly better, 0 worse** (`accumulator-reverse` 37 → 9,
+  `projection-bracket-callee` 24 → 2, …). The Refal-authored driver follows:
+  `RESIDUALIZE-DRIVEN`, `RESIDUALIZE-DRIVEN n` and `Compile` all search.
+- **Two latent defects fell out of the port and are fixed.** The canonical
+  comparison was span-sensitive — `CoreTerm`'s derived `==` includes the source
+  span — so a recurrence never found the split it had already made; and the branch
+  registry carried only the pattern partition's branches, while the Refal-authored
+  `DsPatFindSentL` reads every split.
+- **`the_partition_search_is_ported_to_the_refal_authored_driver`** gates the
+  search on the corpus, against `residualize-driven --split search`, at 77 of 77
+  with `diverged.is_empty()`.
+- **The figure moves `~91.8% → ~91.9%`** — an earning, not a re-weighting: the
+  graph-of-states row goes `5.35 → 5.50` and the table sums to **91.95**.
+
 **CI is 4.7x faster: 50m28s -> 10m45s.**
 
 - The runner measurement lands well above the 1.72x the single-sweep experiment

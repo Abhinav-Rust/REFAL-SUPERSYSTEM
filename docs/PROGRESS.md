@@ -48,7 +48,7 @@ See `README.md` §"What Theorem 5.1 does and does not forbid" and
 
 | | |
 |---|---|
-| Honest completion | **~91.8%** (supersystem completeness — one method, one table, in `README.md`) |
+| Honest completion | **~91.9%** (supersystem completeness — one method, one table, in `README.md`) |
 | Tests | 421 (72 core + 181 CLI integration + 168 across the other four crates), 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
@@ -76,11 +76,77 @@ The **constructor-entering partition** is ported into the Refal-authored driver
 and is now **exact**: `RESIDUALIZE-DRIVEN-PATTERN` agrees with
 `residualize-driven --split pattern` byte for byte on **every example the oracle
 drives** (77 of 77, 2026-10-12), with the gate requiring `diverged.is_empty()`.
-The partition is **searchable** — `--split search` drives both partitions and keeps
-the cheaper residue — but the search is an **opt-in**, not the default: the compiler
-ships the sequence partition. See the 2026-10-14 entry below. **Both modes are now
-gated on the corpus**: `RESIDUALIZE-DRIVEN-SEARCH` agrees with
-`residualize-driven --split search` byte for byte on 77 of 77 (2026-10-15).
+It is now **complete** — it falls back to the sequence partition wherever the
+callee's own patterns cannot name the component — and the search over both
+partitions is the **compiler's default**: `RESIDUALIZE-DRIVEN`,
+`RESIDUALIZE-DRIVEN n`, `Compile` and `residualize-driven` all search, so **E-11 is
+closed**. All three modes are gated on the corpus, each against its Rust
+counterpart, byte for byte on 77 of 77 (2026-10-15).
+
+### Done — E-11 closes: the partition is complete, and the search is the compiler's default (2026-10-15)
+
+**E-11 is closed.** The row's withheld credit was for exactly two things the
+comparison could not see, and both are now built rather than argued around.
+
+**The design: make the pattern partition complete.** `DriveContext::split_configuration`
+now tries `SplitStrategy::Pattern` first and **falls back to
+`SplitStrategy::Sequence`** wherever the callee's own patterns cannot name the
+component. The Refal-authored driver carries the identical fallback
+(`DsSplit` → `DsSplitPatSeq` → `DsSplitSeq`), because the two are a differential.
+That one change closes both halves of the blocker at once:
+
+| the blocker | why the fallback closes it |
+|---|---|
+| the merged `Rev` form folds only under the sequence partition, so the search kept the *unfolded* residue | the pattern partition now produces the identical `Split1` residue, so the two tie and the search keeps the fold |
+| the pattern partition never generates the bracket-headed branch, so the §4.5 verdict came back `perfect: yes` for `symbolic-branch.ref` | the fallback generates that branch, so the residue is complete and the verdict is `perfect: no (undecided 0, uncovered 1)` again |
+
+**Two defects the fallback exposed, both fixed — and both were latent in the
+`--split pattern` path all along.** The port diverged on `invert-list-encoder.ref`
+and `compiler-refal-sentence-subset.ref`, and the cause was not the fallback:
+
+- **The canonical comparison was span-sensitive.** A `SplitFunction` lookup compared
+  `canonical_input` with `CoreTerm`'s derived `==`, which includes the source span —
+  so `<Wrap e.Input>` (a *source* variable, with a real span) and `<Wrap e.T2>` (a
+  driver-generated one, span 0) never matched, and the driver made a second split
+  where the Refal-authored driver reused the first. It is now compared with
+  `term_sequences_same_kind`. This is the same class of defect as the
+  repeated-variable mis-fold closed on 2026-10-10, and it is why the note below says
+  never to compare `CoreTerm` with derived `==`.
+- **`pattern_splits` (renamed `split_branches`) carried only the pattern partition's
+  branches.** The Refal-authored `DsPatFindSentL` scans *every* split, so it found a
+  sequence split's sentences where Rust did not. The sequence path now registers its
+  branches too, which makes the two registries the same list.
+
+**Measured after the change, on the corpus.** `residualize-driven` (default) vs
+`--split sequence`: **69 byte-identical, 8 strictly better, 0 worse** —
+`accumulator-reverse` 37 → 9, `equiv-partial-domain` 28 → 10, `equiv-tree-reversal`
+15 → 8, `projection-bracket-callee` 24 → 2, `projection-complement` 9 → 2,
+`prove-append-reach` 6 → 3, `prove-predicate-true` 7 → 2,
+`variable-index-equivalence` 3 → 2. The six regressions the 2026-10-12 note listed
+(`identity`, `lexer`, …) are now **ties**, which go to the sequence partition, so
+they come out exactly as before.
+
+**The default moved.** `SplitStrategy::default()` is `SplitStrategy::Search`, the
+CLI's `--split` default is the library default (they cannot drift), and the
+Refal-authored driver's `RESIDUALIZE-DRIVEN`, `RESIDUALIZE-DRIVEN n` and `Compile`
+all search. Every mode agrees with its Rust counterpart byte for byte on **77 of
+77**.
+
+**The figure moves `~91.8% → ~91.9%`** — an *earning*, not a re-weighting: E-11's
+withheld 0.15 is credited because the gates behind it are green, so the
+graph-of-states row goes `5.35 → 5.50` and the table sums to **91.95**.
+
+**What the default costs, measured rather than waved at.** The search is a second
+drive, and the compiler's own source is the case where it is *not* free: on
+`examples/compiler.ref` the pattern partition fires (residual-work **9648**, size
+21024) and the sequence partition wins on cost (residual-work **9365**, size 21328),
+so the search runs both and keeps the sequence one — the residue is unchanged, but
+the work is doubled. Locally the three self-hosting gates went from minutes to
+**46m22s**. CI is the authority for the full suite and has a 4x margin on the
+45-minute timeout, so this is within budget, but it is the reason the next
+performance item is worth doing: **skip the second drive when the pattern partition
+provably cannot fire**, which is decidable from the program's own patterns before
+the drive starts.
 
 ### Done — the partition search is gated on the corpus, and E-11's blocker is measured (2026-10-15)
 
