@@ -1509,6 +1509,25 @@ fn call_term(name: &str, args: &[CoreTerm]) -> CoreTerm {
     }
 }
 
+/// Whether a driven branch came back as a call to the split being built, with
+/// the same argument — i.e. the branch *is* the configuration and the sentence
+/// would be `<SplitN <same argument>>`, an infinite self-loop.
+///
+/// The comparison is structural and span-free, for the same reason
+/// [`term_sequences_same_kind`] exists: the branch and the call's arguments are
+/// the same terms reached by different routes.
+fn is_self_call(body: &[CoreTerm], name: &str, branch: &[CoreTerm]) -> bool {
+    let [term] = body else {
+        return false;
+    };
+    match &term.kind {
+        CoreTermKind::Call { name: callee, args } => {
+            callee.eq_ignore_ascii_case(name) && term_sequences_same_kind(args, branch)
+        }
+        _ => false,
+    }
+}
+
 struct DriveContext<'a> {
     graph: &'a StateGraph,
     visited: Vec<StateId>,
@@ -2354,7 +2373,24 @@ impl<'a> DriveContext<'a> {
             let body = match complement_body {
                 Some(result) => result,
                 None => match self.invoke_symbolic(function, &branch) {
-                    Ok(SymbolicInvoke::Reduced(reduced)) => reduced,
+                    Ok(SymbolicInvoke::Reduced(reduced)) => {
+                        // A branch whose drive comes back to *this* split is the
+                        // configuration itself, and emitting `<SplitN <same
+                        // argument>>` would be an infinite self-loop — the
+                        // residue would not terminate, and the E-14 projection
+                        // is where that was measured: the derived compiler
+                        // carried `(e.Source) = <Split1 (e.Source)>;` and
+                        // diverged on its first input. `function` is the callee
+                        // this split replaced and the branch is one of that
+                        // callee's own pattern shapes, so a call to the
+                        // **original** function re-matches there: sound, and
+                        // finite.
+                        if is_self_call(&reduced, &name, &branch) {
+                            vec![call_term(function, &branch)]
+                        } else {
+                            reduced
+                        }
+                    }
                     Ok(SymbolicInvoke::Residual) | Ok(SymbolicInvoke::Fails) => {
                         vec![call_term(function, &branch)]
                     }

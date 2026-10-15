@@ -741,7 +741,7 @@ fn accounting(p: &Palette) -> String {
         ("L2/L4 \u{00b7} compiler in Refal", 17.85, 16.80),
         ("L4 \u{00b7} self-hosting fixpoint", 9.10, 8.05),
         ("L3 \u{00b7} meta-prover", 13.00, 11.40),
-        ("L4 \u{00b7} projections as artifacts", 5.00, 3.50),
+        ("L4 \u{00b7} projections as artifacts", 5.00, 4.40),
         ("L2 \u{00b7} function inversion", 3.00, 3.00),
         ("Conformance / release evidence", 2.80, 2.80),
     ];
@@ -784,7 +784,7 @@ fn accounting(p: &Palette) -> String {
     out.extend(footer(
         p,
         396.0,
-        "One number, one method: ~91.9 of 100, from one table. A row carries zero credit until a gate behind it is green.",
+        "One number, one method: ~92.8 of 100, from one table. A row carries zero credit until a gate behind it is green.",
     ));
     wrap(
         h,
@@ -935,7 +935,7 @@ fn glance(p: &Palette) -> String {
         ),
         (
             "COMPLETION",
-            "~91.9%",
+            "~92.8%",
             "of the supersystem, one method, one table",
             "part",
         ),
@@ -1122,7 +1122,7 @@ fn roadmap(p: &Palette) -> String {
     let mut out = header(
         p,
         "WHAT IS LEFT",
-        "Five rows stand between ~91.9% and 100% \u{2014} each with a named gap",
+        "Five rows stand between ~92.8% and 100% \u{2014} each with a named gap",
         h,
     );
     let rows = [
@@ -1139,7 +1139,7 @@ fn roadmap(p: &Palette) -> String {
         (
             "E-14",
             "The 2nd and 3rd projections",
-            "the derivation S(S, int) by supercompilation, and the compiler generator S(S, S)",
+            "the derivation S(S, int) by supercompilation runs and agrees with the compiler; the generator S(S, S) is not built",
         ),
         (
             "E-7",

@@ -48,7 +48,7 @@ See `README.md` §"What Theorem 5.1 does and does not forbid" and
 
 | | |
 |---|---|
-| Honest completion | **~91.9%** (supersystem completeness — one method, one table, in `README.md`) |
+| Honest completion | **~92.8%** (supersystem completeness — one method, one table, in `README.md`) |
 | Tests | 421 (72 core + 181 CLI integration + 168 across the other four crates), 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
@@ -82,6 +82,54 @@ partitions is the **compiler's default**: `RESIDUALIZE-DRIVEN`,
 `RESIDUALIZE-DRIVEN n`, `Compile` and `residualize-driven` all search, so **E-11 is
 closed**. All three modes are gated on the corpus, each against its Rust
 counterpart, byte for byte on 77 of 77 (2026-10-15).
+
+### Done — the projection's derivation runs, and the self-loop it exposed is fixed (E-14, 2026-10-15)
+
+**The measurement PROGRESS named on 2026-10-09 was performed, and it found a
+defect.** The note said: "run the derived artifact under the **release** build on
+a one-line program and see whether it terminates and agrees with `refal compile`."
+It did not terminate — and the cause was not the bootstrap being slow.
+
+```
+$ refal project2 examples/compiler.ref Dispatch --steps 200   # 67 configurations, 1 split, walk: closed
+$ refal run <artifact> --input-file examples/hello.ref        # never returned
+```
+
+**The defect, read off the residue.** `Split1` ended with two sentences that
+called *itself* with the argument they were matched on:
+
+```
+  (e.Mode) (e.Source) = <Split1 (e.Mode) (e.Source)>;
+  (e.Source) = <Split1 (e.Source)>;
+```
+
+An infinite self-loop. The branch *is* the configuration, so driving it folds
+straight back to the split being built, and the residue — which **checks as
+Refal** — diverges on its first input. **A residue that checks is not a residue
+that works**, and that is what the row's gate was saying all along.
+
+**The fix.** A branch whose drive returns a call to the split being built, with
+the same argument, is emitted as a call to the **original** callee instead —
+`is_self_call` in `refal-core`, mirrored in `examples/compiler.ref`'s `DsPatOne`.
+The branch is one of that callee's own pattern shapes, so the original function
+re-matches there: sound, and finite. The residue now reads
+`(e.Source) = <Dispatch (e.Source)>;`, and the artifact **terminates in 0.66 s**
+and agrees with `refal compile` on **77 of 77**.
+
+**What this changes about "dispatcher-free".** The old gate asserted
+`!artifact.contains("Dispatch {")`. That is no longer the property and was never
+the right one: retaining `Dispatch` as the *fallback* branch for the one
+configuration the partition cannot decide is exactly the partial specialisation
+the row describes, and the **decided** modes are compiled away. The gate now
+asserts the compiled dispatch *and* the run, and is renamed
+`the_supercompiler_derives_a_compiler_that_runs`.
+
+**The figure moves `~91.9% → ~92.8%`.** The row's withheld credit was stated as
+one thing — "the residue has not been **run**" — and that is now green, so the
+projections row goes `3.50 → 4.40` and the table sums to **92.85**. The 0.60
+that stays withheld is the **3rd projection, the compiler generator** (`S(S, S)`),
+which the row's objective requires and which is not built; it is named in the row
+rather than folded into the credit.
 
 ### Done — E-11 closes: the partition is complete, and the search is the compiler's default (2026-10-15)
 

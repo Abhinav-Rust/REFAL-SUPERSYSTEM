@@ -3,7 +3,7 @@
   <desc id="d">Five partial rows E-7, E-12, E-13, E-14 and E-17, each with the named gap that keeps it from being closed.</desc>
   <rect x="0.5" y="0.5" width="1199" height="487" rx="16" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1"/>
   <text x="40" y="52" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="3.2" fill="#0F766E">WHAT IS LEFT</text>
-  <text x="40" y="90" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="-0.3" fill="#1F2328">Five rows stand between ~91.9% and 100% — each with a named gap</text>
+  <text x="40" y="90" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="-0.3" fill="#1F2328">Five rows stand between ~92.8% and 100% — each with a named gap</text>
   <line x1="40" y1="112" x2="1160" y2="112" stroke="#D0D7DE" stroke-width="1"/>
   <rect x="40" y="140" width="1120" height="52" rx="12" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1.5"/>
   <rect x="40" y="140" width="4" height="52" rx="2" fill="#B45309"/>
@@ -24,7 +24,7 @@
   <rect x="60" y="268" width="60" height="28" rx="9" fill="#FFFFFF" stroke="#FDE68A" stroke-width="1.5"/>
   <text x="90" y="287" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="13" font-weight="600" text-anchor="middle" fill="#B45309">E-14</text>
   <text x="136" y="280" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#1F2328">The 2nd and 3rd projections</text>
-  <text x="136" y="298" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">the derivation S(S, int) by supercompilation, and the compiler generator S(S, S)</text>
+  <text x="136" y="298" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">the derivation S(S, int) by supercompilation runs and agrees with the compiler; the generator S(S, S) is not built</text>
   <text x="1140" y="287" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" text-anchor="end" fill="#B45309">Partial</text>
   <rect x="40" y="314" width="1120" height="52" rx="12" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1.5"/>
   <rect x="40" y="314" width="4" height="52" rx="2" fill="#B45309"/>

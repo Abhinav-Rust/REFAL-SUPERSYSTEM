@@ -4025,6 +4025,17 @@ DsPatLoop {
 }
 
 DsPatOne {
+* A branch whose drive comes back to *this* split is the configuration itself,
+* and emitting `<SplitN <same argument>>` would be an infinite self-loop -- the
+* residue would not terminate. The E-14 projection is where that was measured:
+* the derived compiler carried `(e.Source) = <Split1 (e.Source)>;` and diverged
+* on its first input. `e.Fn` is the callee this split replaced and the branch is
+* one of that callee's own pattern shapes, so a call to the **original** function
+* re-matches there: sound, and finite. Mirrors `is_self_call` in `refal-core`.
+  (RED (e.Out) (e.Ctx)) (e.Fn) (e.In) s.Index (e.B) (e.More) (e.Acc),
+    <DsSameKind (e.Out) <DsCallSeq (<DsSplitName s.Index>) (e.B)>> : '1' =
+    <DsPatLoop (e.Ctx) (e.Fn) (e.In) s.Index (e.More)
+      (e.Acc (SENT (e.B) () <DsCallSeq (e.Fn) (e.B)>))>;
   (RED (e.Out) (e.Ctx)) (e.Fn) (e.In) s.Index (e.B) (e.More) (e.Acc) =
     <DsPatLoop (e.Ctx) (e.Fn) (e.In) s.Index (e.More) (e.Acc (SENT (e.B) () (e.Out)))>;
   (RES (e.Ctx)) (e.Fn) (e.In) s.Index (e.B) (e.More) (e.Acc) =

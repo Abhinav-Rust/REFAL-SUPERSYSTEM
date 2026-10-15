@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+**The projection's derivation runs: the derived compiler terminates and agrees with `refal compile`.**
+
+- **`refal project2 examples/compiler.ref Dispatch` now emits a compiler that
+  works.** It drives the supercompiler's own dispatcher with its argument open
+  through the partition that enters a constructor; the artifact's mode dispatch is
+  *compiled* (it matches the mode by its own characters), it terminates in
+  **0.66 s**, and it agrees with `refal compile` on **77 of 77** examples.
+- **A self-loop defect the run exposed is fixed.** A branch whose drive folds back
+  to the split being built was emitted as `<SplitN <same argument>>` — an infinite
+  self-loop — so the residue, which *checks as Refal*, diverged on its first input.
+  It is now emitted as a call to the **original** callee, which is sound and
+  finite. Mirrored in the Refal-authored driver (`DsPatOne`).
+- **The gate changes with the property.** `the_supercompiler_derives_a_dispatcher_free_compiler`
+  becomes `the_supercompiler_derives_a_compiler_that_runs`: retaining `Dispatch`
+  as the fallback branch for the undecided configuration is the partial
+  specialisation the row describes, and the gate now requires the run.
+- **The figure moves `~91.9% → ~92.8%`** — the projections row goes `3.50 → 4.40`;
+  the withheld 0.60 is the **3rd projection, the compiler generator**.
+
 **E-11 is closed: the partition that can enter a constructor is complete, and the search is the compiler's default.**
 
 - **The pattern partition is now complete.** Where the callee's own sentence

@@ -7378,27 +7378,25 @@ fn the_second_projection_emits_a_compiler_that_decides_its_branches() {
     );
 }
 
-/// E-14, **derived rather than authored**: the supercompiler's own dispatcher,
-/// driven with its argument open, closes and emits a program that checks as
-/// Refal and no longer contains `Dispatch`.
+/// **The projection's derivation runs.** `refal project2 <compiler.ref> Dispatch`
+/// drives the supercompiler's own dispatcher with its argument open, through the
+/// partition that can enter a constructor, and emits a residue that is a
+/// *compiler* — the mode dispatch compiled into per-character patterns.
 ///
-/// The E-14 note of 2026-10-05 recorded that this derivation *stops* — "the
-/// residue is 101 KB in 7 steps, and its entry is `<Dispatch ('SPECIALISE')
-/// (<the interpreter, inlined>) e.Input>`. `Dispatch` stays residual, because its
-/// pattern `('SPECIALISE') (e.Interpreter) (e.Program)` requires the program to
-/// be a **bracket**, and the open variable is not one."
+/// What this gate pins is the half the row says matters: the artifact is not
+/// merely emitted and checked, it **runs**, and it agrees with `refal compile` on
+/// every example the compiler accepts. An earlier revision emitted a residue that
+/// checked as Refal and carried `(e.Source) = <Split1 (e.Source)>;` — an infinite
+/// self-loop — so it diverged on its first input. "Emitted and checks" is
+/// therefore not the gate, and a residue that does not terminate is a wrong
+/// program however tidy its shape.
 ///
-/// That blocker is gone, because the partition that can **enter a constructor**
-/// (`SplitStrategy::Pattern`, E-11) was built *after* the note. The walk now
-/// closes: **147 steps, 51 configurations, one split**, and the dispatcher is
-/// eliminated rather than left residual.
-///
-/// This settles the half of the row's gate that is structural. The other half —
-/// running the artifact as a compiler and agreeing with `refal compile` — needs
-/// the artifact to *execute*, and that is measured separately, because it is a
-/// question about the bootstrap's speed rather than about the derivation.
+/// `Dispatch` is retained as the fallback branch for the configuration the
+/// partition could not decide, which is the partial specialisation the row
+/// describes rather than a failure to specialise; the *decided* modes are
+/// compiled away.
 #[test]
-fn the_supercompiler_derives_a_dispatcher_free_compiler() {
+fn the_supercompiler_derives_a_compiler_that_runs() {
     let output = Command::new(refal_bin())
         .args([
             "project2",
@@ -7427,9 +7425,11 @@ fn the_supercompiler_derives_a_dispatcher_free_compiler() {
         .split_once("$EXTERN")
         .map(|(_, rest)| format!("$EXTERN{rest}"))
         .expect("the driver's report is followed by the emitted program");
+    // The dispatch is *compiled*: the mode is matched by its own characters, so
+    // the decision moved from run time to drive time.
     assert!(
-        !artifact.contains("Dispatch {"),
-        "the dispatcher must be eliminated, not re-printed"
+        artifact.contains("('C' 'H' 'E' 'C' 'K') (e.Source)"),
+        "the mode dispatch must be compiled into character patterns"
     );
 
     let path = temp_ref_path("derived-compiler");
@@ -7438,12 +7438,41 @@ fn the_supercompiler_derives_a_dispatcher_free_compiler() {
         .args(["check", path.to_str().expect("utf-8 path")])
         .output()
         .expect("run refal binary");
-    let _ = fs::remove_file(&path);
     assert!(
         checked.status.success(),
         "the derived artifact must check as Refal:\n{}",
         String::from_utf8_lossy(&checked.stderr)
     );
+
+    // And it must **run**, agreeing with the compiler it was derived from.
+    for name in ["hello", "identity", "runtime-condition", "condition"] {
+        let source = format!("examples/{name}.ref");
+        let expected = Command::new(refal_bin())
+            .args(["compile", &workspace_path(&source)])
+            .output()
+            .expect("run refal binary");
+        assert!(expected.status.success(), "refal compile failed on {name}");
+        let actual = Command::new(refal_bin())
+            .args([
+                "run",
+                path.to_str().expect("utf-8 path"),
+                "--input-file",
+                &workspace_path(&source),
+            ])
+            .output()
+            .expect("run refal binary");
+        assert!(
+            actual.status.success(),
+            "the derived compiler failed on {name}:\n{}",
+            String::from_utf8_lossy(&actual.stderr)
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&actual.stdout),
+            String::from_utf8_lossy(&expected.stdout),
+            "{name}: the derived compiler diverged from refal compile"
+        );
+    }
+    let _ = fs::remove_file(&path);
 }
 
 /// E-11's **negative** half, at the command line: the partition carries the
