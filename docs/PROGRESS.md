@@ -49,7 +49,7 @@ See `README.md` §"What Theorem 5.1 does and does not forbid" and
 | | |
 |---|---|
 | Honest completion | **~91.8%** (supersystem completeness — one method, one table, in `README.md`) |
-| Tests | 418 (72 core + 178 CLI integration + 168 across the other four crates), 0 clippy, fmt clean |
+| Tests | 421 (72 core + 181 CLI integration + 168 across the other four crates), 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
 
@@ -78,7 +78,53 @@ and is now **exact**: `RESIDUALIZE-DRIVEN-PATTERN` agrees with
 drives** (77 of 77, 2026-10-12), with the gate requiring `diverged.is_empty()`.
 The partition is **searchable** — `--split search` drives both partitions and keeps
 the cheaper residue — but the search is an **opt-in**, not the default: the compiler
-ships the sequence partition. See the 2026-10-14 entry below.
+ships the sequence partition. See the 2026-10-14 entry below. **Both modes are now
+gated on the corpus**: `RESIDUALIZE-DRIVEN-SEARCH` agrees with
+`residualize-driven --split search` byte for byte on 77 of 77 (2026-10-15).
+
+### Done — the partition search is gated on the corpus, and E-11's blocker is measured (2026-10-15)
+
+**The one gap the 2026-10-14 note named as open is closed.** When the search stopped
+being the default, `RESIDUALIZE-DRIVEN-SEARCH` stayed reachable but untested:
+`the_pattern_partition_is_ported_to_the_refal_authored_driver` pins the pattern
+partition *alone*, so a drift in the choice rule or in the cost it compares would
+have been silent.
+`the_partition_search_is_ported_to_the_refal_authored_driver` sweeps the corpus the
+same way, against `residualize-driven --split search`, and requires
+`diverged.is_empty()` over every example the oracle drives — **77 of 77**, with
+`accumulator-reverse` as the witness that the search actually *chooses* rather than
+always keeping one end.
+
+**Measured before the gate was written, not after.** The sweep was run by hand first
+(77 matched, 0 diverged, 27 out of scope), so the gate pins existing behaviour rather
+than being tuned to pass. The figure does not move: this closes a testing gap, not
+the row.
+
+**E-11's remaining half, restated with the measurement.** The blocker is that the
+comparison cannot see two things `ResidueCost` does not carry. Measured on the
+fixture the row names — `Go { e.X = <Rev e.X>; } Rev { = ; t.H e.T = <Rev e.T> t.H; }`:
+
+| partition | residue | `residual_work` | `size` |
+|---|---|---:|---:|
+| sequence | folds `Rev` into `Split1` | 6 | 15 |
+| pattern | the source, unchanged | 4 | 8 |
+
+The search keeps the pattern residue (`4 < 6`), and the two are semantically
+identical — `Split1`'s third sentence only re-states `t.` for a bracket head — so the
+choice is *defensible on cost* and still wrong for the row's purpose, which is that
+**eliminating the source function is the transition**. The second blind spot is
+sharper: on `symbolic-branch.ref` the pattern partition never generates the
+bracket-headed branch, so its §4.5 verdict comes back `perfect: yes` for a program
+with an unselectable call site — a soundness claim, not an optimistic one.
+
+**The design that closes both is a complete pattern partition** — fall back to the
+sequence split wherever the callee's own patterns cannot name the component. Then
+the pattern residue is never *less* complete than the sequence one, the accumulator
+fold is kept, the six examples where entering the constructor buys nothing tie to
+the sequence partition (so the search cannot regress), and `symbolic-branch.ref`
+reports `perfect: no` again. That is the next step; it is not attempted here because
+it changes `SplitStrategy::Pattern`'s documented semantics and must land in both
+implementations together.
 
 ### Done — the suite is 4.7x faster on CI, and the last hygiene surfaces are set (2026-10-14)
 

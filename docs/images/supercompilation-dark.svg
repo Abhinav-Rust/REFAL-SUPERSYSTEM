@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 408" width="1200" height="408" role="img" aria-labelledby="t d">
+  <title id="t">Supercompilation</title>
+  <desc id="d">Three panels: a program is run by an interpreter; the engine drives it symbolically with the input still unknown; and a specialised residual program comes out that gives the same answers in far fewer steps.</desc>
+  <rect x="0.5" y="0.5" width="1199" height="407" rx="16" fill="#0D1117" stroke="#30363D" stroke-width="1"/>
+  <text x="40" y="52" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="3.2" fill="#0F766E">THE IDEA</text>
+  <text x="40" y="90" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="-0.3" fill="#E6EDF3">What a supercompiler does, in one picture</text>
+  <line x1="40" y1="112" x2="1160" y2="112" stroke="#30363D" stroke-width="1"/>
+  <rect x="40" y="150" width="352" height="168" rx="14" fill="#0B1B19" stroke="#134E4A" stroke-width="1.5"/>
+  <circle cx="76.0" cy="186.0" r="18" fill="#062925"/>
+  <text x="76" y="192" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="17" font-weight="700" text-anchor="middle" fill="#2DD4BF">1</text>
+  <text x="106" y="191" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#E6EDF3">Run it as it is</text>
+  <text x="60" y="224" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#8B949E">An interpreter walks the program over one</text>
+  <text x="60" y="242" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#8B949E">input, one reduction at a time. A second</text>
+  <text x="60" y="260" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#8B949E">input means the whole walk again.</text>
+  <text x="408" y="240" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="20" font-weight="700" text-anchor="middle" fill="#14B8A6">→</text>
+  <rect x="424" y="150" width="352" height="168" rx="14" fill="#0B1B19" stroke="#134E4A" stroke-width="1.5"/>
+  <circle cx="460.0" cy="186.0" r="18" fill="#062925"/>
+  <text x="460" y="192" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="17" font-weight="700" text-anchor="middle" fill="#2DD4BF">2</text>
+  <text x="490" y="191" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#E6EDF3">Drive it symbolically</text>
+  <text x="444" y="224" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#8B949E">The engine runs the program with the input</text>
+  <text x="444" y="242" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#8B949E">still unknown, splits it into cases, and</text>
+  <text x="444" y="260" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#8B949E">records the graph of states it reaches.</text>
+  <text x="444" y="278" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#8B949E">The interpreter's own work becomes data.</text>
+  <text x="792" y="240" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="20" font-weight="700" text-anchor="middle" fill="#14B8A6">→</text>
+  <rect x="808" y="150" width="352" height="168" rx="14" fill="#0B1B19" stroke="#134E4A" stroke-width="1.5"/>
+  <circle cx="844.0" cy="186.0" r="18" fill="#062925"/>
+  <text x="844" y="192" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="17" font-weight="700" text-anchor="middle" fill="#2DD4BF">3</text>
+  <text x="874" y="191" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#E6EDF3">Keep the new program</text>
+  <text x="828" y="224" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#8B949E">The graph folds back into Refal: the</text>
+  <text x="828" y="242" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#8B949E">interpreter is gone and the recursion is</text>
+  <text x="828" y="260" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#8B949E">unrolled into straight-line code. The same</text>
+  <text x="828" y="278" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#8B949E">answers, in a fraction of the steps.</text>
+  <rect x="40" y="344" width="1120" height="44" rx="12" fill="#062925" stroke="#134E4A" stroke-width="1.5"/>
+  <text x="64" y="372" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#99F6E4">Turchin's metasystem transition: the result is a new level that controls the interpreter, not a faster copy of it.</text>
+</svg>

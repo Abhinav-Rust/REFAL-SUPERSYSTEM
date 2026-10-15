@@ -185,6 +185,21 @@ the reflection engine turns a running program into inspectable data; the
 supercompiler transforms that data into a better program; the meta-prover decides
 whether the transformation meant what it claimed.
 
+## The idea, in one picture
+
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/supercompilation-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/supercompilation-light.svg">
+  <img alt="Three panels: an interpreter runs a program over one input; the supercompiler drives the same program symbolically with the input still unknown, recording a graph of states; and a specialised residual program comes out that gives the same answers in far fewer steps" src="docs/images/supercompilation-light.svg" width="100%">
+</picture>
+
+</div>
+
+The third panel is the point: what comes out is not a faster interpreter but a
+**new program specialised to the one it was derived from**.
+
 ## How a program is compiled
 
 <div align="center">
@@ -532,7 +547,9 @@ The ordered work list lives in
    partition. The partition is also **searchable**: `--split search` drives with
    **both** partitions and keeps the cheaper residue — the rule the compilation
    axis already uses, one level out — so `accumulator-reverse` folds at
-   residual-work 37 → 9 while `identity` stays at 0. It is an **opt-in, not the
+   residual-work 37 → 9 while `identity` stays at 0. **Both modes are gated on the
+   corpus**: `RESIDUALIZE-DRIVEN-SEARCH` agrees with `--split search` byte for byte
+   on 77 of 77. It is an **opt-in, not the
    default**: the search compares only the residue's *cost*, and that is not the
    whole story. On the merged `Rev { = ; t.H e.T = <Rev e.T> t.H; }` form the
    sequence split folds the entry to `Split1`, eliminating `Rev`, at cost 6, while

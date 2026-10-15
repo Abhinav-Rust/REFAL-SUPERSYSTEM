@@ -7782,6 +7782,83 @@ fn the_pattern_partition_is_ported_to_the_refal_authored_driver() {
     );
 }
 
+/// The **partition search** is ported too, and this is its gate.
+///
+/// `the_pattern_partition_is_ported_to_the_refal_authored_driver` pins the
+/// pattern partition *alone*; the search that chooses between it and the
+/// sequence partition — `RESIDUALIZE-DRIVEN-SEARCH`, whose Rust counterpart is
+/// `residualize-driven --split search` — was left reachable but untested when
+/// the search stopped being the default, so a drift in the choice rule or in
+/// the cost it compares would have been silent. The two implementations must
+/// agree byte for byte on every example the oracle drives, which is what pins
+/// both the comparison and the short circuit that skips the second partition.
+///
+/// The witness is E-11's accumulator: the search must keep the pattern
+/// partition's folded residue rather than the sequence partition's unfolded
+/// one, so a search that merely always picked one end could not pass.
+#[test]
+fn the_partition_search_is_ported_to_the_refal_authored_driver() {
+    let mut names: Vec<String> = fs::read_dir(workspace_path("examples"))
+        .expect("read the examples directory")
+        .filter_map(|entry| {
+            let path = entry.ok()?.path();
+            let name = path.file_name()?.to_string_lossy().into_owned();
+            (name.ends_with(".ref") && name != "compiler.ref").then_some(name)
+        })
+        .collect();
+    names.sort();
+
+    let compiler = workspace_path("examples/compiler.ref");
+    let mut matched: Vec<String> = Vec::new();
+    let mut diverged: Vec<String> = Vec::new();
+    for name in names {
+        let path = format!("examples/{name}");
+        let oracle = residualize_driven_file(&path, &["--split", "search"]);
+        // A fixture the bootstrap refuses to drive is out of scope here exactly
+        // as it is for the other sweeps.
+        if !oracle.status.success() {
+            continue;
+        }
+        let expected = String::from_utf8_lossy(&oracle.stdout).into_owned();
+        if expected.trim().is_empty() {
+            continue;
+        }
+        let refal = Command::new(refal_bin())
+            .args(["run", &compiler, "RESIDUALIZE-DRIVEN-SEARCH"])
+            .args(["--input-file", &workspace_path(&path)])
+            .output()
+            .expect("run the Refal-authored driver");
+        let actual = String::from_utf8_lossy(&refal.stdout).into_owned();
+        let stem = name.trim_end_matches(".ref").to_string();
+        if actual == expected {
+            matched.push(stem);
+        } else {
+            diverged.push(stem);
+        }
+    }
+
+    // The witness: the search has to actually *choose*, and choose the folded
+    // end on the accumulator. A search that always kept one partition would
+    // still have to match the oracle here, which is the point.
+    assert!(
+        matched.iter().any(|m| m == "accumulator-reverse"),
+        "the search must keep the folded accumulator\nmatched: {matched:?}\n\
+         diverged: {diverged:?}"
+    );
+    // Full agreement, not a floor: the port is measured byte-identical on every
+    // example the oracle drives. A new divergence is a regression.
+    assert!(
+        diverged.is_empty(),
+        "the Refal-authored partition search diverged from the oracle\n\
+         diverged: {diverged:?}\nmatched: {matched:?}"
+    );
+    assert!(
+        matched.len() >= 77,
+        "the corpus is 77 drivable examples; only {} agreed\nmatched: {matched:?}",
+        matched.len()
+    );
+}
+
 /// A repeated variable constrains two positions to the same **value** — and the
 /// ground matcher compared its bindings with `CoreTerm`'s derived equality,
 /// which includes the source `span`.

@@ -1543,6 +1543,85 @@ fn quickstart(p: &Palette) -> String {
     )
 }
 
+// --------------------------------------------------------------------------
+// What a supercompiler does (the idea, before any Refal)
+// --------------------------------------------------------------------------
+fn supercompilation(p: &Palette) -> String {
+    let h = 408.0;
+    let mut out = header(
+        p,
+        "THE IDEA",
+        "What a supercompiler does, in one picture",
+        h,
+    );
+    let steps: [(&str, &str, &str); 3] = [
+        (
+            "1",
+            "Run it as it is",
+            "An interpreter walks the program over one input, one reduction at a time. A second input means the whole walk again.",
+        ),
+        (
+            "2",
+            "Drive it symbolically",
+            "The engine runs the program with the input still unknown, splits it into cases, and records the graph of states it reaches. The interpreter's own work becomes data.",
+        ),
+        (
+            "3",
+            "Keep the new program",
+            "The graph folds back into Refal: the interpreter is gone and the recursion is unrolled into straight-line code. The same answers, in a fraction of the steps.",
+        ),
+    ];
+    let (cw, gap) = (352.0_f64, 32.0_f64);
+    for (i, (num, title, body)) in steps.iter().enumerate() {
+        let x = 40.0 + i as f64 * (cw + gap);
+        out.push(rect(
+            x,
+            150.0,
+            cw,
+            168.0,
+            p.cardbg,
+            Some(p.cardbd),
+            14.0,
+            1.5,
+        ));
+        out.push(circle(Pf(x + 36.0), Pf(186.0), 18.0, p.okbg));
+        out.push(text(
+            x + 36.0,
+            192.0,
+            num,
+            17.0,
+            p.ok,
+            Txt::wfa("700", MONO, "middle"),
+        ));
+        out.push(text(x + 66.0, 191.0, title, 15.0, p.ink, Txt::w("600")));
+        for (k, ln) in wrap_lines(body, 42).iter().enumerate() {
+            out.push(t(x + 20.0, 224.0 + k as f64 * 18.0, ln, 12.5, p.muted));
+        }
+        // A chevron in the gutter, so the three panels read as a flow.
+        if i + 1 < steps.len() {
+            out.push(text(
+                x + cw + gap / 2.0,
+                240.0,
+                "\u{2192}",
+                20.0,
+                p.a2,
+                Txt::wa("700", "middle"),
+            ));
+        }
+    }
+    out.extend(footer(
+        p,
+        344.0,
+        "Turchin's metasystem transition: the result is a new level that controls the interpreter, not a faster copy of it.",
+    ));
+    wrap(
+        h,
+        "Supercompilation",
+        "Three panels: a program is run by an interpreter; the engine drives it symbolically with the input still unknown; and a specialised residual program comes out that gives the same answers in far fewer steps.",
+        &out,
+    )
+}
+
 /// One generated diagram: its file stem, and the function that draws it.
 type Diagram = (&'static str, fn(&Palette) -> String);
 
@@ -1553,7 +1632,8 @@ pub fn run() {
         eprintln!("cannot create {}: {err}", outdir.display());
         std::process::exit(1);
     }
-    let diagrams: [Diagram; 13] = [
+    let diagrams: [Diagram; 14] = [
+        ("supercompilation", supercompilation),
         ("glance", glance),
         ("projections", projections),
         ("conformance", conformance),
