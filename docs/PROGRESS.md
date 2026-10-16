@@ -49,7 +49,7 @@ See `README.md` §"What Theorem 5.1 does and does not forbid" and
 | | |
 |---|---|
 | Honest completion | **~93.4%** (supersystem completeness — one method, one table, in `README.md`) |
-| Tests | 425 (73 core + 183 CLI integration + 169 across the other four crates), 0 clippy, fmt clean |
+| Tests | 428 (73 core + 186 CLI integration + 169 across the other four crates), 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
 
@@ -82,6 +82,59 @@ partitions is the **compiler's default**: `RESIDUALIZE-DRIVEN`,
 `RESIDUALIZE-DRIVEN n`, `Compile` and `residualize-driven` all search, so **E-11 is
 closed**. All three modes are gated on the corpus, each against its Rust
 counterpart, byte for byte on 77 of 77 (2026-10-15).
+
+### Done — the published figure is a gate now, and the stale banner it caught (2026-10-16)
+
+**The status banner was stale, and it is the one asset nothing regenerates.**
+`docs/images/status-{light,dark}.svg` still read `~92.8%` while the accounting
+table summed to `93.45`. The banner is **hand-committed** — unlike the rest of the
+diagram family it is not written by `cargo xtask gen-readme-diagrams` — so
+regenerating the diagrams could not repair it, and no test looked at it. A reader
+meets the picture before the prose, so this was the most damaging place for a
+stale number to sit. Both banners now state `~93.4%`, and **every per-layer bar is
+recomputed from the twelve-row table** rather than carried forward:
+
+| Group | Weight | Credit | Bar |
+|---|---:|---:|---:|
+| L0 · Refal-5 machine (frontend + semantics + runtime) | 23.80 | 22.40 | 94% |
+| L1 · Reflection engine | 9.00 | 9.00 | 100% |
+| L2 · Supercompiler (graph of states + inversion) | 8.95 | 8.50 | 95% |
+| L3 · Meta-prover | 13.00 | 11.40 | 88% |
+| L4 · Self-application (fixpoint + projections) | 14.10 | 13.05 | 93% |
+| Compiler in Refal | 17.85 | 16.80 | 94% |
+| Tier 1 + conformance | 13.30 | 12.30 | 92% |
+| **Total** | **100.00** | **93.45** | **~93.4%** |
+
+**A second error, in the sum itself.** The commit that closed E-14 stated the
+table's sum as `93.40`. The twelve credits add to **`93.45`**, and the withheld
+credit is **`6.55`**. The published `~93.4%` was right either way — the repository
+publishes to one decimal, **round-half-to-even**, which is fitted to all three of
+its transitions (`92.85 → 92.8`, `93.45 → 93.4`, `6.55 → 6.6`); truncation would
+give `6.5` for the last and round-half-up would give `92.9` for the first, so
+neither fits. The wrong figure was in prose only, and is corrected here.
+
+**`crates/refal-cli/tests/readme_consistency.rs` makes the class impossible to
+repeat.** Three gates, all reading the assets the way a reader does:
+
+1. `the_published_figure_is_the_sum_of_the_accounting_table` — twelve rows, weights
+   summing to `100.00`, the published figure equal to the credit sum to one
+   decimal, and the total row restating all three numbers. Computed in **integer
+   hundredths**, because floating-point formatting would make the gate itself a
+   source of the disagreement it exists to catch.
+2. `the_status_banner_states_the_published_figure` — the hand-committed banner
+   states the figure exactly once in each theme, and in its `<desc>` for a screen
+   reader, and carries none of the three superseded headlines.
+3. `the_generated_panels_agree_with_the_readme` — the `glance` panel's figure and
+   its `N / 25`, the `accounting` footer, and one `conformance` grid cell per row
+   in each state, against the README's ledger.
+
+**Two defects of exactly this shape were found on 2026-10-16** — the `glance`
+panel's `19 / 25` against a ledger of `20`, and this banner — and both lived in an
+*asset* rather than in prose. That is why no test could see either, and why the
+guard is a test rather than a note.
+
+**The figure does not move.** `93.45` stands; this commit makes the number
+checkable, not larger.
 
 ### Measured — the termination gap's real reason, and it is not the published one (Tier 1, 2026-10-16)
 
@@ -226,7 +279,7 @@ generated asset. The generator now reads **`21 / 25`**, matching the ledger afte
 this row closed.
 
 **The figure moves `~92.8% → ~93.4%`.** The projections row goes `4.40 → 5.00`,
-the row is fully earned, and the table sums to **93.40**. The conformance ledger
+the row is fully earned, and the table sums to **93.45**. The conformance ledger
 goes **20 closed / 5 partial → 21 closed / 4 partial**; `E-7`, `E-12`, `E-13` and
 `E-17` remain.
 

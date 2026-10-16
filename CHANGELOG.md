@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+**The status banner was stale, and the published figure is now a gate rather than a habit.**
+
+- **`docs/images/status-{light,dark}.svg` still read `~92.8%`** while the
+  accounting table summed to `93.45`. The banner is **hand-committed** — it is not
+  written by `cargo xtask gen-readme-diagrams`, unlike the rest of the diagram
+  family — so regenerating the diagrams could not repair it, and no test looked at
+  it. Both banners now state `~93.4%`, and every per-layer bar is recomputed from
+  the twelve-row table rather than carried forward.
+- **The figure is `93.45`, and the withheld credit is `6.55`.** The commit that
+  closed E-14 stated the sum as `93.40`; the table's twelve credits add to
+  `93.45`. The published `~93.4%` was right either way — the repository publishes
+  to one decimal, round-half-to-even, which is fitted to all three of its
+  transitions (`92.85 → 92.8`, `93.45 → 93.4`, `6.55 → 6.6`).
+- **`crates/refal-cli/tests/readme_consistency.rs`** makes the class of defect
+  impossible to repeat. Three gates: the published figure equals the accounting
+  table's sum and the total row restates it; the hand-committed status banner
+  states the same figure in both themes and in its `<desc>`; and the generated
+  `glance`, `accounting` and `conformance` panels agree with the README's ledger.
+  The arithmetic is integer hundredths, because floating-point formatting would
+  make the gate itself a source of the disagreement it exists to catch.
+- **Two defects of exactly this shape were found on 2026-10-16** — the `glance`
+  panel's `19 / 25` against a ledger of `20`, and this banner — and both lived in
+  an *asset* rather than in prose, which is why no existing test could see them.
+
 **The termination analysis's withheld credit has a measured reason, and it is not the published one.**
 
 - **`refal feasibility examples/compiler.ref` reports 362 functions unproven, and
