@@ -49,7 +49,7 @@ See `README.md` §"What Theorem 5.1 does and does not forbid" and
 | | |
 |---|---|
 | Honest completion | **~93.4%** (supersystem completeness — one method, one table, in `README.md`) |
-| Tests | 424 (73 core + 183 CLI integration + 168 across the other four crates), 0 clippy, fmt clean |
+| Tests | 425 (73 core + 183 CLI integration + 169 across the other four crates), 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
 
@@ -82,6 +82,49 @@ partitions is the **compiler's default**: `RESIDUALIZE-DRIVEN`,
 `RESIDUALIZE-DRIVEN n`, `Compile` and `residualize-driven` all search, so **E-11 is
 closed**. All three modes are gated on the corpus, each against its Rust
 counterpart, byte for byte on 77 of 77 (2026-10-15).
+
+### Measured — the termination gap's real reason, and it is not the published one (Tier 1, 2026-10-16)
+
+The Tier 1 row published its withheld credit with a reason: *"termination where a
+call passes something no measure ranks — a computed argument, `<DsScan <DsBump …>>`"*.
+`refal feasibility examples/compiler.ref` reports **362 functions unproven**, and
+the blocking cycles do not route through a computed argument. They route through
+**`SpliceL` → `SpliceOne` → `SpliceL`**, which is an argument *re-indexing*:
+
+```
+SpliceL (e.Program) ((Ident e.Name) e.Rest) = <SpliceOne (e.Program) (e.Name) (e.Rest)>;
+SpliceOne (e.Program) (e.Name) (e.Rest)     = <Walk-style hand-over to (e.Rest)>;
+```
+
+**Bisected to the smallest program with the shape.**
+
+```text
+Walk (e.P) ((Ident e.N) e.Rest) = <Step (e.P) (e.N) (e.Rest)>;
+Step (e.P) (e.N) (e.Rest)       = <Walk (e.P) (e.Rest)>;
+```
+
+Three variants that *are* proved bound the cause: the same shape with one
+argument, with a constant first argument, and with a bracket-of-bracket pattern
+all come back `terminates`. What breaks it is that the value moves from
+**`Walk`'s index 2** to **`Step`'s index 3** and back.
+
+**The cause, read off `classify`.** `classify(pattern, args, measure)` compares the
+caller's `measure`-th pattern term with the callee's `measure`-th argument. The
+measure is an *index*, and both sides use the same one, so a value handed across
+positions is never tracked: index 2 is compared with index 2 and index 3 with
+index 3, no strict edge is found, and the honest verdict is `unproven`.
+
+**The program does terminate.** `Walk.arg2` strictly contains `Step.arg3` —
+`(Ident e.N)` is dropped — so the cycle `Walk.arg2 → Step.arg3 → Walk.arg2`
+descends and every call passes a strictly smaller bracket. This is a genuine
+*incompleteness*, and the fix is named: a **size-change graph over (caller index,
+callee index) pairs** in place of a family of same-index measures.
+
+`a_cycle_that_hands_a_value_across_argument_positions_is_not_yet_proved` pins the
+smallest program and asserts the current verdict, so fixing the analysis turns the
+gate red. **The figure does not move** — `9.50 / 10.50` stands, because a
+diagnosis is not a fix. What changes is that the row's published reason is now the
+measured one.
 
 ### Measured — the sorting equality is true and the prover cannot close it (E-12/E-13, 2026-10-16)
 
@@ -3719,6 +3762,17 @@ projection found a dead dedup test and a cursor where a source belongs.
    level indices, on top of §6.4's level-carrying unknown. The last of the named
    behaviours, and the least likely to be attempted, because nothing in the
    product's own acceptance criteria asks for it.
+9. **The size-change graph for Tier 1 termination (2026-10-16).** `classify`
+   compares the caller's `measure`-th pattern term with the callee's `measure`-th
+   argument, so a cycle that hands a value across argument positions is invisible
+   to it — `SpliceL` → `SpliceOne` → `SpliceL` is that shape, and it is why 362
+   functions of `compiler.ref` come back unproven. Replacing the same-index
+   measure family with a **size-change graph over (caller index, callee index)
+   pairs**, closed under composition and checked for a strict descent on every
+   idempotent cycle, is the standard construction and is what the Tier 1 row's
+   withheld 1.00 turns on. The smallest program with the shape is pinned by
+   `a_cycle_that_hands_a_value_across_argument_positions_is_not_yet_proved`, so
+   the work is done when that gate goes red.
 
 **The order this paragraph used to carry is closed, including its item 0.** The
 `--configurations` transition-list divergence is gone: `DsHasTrL` tested a

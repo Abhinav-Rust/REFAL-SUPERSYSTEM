@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+**The termination analysis's withheld credit has a measured reason, and it is not the published one.**
+
+- **`refal feasibility examples/compiler.ref` reports 362 functions unproven, and
+  the blocking cycles are not computed arguments.** They route through
+  `SpliceL` → `SpliceOne` → `SpliceL`, which is an argument *re-indexing*.
+- **Bisected to the smallest program with the shape.** `Walk (e.P) ((Ident e.N)
+  e.Rest) = <Step (e.P) (e.N) (e.Rest)>;` and `Step (e.P) (e.N) (e.Rest) =
+  <Walk (e.P) (e.Rest)>;`. Three variants that *are* proved bound the cause: the
+  same shape with one argument, with a constant first argument, and with a
+  bracket-of-bracket pattern all terminate. What breaks it is that the value
+  moves from `Walk`'s index 2 to `Step`'s index 3 and back.
+- **The cause is in `classify`.** It compares the caller's `measure`-th pattern
+  term with the callee's `measure`-th argument — the measure is an *index*, and
+  both sides use the same one — so a value handed across positions is never
+  tracked. No strict edge is found and the honest verdict is `unproven`.
+- **The program does terminate**: `Walk.arg2` strictly contains `Step.arg3`, so
+  the cycle descends. This is a genuine incompleteness, and the fix is named — a
+  **size-change graph over (caller index, callee index) pairs** in place of a
+  family of same-index measures.
+- **`a_cycle_that_hands_a_value_across_argument_positions_is_not_yet_proved`**
+  pins the smallest program and asserts the current verdict, so fixing the
+  analysis turns the gate red.
+- **The figure does not move** — `9.50 / 10.50` stands, because a diagnosis is
+  not a fix. What changes is that the row's published reason is now the measured
+  one.
+
 **The sorting equality is stated and measured: the theorem is true, and the prover cannot close it.**
 
 - **SCP4 1999 §4's third named theorem now has a fixture.**

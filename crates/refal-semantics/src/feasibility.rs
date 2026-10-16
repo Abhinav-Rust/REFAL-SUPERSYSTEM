@@ -1793,6 +1793,52 @@ mod tests {
         assert_eq!(termination(source, "Id"), TerminationVerdict::NonRecursive);
     }
 
+    /// **A measured gap in the analysis: a cycle that hands a value across
+    /// argument *positions* is not proved.**
+    ///
+    /// The analysis ranks the **same argument index** on both sides of a call —
+    /// it compares the caller's `measure`-th pattern term with the callee's
+    /// `measure`-th argument — so a value that moves from one position to another
+    /// is invisible to it, however obviously it shrinks.
+    ///
+    /// `SpliceL` and `SpliceOne` in `examples/compiler.ref` are exactly that
+    /// shape, and they are why `refal feasibility examples/compiler.ref` reports
+    /// 362 functions unproven. This is the smallest program with the shape:
+    ///
+    /// ```text
+    /// Walk (e.P) ((Ident e.N) e.Rest) = <Step (e.P) (e.N) (e.Rest)>;
+    /// Step (e.P) (e.N) (e.Rest)       = <Walk (e.P) (e.Rest)>;
+    /// ```
+    ///
+    /// The cycle is `Walk.arg2 -> Step.arg3 -> Walk.arg2`. `Walk.arg2` strictly
+    /// contains `Step.arg3` — `(Ident e.N)` is dropped — so the cycle descends and
+    /// the program terminates: every call passes a strictly smaller bracket. The
+    /// analysis compares index 2 with index 2 and index 3 with index 3, finds no
+    /// strict edge, and says so rather than guessing.
+    ///
+    /// What closes it is a **size-change graph over (caller index, callee index)
+    /// pairs** rather than a family of same-index measures. That is the named
+    /// next step for the Tier 1 row, and this gate asserts the *current* verdict
+    /// so that fixing the analysis turns it red.
+    #[test]
+    fn a_cycle_that_hands_a_value_across_argument_positions_is_not_yet_proved() {
+        let source = "$ENTRY Go { (e.P) (e.X) = <Walk (e.P) (e.X)>; }\n\
+                      Walk { (e.P) () = ;\n\
+                             (e.P) ((Ident e.N) e.Rest) = <Step (e.P) (e.N) (e.Rest)>;\n\
+                             (e.P) (t.T e.Rest) = <Walk (e.P) (e.Rest)>; }\n\
+                      Step { (e.P) (e.N) (e.Rest) = <Walk (e.P) (e.Rest)>; }";
+        let TerminationVerdict::Unproven { reason } = termination(source, "Walk") else {
+            panic!(
+                "the analysis does not prove this cycle today; if it does, the \
+                 Tier 1 row has moved and this gate must be rewritten"
+            );
+        };
+        assert!(
+            reason.contains("Step"),
+            "the reason must name the function that blocked the proof:\n{reason}"
+        );
+    }
+
     #[test]
     fn mutual_recursion_with_one_shrinking_call_is_proved() {
         // `F` shrinks and `G` does not: the pair terminates, because the
