@@ -7342,6 +7342,67 @@ fn the_prover_never_proves_a_claim_that_is_false_outside_the_domain() {
     );
 }
 
+/// The third named theorem of SCP4 §4 — **equality of sorting algorithms** — and
+/// the boundary the prover reaches on it, measured rather than asserted.
+///
+/// `1999_The_Supercompiler_SCP4_General_Outline.html` names three theorem-shaped
+/// examples: associativity of `Append`, correctness of binary tree reversals, and
+/// equality of sorting algorithms. The first two are **proved**
+/// (`the_prover_proves_the_append_associativity`, `the_prover_proves_the_tree_reversal`);
+/// this gate publishes where the third one stops.
+///
+/// `examples/equiv-sorting.ref` writes the same insertion sort with the recursion
+/// in opposite directions: `ISort` sorts the tail and inserts the head on the way
+/// *back*, `FSort` folds the list from the left into an accumulator. The theorem
+/// is **true** — the gate runs the fixture and checks it really sorts, so what is
+/// pinned is a true claim and not a false one — and the prover does **not** close
+/// it. The `[]` branch is reflexive; the `s.X e.Rest` branch never closes, at
+/// 2,000 steps or at 20,000. What the claim needs is the *fold lemma*, an
+/// auxiliary generalisation that neither definition states, and inventing one is
+/// the half of E-12/E-13 the row still withholds.
+///
+/// The gate is written to fail the day that changes: it asserts the *current*
+/// boundary, so a prover that closes the claim turns this red and the row moves.
+#[test]
+fn the_prover_measures_its_boundary_on_the_sorting_equality() {
+    // The fixture must be a *true* theorem, or this gate pins nothing.
+    for input in ["dcba", "aaaa", "abcd", "b"] {
+        let sorted = run_file("examples/equiv-sorting.ref", &[input]);
+        assert!(
+            sorted.status.success(),
+            "the fixture must run on {input:?}:\n{}",
+            String::from_utf8_lossy(&sorted.stderr)
+        );
+        let mut expected: Vec<char> = input.chars().collect();
+        expected.sort_unstable();
+        assert_eq!(
+            String::from_utf8_lossy(&sorted.stdout).trim(),
+            expected.iter().collect::<String>(),
+            "the fixture must actually sort {input:?}"
+        );
+    }
+
+    let output = prove_equivalence_file("examples/equiv-sorting.ref", "Sort-Left", "Sort-Right");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        !stdout.contains("verdict: proved"),
+        "the prover does not close this claim today; if it does, E-12/E-13 has \
+         moved and this gate must be rewritten:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("reflexive (depth 1)"),
+        "the empty-list branch is decided by reflexivity:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("stuck (depth 1)"),
+        "the cons branch never closes -- that is the measured gap:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("complete: no"),
+        "the walk is truncated by the budget, not closed:\n{stdout}"
+    );
+}
+
 /// The 2nd projection (E-14) emits a compiler, and its partition enters a
 /// constructor.
 ///

@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+**The sorting equality is stated and measured: the theorem is true, and the prover cannot close it.**
+
+- **SCP4 1999 §4's third named theorem now has a fixture.**
+  `examples/equiv-sorting.ref` writes one insertion sort with the recursion in
+  opposite directions — `ISort` sorts the tail and inserts the head on the way
+  *back*, `FSort` folds the list from the left into an accumulator — and the
+  fixture is measured to **really sort** (`refal run … "dcba"` → `abcd`).
+- **The prover's boundary on it, measured rather than asserted.** The `[]` branch
+  is decided by reflexivity; the `s.X e.Rest` branch **never closes**, at 2,000
+  steps or at 20,000 — same two leaves, same `incomplete` verdict. What the claim
+  needs is the *fold lemma*, an auxiliary generalisation neither definition
+  states, which is the half of E-12/E-13 the row withholds.
+- **`the_prover_measures_its_boundary_on_the_sorting_equality`** pins both halves
+  and is written to **fail** the day the prover closes the claim, so moving the
+  boundary is a test change rather than a claim.
+- **The figure does not move** — a measurement is not an earning. The meta-prover
+  row stays at `11.40 / 13.00`.
+
 **E-14 is closed: the 3rd projection — a compiler generator — is built, and a stale published count is fixed.**
 
 - **`refal project3 <compiler.ref> <Function> --mode MODE` emits a compiler

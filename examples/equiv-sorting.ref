@@ -1,0 +1,66 @@
+/* Equality of two sorting algorithms -- SCP4 1999 section 4's third named
+   theorem.
+
+   `1999_The_Supercompiler_SCP4_General_Outline.html` names three theorem-shaped
+   examples: "associativity of append, correctness of binary tree reversals,
+   equality of sorting algorithms". `examples/equiv-append-assoc.ref` carries the
+   first, `examples/equiv-tree-reversal.ref` the second, and this file carries
+   the third.
+
+   The two algorithms are the *same* insertion sort written with the recursion in
+   opposite directions, which is what makes the theorem non-trivial:
+
+     ISort  sorts the tail, then inserts the head  --  <Ins x <ISort rest>>
+     FSort  folds the list from the LEFT, inserting each element into an
+            accumulator that is already sorted
+
+   They agree on every list, and neither is a re-print of the other: `ISort`
+   recurses to the right of the list and inserts on the way *back*, `FSort`
+   recurses to the left and inserts on the way *out*. The proof needs the step
+   that neither definition states -- that inserting into an accumulator commutes
+   with the insertion that follows -- which is the generalisation the whistle
+   and the generaliser exist for (1980 section 4.6, 1988).
+
+   `Compare` returns '-', '+' or '0', so `Ins` is a total function over any list
+   of symbols and both sides are defined at every term: the claim is about the
+   whole domain, not a restricted one. That matters for the same reason the
+   tree-reversal fixture records -- an induction hypothesis may be applied only
+   where the terms are in the claim's domain, and a total function makes every
+   term a case. */
+
+$EXTERN Prout, Compare, Ord;
+
+$ENTRY Go {
+  (e.Input) = <Prout <ISort e.Input>>;
+}
+
+/* The two sides of the claim. */
+Sort-Left {
+  e.L = <ISort e.L>;
+}
+
+Sort-Right {
+  e.L = <FSort e.L>;
+}
+
+/* Insertion sort: sort the tail, then insert the head. */
+ISort {
+  = ;
+  s.X e.Rest = <Ins s.X <ISort e.Rest>>;
+}
+
+Ins {
+  s.X = s.X;
+  s.X s.Y e.Rest , <Compare <Ord s.X> <Ord s.Y>> : '-' = s.X s.Y e.Rest;
+  s.X s.Y e.Rest = s.Y <Ins s.X e.Rest>;
+}
+
+/* The same sort as a left fold over an accumulator. */
+FSort {
+  e.L = <Fold () e.L>;
+}
+
+Fold {
+  (e.Acc) = e.Acc;
+  (e.Acc) s.X e.Rest = <Fold (<Ins s.X e.Acc>) e.Rest>;
+}

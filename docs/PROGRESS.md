@@ -49,7 +49,7 @@ See `README.md` §"What Theorem 5.1 does and does not forbid" and
 | | |
 |---|---|
 | Honest completion | **~93.4%** (supersystem completeness — one method, one table, in `README.md`) |
-| Tests | 423 (73 core + 182 CLI integration + 168 across the other four crates), 0 clippy, fmt clean |
+| Tests | 424 (73 core + 183 CLI integration + 168 across the other four crates), 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
 
@@ -82,6 +82,59 @@ partitions is the **compiler's default**: `RESIDUALIZE-DRIVEN`,
 `RESIDUALIZE-DRIVEN n`, `Compile` and `residualize-driven` all search, so **E-11 is
 closed**. All three modes are gated on the corpus, each against its Rust
 counterpart, byte for byte on 77 of 77 (2026-10-15).
+
+### Measured — the sorting equality is true and the prover cannot close it (E-12/E-13, 2026-10-16)
+
+**SCP4 1999 §4 names three theorem-shaped examples** — associativity of `Append`,
+correctness of binary tree reversals, and **equality of sorting algorithms**. The
+first two are proved and gated. The third had never been stated in this
+repository, so the row could only say it "is not" gated. It is now stated,
+measured, and pinned.
+
+`examples/equiv-sorting.ref` is the smallest honest statement of it: **one
+insertion sort written with the recursion in opposite directions.**
+
+```
+ISort  e.L = <Ins s.X <ISort e.Rest>>          -- sorts the tail, inserts on the way back
+FSort  e.L = <Fold () e.L>                     -- folds from the left into an accumulator
+Fold   (e.Acc) s.X e.Rest = <Fold (<Ins s.X e.Acc>) e.Rest>;
+```
+
+`Compare` is numeric, so the comparison is `<Compare <Ord s.X> <Ord s.Y>> : '-'`,
+which makes `Ins` total over any list of symbols — both sides are defined at every
+term, so the claim is about the whole domain and the induction hypothesis is sound
+everywhere. Measured: `refal run examples/equiv-sorting.ref "dcba"` → `abcd`.
+
+**The theorem is true and the prover does not close it.**
+
+```
+$ refal prove examples/equiv-sorting.ref --equiv Sort-Left Sort-Right
+  steps: 10000
+  complete: no
+  leaves: 2
+    reflexive (depth 1)
+    stuck (depth 1)
+  verdict: incomplete (budget spent after 10000 steps)
+```
+
+The `[]` branch is decided by reflexivity. The `s.X e.Rest` branch **never
+closes** — measured at 2,000 steps and again at 20,000, same two leaves, same
+verdict. **What the claim needs is the *fold lemma*** — that inserting into an
+accumulator commutes with the insertion that follows — which is an *auxiliary
+generalisation* neither definition states. Inventing one is the "proof needing
+generalisation beyond the loop edge" this row withholds, and this is now the
+smallest fixture that demonstrates the gap.
+
+**The gate pins both halves, and is written to fail.** `the_prover_measures_its_boundary_on_the_sorting_equality`
+(1) runs the fixture on four inputs and requires it to **really sort**, so what is
+pinned is a true claim rather than a false one, and (2) requires the verdict to be
+`incomplete` with a reflexive and a stuck leaf. A prover that closes the claim
+turns the gate red, which is the point: **the boundary is asserted, so moving it
+is a test change and not a claim.**
+
+**The figure does not move.** The row stays at `11.40 / 13.00` — a measurement is
+not an earning, and §"Evidence or it didn't happen" cuts both ways. What changes is
+that the withheld half now has a name, a fixture and a number.
 
 ### Done — the 3rd projection: the compiler generator, and a stale published count (E-14 closes, 2026-10-16)
 
