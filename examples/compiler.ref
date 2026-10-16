@@ -3748,12 +3748,32 @@ DsSplitSeq {
 * whose recursion rebuilds its second argument, where the sequence partition
 * peels the argument list's tail and never enters the bracket.
 *
-* Mirrors `DriveContext::pattern_split_configuration` in `refal-core`. What is
-* deliberately not ported yet is the **complement branch** and the
-* `pattern_splits` registry keyed by the split's own sentences: the first is
-* only reached when a sentence's component at the split position is a bare
-* variable, and the accumulator has no such sentence; the second is replaced by
-* the equivalent test against the sentences `DsSetSents` already stores.
+* Mirrors `DriveContext::pattern_split_configuration` in `refal-core`. The
+* **complement branch is ported**: a sentence whose component at the split
+* position is a bare `e.`/`t.` variable -- with no conditions, and with every
+* leading pattern term variable-free, so the branch it produces can carry the
+* sentence's own result -- is emitted rather than driven (`DsPatEntry2`,
+* `DsPatLoop`), which is what makes a catch-all the partition's last branch.
+* What is **not** ported is the `pattern_splits` registry keyed by the split's
+* own sentences; it is replaced by the sentence-identity test
+* (`DsPatFindSent`/`DsPatHas`) against the entries `DsSetSents` already stores.
+*
+* **Known divergence, measured 2026-10-16.** On the compiler's own source this
+* partition does not yet match the oracle. `refal residualize-driven
+* examples/compiler.ref --split pattern` exits 0 and emits 116,790 bytes; the
+* Refal-authored `RESIDUALIZE-DRIVEN-PATTERN` exits 1 after ~162 s with
+* `runtime error: no sentence matched in function EmitTerms`. Instrumenting the
+* emitter locates the term: it is in the **result** of the split's
+* `('SPECIALISE') (e.Interpreter) (e.Program)` sentence, and it is a bracket
+* that `EmitTerms` has no sentence for. `EmitTerms` accepts exactly one bracket
+* shape -- `(BR e.Inner)` -- so the term is a bracket that reached the emitter
+* **without the metacode `BR` tag**, and its contents are the metacode of
+* `(<Chr 10>)` and of `<StripCR (<Chr 13>) e.Interpreter>`: the argument list
+* of the `Lex` call the oracle renders flat as
+* `<Lex (<Chr 10>) <StripCR (<Chr 13>) e.Program>>`. The defect is therefore in
+* how this partition rebuilds a call inside a branch's result, not in the
+* partition's own branch patterns. `compiler.ref` is not in the corpus, which is
+* why the corpus gate (`77 of 77`) is green and this sits outside it.
 
 * The strategy character the driver was entered with. `DsSteps` and its
 * neighbours read the rest of the state; this reads the axis.

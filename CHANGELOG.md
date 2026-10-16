@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+**Where the pattern partition's divergence is — and a claim in the source that was wrong.**
+
+- **The Refal-authored pattern partition still diverges from the oracle on the
+  compiler's own source.** `refal residualize-driven examples/compiler.ref --split
+  pattern` exits 0 with 116,790 bytes; `RESIDUALIZE-DRIVEN-PATTERN` exits 1 with
+  `no sentence matched in function EmitTerms`. `compiler.ref` is excluded by name
+  from the 77-of-77 corpus gate, which is why both can be true at once.
+- **The source said the complement branch was "deliberately not ported". It is
+  ported** (`DsPatEntry2` / `DsPatLoop`); what is unported is the
+  `pattern_splits` registry, replaced by the sentence-identity test. The comment
+  is corrected in place, with the divergence recorded beside it.
+- **The failing term is in a branch's *result*, not its pattern.** Instrumenting
+  the emitter shows the last sentence emitted is the split's `('SPECIALISE')`
+  sentence, whose pattern is clean; the unhandled term comes from its result and
+  is a bracket that reached the emitter without the metacode `BR` tag — the
+  argument list of the `Lex` call the oracle renders flat.
+- **No guard was committed.** Applying the sequence partition's `DsCharisable`
+  test to the pattern partition is principled but changes nothing measurable
+  (corpus 77 of 77, same failure), so it is recorded rather than carried: a
+  behavioural change with no gate behind it is not evidence.
+
 **The self-compilation cost is decomposed, and the row's recorded reason is corrected.**
 
 - **`refal compile examples/compiler.ref` takes 346.7 s** (release build) on the

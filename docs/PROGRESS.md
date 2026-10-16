@@ -83,6 +83,47 @@ partitions is the **compiler's default**: `RESIDUALIZE-DRIVEN`,
 closed**. All three modes are gated on the corpus, each against its Rust
 counterpart, byte for byte on 77 of 77 (2026-10-15).
 
+### Investigated — where the pattern partition's divergence is (2026-10-16)
+
+The measurement above found that `RESIDUALIZE-DRIVEN-PATTERN` errors on the
+compiler's own source while the Rust oracle succeeds. This is where it happens,
+and it is not where the source first said.
+
+**It is not the complement branch.** The comment on the pattern partition claimed
+the complement branch was "deliberately not ported". It is ported: `DsPatEntry2`
+returns the sentence's own result for a bare `e.`/`t.` component whose leading
+pattern terms are variable-free, and `DsPatLoop` emits it without driving. What
+is unported is the `pattern_splits` registry, replaced by the sentence-identity
+test `DsPatFindSent`/`DsPatHas` — which is what the corpus gate's own comment
+already says. The claim is corrected in place.
+
+**It is a term the emitter has no sentence for, in a branch's *result*.**
+Instrumenting `EmitSents` and `EmitTerms` locates it: the last sentence emitted is
+the split's `('SPECIALISE') (e.Interpreter) (e.Program)` sentence, whose *pattern*
+emits cleanly, and the unhandled term arrives from its result. `EmitTerms` accepts
+exactly one bracket shape — `(BR e.Inner)` — so the term is a bracket that reached
+the emitter **without the metacode `BR` tag**; its contents are the metacode of
+`(<Chr 10>)` and of `<StripCR (<Chr 13>) e.Interpreter>`, the argument list of the
+`Lex` call the oracle renders flat as
+`<Lex (<Chr 10>) <StripCR (<Chr 13>) e.Program>>`. The defect is in how the
+partition rebuilds a call inside a branch's result.
+
+**A guard was tried, and it is not the fix.** The sequence partition refuses to
+split when the input holds an unevaluated call or block (`DsCharisable`), because
+a call is not a term a Refal pattern may contain; the pattern partition did not
+apply that test. Adding it is principled — and it changes nothing measurable: the
+corpus stays 77 of 77 and `compiler.ref` still fails with the same message after
+~136 s instead of ~162 s. It is therefore **not** committed, because a behavioural
+change with no gate behind it is what this repository refuses to carry. It is
+recorded here as the first thing to re-examine if the result-side defect turns out
+to have a pattern-side partner.
+
+**The gate this needs.** `compiler.ref` is excluded *by name* from
+`the_pattern_partition_is_ported_to_the_refal_authored_driver`, which is why a
+77-of-77 sweep is green beside a divergence on the compiler's own source. The next
+step is the smallest program whose branch result rebuilds a call, so the gate can
+be cheap; a sweep that includes `compiler.ref` costs ~3 minutes of driving per run.
+
 ### Measured — the self-compilation cost, decomposed (2026-10-16)
 
 The L2/L4 compiler-in-Refal row withholds 1.05 for "not yet fast on very large
