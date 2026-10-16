@@ -898,8 +898,12 @@ Refal, agrees with the interpreter, and is measurably cheaper.
 Three ways to specialise a program by its arguments: specialising an **interpreter**
 to a program yields a **target program** (1st); specialising the **supercompiler**
 to an interpreter yields a **compiler** (2nd); specialising it to itself yields a
-**compiler generator** (3rd). The 1st is built and gated here; the 2nd emits an
-artifact; the 3rd is the open item.
+**compiler generator** (3rd) — `mix(mix, mix)` in Futamura's notation, `S(S, S)`
+in Turchin's. All three are commands here, each with a gate: `refal metasystem`,
+`refal project2`, and `refal project3`. The 2nd's artifact terminates and agrees
+with `refal compile` on every example the compiler accepts; the 3rd's pins the
+**mode** and leaves the **interpreter** open, so the artifact it emits *is* a
+compiler generator — applied to an interpreter, it compiles programs.
 </details>
 
 <details>

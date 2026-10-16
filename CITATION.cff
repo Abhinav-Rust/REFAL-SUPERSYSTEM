@@ -5,7 +5,9 @@ abstract: >-
   An implementation of the architecture Valentin Turchin set out in A Supersystem
   of Language Refal (1991): a Refal-5 machine (L0), a reflection engine (L1), a
   supercompiler core (L2) and a meta-prover (L3) over one shared expression space,
-  with self-application (L4) as the headline capability. The Refal-5 compiler is
+  with self-application (L4) as the headline capability: all three Futamura
+  projections are commands, so the supercompiler specialises itself into a compiler
+  generator. The Refal-5 compiler is
   written in Refal, compiles its own source, and drives rather than re-prints.
   Every capability carries a gate; the completion figure is measured, not claimed.
 authors:
@@ -23,6 +25,7 @@ keywords:
   - metacomputation
   - partial evaluation
   - Futamura projections
+  - compiler generator
   - program transformation
   - term rewriting
   - symbolic computation
