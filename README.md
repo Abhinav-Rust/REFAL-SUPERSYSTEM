@@ -43,6 +43,12 @@
 
 </div>
 
+<div align="center">
+
+**New here? Jump to —** [What it is](#what-this-is) · [The idea](#the-idea-in-one-picture) · [See it run](#see-it-work) · [How complete](#project-status) · [Try it](#start-here) · [FAQ](#frequently-asked-questions)
+
+</div>
+
 ## Start here
 
 <div align="center">
@@ -160,13 +166,21 @@ Turchin's loop edge), which is the induction step a testing tool cannot give you
 ## What this is
 
 In 1991 Valentin Turchin wrote a technical report titled *A Supersystem of Language
-Refal*. Its argument was architectural, not aspirational: rather than treating an
-interpreter, a compiler, a supercompiler, an automated theorem prover and an
-algebraic simplifier as **disjoint software tools**, Turchin designs an integrated
-cybernetic architecture wherein all these components are realized as **specialized
-configurations of a single universal reflective engine**.
+Refal*. Its argument was architectural: an interpreter, a compiler, a supercompiler
+and an automated theorem prover are not four tools, but **specialised
+configurations of one universal reflective engine**.
 
-That is the thing this repository builds. **One engine, four layers, one shared
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/engine-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/engine-light.svg">
+  <img alt="Two panels. Left, the conventional architecture: an interpreter, a compiler, a supercompiler and a theorem prover as four disconnected tools that copy the program at every boundary. Right, this repository: one engine whose four layers — L0 the Refal-5 machine, L1 the reflection engine, L2 the supercompiler core and L3 the meta-prover — all work over one shared expression space." src="docs/images/engine-light.svg" width="100%">
+</picture>
+
+</div>
+
+That is what this repository builds: **one engine, four layers, one shared
 expression space** — not four programs that talk to each other through serialized
 files.
 

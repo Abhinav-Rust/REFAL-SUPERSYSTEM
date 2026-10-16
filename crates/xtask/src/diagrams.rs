@@ -1617,6 +1617,129 @@ fn supercompilation(p: &Palette) -> String {
     )
 }
 
+// --------------------------------------------------------------------------
+// The thesis -- four separate tools, or one engine over one expression space
+// --------------------------------------------------------------------------
+fn engine(p: &Palette) -> String {
+    let h = 462.0;
+    let mut out = header(p, "THE THESIS", "Four separate tools, or one engine?", h);
+    let (top, ph) = (140.0_f64, 240.0_f64);
+
+    // Left: the conventional architecture -- four programs, copied at each
+    // boundary. Drawn in the "out of scope" tone, so the contrast is the colour.
+    out.push(rect(
+        40.0,
+        top,
+        545.0,
+        ph,
+        p.outbg,
+        Some(p.outbd),
+        14.0,
+        1.5,
+    ));
+    out.push(text(
+        60.0,
+        172.0,
+        "FOUR DISCONNECTED TOOLS",
+        12.0,
+        p.out,
+        Txt::ws("600", "1.0"),
+    ));
+    let tools = [
+        "An interpreter",
+        "A compiler",
+        "A supercompiler",
+        "A theorem prover",
+    ];
+    for (i, name) in tools.iter().enumerate() {
+        let y = 176.0 + i as f64 * 48.0;
+        out.push(rect(60.0, y, 200.0, 32.0, p.bg, Some(p.outbd), 8.0, 1.0));
+        out.push(text(76.0, y + 21.0, name, 12.5, p.muted, Txt::w("600")));
+        if i + 1 < tools.len() {
+            out.push(text(
+                160.0,
+                y + 44.0,
+                "\u{2193}",
+                15.0,
+                p.out,
+                Txt::wa("700", "middle"),
+            ));
+        }
+    }
+    for (k, ln) in wrap_lines(
+        "Each tool reads and writes the next one's files, so the program is copied and re-parsed at every boundary.",
+        34,
+    )
+    .iter()
+    .take(6)
+    .enumerate()
+    {
+        out.push(t(288.0, 206.0 + k as f64 * 18.0, ln, 12.0, p.muted));
+    }
+
+    // Right: this repository -- one engine, four layers, one shared space.
+    out.push(rect(615.0, top, 545.0, ph, p.okbg, Some(p.okbd), 14.0, 1.5));
+    out.push(text(
+        635.0,
+        172.0,
+        "ONE ENGINE, ONE EXPRESSION SPACE",
+        12.0,
+        p.ok,
+        Txt::ws("600", "1.0"),
+    ));
+    out.push(rect(
+        635.0,
+        186.0,
+        505.0,
+        168.0,
+        p.cardbg,
+        Some(p.cardbd),
+        12.0,
+        1.5,
+    ));
+    let layers = [
+        "L0 \u{b7} the Refal-5 machine",
+        "L1 \u{b7} the reflection engine",
+        "L2 \u{b7} the supercompiler core",
+        "L3 \u{b7} the meta-prover",
+    ];
+    for (i, name) in layers.iter().enumerate() {
+        let y = 196.0 + i as f64 * 32.0;
+        out.push(rect(655.0, y, 465.0, 26.0, p.fbg, Some(p.fbd), 8.0, 1.0));
+        out.push(text(671.0, y + 18.0, name, 12.5, p.fink, Txt::w("600")));
+    }
+    out.push(rect(
+        655.0,
+        320.0,
+        465.0,
+        26.0,
+        p.okbg,
+        Some(p.okbd),
+        8.0,
+        1.0,
+    ));
+    out.push(text(
+        887.5,
+        338.0,
+        "one shared expression space",
+        12.5,
+        p.ok,
+        Txt::wa("700", "middle"),
+    ));
+
+    out.extend(footer(
+        p,
+        394.0,
+        "Turchin 1991: the four layers are specialised configurations of one reflective engine, not four programs passing files.",
+    ));
+    wrap(
+        h,
+        "Four tools, or one engine?",
+        "Two panels. On the left, the conventional architecture: an interpreter, a compiler, a supercompiler and a theorem prover as four disconnected tools that pass serialised files. On the right, this repository: one engine whose four layers, L0 the Refal-5 machine, L1 the reflection engine, L2 the supercompiler core and L3 the meta-prover, all work over a single shared expression space.",
+        &out,
+    )
+}
+
 /// One generated diagram: its file stem, and the function that draws it.
 type Diagram = (&'static str, fn(&Palette) -> String);
 
@@ -1627,7 +1750,8 @@ pub fn run() {
         eprintln!("cannot create {}: {err}", outdir.display());
         std::process::exit(1);
     }
-    let diagrams: [Diagram; 14] = [
+    let diagrams: [Diagram; 15] = [
+        ("engine", engine),
         ("supercompilation", supercompilation),
         ("glance", glance),
         ("projections", projections),

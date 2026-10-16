@@ -83,6 +83,24 @@ partitions is the **compiler's default**: `RESIDUALIZE-DRIVEN`,
 closed**. All three modes are gated on the corpus, each against its Rust
 counterpart, byte for byte on 77 of 77 (2026-10-15).
 
+### Done — the README's thesis, drawn (2026-10-16)
+
+The repository's central claim — that an interpreter, a compiler, a supercompiler and
+a prover are **one engine** rather than four tools passing serialised files — was
+carried entirely in prose. It is a panel now:
+`docs/images/engine-{light,dark}.svg`, generated from `crates/xtask/src/diagrams.rs`
+like the rest of the family, with the conventional architecture drawn in the
+out-of-scope tone beside the four layers over one shared expression space. The two
+paragraphs it replaces are one sentence.
+
+The README also gains a short navigation line under the glance panel, so a reader can
+reach the idea, the demonstrations, the status and the FAQ without scrolling the whole
+page.
+
+**Gates.** `cargo xtask gen-readme-diagrams` is idempotent — a second run leaves
+`git diff docs/images` empty — and `readme_consistency` is green, so the new panel
+sits inside the same one-figure-one-method accounting as the rest.
+
 ### Done — the published figure is a gate now, and the stale banner it caught (2026-10-16)
 
 **The status banner was stale, and it is the one asset nothing regenerates.**
