@@ -16,7 +16,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/status-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/status-light.svg">
-  <img alt="Status: about 92.8% of the supersystem — L0, L1 and the Refal-authored compiler are near complete, L2 is close, and L3 and L4 are partial" src="docs/images/status-light.svg" width="100%">
+  <img alt="Status: about 93.4% of the supersystem — L0, L1 and the Refal-authored compiler are near complete, L2 is close, and L3 is partial" src="docs/images/status-light.svg" width="100%">
 </picture>
 
 </div>
@@ -38,7 +38,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/glance-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/glance-light.svg">
-  <img alt="At a glance: four layers over one shared expression space; about 92.8% of the supersystem complete by one method; 100% Rust; a byte-identical self-hosting fixpoint at 12,599 bytes; and 20 of 25 in-scope conformance rows closed" src="docs/images/glance-light.svg" width="100%">
+  <img alt="At a glance: four layers over one shared expression space; about 93.4% of the supersystem complete by one method; 100% Rust; a byte-identical self-hosting fixpoint at 12,599 bytes; and 21 of 25 in-scope conformance rows closed" src="docs/images/glance-light.svg" width="100%">
 </picture>
 
 </div>
@@ -244,7 +244,7 @@ green rows are built; the amber rows name their own gap.
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/commands-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/commands-light.svg">
-  <img alt="Nine commands, one per layer capability: run and check for L0; reflect for L1; compile and metasystem for L2; prove for L3; and invert, project2 and differential for L4." src="docs/images/commands-light.svg" width="100%">
+  <img alt="Ten commands, one per layer capability: run and check for L0; reflect for L1; compile and metasystem for L2; prove for L3; and invert, project2, project3 and differential for L4." src="docs/images/commands-light.svg" width="100%">
 </picture>
 
 </div>
@@ -384,7 +384,7 @@ operations at the centre of the language.
 
 ## Project status
 
-### Honest completion: ~92.8%
+### Honest completion: ~93.4%
 
 This figure measures **the whole supersystem** — all four layers — not the compiler
 alone. The compiler is finished; the supersystem is not, and publishing the
@@ -418,10 +418,10 @@ compiler's own number as the project's would misdescribe what this repository is
 | L2/L4 · Compiler implemented in Refal | 17.85 | 16.80 | 1.05 | not yet fast on very large inputs |
 | L4 · Verified self-hosting fixpoint | 9.10 | 8.05 | 1.05 | the fixpoint holds on the corpus and the compiler's own source, not on arbitrary programs |
 | **L3 · Meta-prover** | **13.00** | **11.40** | **1.60** | the entry, the driving, Turchin's `'True'` criterion, and the *relational* half are built and gated. What is withheld is the *general* relation (an arbitrary relation rather than equality) and a proof needing generalisation beyond the loop edge; of SCP4's three named theorems, associativity of `Append` **and the tree reversal** are gated, the sorting equality is not |
-| L4 · Projections as artifacts | 5.00 | 4.40 | 0.60 | the 1st and 2nd both emit target code with gates, and **the derivation now runs**: `refal project2 examples/compiler.ref Dispatch` emits a residue that **terminates** and agrees with `refal compile` on **77 of 77**. It was not always so — the residue carried `(e.Source) = <Split1 (e.Source)>;`, an infinite self-loop, so it diverged on its first input; a branch whose drive folds back to the split being built is now emitted as a call to the *original* callee. What is withheld is the **3rd projection, the compiler generator**: the row's objective is all three, and `S(S, S)` is not built |
+| **L4 · Projections as artifacts** | **5.00** | **5.00** | **0.00** | closed — **all three projections are commands with gates.** The 1st is `refal metasystem`; the 2nd is `refal project2`, whose artifact **terminates** and agrees with `refal compile` on **77 of 77** (it once carried `(e.Source) = <Split1 (e.Source)>;`, an infinite self-loop, so it diverged on its first input; a branch whose drive folds back to the split being built is now emitted as a call to the *original* callee); and the 3rd is `refal project3`, which pins the **mode** and leaves the **interpreter** open, so the artifact is a **compiler generator** — applied to an interpreter it compiles programs. The gate **runs** both and requires the generator to reproduce the 2nd projection's compiler, then runs the target it emitted |
 | **L2 · Function inversion** | **3.00** | **3.00** | **0.00** | closed — `refal invert` drives the forward definition and emits the synthesised inverse, round-tripped in a gate |
 | **Conformance / release evidence** | **2.80** | **2.80** | **0.00** | closed — the file-backed input/output clauses (`c1.4`, `c1.6`, `c1.7`) are bound to a runnable fixture, not only to the runtime's own test: `examples/builtin-file-io-conformance.ref` opens a file by a **relative** name, and the conformance harness runs every `run` row in a temporary directory it owns and removes, so a committed program can carry a path after all |
-| **Total** | **100.00** | **~92.8** | **~7.2** | |
+| **Total** | **100.00** | **~93.4** | **~6.6** | |
 
 </details>
 
@@ -440,15 +440,15 @@ verified by a test rather than estimated.
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/conformance-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/conformance-light.svg">
-  <img alt="A grid of the twenty-six conformance rows E-1 to E-26: twenty are closed, five are partial (E-7, E-12, E-13, E-14, E-17), and E-26 is out of scope" src="docs/images/conformance-light.svg" width="100%">
+  <img alt="A grid of the twenty-six conformance rows E-1 to E-26: twenty-one are closed, four are partial (E-7, E-12, E-13, E-17), and E-26 is out of scope" src="docs/images/conformance-light.svg" width="100%">
 </picture>
 
 </div>
 
 | | Count |
 |---|---:|
-| Ecosystem rows closed | **20** |
-| Partially closed | 5 |
+| Ecosystem rows closed | **21** |
+| Partially closed | 4 |
 | Not started | 0 |
 | Out of scope | 1 |
 | In scope | 25 |
@@ -467,7 +467,7 @@ knowledge network and is out of scope, which is why 26 rows make 25 in scope.
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/roadmap-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/roadmap-light.svg">
-  <img alt="Five partial rows E-7, E-12, E-13, E-14 and E-17, each with the named gap that keeps it from being closed" src="docs/images/roadmap-light.svg" width="100%">
+  <img alt="Four partial rows E-7, E-12, E-13 and E-17, each with the named gap that keeps it from being closed" src="docs/images/roadmap-light.svg" width="100%">
 </picture>
 
 </div>
@@ -492,7 +492,7 @@ it becomes a compiler, then a compiler generator. The 1st is built and gated; th
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/projections-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/projections-light.svg">
-  <img alt="Three projections: the 1st, S(int, prog), is built; the 2nd, S(S, int), is partial; the 3rd, S(S, S), a compiler generator, is not built" src="docs/images/projections-light.svg" width="100%">
+  <img alt="Three projections, all built: the 1st, S(int, prog), yields a target program; the 2nd, S(S, int), yields a compiler; the 3rd, S(S, S), yields a compiler generator" src="docs/images/projections-light.svg" width="100%">
 </picture>
 
 </div>
@@ -533,18 +533,7 @@ The ordered work list lives in
    folds at residual-work 37 → 9, `identity` stays at 0, and a corpus scan puts it
    strictly better on **8** examples and strictly worse on **none**. The
    compiler's own output is unchanged at **111,600 bytes**.
-5. **The projections as artifacts (E-14)** — **the 2nd projection's derivation
-   runs.** `refal project2 examples/compiler.ref Dispatch` drives the supercompiler's
-   own dispatcher with its argument open, and the artifact it emits **terminates**
-   and agrees with `refal compile` on **77 of 77**. The mode dispatch is *compiled*:
-   the artifact matches the mode by its own characters, so the decision moved from
-   run time to drive time. It was not always so — the residue carried
-   `(e.Source) = <Split1 (e.Source)>;`, an infinite self-loop, so it diverged on its
-   first input; a branch whose drive folds back to the split being built is now
-   emitted as a call to the **original** callee, which is sound and finite. What
-   remains is the **3rd projection, the compiler generator** (`S(S, S)`).
-
-6. **§4.4's other half (E-7)**, **the compiler's speed on very large inputs**,
+5. **§4.4's other half (E-7)**, **the compiler's speed on very large inputs**,
    **the self-hosting fixpoint over an arbitrary program**, and **metavariable
    stratification (E-17)**.
 
@@ -734,9 +723,15 @@ cargo run -p refal -- prove examples/equiv-append-right-id.ref --equiv Right-Id-
 cargo run -p refal -- invert examples/invert-list-encoder.ref Wrap --strategy interpretive
 
 # L4: drive an interpreter with its object program LEFT OPEN (Turchin 1980,
-# Aarhus). The 2nd projection *proper* is mix(mix, int) and is not built.
+# Aarhus). The artifact is a compiler: it terminates and agrees with
+# `refal compile` on every example the compiler accepts.
 cargo run -p refal -- project2 examples/projection-bracket-callee.ref F
 cargo run -p refal -- project2 examples/metasystem-unroll.ref Run
+
+# L4: the 3rd projection, S(S, S). The mode is PINNED and the interpreter is left
+# open, so the artifact is not a compiler but a *compiler generator*: applied to
+# an interpreter it compiles programs.
+cargo run -p refal -- project3 examples/compiler.ref Dispatch --mode SPECIALISE
 
 # Run a .ref program with the bootstrap interpreter
 cargo run -p refal -- run examples/hello.ref
@@ -930,9 +925,9 @@ without garbage collection.
 <summary><b>Is it usable today?</b></summary>
 
 The **compiler is finished and gated**; the *supersystem* is being completed and
-is at about **92.8%**. `refal compile`, `refal run`, `refal check`, `refal reflect`,
-`refal prove`, `refal invert` and `refal project2` all work and are exercised by
-tests. What remains is named row by row in
+is at about **93.4%**. `refal compile`, `refal run`, `refal check`, `refal reflect`,
+`refal prove`, `refal invert`, `refal project2` and `refal project3` all work and are
+exercised by tests. What remains is named row by row in
 [What is left](#what-is-left).
 </details>
 

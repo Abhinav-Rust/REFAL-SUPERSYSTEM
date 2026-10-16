@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 660" width="1200" height="660" role="img" aria-labelledby="t d">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 710" width="1200" height="710" role="img" aria-labelledby="t d">
   <title id="t">The command surface</title>
-  <desc id="d">Nine commands across four layers: run and check for layer 0, reflect for layer 1, compile and metasystem for layer 2, prove for layer 3, and invert, project2 and differential for layer 4.</desc>
-  <rect x="0.5" y="0.5" width="1199" height="659" rx="16" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1"/>
+  <desc id="d">Ten commands across four layers: run and check for layer 0, reflect for layer 1, compile and metasystem for layer 2, prove for layer 3, and invert, project2, project3 and differential for layer 4.</desc>
+  <rect x="0.5" y="0.5" width="1199" height="709" rx="16" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1"/>
   <text x="40" y="52" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="3.2" fill="#0F766E">THE COMMAND SURFACE</text>
   <text x="40" y="90" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="-0.3" fill="#1F2328">One command per layer capability — each one backed by a gate</text>
   <line x1="40" y1="112" x2="1160" y2="112" stroke="#D0D7DE" stroke-width="1"/>
@@ -48,8 +48,13 @@
   <rect x="40" y="536" width="1120" height="44" rx="10" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1"/>
   <rect x="56" y="544" width="44" height="28" rx="8" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1.2"/>
   <text x="78" y="563" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="13" font-weight="600" text-anchor="middle" fill="#B45309">L4</text>
-  <text x="116" y="564" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="600" fill="#1F2328">refal differential</text>
-  <text x="400" y="564" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#57606A">run a residue and require the source's output — truth as efficacy</text>
-  <rect x="40" y="594" width="1120" height="44" rx="12" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1.5"/>
-  <text x="64" y="622" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#134E4A">Run any of them as `cargo run -p refal -- &lt;command&gt;`. The full reference, with every flag, is further down the README.</text>
+  <text x="116" y="564" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="600" fill="#1F2328">refal project3</text>
+  <text x="400" y="564" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#57606A">pin the mode, leave the interpreter open — emit a compiler generator</text>
+  <rect x="40" y="586" width="1120" height="44" rx="10" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1"/>
+  <rect x="56" y="594" width="44" height="28" rx="8" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1.2"/>
+  <text x="78" y="613" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="13" font-weight="600" text-anchor="middle" fill="#B45309">L4</text>
+  <text x="116" y="614" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="600" fill="#1F2328">refal differential</text>
+  <text x="400" y="614" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#57606A">run a residue and require the source's output — truth as efficacy</text>
+  <rect x="40" y="644" width="1120" height="44" rx="12" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1.5"/>
+  <text x="64" y="672" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#134E4A">Run any of them as `cargo run -p refal -- &lt;command&gt;`. The full reference, with every flag, is further down the README.</text>
 </svg>

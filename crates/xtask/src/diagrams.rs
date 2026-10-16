@@ -397,17 +397,17 @@ fn projections(p: &Palette) -> String {
             "2nd projection",
             "S(S, int)",
             "a compiler",
-            "part",
-            "Partial",
-            "refal project2 emits the artifact, but it is the driven interpreter",
+            "ok",
+            "Built",
+            "refal project2 emits the artifact, and the artifact runs and agrees with the compiler",
         ),
         (
             "3rd projection",
             "S(S, S)",
             "a compiler generator",
-            "out",
-            "Not built",
-            "downstream of the 2nd: the supercompiler specialised with respect to itself",
+            "ok",
+            "Built",
+            "refal project3 pins the mode and leaves the interpreter open, so the artifact emits compilers",
         ),
     ];
     for (i, (name, formula, result, tone_key, status, note)) in cards.iter().enumerate() {
@@ -450,7 +450,7 @@ fn projections(p: &Palette) -> String {
     wrap(
         h,
         "The Futamura projections",
-        "Three cards: the first projection specialises an interpreter to a known program and is built; the second is partial; the third, a compiler generator, is not built.",
+        "Three cards: the first projection specialises an interpreter to a known program; the second yields a compiler; the third, a compiler generator, yields a compiler given an interpreter. All three are built and gated.",
         &out,
     )
 }
@@ -466,7 +466,7 @@ fn conformance(p: &Palette) -> String {
         "E-1 \u{2026} E-26 \u{2014} one row per named component or behaviour",
         h,
     );
-    let partial = [7u32, 12, 13, 14, 17];
+    let partial = [7u32, 12, 13, 17];
     let cw = 78.0;
     let gap = 6.0;
     for n in 1..=26u32 {
@@ -524,7 +524,7 @@ fn conformance(p: &Palette) -> String {
     wrap(
         h,
         "The conformance matrix",
-        "A grid of twenty-six cells, E-1 to E-26. Twenty are closed, five are partial, and one, E-26, is out of scope.",
+        "A grid of twenty-six cells, E-1 to E-26. Twenty-one are closed, four are partial, and one, E-26, is out of scope.",
         &out,
     )
 }
@@ -741,7 +741,7 @@ fn accounting(p: &Palette) -> String {
         ("L2/L4 \u{00b7} compiler in Refal", 17.85, 16.80),
         ("L4 \u{00b7} self-hosting fixpoint", 9.10, 8.05),
         ("L3 \u{00b7} meta-prover", 13.00, 11.40),
-        ("L4 \u{00b7} projections as artifacts", 5.00, 4.40),
+        ("L4 \u{00b7} projections as artifacts", 5.00, 5.00),
         ("L2 \u{00b7} function inversion", 3.00, 3.00),
         ("Conformance / release evidence", 2.80, 2.80),
     ];
@@ -784,7 +784,7 @@ fn accounting(p: &Palette) -> String {
     out.extend(footer(
         p,
         396.0,
-        "One number, one method: ~92.8 of 100, from one table. A row carries zero credit until a gate behind it is green.",
+        "One number, one method: ~93.4 of 100, from one table. A row carries zero credit until a gate behind it is green.",
     ));
     wrap(
         h,
@@ -935,7 +935,7 @@ fn glance(p: &Palette) -> String {
         ),
         (
             "COMPLETION",
-            "~92.8%",
+            "~93.4%",
             "of the supersystem, one method, one table",
             "part",
         ),
@@ -953,7 +953,7 @@ fn glance(p: &Palette) -> String {
         ),
         (
             "CONFORMANCE",
-            "19 / 25",
+            "21 / 25",
             "ecosystem rows closed, in scope",
             "part",
         ),
@@ -1118,11 +1118,11 @@ fn demonstrations(p: &Palette) -> String {
 // What is left -- the six partial rows and their named gaps
 // --------------------------------------------------------------------------
 fn roadmap(p: &Palette) -> String {
-    let h = 488.0;
+    let h = 430.0;
     let mut out = header(
         p,
         "WHAT IS LEFT",
-        "Five rows stand between ~92.8% and 100% \u{2014} each with a named gap",
+        "Four rows stand between ~93.4% and 100% \u{2014} each with a named gap",
         h,
     );
     let rows = [
@@ -1135,11 +1135,6 @@ fn roadmap(p: &Palette) -> String {
             "E-13",
             "Proof is supercompilation, cashed out",
             "the constructive reading \u{2014} a set is a generator, truth is a terminating verification algorithm",
-        ),
-        (
-            "E-14",
-            "The 2nd and 3rd projections",
-            "the derivation S(S, int) by supercompilation runs and agrees with the compiler; the generator S(S, S) is not built",
         ),
         (
             "E-7",
@@ -1197,13 +1192,13 @@ fn roadmap(p: &Palette) -> String {
     }
     out.extend(footer(
         p,
-        436.0,
+        378.0,
         "Statuses are those of docs/TURCHIN-ECOSYSTEM-CONFORMANCE.md. A row is Closed only when a gate is green for the general case.",
     ));
     wrap(
         h,
         "What is left",
-        "Five partial rows E-7, E-12, E-13, E-14 and E-17, each with the named gap that keeps it from being closed.",
+        "Four partial rows E-7, E-12, E-13 and E-17, each with the named gap that keeps it from being closed.",
         &out,
     )
 }
@@ -1212,7 +1207,7 @@ fn roadmap(p: &Palette) -> String {
 // The command surface -- one command per layer capability
 // --------------------------------------------------------------------------
 fn commands(p: &Palette) -> String {
-    let h = 660.0;
+    let h = 710.0;
     let mut out = header(
         p,
         "THE COMMAND SURFACE",
@@ -1220,7 +1215,7 @@ fn commands(p: &Palette) -> String {
         h,
     );
     // (layer, command, one-line description)
-    let rows: [(&str, &str, &str); 9] = [
+    let rows: [(&str, &str, &str); 10] = [
         (
             "L0",
             "refal run",
@@ -1260,6 +1255,11 @@ fn commands(p: &Palette) -> String {
             "L4",
             "refal project2",
             "drive an interpreter with its object program left open",
+        ),
+        (
+            "L4",
+            "refal project3",
+            "pin the mode, leave the interpreter open \u{2014} emit a compiler generator",
         ),
         (
             "L4",
@@ -1306,13 +1306,13 @@ fn commands(p: &Palette) -> String {
     }
     out.extend(footer(
         p,
-        594.0,
+        644.0,
         "Run any of them as `cargo run -p refal -- <command>`. The full reference, with every flag, is further down the README.",
     ));
     wrap(
         h,
         "The command surface",
-        "Nine commands across four layers: run and check for layer 0, reflect for layer 1, compile and metasystem for layer 2, prove for layer 3, and invert, project2 and differential for layer 4.",
+        "Ten commands across four layers: run and check for layer 0, reflect for layer 1, compile and metasystem for layer 2, prove for layer 3, and invert, project2, project3 and differential for layer 4.",
         &out,
     )
 }

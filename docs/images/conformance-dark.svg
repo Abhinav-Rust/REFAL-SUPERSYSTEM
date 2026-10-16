@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" width="1200" height="360" role="img" aria-labelledby="t d">
   <title id="t">The conformance matrix</title>
-  <desc id="d">A grid of twenty-six cells, E-1 to E-26. Twenty are closed, five are partial, and one, E-26, is out of scope.</desc>
+  <desc id="d">A grid of twenty-six cells, E-1 to E-26. Twenty-one are closed, four are partial, and one, E-26, is out of scope.</desc>
   <rect x="0.5" y="0.5" width="1199" height="359" rx="16" fill="#0D1117" stroke="#30363D" stroke-width="1"/>
   <text x="40" y="52" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="3.2" fill="#0F766E">THE CONFORMANCE MATRIX</text>
   <text x="40" y="90" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="-0.3" fill="#E6EDF3">E-1 … E-26 — one row per named component or behaviour</text>
@@ -57,10 +57,10 @@
   <text x="1060" y="172" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="12.5" font-weight="600" fill="#F59E0B">E-13</text>
   <circle cx="1063" cy="189" r="4" fill="#F59E0B"/>
   <text x="1073" y="193" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" fill="#8B949E">partial</text>
-  <rect x="40" y="212" width="78" height="52" rx="10" fill="#2B1D06" stroke="#7C4A03" stroke-width="1.5"/>
-  <text x="52" y="234" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="12.5" font-weight="600" fill="#F59E0B">E-14</text>
-  <circle cx="55" cy="251" r="4" fill="#F59E0B"/>
-  <text x="65" y="255" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" fill="#8B949E">partial</text>
+  <rect x="40" y="212" width="78" height="52" rx="10" fill="#062925" stroke="#134E4A" stroke-width="1.5"/>
+  <text x="52" y="234" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="12.5" font-weight="600" fill="#2DD4BF">E-14</text>
+  <circle cx="55" cy="251" r="4" fill="#2DD4BF"/>
+  <text x="65" y="255" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" fill="#8B949E">closed</text>
   <rect x="124" y="212" width="78" height="52" rx="10" fill="#062925" stroke="#134E4A" stroke-width="1.5"/>
   <text x="136" y="234" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="12.5" font-weight="600" fill="#2DD4BF">E-15</text>
   <circle cx="139" cy="251" r="4" fill="#2DD4BF"/>

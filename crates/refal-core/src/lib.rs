@@ -7889,6 +7889,83 @@ pub fn project_compiler(
     })
 }
 
+/// A bracket holding a concrete character literal, e.g. `('SPECIALISE')`.
+///
+/// A projection's entry may be **partially known**: the 3rd projection pins the
+/// mode and leaves the interpreter and the program open, where the 2nd leaves
+/// the whole argument open.
+fn char_bracket(text: &str) -> CoreTerm {
+    CoreTerm {
+        kind: CoreTermKind::Bracket(
+            text.chars()
+                .map(|symbol| CoreTerm {
+                    kind: CoreTermKind::Char(symbol),
+                    span: Span { start: 0, end: 0 },
+                })
+                .collect(),
+        ),
+        span: Span { start: 0, end: 0 },
+    }
+}
+
+/// A bracket holding one free expression variable, e.g. `(e.Interpreter)`.
+fn symbolic_bracket(name: &str) -> CoreTerm {
+    CoreTerm {
+        kind: CoreTermKind::Bracket(vec![symbolic_variable(name)]),
+        span: Span { start: 0, end: 0 },
+    }
+}
+
+/// The **3rd projection**: specialise the supercompiler with respect to itself,
+/// so that the residue is a program which takes an *interpreter* and emits a
+/// compiler for it (Turchin 1980, Aarhus; Futamura's `mix(mix, mix)`).
+///
+/// # Why the entry is partially known
+///
+/// The 2nd projection enters with the whole argument open, and what it gets back
+/// is the compiler: driving a dispatcher with its argument unknown reproduces
+/// the dispatcher. The generator needs a different entry — the **mode fixed** and
+/// the interpreter slot open — so that the residue is not "a program that
+/// compiles", but "a program that, given an interpreter, *produces* a program
+/// that compiles". That is the difference between an artifact and a generator of
+/// artifacts, and it is the whole of what E-14 withholds.
+///
+/// # The gate this has to pass
+///
+/// The row names it: the emitted generator, **applied to an interpreter**, must
+/// reproduce the 2nd projection's compiler. Emitting a program that checks is not
+/// the gate; a residue that re-prints its input is also a program.
+pub fn project_generator(
+    program: &CoreProgram,
+    graph: &StateGraph,
+    function: &str,
+    mode: &str,
+    max_steps: usize,
+    strategy: DriveStrategy,
+) -> Result<ProjectionReport, DriveError> {
+    let entry_graph = predicate_entry_graph(graph, function)?;
+    let input = vec![
+        char_bracket(mode),
+        symbolic_bracket("Interpreter"),
+        symbolic_bracket("Program"),
+    ];
+    let report = drive_symbolic_pattern_entry(&entry_graph, input.clone(), max_steps, strategy)?;
+    let complete = report.steps < max_steps;
+    let configurations = report.configurations.len();
+    let splits = report.split_functions.len();
+    let steps = report.steps;
+    let artifact = residualize_symbolic_program_with_pattern(program, &report, input);
+    Ok(ProjectionReport {
+        projection: 3,
+        entry: function.to_string(),
+        program: artifact,
+        configurations,
+        splits,
+        steps,
+        complete,
+    })
+}
+
 /// Render a projection report: the outcome, the walk, and the artifact itself.
 ///
 /// The artifact is printed last and in full, because the artifact is the
@@ -11869,6 +11946,110 @@ mod tests {
                 .iter()
                 .any(|function| function.name == "F"),
             "the callee is eliminated, not left residual -- the point of the complement"
+        );
+    }
+
+    /// `Go { e.X = <F e.X>; }` and
+    /// `F { ('M') (e.Interpreter) (e.Program) = 'ok'; }` — the smallest callee
+    /// whose **first** component is a known bracket, which is what a
+    /// partially-known projection entry needs.
+    fn projection_mode_program() -> CoreProgram {
+        let variable = |name: &str| CoreTerm {
+            kind: CoreTermKind::Variable {
+                kind: VariableKind::Expression,
+                name: name.to_string(),
+            },
+            span: Span { start: 0, end: 0 },
+        };
+        let bracket = |content: Vec<CoreTerm>| CoreTerm {
+            kind: CoreTermKind::Bracket(content),
+            span: Span { start: 0, end: 0 },
+        };
+        let character = |symbol: char| CoreTerm {
+            kind: CoreTermKind::Char(symbol),
+            span: Span { start: 0, end: 0 },
+        };
+        let call = |name: &str, args: Vec<CoreTerm>| CoreTerm {
+            kind: CoreTermKind::Call {
+                name: name.to_string(),
+                args,
+            },
+            span: Span { start: 0, end: 0 },
+        };
+        let sentence = |pattern: Vec<CoreTerm>, result: Vec<CoreTerm>| CoreSentence {
+            pattern,
+            conditions: vec![],
+            result,
+            span: Span { start: 0, end: 0 },
+        };
+        CoreProgram {
+            declarations: vec![],
+            functions: vec![
+                CoreFunction {
+                    name: "Go".to_string(),
+                    visibility: Visibility::Entry,
+                    sentences: vec![sentence(
+                        vec![variable("X")],
+                        vec![call("F", vec![variable("X")])],
+                    )],
+                    span: Span { start: 0, end: 0 },
+                },
+                CoreFunction {
+                    name: "F".to_string(),
+                    visibility: Visibility::Local,
+                    sentences: vec![sentence(
+                        vec![
+                            bracket(vec![character('M')]),
+                            bracket(vec![variable("Interpreter")]),
+                            bracket(vec![variable("Program")]),
+                        ],
+                        vec![character('o'), character('k')],
+                    )],
+                    span: Span { start: 0, end: 0 },
+                },
+            ],
+        }
+    }
+
+    /// **The 3rd projection pins the mode and leaves the interpreter open.**
+    ///
+    /// The 2nd projection enters with the whole argument open and emits a
+    /// compiler. This one enters with the mode *fixed* — so the residue is not a
+    /// compiler but a program that takes an interpreter and compiles programs,
+    /// which is `S(S, S)`. The gate is on the entry's shape, because the shape is
+    /// the whole difference: a residue that still dispatches on the mode is the
+    /// 2nd projection wearing a different name.
+    #[test]
+    fn the_third_projection_pins_the_mode_and_leaves_the_interpreter_open() {
+        let program = projection_mode_program();
+        let graph = clean_unreachable_states(&build_seed_graph(&program));
+        let report = project_generator(&program, &graph, "F", "M", 200, DriveStrategy::Compilative)
+            .expect("the projection drives");
+        assert!(report.complete, "the walk must close inside its budget");
+        assert_eq!(report.projection, 3, "the report names the 3rd projection");
+        let entry = report
+            .program
+            .functions
+            .iter()
+            .find(|function| function.visibility == Visibility::Entry)
+            .expect("the artifact carries its entry");
+        assert_eq!(
+            entry.sentences[0].pattern.len(),
+            3,
+            "the generator's entry takes the interpreter and the program"
+        );
+        assert_eq!(
+            entry.sentences[0].pattern[0],
+            char_bracket("M"),
+            "the mode is pinned to a concrete bracket, not left to dispatch"
+        );
+        assert!(
+            !report
+                .program
+                .functions
+                .iter()
+                .any(|function| function.name == "F"),
+            "the callee is eliminated by the projection"
         );
     }
 

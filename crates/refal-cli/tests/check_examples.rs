@@ -8208,6 +8208,145 @@ fn the_generator_emits_target_code_that_runs() {
     }
 }
 
+/// **The 3rd projection: a compiler generator, and it reproduces the 2nd.**
+///
+/// `refal project2` enters with the whole argument open and emits a compiler.
+/// `refal project3` enters with the **mode pinned** and the interpreter left
+/// open, so what it emits is not a compiler but a program that, given an
+/// interpreter, compiles programs — Turchin's `S(S, S)`, Futamura's
+/// `mix(mix, mix)`. That is the difference between an artifact and a generator
+/// of artifacts, and it is the whole of what E-14 withheld.
+///
+/// The gate is the one the row names — *the emitted generator, applied to an
+/// interpreter, must reproduce the 2nd projection's compiler* — and it is
+/// discharged by **running** both, not by reading the text. A residue that
+/// re-printed its input is also a program.
+#[test]
+fn the_third_projection_emits_a_generator_that_reproduces_the_second() {
+    let template = fs::read_to_string(workspace_path("examples/specialise-template.ref"))
+        .expect("read the template");
+    let program = "(Times ('*' '*' '*') (Seq (Lit 'a' (End)) (In)))";
+
+    // The generator: the supercompiler specialised with respect to itself, with
+    // the mode pinned and the interpreter slot left open.
+    let output = Command::new(refal_bin())
+        .args([
+            "project3",
+            &workspace_path("examples/compiler.ref"),
+            "Dispatch",
+            "--mode",
+            "SPECIALISE",
+            "--steps",
+            "400",
+        ])
+        .output()
+        .expect("run refal binary");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "a closed projection exits zero:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("walk: closed"),
+        "the walk must close rather than be truncated by the budget:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("projection: 3"),
+        "the report must name the projection it is:\n{stdout}"
+    );
+
+    let artifact = stdout
+        .split_once("$EXTERN")
+        .map(|(_, rest)| format!("$EXTERN{rest}"))
+        .expect("the driver's report is followed by the emitted program");
+    // The mode is *pinned*: the generator's entry takes the interpreter and the
+    // program, and the mode is already decided, so the generator has nothing to
+    // dispatch on.
+    assert!(
+        artifact.contains("(e.Interpreter) (e.Program)"),
+        "the generator's entry must take an interpreter and a program:\n{artifact}"
+    );
+    let path = temp_ref_path("derived-generator");
+    fs::write(&path, &artifact).expect("write the generator");
+    let checked = Command::new(refal_bin())
+        .args(["check", path.to_str().expect("utf-8 path")])
+        .output()
+        .expect("run refal binary");
+    assert!(
+        checked.status.success(),
+        "the derived generator must check as Refal:\n{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+
+    // **The gate: run both, and require the generator to reproduce the 2nd
+    // projection's compiler.** The reference is the projection the row already
+    // gates (`the_generator_emits_target_code_that_runs`); the generator is the
+    // derived artifact. Their output on the same interpreter and program must
+    // agree, and the target must then *run*.
+    let reference = Command::new(refal_bin())
+        .args([
+            "run",
+            &workspace_path("examples/compiler.ref"),
+            "SPECIALISE",
+            &template,
+            program,
+        ])
+        .output()
+        .expect("run refal binary");
+    assert!(
+        reference.status.success(),
+        "the 2nd projection must run:\n{}",
+        String::from_utf8_lossy(&reference.stderr)
+    );
+    let generated = Command::new(refal_bin())
+        .args([
+            "run",
+            path.to_str().expect("utf-8 path"),
+            "SPECIALISE",
+            &template,
+            program,
+        ])
+        .output()
+        .expect("run refal binary");
+    assert!(
+        generated.status.success(),
+        "the derived generator must run:\n{}",
+        String::from_utf8_lossy(&generated.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&reference.stdout),
+        String::from_utf8_lossy(&generated.stdout),
+        "the generator must reproduce the 2nd projection's compiler"
+    );
+
+    // And the target the generator emitted must run, agreeing with the
+    // interpreter it was derived from.
+    let generated_stdout = String::from_utf8_lossy(&generated.stdout).to_string();
+    let target = generated_stdout
+        .split_once("$ENTRY Go {")
+        .map(|(_, rest)| format!("$ENTRY Go {{{rest}"))
+        .expect("the generator's output is a program");
+    let target_path = temp_ref_path("generated-target");
+    fs::write(&target_path, &target).expect("write the target");
+    for input in ["abc", "zzz", "a"] {
+        let expected = run_file("examples/metasystem-unroll.ref", &[input]);
+        let actual = Command::new(refal_bin())
+            .args(["run", target_path.to_str().expect("utf-8 path"), input])
+            .output()
+            .expect("run refal binary");
+        assert!(
+            actual.status.success(),
+            "the generated target must run on {input:?}:\n{}",
+            String::from_utf8_lossy(&actual.stderr)
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&expected.stdout),
+            String::from_utf8_lossy(&actual.stdout),
+            "the generated target disagreed with the interpreter on {input:?}"
+        );
+    }
+}
+
 /// A scratch `.ref` path, unique to this process **and to this call**, so two
 /// tests running in parallel cannot clobber each other's fixture.
 fn temp_ref_path(stem: &str) -> PathBuf {

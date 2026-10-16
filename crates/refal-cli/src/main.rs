@@ -124,6 +124,7 @@ fn main() {
         "prove" => prove_program(&program, &input_args),
         "invert" => invert_program(&program, &input_args),
         "project2" => project_compiler_command(&program, &input_args),
+        "project3" => project_generator_command(&program, &input_args),
         "analyze" => analyze_program(&program, &input_args),
         "formats" => formats_program(&program, &input_args),
         "feasibility" => feasibility_program(&program, &input_args),
@@ -287,6 +288,10 @@ fn print_usage() {
     eprintln!("             eliminated, but the residue is structurally the interpreter:");
     eprintln!("             with the program unknown there is nothing static to exploit");
     eprintln!("             refal project2 <interpreter.ref> <Function> [--steps N]");
+    eprintln!("  project3   Specialise the supercompiler with respect to ITSELF with the mode");
+    eprintln!("             pinned and the interpreter open, so the residue is a compiler");
+    eprintln!("             generator S(S, S): applied to an interpreter it emits a compiler");
+    eprintln!("             refal project3 <compiler.ref> <Function> [--mode MODE] [--steps N]");
     eprintln!("  analyze    Report bounded Tier 1 reachability, terminals, and SCCs");
     eprintln!("  overlap    Report conservative sentence-pattern compatibility pairs");
     eprintln!("  formats    Report inferred function formats (argument -> result)");
@@ -683,6 +688,61 @@ fn invert_program(program: &refal_ast::Program, args: &[String]) {
 /// rather than emitted is the gap E-14 records, so the report prints the program
 /// last and the exit status carries whether the walk closed (0) or the budget
 /// truncated it (2).
+/// The 3rd projection: a **compiler generator**.
+///
+/// `refal project2` enters with the whole argument open and emits a compiler.
+/// This enters with the *mode* pinned and the interpreter open, so the artifact
+/// is a program that takes an interpreter and emits a compiler for it — the
+/// construction `S(S, S)` (Turchin 1980, Aarhus; Futamura's `mix(mix, mix)`).
+fn project_generator_command(program: &refal_ast::Program, args: &[String]) {
+    let Some(function) = args.first() else {
+        eprintln!("{PROJECT3_USAGE}");
+        process::exit(2);
+    };
+    let rest = &args[1..];
+    let (mode, rest) = match rest.first().map(String::as_str) {
+        Some("--mode") => match rest.get(1) {
+            Some(mode) => (mode.clone(), &rest[2..]),
+            None => {
+                eprintln!("{PROJECT3_USAGE}");
+                process::exit(2);
+            }
+        },
+        _ => ("SPECIALISE".to_string(), rest),
+    };
+    let options = match drive_options(rest) {
+        Ok(options) => options,
+        Err(usage) => {
+            eprintln!("{usage}");
+            process::exit(2);
+        }
+    };
+    let core = refal_core::lower_program(program);
+    let graph = refal_core::clean_unreachable_states(&refal_core::build_seed_graph(&core));
+    let report = match refal_core::project_generator(
+        &core,
+        &graph,
+        function,
+        &mode,
+        options.max_steps,
+        options.strategy,
+    ) {
+        Ok(report) => report,
+        Err(error) => {
+            eprintln!("projection error: {error}");
+            process::exit(1);
+        }
+    };
+    let program_text = refal_core::format_program(&report.program);
+    print!(
+        "{}",
+        refal_core::format_projection_report(&report, &program_text)
+    );
+    if !report.complete {
+        process::exit(2);
+    }
+}
+
 fn project_compiler_command(program: &refal_ast::Program, args: &[String]) {
     let Some(function) = args.first() else {
         eprintln!("{PROJECT2_USAGE}");
@@ -829,6 +889,7 @@ const PROVE_USAGE: &str = "Usage: refal prove <file.ref> <Predicate> [--steps N]
 const EQUIV_USAGE: &str = "Usage: refal prove <file.ref> --equiv <Left> <Right> [--steps N]";
 const INVERT_USAGE: &str = "Usage: refal invert <file.ref> <Function> [--steps N] [--strategy search|compilative|interpretive]";
 const PROJECT2_USAGE: &str = "Usage: refal project2 <interpreter.ref> <Function> [--steps N] [--strategy search|compilative|interpretive]";
+const PROJECT3_USAGE: &str = "Usage: refal project3 <compiler.ref> <Function> [--mode MODE] [--steps N] [--strategy search|compilative|interpretive]";
 
 fn drive_options(args: &[String]) -> Result<DriveOptions, String> {
     let mut options = DriveOptions {

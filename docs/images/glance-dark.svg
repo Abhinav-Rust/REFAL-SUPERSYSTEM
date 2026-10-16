@@ -14,7 +14,7 @@
   <rect x="267" y="140" width="211" height="150" rx="14" fill="#0B1B19" stroke="#134E4A" stroke-width="1.5"/>
   <rect x="267" y="140" width="211" height="5" rx="2.5" fill="#F59E0B"/>
   <text x="287" y="178" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" letter-spacing="2.0" fill="#0F766E">COMPLETION</text>
-  <text x="287" y="228" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="28" font-weight="700" fill="#E6EDF3">~92.8%</text>
+  <text x="287" y="228" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="28" font-weight="700" fill="#E6EDF3">~93.4%</text>
   <text x="287" y="252" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#8B949E">of the supersystem, one</text>
   <text x="287" y="268" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#8B949E">method, one table</text>
   <rect x="494" y="140" width="211" height="150" rx="14" fill="#0B1B19" stroke="#134E4A" stroke-width="1.5"/>
@@ -32,7 +32,7 @@
   <rect x="948" y="140" width="211" height="150" rx="14" fill="#0B1B19" stroke="#134E4A" stroke-width="1.5"/>
   <rect x="948" y="140" width="211" height="5" rx="2.5" fill="#F59E0B"/>
   <text x="968" y="178" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" letter-spacing="2.0" fill="#0F766E">CONFORMANCE</text>
-  <text x="968" y="228" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="28" font-weight="700" fill="#E6EDF3">19 / 25</text>
+  <text x="968" y="228" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="28" font-weight="700" fill="#E6EDF3">21 / 25</text>
   <text x="968" y="252" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#8B949E">ecosystem rows closed, in</text>
   <text x="968" y="268" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#8B949E">scope</text>
   <rect x="40" y="316" width="1120" height="44" rx="12" fill="#062925" stroke="#134E4A" stroke-width="1.5"/>

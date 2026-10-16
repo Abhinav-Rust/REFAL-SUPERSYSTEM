@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+**E-14 is closed: the 3rd projection — a compiler generator — is built, and a stale published count is fixed.**
+
+- **`refal project3 <compiler.ref> <Function> --mode MODE` emits a compiler
+  generator.** `refal project2` enters with the whole argument open and what comes
+  back is a compiler; this one **pins the mode** and leaves the **interpreter**
+  open, so the artifact is not a compiler but a program that, given an interpreter,
+  compiles programs — Turchin's `S(S, S)`, Futamura's `mix(mix, mix)`. The artifact
+  is 92,838 bytes, checks as Refal, and **runs**.
+- **The gate is the row's own words, and it runs both sides.**
+  `the_third_projection_emits_a_generator_that_reproduces_the_second` emits the
+  generator, runs it on `examples/specialise-template.ref` and a metacoded-language
+  program, requires its output to equal the 2nd projection's on the same input, and
+  then **runs the target it emitted** against `examples/metasystem-unroll.ref` on
+  three inputs. `the_third_projection_pins_the_mode_and_leaves_the_interpreter_open`
+  pins the entry's *shape* in `refal-core`.
+- **A stale published count is fixed.** The `glance` diagram rendered **`19 / 25`**
+  conformance rows closed while the README's ledger table said **20** — one
+  question, two answers, in the same README, invisible to every test because it
+  lived in a generated asset. It now reads **`21 / 25`**, matching the ledger.
+- **The figure moves `~92.8% → ~93.4%`** — the projections row goes `4.40 → 5.00`
+  and is fully earned; the conformance ledger goes `20 closed / 5 partial` →
+  `21 closed / 4 partial`.
+
 **The projection's derivation runs: the derived compiler terminates and agrees with `refal compile`.**
 
 - **`refal project2 examples/compiler.ref Dispatch` now emits a compiler that

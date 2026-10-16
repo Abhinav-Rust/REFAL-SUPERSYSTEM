@@ -48,8 +48,8 @@ See `README.md` §"What Theorem 5.1 does and does not forbid" and
 
 | | |
 |---|---|
-| Honest completion | **~92.8%** (supersystem completeness — one method, one table, in `README.md`) |
-| Tests | 421 (72 core + 181 CLI integration + 168 across the other four crates), 0 clippy, fmt clean |
+| Honest completion | **~93.4%** (supersystem completeness — one method, one table, in `README.md`) |
+| Tests | 423 (73 core + 182 CLI integration + 168 across the other four crates), 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
 
@@ -82,6 +82,57 @@ partitions is the **compiler's default**: `RESIDUALIZE-DRIVEN`,
 `RESIDUALIZE-DRIVEN n`, `Compile` and `residualize-driven` all search, so **E-11 is
 closed**. All three modes are gated on the corpus, each against its Rust
 counterpart, byte for byte on 77 of 77 (2026-10-15).
+
+### Done — the 3rd projection: the compiler generator, and a stale published count (E-14 closes, 2026-10-16)
+
+**E-14's last row closed.** `refal project2` enters with the **whole argument
+open**, and what it gets back is the compiler — driving a dispatcher with its
+argument unknown reproduces the dispatcher. The generator needs a different
+entry, and the difference is one component:
+
+```
+$ refal project3 examples/compiler.ref Dispatch --mode SPECIALISE --steps 400
+projection: 3
+configurations: 25
+splits: 0
+driving steps: 42
+walk: closed
+$EXTERN Prout, Chr, Ord, Add, Sub, Compare, Upper, Symb, Numb;
+$ENTRY Go {
+  ('S' 'P' 'E' 'C' 'I' 'A' 'L' 'I' 'S' 'E') (e.Interpreter) (e.Program) = <Prout <DsRdRender ...
+```
+
+The **mode is pinned** and the **interpreter is left open**, so the artifact is
+not a compiler but a program that, given an interpreter, compiles programs —
+Turchin's `S(S, S)`, Futamura's `mix(mix, mix)`. That is the difference between
+an artifact and a generator of artifacts, and it is the whole of what the row
+withheld.
+
+**The gate is the row's own words, and it runs both sides.** *"The emitted
+generator, applied to an interpreter, must reproduce the 2nd projection's
+compiler."* `the_third_projection_emits_a_generator_that_reproduces_the_second`
+emits the generator, checks it as Refal, **runs** it on
+`examples/specialise-template.ref` and `(Times ('*' '*' '*') (Seq (Lit 'a' (End)) (In)))`,
+requires its output to equal the 2nd projection's on the same interpreter and
+program, and then **runs the target it emitted** against
+`examples/metasystem-unroll.ref` on three inputs. `refal-core`'s
+`the_third_projection_pins_the_mode_and_leaves_the_interpreter_open` pins the
+entry's *shape* — three components with the mode a concrete bracket — because a
+residue that still dispatched on the mode would be the 2nd projection wearing a
+different name.
+
+**A second defect, in the published count.** The `glance` diagram was rendering
+**`19 / 25`** conformance rows closed while the README's ledger table said **20**
+and the conformance matrix had been at 20 since `E-14`'s neighbours closed. One
+question, two answers, in the same README — exactly the failure the reporting
+rules exist to prevent, and invisible to every test because it lived in a
+generated asset. The generator now reads **`21 / 25`**, matching the ledger after
+this row closed.
+
+**The figure moves `~92.8% → ~93.4%`.** The projections row goes `4.40 → 5.00`,
+the row is fully earned, and the table sums to **93.40**. The conformance ledger
+goes **20 closed / 5 partial → 21 closed / 4 partial**; `E-7`, `E-12`, `E-13` and
+`E-17` remain.
 
 ### Done — the projection's derivation runs, and the self-loop it exposed is fixed (E-14, 2026-10-15)
 
@@ -3040,8 +3091,8 @@ Refal-authored compiler and a `Compile` that drives.
 
 ## NEXT ACTION
 
-**The projections as artifacts, then §4.4's other half, then the remaining
-relational forms.**
+**§4.4's other half, then the remaining relational forms.** The projections
+(E-14) are closed: all three are commands with gates.
 
 > **2026-10-09 — the Tier-1 row's feasibility target is built.** `refal
 > feasibility` decides each sentence's selectability with a **ground witness it
@@ -3211,8 +3262,14 @@ projection found a dead dedup test and a cursor where a source belongs.
    at all — a run-length encoder drops the run's symbols — which is a property of
    the program rather than of the synthesizer, and is why `examples/invert-list-encoder.ref`
    encodes losslessly.
-3. **The projections as artifacts (E-14) — the 2nd emits an artifact, and the
-   artifact is not a compiler.** `refal project2 <interpreter.ref> <Function>`
+3. ~~**The projections as artifacts (E-14).**~~ **Closed, 2026-10-16** — all three
+   are commands with gates. `refal project2` emits a compiler that terminates and
+   agrees with `refal compile` on 77 of 77, and `refal project3` pins the mode and
+   leaves the interpreter open, emitting a **compiler generator** `S(S, S)`. The
+   historical notes below are kept because the *reasons* each half was hard are
+   still the reasons the partition and the interface are shaped as they are.
+
+   *Historically,* `refal project2 <interpreter.ref> <Function>`
    enters the interpreter with the object program and its data as separate
    unknowns, drives with `SplitStrategy::Pattern` (E-11), and prints the residual
    as a checked program. **Measured on `examples/metasystem-unroll.ref`'s `Run`:
