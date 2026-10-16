@@ -83,6 +83,59 @@ partitions is the **compiler's default**: `RESIDUALIZE-DRIVEN`,
 closed**. All three modes are gated on the corpus, each against its Rust
 counterpart, byte for byte on 77 of 77 (2026-10-15).
 
+### Measured — the self-compilation cost, decomposed (2026-10-16)
+
+The L2/L4 compiler-in-Refal row withholds 1.05 for "not yet fast on very large
+inputs". That phrase is a number now, and the number is larger than the file
+recorded: `examples/compiler.ref` has grown to **176,238 bytes**, and the stale
+figures this file and `CHANGELOG.md` carried were read off a smaller source.
+
+```
+$ refal compile examples/compiler.ref                              346.7 s
+$ refal run examples/compiler.ref RESIDUALIZE-DRIVEN ...           282.9 s
+$ refal run examples/compiler.ref RESIDUALIZE-DRIVEN-COMPILATIVE    53.9 s
+$ refal run examples/compiler.ref RESIDUALIZE-DRIVEN-PATTERN       161.8 s   exit 1
+$ refal run examples/compiler.ref ... (the self-application)       280.6 s
+$ refal check | graph | residualize-driven | differential --corpus  0.21-0.36 s
+```
+
+**Every Rust subcommand on the same source costs a third of a second. `compile`
+costs nearly six minutes.** The gap is not the front end, the checker or the Rust
+driver: it is entirely inside the Refal-authored compiler's default path.
+
+**Where the time goes.** The default is a search over both partitions, each driven
+at both ends of the compilation axis. `cargo xtask perf` measures the decomposition
+now rather than only the total, so the 282.9 s of `RESIDUALIZE-DRIVEN` sits beside
+one drive at 53.9 s and the other partition at 161.8 s.
+
+**The pattern partition does not lose a cost comparison — it errors.** Run alone on
+the compiler's own source it exits **1** with
+
+```
+runtime error: no sentence matched in function `EmitTerms`
+```
+
+so there is no pattern residue to compare at all and the 161.8 s it spent is
+discarded. The corpus is green for this partition (77 of 77), so the failure is
+specific to the compiler's own source — a shape its patterns reach that the fallback
+does not cover. That is a different, and more tractable, statement than a cost
+comparison the sequence partition happened to win.
+
+**The profile, on one drive** (`cargo xtask profile RESIDUALIZE-DRIVEN-COMPILATIVE
+examples/compiler.ref`): 6,089,849 calls, led by `SameChars` **32.0%**,
+`LookupL` **15.2%**, `GTargets2` 7.4%, `DsRdSeenL` 7.2%, `MapTo` 6.6%,
+`DsRdFindFunL` 4.9%, `MemberL` 4.2%. Every one of those is a **linear scan over a
+growing list** — `LookupL`, `DsRdSeenL` and `DsRdFindFunL` are list lookups by
+name, `MemberL` is the visited-set scan, and `SameChars` is the equality test they
+are built on. The cost is the shape of the data structures, not a hot instruction.
+
+**No optimisation is claimed.** The measurement is the deliverable, and the row's
+1.05 stays withheld: 346.7 s to compile the compiler's own source is not "fast on
+very large inputs" by any reading, and the fix is a change to how the driver looks
+names up rather than a constant factor. What changed is that the row's gap is
+reproducible in one command, its size is current, and its recorded cause is
+corrected.
+
 ### Done — the README's thesis, drawn (2026-10-16)
 
 The repository's central claim — that an interpreter, a compiler, a supercompiler and

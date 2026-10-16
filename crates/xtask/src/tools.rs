@@ -446,6 +446,34 @@ pub fn perf() -> i32 {
             &source,
         ],
     );
+    // The default is a *search*: two partitions, each driven at both ends of the
+    // compilation axis, so up to four drives. Measuring one end of one partition
+    // and the pattern partition on its own is what turns "the default is slow"
+    // into a decomposition, and the decomposition is what says where the time is.
+    measure(
+        &root,
+        &bin,
+        "compiler.ref RESIDUALIZE-DRIVEN-COMPILATIVE (one drive)",
+        &[
+            "run",
+            "examples/compiler.ref",
+            "RESIDUALIZE-DRIVEN-COMPILATIVE",
+            "--input-file",
+            &source,
+        ],
+    );
+    measure(
+        &root,
+        &bin,
+        "compiler.ref RESIDUALIZE-DRIVEN-PATTERN (the other partition)",
+        &[
+            "run",
+            "examples/compiler.ref",
+            "RESIDUALIZE-DRIVEN-PATTERN",
+            "--input-file",
+            &source,
+        ],
+    );
     measure(
         &root,
         &bin,

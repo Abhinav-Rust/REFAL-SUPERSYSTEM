@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+**The self-compilation cost is decomposed, and the row's recorded reason is corrected.**
+
+- **`refal compile examples/compiler.ref` takes 346.7 s** (release build) on the
+  compiler's own source, now **176,238 bytes** — the figures this file carried were
+  read off a smaller source and are corrected. Every Rust subcommand on the same
+  source costs **0.21–0.36 s** (`check`, `graph`, `residualize-driven`,
+  `differential --corpus`). The gap is entirely inside the Refal-authored compiler's
+  default path.
+- **The default is a search over both partitions, and `cargo xtask perf` now
+  decomposes it** rather than printing only the total: `RESIDUALIZE-DRIVEN` **282.9 s**
+  beside one drive at **53.9 s** and the other partition at **161.8 s**; the
+  self-application is **280.6 s**.
+- **A recorded reason is wrong.** The pattern partition does not lose a cost
+  comparison — run alone on `compiler.ref` it **errors**, `exit 1`, with
+  `runtime error: no sentence matched in function 'EmitTerms'`, so there is no
+  pattern residue to compare and the 161.8 s it spent is discarded. The corpus is
+  green for that partition (77 of 77), so the shape is specific to the compiler's
+  own source.
+- **The profile of one drive** (`cargo xtask profile RESIDUALIZE-DRIVEN-COMPILATIVE
+  examples/compiler.ref`): 6,089,849 calls, led by `SameChars` **32.0%**,
+  `LookupL` **15.2%**, then `GTargets2` 7.4%, `DsRdSeenL` 7.2%, `MapTo` 6.6%,
+  `DsRdFindFunL` 4.9%, `MemberL` 4.2%. Each is a linear scan over a growing list,
+  so the cost is the shape of the data structures rather than a hot instruction.
+- **No optimisation is claimed.** The row's 1.05 stays withheld: 346.7 s to compile
+  the compiler's own source is not "fast on very large inputs". What changed is that
+  the gap is reproducible in one command, its size is current, and its cause is
+  corrected.
+
 **The status banner was stale, and the published figure is now a gate rather than a habit.**
 
 - **`docs/images/status-{light,dark}.svg` still read `~92.8%`** while the
