@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+**Termination now proves size change across argument positions.**
+
+- **A size-change closure over caller/callee positions** proves cycles where a
+  value moves from one argument to another. Each call contributes a graph; the
+  analysis composes graphs to a fixed point and requires a strict self-loop on
+  every idempotent graph.
+- **The certificate re-runs the closure.** `verify` rebuilds every graph and does
+  not trust the reported components or their order.
+- **The former measured gap is a positive gate:**
+  `a_cycle_that_hands_a_value_across_argument_positions_is_proved_by_size_change`.
+  On `compiler.ref`, unproven functions fall from **362 to 359**. The Tier 1
+  credit remains withheld because most remaining failures flow through bare `e.`
+  sequence variables that the conservative mapping declines.
+
 **The pattern partition now self-hosts: alpha-equivalent residual reuse is exact.**
 
 - **`RESIDUALIZE-DRIVEN-PATTERN` completes on `compiler.ref`** and emits the same

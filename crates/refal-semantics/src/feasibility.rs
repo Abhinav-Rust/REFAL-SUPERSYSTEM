@@ -27,9 +27,15 @@
 //! outside it binds at least one term, so the run is strictly shorter. Length is
 //! well-founded, so the function terminates, and the run is the witness. A
 //! recursive call that passes anything else — the whole argument, a reordering,
-//! or a run whose complement is entirely `e.`-variables — is `Unproven`, which
-//! is the honest answer: `F { s.H e.T = <F s.H>; }` really does loop when `e.T`
-//! is empty, and no descent argument exists for it.
+//! or a run whose complement is entirely `e.`-variables — is not proved this
+//! way. `F { s.H e.T = <F s.H>; }` really does loop when `e.T` is empty, so no
+//! descent argument exists for it.
+//!
+//! Where a fixed measure fails because a value moves between argument positions,
+//! the analysis builds **size-change graphs** over caller/callee positions,
+//! closes them under composition, and requires a strict self-loop on every
+//! idempotent graph. A flow it cannot map soundly declines the proof rather than
+//! guessing.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -149,6 +155,14 @@ pub enum TerminationVerdict {
         ranking: Ranking,
         components: Vec<Component>,
     },
+    /// The function terminates by **size change across argument positions**.
+    ///
+    /// This is the case no single fixed measure can express: one function hands
+    /// a value from its second argument to a callee's third, and the callee hands
+    /// it back. The proof is the size-change closure over per-position arcs; see
+    /// [`CallGraph::size_change_component`]. Each component names its members,
+    /// and the verifier re-derives the closure from the source.
+    SizeChange { components: Vec<Component> },
     /// Not proved. The reason names the call that blocked it, because a bare
     /// "unproven" is not checkable.
     Unproven { reason: String },
@@ -366,6 +380,9 @@ pub fn verify(report: &FeasibilityReport, program: &Program) -> Vec<String> {
             } => {
                 failures.extend(check_terminating(function, *ranking, components, &graph));
             }
+            TerminationVerdict::SizeChange { components } => {
+                failures.extend(check_size_change(function, components, &graph));
+            }
             TerminationVerdict::Unproven { .. } => {}
         }
     }
@@ -520,6 +537,78 @@ fn check_terminating(
     failures
 }
 
+/// Re-check a `size-change` claim by rebuilding every graph and rerunning the
+/// closure. The certificate names components; the verifier does not trust their
+/// members, their order, or the analysis's closure budget.
+fn check_size_change(
+    function: &FunctionFeasibility,
+    components: &[Component],
+    graph: &CallGraph,
+) -> Vec<String> {
+    let mut failures = Vec::new();
+    let start = canonical_identifier(&function.function);
+    let Some(&start_component) = graph.component_of.get(&start) else {
+        failures.push(format!("`{}` is not in the call graph", function.function));
+        return failures;
+    };
+    let expected: BTreeSet<BTreeSet<String>> = graph.reach[start_component]
+        .iter()
+        .filter(|id| graph.cyclic[**id])
+        .map(|id| graph.components[*id].iter().cloned().collect())
+        .collect();
+    let claimed: BTreeSet<BTreeSet<String>> = components
+        .iter()
+        .map(|component| {
+            component
+                .members
+                .iter()
+                .map(|name| canonical_identifier(name))
+                .collect()
+        })
+        .collect();
+    if claimed != expected {
+        failures.push(format!(
+            "`{}` claims a size-change component set that is not the cyclic set it reaches",
+            function.function
+        ));
+        return failures;
+    }
+    for component in components {
+        let members: BTreeSet<String> = component
+            .members
+            .iter()
+            .map(|name| canonical_identifier(name))
+            .collect();
+        let Some(&id) = members
+            .iter()
+            .next()
+            .and_then(|name| graph.component_of.get(name))
+        else {
+            failures.push(format!(
+                "`{}` names a size-change component with no member in the graph",
+                function.function
+            ));
+            continue;
+        };
+        let real: BTreeSet<String> = graph.components[id].iter().cloned().collect();
+        if real != members {
+            failures.push(format!(
+                "`{}` claims a size-change component that is not strongly connected",
+                function.function
+            ));
+            continue;
+        }
+        if let Err(reason) = graph.size_change_component(id) {
+            failures.push(format!(
+                "`{}` claims size-change termination for `{}`, but {reason}",
+                function.function,
+                component.members.join(" ")
+            ));
+        }
+    }
+    failures
+}
+
 /// Render the report for a terminal.
 pub fn format_report(report: &FeasibilityReport) -> String {
     let mut out = String::new();
@@ -558,6 +647,13 @@ pub fn format_report(report: &FeasibilityReport) -> String {
                     .collect::<Vec<_>>();
                 if !strict.is_empty() {
                     text.push_str(&format!("; decreasing: {}", strict.join(", ")));
+                }
+                text
+            }
+            TerminationVerdict::SizeChange { components } => {
+                let mut text = "terminates (size change across argument positions)".to_string();
+                for component in components {
+                    text.push_str(&format!(" (cycle: {})", component.members.join(" ")));
                 }
                 text
             }
@@ -629,21 +725,25 @@ pub fn format_certificate(report: &FeasibilityReport) -> String {
     // The cyclic components the analysis proved, each listed once per ranking.
     let mut seen: BTreeSet<(String, String)> = BTreeSet::new();
     for function in &report.functions {
-        if let TerminationVerdict::Terminating {
-            ranking,
-            components,
-        } = &function.termination
-        {
-            for component in components {
-                let key = component_key(component);
-                if seen.insert((ranking.label(), key.clone())) {
-                    out.push_str(&format!(
-                        "component {} {} {}\n",
-                        ranking.label(),
-                        key,
-                        component.members.join(" ")
-                    ));
-                }
+        let (label, components) = match &function.termination {
+            TerminationVerdict::Terminating {
+                ranking,
+                components,
+            } => (ranking.label(), components),
+            TerminationVerdict::SizeChange { components } => {
+                ("size-change".to_string(), components)
+            }
+            TerminationVerdict::NonRecursive | TerminationVerdict::Unproven { .. } => continue,
+        };
+        for component in components {
+            let key = component_key(component);
+            if seen.insert((label.clone(), key.clone())) {
+                out.push_str(&format!(
+                    "component {} {} {}\n",
+                    label,
+                    key,
+                    component.members.join(" ")
+                ));
             }
         }
     }
@@ -667,6 +767,18 @@ pub fn format_certificate(report: &FeasibilityReport) -> String {
                     function.function,
                     ranking.label(),
                     cycles
+                ));
+            }
+            TerminationVerdict::SizeChange { components } => {
+                let keys: Vec<String> = components.iter().map(component_key).collect();
+                let cycles = if keys.is_empty() {
+                    "-".to_string()
+                } else {
+                    keys.join(" ")
+                };
+                out.push_str(&format!(
+                    "terminates {} ranking size-change cycles {}\n",
+                    function.function, cycles
                 ));
             }
             TerminationVerdict::Unproven { .. } => {
@@ -927,6 +1039,58 @@ struct CallGraph {
 /// are measured only at their first positions, which can lose a proof but never
 /// invent one.
 const MAX_MEASURE: usize = 12;
+
+/// The deepest argument position a size-change graph tracks. A longer pattern
+/// declines the graph rather than approximating it.
+const MAX_SIZE_CHANGE_POSITION: usize = 32;
+
+/// The closure budget for size-change graphs. Reaching it is an honest decline:
+/// the program is not called non-terminating, and the report says no proof was
+/// found within the budget.
+const MAX_SIZE_CHANGE_GRAPHS: usize = 4096;
+
+/// One size-change graph: arcs from the caller's argument positions to the
+/// callee's. A `true` arc is strict.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SizeChangeGraph {
+    from: String,
+    to: String,
+    arcs: BTreeMap<(usize, usize), bool>,
+}
+
+impl SizeChangeGraph {
+    /// Compose `self` with `next`, following a value from the caller of `self`
+    /// through the middle function to the callee of `next`.
+    fn compose(&self, next: &Self) -> Self {
+        let mut arcs = BTreeMap::new();
+        for (&(from, middle), &left_strict) in &self.arcs {
+            for (&(middle2, to), &right_strict) in &next.arcs {
+                if middle != middle2 {
+                    continue;
+                }
+                let strict = left_strict || right_strict;
+                arcs.entry((from, to))
+                    .and_modify(|existing| *existing |= strict)
+                    .or_insert(strict);
+            }
+        }
+        Self {
+            from: self.from.clone(),
+            to: next.to.clone(),
+            arcs,
+        }
+    }
+
+    fn is_idempotent(&self) -> bool {
+        self.from == self.to && self.compose(self) == *self
+    }
+
+    fn has_strict_self_loop(&self) -> bool {
+        self.arcs
+            .iter()
+            .any(|(&(from, to), &strict)| from == to && strict)
+    }
+}
 
 impl CallGraph {
     fn build(program: &Program) -> Self {
@@ -1251,6 +1415,76 @@ impl CallGraph {
         }
     }
 
+    /// Prove a cyclic component by size change over **caller/callee position
+    /// pairs**, rather than one fixed measure.
+    ///
+    /// Each call contributes a graph whose arcs say how a value flows between
+    /// positions. Composing graphs follows a value around a cycle; a graph that
+    /// is its own composition is a possible infinite multipath shape. If every
+    /// such idempotent graph contains a strict self-loop, every infinite call
+    /// sequence must descend a well-founded measure infinitely often and cannot
+    /// exist. That is the size-change termination principle.
+    ///
+    /// The construction is deliberately conservative. A target argument that
+    /// carries a caller variable but cannot be mapped to a position declines the
+    /// whole proof: omitting a real flow could otherwise turn an under-approximation
+    /// into a false proof.
+    fn size_change_component(&self, id: usize) -> Result<Component, String> {
+        let mut graphs: Vec<SizeChangeGraph> = Vec::new();
+        for &index in &self.internal[id] {
+            let call = &self.calls[index];
+            let graph = size_change_graph(call).ok_or_else(|| {
+                format!(
+                    "`{}` -> `{}` in sentence {} has a data flow between argument positions that the size-change graph cannot map soundly",
+                    call.from, call.to, call.sentence
+                )
+            })?;
+            if !graphs.contains(&graph) {
+                graphs.push(graph);
+            }
+        }
+        if graphs.is_empty() {
+            return Err("the cycle has no call to build a size-change graph from".to_string());
+        }
+
+        let mut cursor = 0usize;
+        while cursor < graphs.len() {
+            let current = graphs[cursor].clone();
+            let next: Vec<SizeChangeGraph> = graphs
+                .iter()
+                .filter(|graph| graph.from == current.to)
+                .cloned()
+                .collect();
+            for graph in next {
+                let composed = current.compose(&graph);
+                if !graphs.contains(&composed) {
+                    if graphs.len() >= MAX_SIZE_CHANGE_GRAPHS {
+                        return Err(format!(
+                            "the size-change closure exceeded {MAX_SIZE_CHANGE_GRAPHS} graphs"
+                        ));
+                    }
+                    graphs.push(composed);
+                }
+            }
+            cursor += 1;
+        }
+
+        for graph in &graphs {
+            if graph.is_idempotent() && !graph.has_strict_self_loop() {
+                return Err(format!(
+                    "the size-change closure contains an idempotent graph `{}` -> `{}` with no strict self-loop",
+                    self.name(&graph.from),
+                    self.name(&graph.to)
+                ));
+            }
+        }
+
+        Ok(Component {
+            members: self.components[id].clone(),
+            strict: Vec::new(),
+        })
+    }
+
     /// The witness for a component: its members in an order in which every
     /// non-decreasing call inside it goes forward.
     fn order(&self, id: usize, edges: &[CallEdge]) -> Option<Vec<String>> {
@@ -1348,6 +1582,24 @@ fn termination_of(function: &Function, graph: &CallGraph) -> TerminationVerdict 
         }
     }
 
+    // A fixed measure cannot express a value handed from one argument position
+    // to another. Try the size-change closure before withholding the proof.
+    let mut size_change = Vec::new();
+    for &id in &cyclic {
+        match graph.size_change_component(id) {
+            Ok(component) => size_change.push(component),
+            Err(_) => {
+                size_change.clear();
+                break;
+            }
+        }
+    }
+    if !cyclic.is_empty() && size_change.len() == cyclic.len() {
+        return TerminationVerdict::SizeChange {
+            components: size_change,
+        };
+    }
+
     TerminationVerdict::Unproven {
         reason: match closest {
             Some((ranking, failure)) if failure.unbounded > 0 => format!(
@@ -1359,6 +1611,103 @@ fn termination_of(function: &Function, graph: &CallGraph) -> TerminationVerdict 
             Some((_, failure)) => failure.reason,
             None => "no measure applies".to_string(),
         },
+    }
+}
+
+/// Build the size-change graph for one call.
+///
+/// Positions are 1-based top-level terms. An exact occurrence is non-strict; a
+/// bracket whose contents are a suffix or subsequence of the caller's bracket is
+/// strict. Every source position that can carry the target term contributes an
+/// arc, because size-change composition must over-approximate every possible
+/// data flow.
+fn size_change_graph(call: &RawCall) -> Option<SizeChangeGraph> {
+    if call.pattern.len() > MAX_SIZE_CHANGE_POSITION || call.args.len() > MAX_SIZE_CHANGE_POSITION {
+        return None;
+    }
+    let mut arcs: BTreeMap<(usize, usize), bool> = BTreeMap::new();
+    for (argument_index, argument) in call.args.iter().enumerate() {
+        let target = argument_index + 1;
+        let mut mapped = false;
+        for (pattern_index, pattern) in call.pattern.iter().enumerate() {
+            let source = pattern_index + 1;
+            if binds_at_least_one_term(pattern) && same_term(pattern, argument) {
+                arcs.entry((source, target)).or_insert(false);
+                mapped = true;
+                continue;
+            }
+            let (TermKind::Bracket(pattern_inner), TermKind::Bracket(argument_inner)) =
+                (&pattern.kind, &argument.kind)
+            else {
+                continue;
+            };
+            match classify_containment(pattern_inner, argument_inner) {
+                CallClass::Strict => {
+                    arcs.entry((source, target))
+                        .and_modify(|strict| *strict = true)
+                        .or_insert(true);
+                    mapped = true;
+                }
+                CallClass::Nonstrict => {
+                    arcs.entry((source, target)).or_insert(false);
+                    mapped = true;
+                }
+                CallClass::Unknown => {}
+            }
+        }
+        if !mapped && term_has_variable(argument) {
+            return None;
+        }
+    }
+    Some(SizeChangeGraph {
+        from: canonical_identifier(&call.from),
+        to: canonical_identifier(&call.to),
+        arcs,
+    })
+}
+
+/// Classify a target bracket against a source bracket, looking through nested
+/// brackets when the target is a projection of their contents.
+///
+/// `Walk`'s pattern `((Ident e.N) e.Rest)` hands `(e.N)` to `Step`: the target
+/// is the contents of the nested `(Ident e.N)` without its tag, which is a
+/// strict sub-expression of the source bracket even though the direct sequence
+/// comparison cannot align the two.
+fn classify_containment(pattern_inner: &[Term], argument_inner: &[Term]) -> CallClass {
+    let direct = classify_sequence(pattern_inner, argument_inner);
+    if direct != CallClass::Unknown {
+        return direct;
+    }
+    for term in pattern_inner {
+        if let TermKind::Bracket(nested) = &term.kind {
+            let found = classify_containment(nested, argument_inner);
+            if found != CallClass::Unknown {
+                return found;
+            }
+        }
+    }
+    CallClass::Unknown
+}
+
+fn term_has_variable(term: &Term) -> bool {
+    match &term.kind {
+        TermKind::Variable(_) => true,
+        TermKind::Bracket(inner) => inner.iter().any(term_has_variable),
+        TermKind::Call { args, .. } => args.iter().any(term_has_variable),
+        TermKind::Block {
+            argument,
+            sentences,
+        } => {
+            argument.iter().any(term_has_variable)
+                || sentences.iter().any(|sentence| {
+                    sentence
+                        .conditions
+                        .iter()
+                        .any(|condition| condition.result.iter().any(term_has_variable))
+                        || sentence.result.iter().any(term_has_variable)
+                })
+        }
+        TermKind::Symbol(_) => false,
     }
 }
 
@@ -1793,17 +2142,12 @@ mod tests {
         assert_eq!(termination(source, "Id"), TerminationVerdict::NonRecursive);
     }
 
-    /// **A measured gap in the analysis: a cycle that hands a value across
-    /// argument *positions* is not proved.**
+    /// **A cycle that hands a value across argument positions is proved by size
+    /// change.**
     ///
-    /// The analysis ranks the **same argument index** on both sides of a call —
-    /// it compares the caller's `measure`-th pattern term with the callee's
-    /// `measure`-th argument — so a value that moves from one position to another
-    /// is invisible to it, however obviously it shrinks.
-    ///
-    /// `SpliceL` and `SpliceOne` in `examples/compiler.ref` are exactly that
-    /// shape, and they are why `refal feasibility examples/compiler.ref` reports
-    /// 362 functions unproven. This is the smallest program with the shape:
+    /// A fixed measure ranks the same argument index on both sides of a call, so
+    /// a value that moves from one position to another is invisible to it. This
+    /// is the smallest program with that shape:
     ///
     /// ```text
     /// Walk (e.P) ((Ident e.N) e.Rest) = <Step (e.P) (e.N) (e.Rest)>;
@@ -1811,31 +2155,44 @@ mod tests {
     /// ```
     ///
     /// The cycle is `Walk.arg2 -> Step.arg3 -> Walk.arg2`. `Walk.arg2` strictly
-    /// contains `Step.arg3` — `(Ident e.N)` is dropped — so the cycle descends and
-    /// the program terminates: every call passes a strictly smaller bracket. The
-    /// analysis compares index 2 with index 2 and index 3 with index 3, finds no
-    /// strict edge, and says so rather than guessing.
+    /// contains `Step.arg3` — `(Ident e.N)` is dropped — so the cycle descends
+    /// and the program terminates. The size-change closure composes the two
+    /// graphs, finds a strict self-loop, and the certificate re-checks it.
     ///
-    /// What closes it is a **size-change graph over (caller index, callee index)
-    /// pairs** rather than a family of same-index measures. That is the named
-    /// next step for the Tier 1 row, and this gate asserts the *current* verdict
-    /// so that fixing the analysis turns it red.
+    /// The gate is written as a proof, not as an assertion of the old failure:
+    /// reverting to same-index measures turns it red.
     #[test]
-    fn a_cycle_that_hands_a_value_across_argument_positions_is_not_yet_proved() {
+    fn a_cycle_that_hands_a_value_across_argument_positions_is_proved_by_size_change() {
         let source = "$ENTRY Go { (e.P) (e.X) = <Walk (e.P) (e.X)>; }\n\
                       Walk { (e.P) () = ;\n\
                              (e.P) ((Ident e.N) e.Rest) = <Step (e.P) (e.N) (e.Rest)>;\n\
                              (e.P) (t.T e.Rest) = <Walk (e.P) (e.Rest)>; }\n\
                       Step { (e.P) (e.N) (e.Rest) = <Walk (e.P) (e.Rest)>; }";
-        let TerminationVerdict::Unproven { reason } = termination(source, "Walk") else {
+        let program = parse(source);
+        let report = analyse(&program);
+        let walk = report
+            .functions
+            .iter()
+            .find(|function| function.function == "Walk")
+            .expect("Walk");
+        let TerminationVerdict::SizeChange { components } = &walk.termination else {
             panic!(
-                "the analysis does not prove this cycle today; if it does, the \
-                 Tier 1 row has moved and this gate must be rewritten"
+                "the value moves Walk.2 -> Step.3 -> Walk.2, so a fixed same-index \
+                 measure cannot prove it and size change must: {:?}",
+                walk.termination
             );
         };
+        assert_eq!(components.len(), 1);
         assert!(
-            reason.contains("Step"),
-            "the reason must name the function that blocked the proof:\n{reason}"
+            components[0]
+                .members
+                .iter()
+                .any(|member| member.eq_ignore_ascii_case("Step"))
+        );
+        assert!(
+            verify(&report, &program).is_empty(),
+            "the certificate must re-check: {:?}",
+            verify(&report, &program)
         );
     }
 

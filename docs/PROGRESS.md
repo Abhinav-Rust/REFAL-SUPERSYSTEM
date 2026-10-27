@@ -113,6 +113,22 @@ corrected reuse: 105 configurations, closed at **305 steps**, with the gate run 
 400. Completion stays **~93.4%**: this closes a correctness defect, not one of the
 weighted open rows.
 
+### Done — size change across argument positions (2026-10-27)
+
+`refal feasibility` now proves termination when a value moves between argument
+positions. Each call becomes a **size-change graph**: arcs run from caller
+positions to callee positions, strict where the target is a proper subexpression
+of the source. The analysis composes graphs to a fixed point, and every
+idempotent graph in the closure must contain a strict self-loop. The verifier
+rebuilds the graphs and reruns the closure; it does not trust the reported
+components.
+
+The gate is `a_cycle_that_hands_a_value_across_argument_positions_is_proved_by_size_change`,
+the former measured gap. On `examples/compiler.ref` the unproven set moves from
+**362 to 359 functions**. The remaining 359 are mostly flows through bare `e.`
+sequence variables, which the conservative mapping declines rather than
+approximating; the Tier 1 credit therefore stays withheld. No figure moves.
+
 ### Measured — the self-compilation cost, decomposed (2026-10-16)
 
 The L2/L4 compiler-in-Refal row withholds 1.05 for "not yet fast on very large
@@ -3336,14 +3352,13 @@ Refal-authored compiler and a `Compile` that drives.
 
 ## NEXT ACTION
 
-> **2026-10-27 — the immediate lead is Tier 1's cross-argument size-change graph.**
-> The pattern-partition self-hosting divergence is fixed and gated on 78 examples;
-> `compiler.ref` now emits the same 123,572-byte pattern residual on both sides.
-> Replace the same-index measure family in `refal-semantics/src/feasibility.rs`
-> with relations over caller/callee argument positions. The gate to turn is
-> `a_cycle_that_hands_a_value_across_argument_positions_is_not_yet_proved`; do not
-> raise the Tier 1 credit until the compiler's measured unproven set improves and
-> the certificate verifier accepts the new proof shape.
+> **2026-10-27 — the size-change graph is built and gated.** The pattern partition
+> self-hosts exactly (78/78; 123,572 bytes on `compiler.ref`), and cross-position
+> termination is proved with a re-checked closure. The immediate lead is the
+> remaining Tier 1 mapping gap: extend size-change arcs through **bare `e.`
+> sequence variables**, which account for most of the 359 unproven functions.
+> Keep the credit withheld until the measured set falls materially and the
+> certificate still re-checks; no figure moves for a proof shape alone.
 
 **§4.4's other half, then the remaining relational forms.** The projections
 (E-14) are closed: all three are commands with gates.
@@ -3920,17 +3935,14 @@ projection found a dead dedup test and a cursor where a source belongs.
    level indices, on top of §6.4's level-carrying unknown. The last of the named
    behaviours, and the least likely to be attempted, because nothing in the
    product's own acceptance criteria asks for it.
-9. **The size-change graph for Tier 1 termination (2026-10-16).** `classify`
-   compares the caller's `measure`-th pattern term with the callee's `measure`-th
-   argument, so a cycle that hands a value across argument positions is invisible
-   to it — `SpliceL` → `SpliceOne` → `SpliceL` is that shape, and it is why 362
-   functions of `compiler.ref` come back unproven. Replacing the same-index
-   measure family with a **size-change graph over (caller index, callee index)
-   pairs**, closed under composition and checked for a strict descent on every
-   idempotent cycle, is the standard construction and is what the Tier 1 row's
-   withheld 1.00 turns on. The smallest program with the shape is pinned by
-   `a_cycle_that_hands_a_value_across_argument_positions_is_not_yet_proved`, so
-   the work is done when that gate goes red.
+9. ~~**The size-change graph for Tier 1 termination.**~~ **Built 2026-10-27.**
+   Caller/callee position graphs are closed under composition, every idempotent
+   graph must carry a strict self-loop, and the verifier reruns the closure. The
+   former gap is now the positive gate
+   `a_cycle_that_hands_a_value_across_argument_positions_is_proved_by_size_change`.
+   `compiler.ref` moves from 362 to **359** unproven functions. The remaining
+   limitation is mapping through **bare `e.` sequence variables**; until those
+   flows are approximated soundly, the Tier 1 1.00 stays withheld.
 
 **The order this paragraph used to carry is closed, including its item 0.** The
 `--configurations` transition-list divergence is gone: `DsHasTrL` tested a
