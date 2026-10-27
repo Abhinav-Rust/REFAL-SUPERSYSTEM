@@ -3758,22 +3758,12 @@ DsSplitSeq {
 * own sentences; it is replaced by the sentence-identity test
 * (`DsPatFindSent`/`DsPatHas`) against the entries `DsSetSents` already stores.
 *
-* **Known divergence, measured 2026-10-16.** On the compiler's own source this
-* partition does not yet match the oracle. `refal residualize-driven
-* examples/compiler.ref --split pattern` exits 0 and emits 116,790 bytes; the
-* Refal-authored `RESIDUALIZE-DRIVEN-PATTERN` exits 1 after ~162 s with
-* `runtime error: no sentence matched in function EmitTerms`. Instrumenting the
-* emitter locates the term: it is in the **result** of the split's
-* `('SPECIALISE') (e.Interpreter) (e.Program)` sentence, and it is a bracket
-* that `EmitTerms` has no sentence for. `EmitTerms` accepts exactly one bracket
-* shape -- `(BR e.Inner)` -- so the term is a bracket that reached the emitter
-* **without the metacode `BR` tag**, and its contents are the metacode of
-* `(<Chr 10>)` and of `<StripCR (<Chr 13>) e.Interpreter>`: the argument list
-* of the `Lex` call the oracle renders flat as
-* `<Lex (<Chr 10>) <StripCR (<Chr 13>) e.Program>>`. The defect is therefore in
-* how this partition rebuilds a call inside a branch's result, not in the
-* partition's own branch patterns. `compiler.ref` is not in the corpus, which is
-* why the corpus gate (`77 of 77`) is green and this sits outside it.
+* Alpha-equivalent residual reuse is part of this partition's contract. The
+* `drive-alpha-rename` fixture requires nested `BR`/`CALL` structure and the
+* current variable's spelling to survive that reuse; it is the minimal form of
+* the `EmitTerms` failure this source reached on 2026-10-16. The walker that
+* performs the rename is below, and keeps its public bracketed result separate
+* from the spread its recursive reconstruction needs.
 
 * The strategy character the driver was entered with. `DsSteps` and its
 * neighbours read the rest of the state; this reads the axis.
@@ -4411,7 +4401,7 @@ DsVarPairs {
 DsVarPairsL {
   () (e.C) (e.Acc) = (e.Acc);
   ((VAR s.K e.L) e.SRest) ((VAR s.K2 e.R) e.CRest) (e.Acc) =
-    <DsVarPairsL (e.SRest) (e.CRest) (e.Acc (VP (<Canon e.L>) (<Canon e.R>)))>;
+    <DsVarPairsL (e.SRest) (e.CRest) (e.Acc (VP (<Canon e.L>) (e.R)))>;
   ((BR e.L) e.SRest) ((BR e.R) e.CRest) (e.Acc) =
     <DsVarPairsL (e.SRest) (e.CRest) <DsVarPairs (e.L) (e.R) (e.Acc)>>;
   ((CALL (ID e.N) e.L) e.SRest) ((CALL (ID e.N2) e.R) e.CRest) (e.Acc) =
@@ -4419,21 +4409,23 @@ DsVarPairsL {
   (t.L e.SRest) (t.R e.CRest) (e.Acc) = <DsVarPairsL (e.SRest) (e.CRest) (e.Acc)>;
 }
 
+* The public result is one bracketed term sequence; the recursive walker returns
+* a spread so a BR/CALL rebuild does not insert that bracket as an extra term.
 DsRename {
-  (e.Terms) (e.Pairs) = <DsRenameL (e.Terms) (e.Pairs) ()>;
+  (e.Terms) (e.Pairs) = (<DsRenameL (e.Terms) (e.Pairs) ()>);
 }
 
 DsRenameL {
-  () (e.Pairs) (e.Acc) = (e.Acc);
+  () (e.Pairs) (e.Acc) = e.Acc;
   ((VAR s.K e.N) e.Rest) (e.Pairs) (e.Acc),
     <DsPairTo (e.Pairs) (<Canon e.N>)> : (SOME (e.To)) =
       <DsRenameL (e.Rest) (e.Pairs) (e.Acc (VAR s.K e.To))>;
   ((VAR s.K e.N) e.Rest) (e.Pairs) (e.Acc) =
       <DsRenameL (e.Rest) (e.Pairs) (e.Acc (VAR s.K e.N))>;
   ((BR e.X) e.Rest) (e.Pairs) (e.Acc) =
-      <DsRenameL (e.Rest) (e.Pairs) (e.Acc (BR <DsRename (e.X) (e.Pairs)>))>;
+      <DsRenameL (e.Rest) (e.Pairs) (e.Acc (BR <DsRenameL (e.X) (e.Pairs) ()>))>;
   ((CALL (ID e.N) e.Args) e.Rest) (e.Pairs) (e.Acc) =
-      <DsRenameL (e.Rest) (e.Pairs) (e.Acc (CALL (ID e.N) <DsRename (e.Args) (e.Pairs)>))>;
+      <DsRenameL (e.Rest) (e.Pairs) (e.Acc (CALL (ID e.N) <DsRenameL (e.Args) (e.Pairs) ()>))>;
   (t.T e.Rest) (e.Pairs) (e.Acc) = <DsRenameL (e.Rest) (e.Pairs) (e.Acc t.T)>;
 }
 

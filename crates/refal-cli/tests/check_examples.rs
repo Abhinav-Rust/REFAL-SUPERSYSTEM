@@ -7458,13 +7458,15 @@ fn the_second_projection_emits_a_compiler_that_decides_its_branches() {
 /// compiled away.
 #[test]
 fn the_supercompiler_derives_a_compiler_that_runs() {
+    // Span-insensitive completed-residual reuse changes the drive: 67
+    // configurations at the old 200-step cut-off, 105 and closure at 305.
     let output = Command::new(refal_bin())
         .args([
             "project2",
             &workspace_path("examples/compiler.ref"),
             "Dispatch",
             "--steps",
-            "200",
+            "400",
         ])
         .output()
         .expect("run refal binary");
@@ -7472,6 +7474,10 @@ fn the_supercompiler_derives_a_compiler_that_runs() {
     assert!(
         output.status.success(),
         "a closed projection exits zero:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("driving steps: 305"),
+        "alpha-equivalent residual reuse changes the measured closure to 305 steps:\n{stdout}"
     );
     assert!(
         stdout.contains("walk: closed"),
@@ -7866,8 +7872,13 @@ fn the_pattern_partition_is_ported_to_the_refal_authored_driver() {
          diverged: {diverged:?}\nmatched: {matched:?}"
     );
     assert!(
-        matched.len() >= 77,
-        "the corpus is 77 drivable examples; only {} agreed\nmatched: {matched:?}",
+        matched.iter().any(|m| m == "drive-alpha-rename"),
+        "alpha-equivalent reuse must preserve nested BR/CALL structure\n\
+         matched: {matched:?}\ndiverged: {diverged:?}"
+    );
+    assert!(
+        matched.len() >= 78,
+        "the corpus is 78 drivable examples; only {} agreed\nmatched: {matched:?}",
         matched.len()
     );
 }
@@ -7943,8 +7954,8 @@ fn the_partition_search_is_ported_to_the_refal_authored_driver() {
          diverged: {diverged:?}\nmatched: {matched:?}"
     );
     assert!(
-        matched.len() >= 77,
-        "the corpus is 77 drivable examples; only {} agreed\nmatched: {matched:?}",
+        matched.len() >= 78,
+        "the corpus is 78 drivable examples; only {} agreed\nmatched: {matched:?}",
         matched.len()
     );
 }

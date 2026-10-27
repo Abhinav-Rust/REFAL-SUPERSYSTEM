@@ -1,0 +1,31 @@
+* Alpha-equivalent residual reuse must preserve nested BR/CALL structure and the
+* current variable's spelling. The two Lex calls are the same configuration up
+* to renaming; the second reuses the first one's residual.
+$EXTERN Chr;
+$ENTRY Go {
+  e.X = <F e.X>;
+}
+
+F {
+  ('SPECIALISE') (e.Interpreter) (e.Program) =
+    <Specialise (e.Interpreter) (e.Program)>;
+  ('OTHER') (e.Interpreter) (e.Program) = 'other';
+}
+
+Specialise {
+  (e.Interpreter) (e.Program) =
+    (<Lex (<Chr 10>) <StripCR (<Chr 13>) e.Program>>) (<LexSource e.Interpreter>);
+}
+
+LexSource {
+  e.Source = <Lex (<Chr 10>) <StripCR (<Chr 13>) e.Source>>;
+}
+
+Lex {
+  e.X = e.X;
+}
+
+StripCR {
+  (e.CR) s.C e.R = s.C <StripCR (e.CR) e.R>;
+  (e.CR) = ;
+}

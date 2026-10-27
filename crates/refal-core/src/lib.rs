@@ -1302,10 +1302,7 @@ fn collect_variable_pairs(
                 CoreTermKind::Variable {
                     name: right_name, ..
                 },
-            ) => pairs.push((
-                left_name.to_ascii_lowercase(),
-                right_name.to_ascii_lowercase(),
-            )),
+            ) => pairs.push((left_name.to_ascii_lowercase(), right_name.clone())),
             (CoreTermKind::Bracket(left_inner), CoreTermKind::Bracket(right_inner)) => {
                 collect_variable_pairs(left_inner, right_inner, pairs);
             }
@@ -1659,7 +1656,8 @@ impl<'a> DriveContext<'a> {
             .completed
             .iter()
             .find(|(configuration, _)| {
-                configuration.state == state && configuration.canonical == canonical
+                configuration.state == state
+                    && term_sequences_same_kind(&configuration.canonical, &canonical)
             })
             .map(|(configuration, residual)| (configuration.input.clone(), residual.clone()))?;
         if stored_input == input {

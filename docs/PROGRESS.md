@@ -68,61 +68,50 @@ which are the two sides of the default/normalise split.
 `the_refal_authored_driven_residualizer_is_total_when_the_budget_runs_out` cover
 the budget-exhausted arm on both sides, the second by byte-comparing against the
 Rust oracle at budgets 1, 2, 5 and 12. The T-4/T-6 differential
-corpus gate is green at `cases: 71`, `positive: 31`, `check-failure: 6`,
+corpus gate is green at `cases: 72`, `positive: 32`, `check-failure: 6`,
 `runtime-failure: 1`, `residual: 33`, `cleaned-sentences: 1`, and
 `clippy --all-targets -D warnings` and `cargo fmt --check` are clean.
 
 The **constructor-entering partition** is ported into the Refal-authored driver
 and is now **exact**: `RESIDUALIZE-DRIVEN-PATTERN` agrees with
 `residualize-driven --split pattern` byte for byte on **every example the oracle
-drives** (77 of 77, 2026-10-12), with the gate requiring `diverged.is_empty()`.
+drives** (78 of 78, 2026-10-27), with the gate requiring `diverged.is_empty()`.
 It is now **complete** — it falls back to the sequence partition wherever the
 callee's own patterns cannot name the component — and the search over both
 partitions is the **compiler's default**: `RESIDUALIZE-DRIVEN`,
 `RESIDUALIZE-DRIVEN n`, `Compile` and `residualize-driven` all search, so **E-11 is
 closed**. All three modes are gated on the corpus, each against its Rust
-counterpart, byte for byte on 77 of 77 (2026-10-15).
+counterpart, byte for byte on 78 of 78 (2026-10-27).
 
-### Investigated — where the pattern partition's divergence is (2026-10-16)
+### Done — alpha-equivalent residual reuse preserves the AST (2026-10-27)
 
-The measurement above found that `RESIDUALIZE-DRIVEN-PATTERN` errors on the
-compiler's own source while the Rust oracle succeeds. This is where it happens,
-and it is not where the source first said.
+The compiler's `RESIDUALIZE-DRIVEN-PATTERN` failure is closed. The minimal
+reproducer is `examples/drive-alpha-rename.ref`: two calls are the same
+configuration up to a variable renaming, so the second reuses the first's
+residual. The result contains nested calls inside brackets, the shape the old
+corpus did not exercise.
 
-**It is not the complement branch.** The comment on the pattern partition claimed
-the complement branch was "deliberately not ported". It is ported: `DsPatEntry2`
-returns the sentence's own result for a bare `e.`/`t.` component whose leading
-pattern terms are variable-free, and `DsPatLoop` emits it without driving. What
-is unported is the `pattern_splits` registry, replaced by the sentence-identity
-test `DsPatFindSent`/`DsPatHas` — which is what the corpus gate's own comment
-already says. The claim is corrected in place.
+**The Refal defect was the spread/bracket boundary.** `DsRename` returned one
+bracketed sequence, and its recursive `BR`/`CALL` reconstruction inserted that
+sequence as a single untagged bracket. The public wrapper still returns one
+bracketed sequence, but `DsRenameL` now returns a spread and is what recursive
+reconstruction calls. `DsVarPairsL` also keeps the current variable's actual
+spelling as the rename target rather than its canonical lowercase key.
 
-**It is a term the emitter has no sentence for, in a branch's *result*.**
-Instrumenting `EmitSents` and `EmitTerms` locates it: the last sentence emitted is
-the split's `('SPECIALISE') (e.Interpreter) (e.Program)` sentence, whose *pattern*
-emits cleanly, and the unhandled term arrives from its result. `EmitTerms` accepts
-exactly one bracket shape — `(BR e.Inner)` — so the term is a bracket that reached
-the emitter **without the metacode `BR` tag**; its contents are the metacode of
-`(<Chr 10>)` and of `<StripCR (<Chr 13>) e.Interpreter>`, the argument list of the
-`Lex` call the oracle renders flat as
-`<Lex (<Chr 10>) <StripCR (<Chr 13>) e.Program>>`. The defect is in how the
-partition rebuilds a call inside a branch's result.
+**The Rust side had the matching span defect.** Canonical configurations were
+still compared with derived `==`, which includes source spans. The completed-residual lookup now uses
+`term_sequences_same_kind`; `collect_variable_pairs` likewise preserves the
+current name. This is why the two sides now agree on the new fixture instead of
+one whistle/generalisation report versus one completed-residual reuse.
 
-**A guard was tried, and it is not the fix.** The sequence partition refuses to
-split when the input holds an unevaluated call or block (`DsCharisable`), because
-a call is not a term a Refal pattern may contain; the pattern partition did not
-apply that test. Adding it is principled — and it changes nothing measurable: the
-corpus stays 77 of 77 and `compiler.ref` still fails with the same message after
-~136 s instead of ~162 s. It is therefore **not** committed, because a behavioural
-change with no gate behind it is what this repository refuses to carry. It is
-recorded here as the first thing to re-examine if the result-side defect turns out
-to have a pattern-side partner.
-
-**The gate this needs.** `compiler.ref` is excluded *by name* from
-`the_pattern_partition_is_ported_to_the_refal_authored_driver`, which is why a
-77-of-77 sweep is green beside a divergence on the compiler's own source. The next
-step is the smallest program whose branch result rebuilds a call, so the gate can
-be cheap; a sweep that includes `compiler.ref` costs ~3 minutes of driving per run.
+**Gates.** The pattern partition is byte-identical on **78 of 78** drivable
+examples, with `drive-alpha-rename` required as a witness. The Refal-authored
+pattern partition now completes on `compiler.ref` itself and emits the same
+**123,572-byte** residual as the Rust implementation; the old `EmitTerms`
+failure is gone. The 2nd-projection `Dispatch` walk was re-measured under the
+corrected reuse: 105 configurations, closed at **305 steps**, with the gate run at
+400. Completion stays **~93.4%**: this closes a correctness defect, not one of the
+weighted open rows.
 
 ### Measured — the self-compilation cost, decomposed (2026-10-16)
 
@@ -149,18 +138,13 @@ at both ends of the compilation axis. `cargo xtask perf` measures the decomposit
 now rather than only the total, so the 282.9 s of `RESIDUALIZE-DRIVEN` sits beside
 one drive at 53.9 s and the other partition at 161.8 s.
 
-**The pattern partition does not lose a cost comparison — it errors.** Run alone on
-the compiler's own source it exits **1** with
-
-```
-runtime error: no sentence matched in function `EmitTerms`
-```
-
-so there is no pattern residue to compare at all and the 161.8 s it spent is
-discarded. The corpus is green for this partition (77 of 77), so the failure is
-specific to the compiler's own source — a shape its patterns reach that the fallback
-does not cover. That is a different, and more tractable, statement than a cost
-comparison the sequence partition happened to win.
+**The pattern partition's failure was corrected on 2026-10-27.** The 2026-10-16
+run exited **1** in `EmitTerms`, so its 161.8 s was discarded and no cost
+comparison could be made. Alpha-equivalent residual reuse now preserves nested
+`BR`/`CALL` structure and variable spelling on both implementations; the Refal
+run completes and the 78-example differential is green. The historical timing
+above is retained as the measurement that located the defect, not as a current
+performance claim.
 
 **The profile, on one drive** (`cargo xtask profile RESIDUALIZE-DRIVEN-COMPILATIVE
 examples/compiler.ref`): 6,089,849 calls, led by `SameChars` **32.0%**,
@@ -3351,6 +3335,15 @@ Refal-authored compiler and a `Compile` that drives.
 ---
 
 ## NEXT ACTION
+
+> **2026-10-27 — the immediate lead is Tier 1's cross-argument size-change graph.**
+> The pattern-partition self-hosting divergence is fixed and gated on 78 examples;
+> `compiler.ref` now emits the same 123,572-byte pattern residual on both sides.
+> Replace the same-index measure family in `refal-semantics/src/feasibility.rs`
+> with relations over caller/callee argument positions. The gate to turn is
+> `a_cycle_that_hands_a_value_across_argument_positions_is_not_yet_proved`; do not
+> raise the Tier 1 credit until the compiler's measured unproven set improves and
+> the certificate verifier accepts the new proof shape.
 
 **§4.4's other half, then the remaining relational forms.** The projections
 (E-14) are closed: all three are commands with gates.

@@ -2,9 +2,25 @@
 
 ## Unreleased
 
-**Where the pattern partition's divergence is — and a claim in the source that was wrong.**
+**The pattern partition now self-hosts: alpha-equivalent residual reuse is exact.**
 
-- **The Refal-authored pattern partition still diverges from the oracle on the
+- **`RESIDUALIZE-DRIVEN-PATTERN` completes on `compiler.ref`** and emits the same
+  **123,572-byte** residual as the Rust implementation. The former
+  `no sentence matched in EmitTerms` failure is closed.
+- **The minimal gate is `examples/drive-alpha-rename.ref`.** The Refal renaming
+  walker now distinguishes its public bracketed result from the spread required
+  by recursive `BR`/`CALL` reconstruction, and preserves the current variable's
+  spelling instead of substituting its canonical lowercase key.
+- **Completed-residual lookup no longer includes source spans.** Rust's reuse
+  check uses structural equality, and its variable pairing preserves current names.
+- **The 2nd-projection gate is measured again.** Corrected reuse changes the
+  `Dispatch` walk from 67 configurations at the old 200-step cut-off to 105 and
+  closure at **305 steps**; the gate runs at 400 and pins the measured count. The pattern partition and search are
+  byte-identical across **78 of 78** drivable examples.
+
+**Historical diagnosis (2026-10-16), superseded by the fix above.**
+
+- **The Refal-authored pattern partition then diverged from the oracle on the
   compiler's own source.** `refal residualize-driven examples/compiler.ref --split
   pattern` exits 0 with 116,790 bytes; `RESIDUALIZE-DRIVEN-PATTERN` exits 1 with
   `no sentence matched in function EmitTerms`. `compiler.ref` is excluded by name
@@ -35,8 +51,8 @@
   decomposes it** rather than printing only the total: `RESIDUALIZE-DRIVEN` **282.9 s**
   beside one drive at **53.9 s** and the other partition at **161.8 s**; the
   self-application is **280.6 s**.
-- **A recorded reason is wrong.** The pattern partition does not lose a cost
-  comparison — run alone on `compiler.ref` it **errors**, `exit 1`, with
+- **A recorded reason was wrong.** In that measurement the pattern partition did
+  not lose a cost comparison — run alone on `compiler.ref` it **errored**, `exit 1`, with
   `runtime error: no sentence matched in function 'EmitTerms'`, so there is no
   pattern residue to compare and the 161.8 s it spent is discarded. The corpus is
   green for that partition (77 of 77), so the shape is specific to the compiler's
