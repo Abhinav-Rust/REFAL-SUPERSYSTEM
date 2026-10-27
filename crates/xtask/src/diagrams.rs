@@ -1740,6 +1740,153 @@ fn engine(p: &Palette) -> String {
     )
 }
 
+// --------------------------------------------------------------------------
+// The verifier -- four proof shapes, and the honest fifth case
+// --------------------------------------------------------------------------
+fn verification(p: &Palette) -> String {
+    let h = 470.0;
+    let mut out = header(p, "TIER 1", "How a termination claim is earned", h);
+    let top = 142.0;
+    let card_w = 265.0;
+    let gap = 20.0;
+    let cards = [
+        (
+            "1 \u{b7} WITNESS",
+            "A concrete input",
+            "matches the sentence, and no earlier one. Re-checked, not asserted.",
+        ),
+        (
+            "2 \u{b7} DESCENT",
+            "A smaller argument",
+            "a proper sub-run passes on every recursive call.",
+        ),
+        (
+            "3 \u{b7} MEASURE",
+            "One position falls",
+            "the same argument index shrinks, or a lexicographic pair does.",
+        ),
+        (
+            "4 \u{b7} SIZE CHANGE",
+            "A value moves",
+            "caller position 2 \u{2192} callee 3 \u{2192} back; the composed cycle still falls.",
+        ),
+    ];
+    for (i, (title, headline, detail)) in cards.iter().enumerate() {
+        let x = 40.0 + i as f64 * (card_w + gap);
+        let tone = if i == 3 {
+            (p.okbg, p.okbd, p.ok)
+        } else {
+            (p.cardbg, p.cardbd, p.fink)
+        };
+        out.push(rect(x, top, card_w, 194.0, tone.0, Some(tone.1), 12.0, 1.5));
+        out.push(text(
+            x + 16.0,
+            top + 24.0,
+            title,
+            11.0,
+            if i == 3 { p.ok } else { p.muted },
+            Txt::ws("650", "1.0"),
+        ));
+        out.push(text(
+            x + 16.0,
+            top + 52.0,
+            headline,
+            13.5,
+            tone.2,
+            Txt::w("650"),
+        ));
+        for (k, line) in wrap_lines(detail, 29).iter().take(5).enumerate() {
+            out.push(t(
+                x + 16.0,
+                top + 80.0 + k as f64 * 17.0,
+                line,
+                11.5,
+                p.muted,
+            ));
+        }
+        // A small glyph per proof shape, so the distinction is visible before
+        // the prose is read.
+        let gy = top + 158.0;
+        match i {
+            0 => {
+                out.push(text(x + 18.0, gy, "\u{2713}", 22.0, p.ok, Txt::w("700")));
+                out.push(text(
+                    x + 46.0,
+                    gy,
+                    "input \u{2192} match",
+                    11.0,
+                    p.muted,
+                    Txt::w("500"),
+                ));
+            }
+            1 => {
+                out.push(text(x + 18.0, gy, "\u{2193}", 22.0, p.ok, Txt::w("700")));
+                out.push(text(
+                    x + 46.0,
+                    gy,
+                    "outer \u{2283} inner",
+                    11.0,
+                    p.muted,
+                    Txt::w("500"),
+                ));
+            }
+            2 => {
+                out.push(text(x + 18.0, gy, "\u{2193}", 22.0, p.ok, Txt::w("700")));
+                out.push(text(
+                    x + 46.0,
+                    gy,
+                    "position k \u{2192} k",
+                    11.0,
+                    p.muted,
+                    Txt::w("500"),
+                ));
+            }
+            _ => {
+                out.push(text(x + 18.0, gy, "\u{21c4}", 22.0, p.ok, Txt::w("700")));
+                out.push(text(
+                    x + 46.0,
+                    gy,
+                    "position 2 \u{21c4} 3",
+                    11.0,
+                    p.muted,
+                    Txt::w("500"),
+                ));
+            }
+        }
+    }
+
+    out.push(rect(
+        40.0,
+        356.0,
+        1120.0,
+        34.0,
+        p.outbg,
+        Some(p.outbd),
+        9.0,
+        1.2,
+    ));
+    out.push(text(
+        56.0,
+        378.0,
+        "None of the four?  The function is reported unproven, and the blocking call is named \u{2014} never guessed.",
+        12.0,
+        p.out,
+        Txt::w("600"),
+    ));
+
+    out.extend(footer(
+        p,
+        406.0,
+        "Every claim carries a certificate the verifier rebuilds from the source: witnesses are re-matched and size-change graphs are re-closed.",
+    ));
+    wrap(
+        h,
+        "How a termination claim is earned",
+        "Four proof shapes as cards: a re-checked ground witness; structural descent into a smaller argument; a fixed argument position that falls; and size change where a value moves between caller and callee positions and the composed cycle still falls. A footer says that when none applies the function is reported unproven and the blocking call is named, never guessed.",
+        &out,
+    )
+}
+
 /// One generated diagram: its file stem, and the function that draws it.
 type Diagram = (&'static str, fn(&Palette) -> String);
 
@@ -1750,8 +1897,9 @@ pub fn run() {
         eprintln!("cannot create {}: {err}", outdir.display());
         std::process::exit(1);
     }
-    let diagrams: [Diagram; 15] = [
+    let diagrams: [Diagram; 16] = [
         ("engine", engine),
+        ("verification", verification),
         ("supercompilation", supercompilation),
         ("glance", glance),
         ("projections", projections),

@@ -12,9 +12,21 @@
   not trust the reported components or their order.
 - **The former measured gap is a positive gate:**
   `a_cycle_that_hands_a_value_across_argument_positions_is_proved_by_size_change`.
-  On `compiler.ref`, unproven functions fall from **362 to 359**. The Tier 1
-  credit remains withheld because most remaining failures flow through bare `e.`
-  sequence variables that the conservative mapping declines.
+  On `compiler.ref`, unproven functions fell from **362 to 359** at that commit.
+- **Sequence tails and nested brackets are tracked too.** A bare `e.` argument
+  that is a suffix of a caller bracket contributes a strict arc, and a nested
+  bracket reached through another bracket is a strict projection. With the five
+  reachability helpers added by the fixpoint work, the current source reports
+  **354** unproven functions (from 364 before these arcs). The Tier 1 credit
+  remains withheld: remaining failures cross computed calls or genuinely grow.
+
+**The README now shows how a claim is checked.**
+
+- **New generated panel `verification-{light,dark}.svg`:** the four proof shapes
+  used by the Tier 1 verifier — re-checked witness, structural descent, fixed
+  measure, and size change across argument positions — plus the honest unproven
+  case. It replaces another paragraph with a picture and follows the same
+  theme-aware, idempotent generation as the rest of the README diagrams.
 
 **`compile` is now a fixpoint on every accepted example.**
 

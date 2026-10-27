@@ -396,6 +396,21 @@ operations at the centre of the language.
 
 </details>
 
+## How a claim is checked
+
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/verification-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/verification-light.svg">
+  <img alt="Four proof shapes used by the Tier 1 verifier: a re-checked ground witness; structural descent into a smaller argument; a fixed argument position that falls; and size change where a value moves between caller and callee positions and the composed cycle still falls. When none applies, the function is reported unproven and the blocking call is named." src="docs/images/verification-light.svg" width="100%">
+</picture>
+
+</div>
+
+The verifier rebuilds every claim from the source: witnesses are re-matched and
+size-change graphs are re-closed. It never guesses the cases it cannot settle.
+
 ## Project status
 
 ### Honest completion: ~93.4%
@@ -428,7 +443,7 @@ compiler's own number as the project's would misdescribe what this repository is
 | **L0 · Refal machine / runtime** | **13.65** | **13.65** | **0.00** | closed — a block sentence carrying a condition now runs on the work list exactly as a named call does, so a recursion through one no longer uses the host stack. The gate drives 100,000 such steps, which overflowed the stack before the fix |
 | **L1 · Reflection engine** | **9.00** | **9.00** | **0.00** | closed — the service is exposed as `refal reflect`, with four shape gates |
 | L2 · Graph of states / emission | 5.95 | 5.50 | 0.45 | **§4.4's other half (E-7)** — 0.45, a Tier-2 research item. **E-11 is closed**: the pattern partition is now **complete** — wherever the callee's own patterns cannot name the component it hands over to the sequence partition — so the merged `Rev` form folds under *both* partitions and the §4.5 verdict can no longer be claimed for a residue that is missing a branch. The search over both partitions is the **default**, and a corpus scan puts it strictly better on **8** examples (`accumulator-reverse` 37 → 9, `projection-bracket-callee` 24 → 2, …) and strictly worse on **none**. The constructor-entering partition also completes on the compiler's own source: alpha-equivalent residual reuse preserves nested brackets, calls and variable spelling on both implementations, gated byte for byte on 78 examples |
-| Tier 1 static verification | 10.50 | 9.50 | 1.00 | the decidable checks, **and a sound, incomplete, certificate-carrying feasibility and termination analysis** (`refal feasibility`, see below). A **size-change closure over caller/callee argument positions** now proves cycles that hand a value between positions — `a_cycle_that_hands_a_value_across_argument_positions_is_proved_by_size_change` is the minimal gate, and the certificate re-runs the closure. `compiler.ref` improves from 362 to **359** unproven functions, so credit stays withheld: 359 remain, mostly flows through bare sequence variables that the conservative graph declines to approximate. Also withheld: feasibility beyond the witness budget |
+| Tier 1 static verification | 10.50 | 9.50 | 1.00 | the decidable checks, **and a sound, incomplete, certificate-carrying feasibility and termination analysis** (`refal feasibility`, see below). A **size-change closure over caller/callee argument positions** now proves cycles that hand a value between positions — `a_cycle_that_hands_a_value_across_argument_positions_is_proved_by_size_change` is the minimal gate, and the certificate re-runs the closure. Size-change arcs also follow **bare `e.` tails** out of the bracket they came from, and nested brackets are strict projections. On the current compiler source **354** functions remain unproven — down from 364 before sequence-tail tracking, though the source itself gained five reachability helpers — so credit stays withheld. The remaining flows cross computed calls or genuinely grow. Also withheld: feasibility beyond the witness budget |
 | L2/L4 · Compiler implemented in Refal | 17.85 | 16.80 | 1.05 | not yet fast on very large inputs — now **measured**: on the compiler's own 176 KB source every Rust subcommand costs 0.21–0.36 s while `refal compile` costs **347 s**, entirely inside the Refal driver's default search (one measured drive 53.9 s). `cargo xtask perf` decomposes it, and the profile is 6.1 M calls led by `SameChars` 32% and `LookupL` 15% — linear scans over growing name lists. The pattern partition's `EmitTerms` failure is fixed and its self-hosting residual now completes; what remains withheld is the change of shape that makes the search fast |
 | L4 · Verified self-hosting fixpoint | 9.10 | 8.05 | 1.05 | the fixpoint now holds on the compiler's own source **and every accepted example** — `compile(compile(P)) == compile(P)`, after residualization stopped emitting unreachable generated splits. What is withheld is the proof over *arbitrary* programs rather than a fixed corpus |
 | **L3 · Meta-prover** | **13.00** | **11.40** | **1.60** | the entry, the driving, Turchin's `'True'` criterion, and the *relational* half are built and gated. What is withheld is the *general* relation (an arbitrary relation rather than equality) and a proof needing generalisation beyond the loop edge. Of SCP4's three named theorems, associativity of `Append` **and the tree reversal are proved**; the third, the **sorting equality**, is now *measured* rather than merely named — `examples/equiv-sorting.ref` writes one insertion sort with the recursion in opposite directions (`ISort` sorts the tail and inserts on the way back, `FSort` folds from the left), the fixture is checked to really sort, and the prover's `[]` branch is reflexive while the `s.X e.Rest` branch **never closes** at 2,000 steps or at 20,000. The claim is true and the prover cannot close it: what it needs is the *fold lemma*, an auxiliary generalisation neither definition states — which is exactly the withheld half, now pinned by a gate instead of asserted |

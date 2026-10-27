@@ -124,10 +124,12 @@ rebuilds the graphs and reruns the closure; it does not trust the reported
 components.
 
 The gate is `a_cycle_that_hands_a_value_across_argument_positions_is_proved_by_size_change`,
-the former measured gap. On `examples/compiler.ref` the unproven set moves from
-**362 to 359 functions**. The remaining 359 are mostly flows through bare `e.`
-sequence variables, which the conservative mapping declines rather than
-approximating; the Tier 1 credit therefore stays withheld. No figure moves.
+the former measured gap. On `examples/compiler.ref` the unproven set moved from **362 to 359 functions** at
+that commit. Sequence-tail arcs and strict nested-bracket projections followed:
+the current source reports **354**, down from 364 before those changes (the
+fixpoint work added five reachability helpers to the source). The remaining
+failures cross computed calls or genuinely grow; the Tier 1 credit stays
+withheld. No figure moves.
 
 ### Done — the compile fixpoint holds on every accepted example (2026-10-27)
 
@@ -3371,10 +3373,11 @@ Refal-authored compiler and a `Compile` that drives.
 > fixpoint now holds on every accepted example.** The pattern partition
 > self-hosts exactly (78/78; 123,572 bytes on `compiler.ref`), and cross-position
 > termination is proved with a re-checked closure. The immediate lead is the
-> remaining Tier 1 mapping gap: extend size-change arcs through **bare `e.`
-> sequence variables**, which account for most of the 359 unproven functions.
-> Keep the credit withheld until the measured set falls materially and the
-> certificate still re-checks; no figure moves for a proof shape alone.
+> remaining Tier 1 mapping gap is **computed calls and genuinely growing
+> arguments**; bare `e.` sequence tails and nested-bracket projections are now
+> tracked, and the current unproven set is **354 functions**. Keep the credit
+> withheld until the measured set falls materially and the certificate still
+> re-checks; no figure moves for a proof shape alone.
 
 **§4.4's other half, then the remaining relational forms.** The projections
 (E-14) are closed: all three are commands with gates.
@@ -3956,9 +3959,10 @@ projection found a dead dedup test and a cursor where a source belongs.
    graph must carry a strict self-loop, and the verifier reruns the closure. The
    former gap is now the positive gate
    `a_cycle_that_hands_a_value_across_argument_positions_is_proved_by_size_change`.
-   `compiler.ref` moves from 362 to **359** unproven functions. The remaining
-   limitation is mapping through **bare `e.` sequence variables**; until those
-   flows are approximated soundly, the Tier 1 1.00 stays withheld.
+   `compiler.ref` moved from 362 to **359** unproven functions, and sequence-tail
+   and nested-bracket arcs bring the current source to **354**. The remaining
+   limitation is **computed calls and genuinely growing arguments**; until those
+   flows are settled, the Tier 1 1.00 stays withheld.
 
 **The order this paragraph used to carry is closed, including its item 0.** The
 `--configurations` transition-list divergence is gone: `DsHasTrL` tested a

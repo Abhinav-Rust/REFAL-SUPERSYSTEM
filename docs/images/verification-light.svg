@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 470" width="1200" height="470" role="img" aria-labelledby="t d">
+  <title id="t">How a termination claim is earned</title>
+  <desc id="d">Four proof shapes as cards: a re-checked ground witness; structural descent into a smaller argument; a fixed argument position that falls; and size change where a value moves between caller and callee positions and the composed cycle still falls. A footer says that when none applies the function is reported unproven and the blocking call is named, never guessed.</desc>
+  <rect x="0.5" y="0.5" width="1199" height="469" rx="16" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1"/>
+  <text x="40" y="52" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="3.2" fill="#0F766E">TIER 1</text>
+  <text x="40" y="90" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="-0.3" fill="#1F2328">How a termination claim is earned</text>
+  <line x1="40" y1="112" x2="1160" y2="112" stroke="#D0D7DE" stroke-width="1"/>
+  <rect x="40" y="142" width="265" height="194" rx="12" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1.5"/>
+  <text x="56" y="166" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="650" letter-spacing="1.0" fill="#57606A">1 · WITNESS</text>
+  <text x="56" y="194" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="650" fill="#134E4A">A concrete input</text>
+  <text x="56" y="222" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">matches the sentence, and no</text>
+  <text x="56" y="239" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">earlier one. Re-checked, not</text>
+  <text x="56" y="256" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">asserted.</text>
+  <text x="58" y="300" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="22" font-weight="700" fill="#0F766E">✓</text>
+  <text x="86" y="300" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="500" fill="#57606A">input → match</text>
+  <rect x="325" y="142" width="265" height="194" rx="12" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1.5"/>
+  <text x="341" y="166" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="650" letter-spacing="1.0" fill="#57606A">2 · DESCENT</text>
+  <text x="341" y="194" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="650" fill="#134E4A">A smaller argument</text>
+  <text x="341" y="222" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">a proper sub-run passes on</text>
+  <text x="341" y="239" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">every recursive call.</text>
+  <text x="343" y="300" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="22" font-weight="700" fill="#0F766E">↓</text>
+  <text x="371" y="300" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="500" fill="#57606A">outer ⊃ inner</text>
+  <rect x="610" y="142" width="265" height="194" rx="12" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1.5"/>
+  <text x="626" y="166" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="650" letter-spacing="1.0" fill="#57606A">3 · MEASURE</text>
+  <text x="626" y="194" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="650" fill="#134E4A">One position falls</text>
+  <text x="626" y="222" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">the same argument index</text>
+  <text x="626" y="239" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">shrinks, or a lexicographic</text>
+  <text x="626" y="256" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">pair does.</text>
+  <text x="628" y="300" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="22" font-weight="700" fill="#0F766E">↓</text>
+  <text x="656" y="300" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="500" fill="#57606A">position k → k</text>
+  <rect x="895" y="142" width="265" height="194" rx="12" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1.5"/>
+  <text x="911" y="166" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="650" letter-spacing="1.0" fill="#0F766E">4 · SIZE CHANGE</text>
+  <text x="911" y="194" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="650" fill="#0F766E">A value moves</text>
+  <text x="911" y="222" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">caller position 2 → callee 3</text>
+  <text x="911" y="239" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">→ back; the composed cycle</text>
+  <text x="911" y="256" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#57606A">still falls.</text>
+  <text x="913" y="300" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="22" font-weight="700" fill="#0F766E">⇄</text>
+  <text x="941" y="300" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="500" fill="#57606A">position 2 ⇄ 3</text>
+  <rect x="40" y="356" width="1120" height="34" rx="9" fill="#F6F8FA" stroke="#D0D7DE" stroke-width="1.2"/>
+  <text x="56" y="378" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#6E7781">None of the four?  The function is reported unproven, and the blocking call is named — never guessed.</text>
+  <rect x="40" y="406" width="1120" height="44" rx="12" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1.5"/>
+  <text x="64" y="434" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#134E4A">Every claim carries a certificate the verifier rebuilds from the source: witnesses are re-matched and size-change graphs are re-closed.</text>
+</svg>

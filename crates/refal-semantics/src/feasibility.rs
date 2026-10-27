@@ -1047,7 +1047,7 @@ const MAX_SIZE_CHANGE_POSITION: usize = 32;
 /// The closure budget for size-change graphs. Reaching it is an honest decline:
 /// the program is not called non-terminating, and the report says no proof was
 /// found within the budget.
-const MAX_SIZE_CHANGE_GRAPHS: usize = 4096;
+const MAX_SIZE_CHANGE_GRAPHS: usize = 512;
 
 /// One size-change graph: arcs from the caller's argument positions to the
 /// callee's. A `true` arc is strict.
@@ -1425,10 +1425,9 @@ impl CallGraph {
     /// sequence must descend a well-founded measure infinitely often and cannot
     /// exist. That is the size-change termination principle.
     ///
-    /// The construction is deliberately conservative. A target argument that
-    /// carries a caller variable but cannot be mapped to a position declines the
-    /// whole proof: omitting a real flow could otherwise turn an under-approximation
-    /// into a false proof.
+    /// The construction is deliberately conservative. A flow that cannot be
+    /// shown not to grow gets no arc: absent means unknown, and a growing value
+    /// ends its thread rather than carrying one. No arc is ever guessed.
     fn size_change_component(&self, id: usize) -> Result<Component, String> {
         let mut graphs: Vec<SizeChangeGraph> = Vec::new();
         for &index in &self.internal[id] {
@@ -1628,12 +1627,36 @@ fn size_change_graph(call: &RawCall) -> Option<SizeChangeGraph> {
     let mut arcs: BTreeMap<(usize, usize), bool> = BTreeMap::new();
     for (argument_index, argument) in call.args.iter().enumerate() {
         let target = argument_index + 1;
-        let mut mapped = false;
+        // A bare expression variable denotes a run, not a term. It can still be
+        // tracked: when the same variable is the suffix of a caller bracket, the
+        // run passed is a proper suffix of that bracket's contents.
+        if let TermKind::Variable(variable) = &argument.kind
+            && variable.kind == VariableKind::Expression
+        {
+            for (pattern_index, pattern) in call.pattern.iter().enumerate() {
+                match &pattern.kind {
+                    TermKind::Variable(source)
+                        if source.kind == VariableKind::Expression
+                            && canonical_variable_index(&source.name)
+                                == canonical_variable_index(&variable.name) =>
+                    {
+                        arcs.entry((pattern_index + 1, target)).or_insert(false);
+                    }
+                    TermKind::Bracket(inner) => {
+                        if let Some(strict) = sequence_inside(inner, &variable.name) {
+                            arcs.entry((pattern_index + 1, target))
+                                .and_modify(|existing| *existing |= strict)
+                                .or_insert(strict);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
         for (pattern_index, pattern) in call.pattern.iter().enumerate() {
             let source = pattern_index + 1;
             if binds_at_least_one_term(pattern) && same_term(pattern, argument) {
                 arcs.entry((source, target)).or_insert(false);
-                mapped = true;
                 continue;
             }
             let (TermKind::Bracket(pattern_inner), TermKind::Bracket(argument_inner)) =
@@ -1646,17 +1669,12 @@ fn size_change_graph(call: &RawCall) -> Option<SizeChangeGraph> {
                     arcs.entry((source, target))
                         .and_modify(|strict| *strict = true)
                         .or_insert(true);
-                    mapped = true;
                 }
                 CallClass::Nonstrict => {
                     arcs.entry((source, target)).or_insert(false);
-                    mapped = true;
                 }
                 CallClass::Unknown => {}
             }
-        }
-        if !mapped && term_has_variable(argument) {
-            return None;
         }
     }
     Some(SizeChangeGraph {
@@ -1682,33 +1700,37 @@ fn classify_containment(pattern_inner: &[Term], argument_inner: &[Term]) -> Call
         if let TermKind::Bracket(nested) = &term.kind {
             let found = classify_containment(nested, argument_inner);
             if found != CallClass::Unknown {
-                return found;
+                // Reaching the target through a nested bracket drops the
+                // bracket around it, so the flow is proper even when the
+                // nested contents match exactly.
+                return CallClass::Strict;
             }
         }
     }
     CallClass::Unknown
 }
 
-fn term_has_variable(term: &Term) -> bool {
-    match &term.kind {
-        TermKind::Variable(_) => true,
-        TermKind::Bracket(inner) => inner.iter().any(term_has_variable),
-        TermKind::Call { args, .. } => args.iter().any(term_has_variable),
-        TermKind::Block {
-            argument,
-            sentences,
-        } => {
-            argument.iter().any(term_has_variable)
-                || sentences.iter().any(|sentence| {
-                    sentence
-                        .conditions
-                        .iter()
-                        .any(|condition| condition.result.iter().any(term_has_variable))
-                        || sentence.result.iter().any(term_has_variable)
-                })
+/// Whether `name` occurs inside a bracket's contents, at any depth.
+///
+/// A match found here is strict: the target run is part of the bracket's
+/// contents, while the source measure includes the bracket itself.
+fn sequence_inside(terms: &[Term], name: &str) -> Option<bool> {
+    for term in terms {
+        match &term.kind {
+            TermKind::Variable(variable)
+                if variable.kind == VariableKind::Expression
+                    && canonical_variable_index(&variable.name)
+                        == canonical_variable_index(name) =>
+            {
+                return Some(true);
+            }
+            TermKind::Bracket(inner) if sequence_inside(inner, name).is_some() => {
+                return Some(true);
+            }
+            _ => {}
         }
-        TermKind::Symbol(_) => false,
     }
+    None
 }
 
 /// Classify one call under a ranking.
@@ -2194,6 +2216,28 @@ mod tests {
             "the certificate must re-check: {:?}",
             verify(&report, &program)
         );
+    }
+
+    /// A bare `e.` argument denotes a run, not a term. When it is the tail of a
+    /// caller bracket, the run is strictly smaller than the bracket it came
+    /// from, and size change can track it.
+    #[test]
+    fn a_bare_sequence_tail_is_tracked_from_the_bracket_it_came_from() {
+        let source = "$ENTRY Go { = <Walk (A B C)>; }\n\
+                      Walk { (s.H e.T) = <Walk e.T>; }";
+        let program = parse(source);
+        let report = analyse(&program);
+        let walk = report
+            .functions
+            .iter()
+            .find(|function| function.function == "Walk")
+            .expect("Walk");
+        assert!(
+            matches!(walk.termination, TerminationVerdict::SizeChange { .. }),
+            "the bare tail is a strict suffix of the bracket: {:?}",
+            walk.termination
+        );
+        assert!(verify(&report, &program).is_empty());
     }
 
     #[test]
