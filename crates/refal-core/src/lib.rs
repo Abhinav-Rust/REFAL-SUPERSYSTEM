@@ -4066,17 +4066,40 @@ pub fn residualize_symbolic_program_with_pattern(
     // reach comes along too.
     let mut reachable = Vec::new();
     collect_call_names(&report.residual, &mut reachable);
-    for split in &report.split_functions {
+    // Only splits the residue can actually reach belong to it. A split built
+    // during a drive that no surviving branch calls is scaffolding: emitting it
+    // makes the first residue larger than its own recompilation, so the compile
+    // fixpoint fails even though both programs compute the same answers.
+    let mut keep = vec![false; report.split_functions.len()];
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for (index, split) in report.split_functions.iter().enumerate() {
+            if keep[index]
+                || !reachable
+                    .iter()
+                    .any(|name| name.eq_ignore_ascii_case(&split.name))
+            {
+                continue;
+            }
+            keep[index] = true;
+            changed = true;
+            for sentence in &split.sentences {
+                collect_call_names(&sentence.pattern, &mut reachable);
+                collect_call_names(&sentence.result, &mut reachable);
+            }
+        }
+    }
+    for (split, keep) in report.split_functions.iter().zip(keep) {
+        if !keep {
+            continue;
+        }
         functions.push(CoreFunction {
             name: split.name.clone(),
             visibility: Visibility::Local,
             sentences: split.sentences.clone(),
             span: Span { start: 0, end: 0 },
         });
-        for sentence in &split.sentences {
-            collect_call_names(&sentence.pattern, &mut reachable);
-            collect_call_names(&sentence.result, &mut reachable);
-        }
     }
     let entry_name = functions[0].name.clone();
     let generated = report
@@ -9389,6 +9412,66 @@ mod tests {
             format_program(&residual),
             "$ENTRY Go {\n  e.Input = <Worker e.Input>;\n}\n\nWorker {\n  e.Input = e.Input;\n}\n"
         );
+    }
+
+    #[test]
+    fn an_unreachable_generated_split_is_not_emitted_in_the_residue() {
+        // A split built while exploring a branch that later vanished is
+        // scaffolding, not part of the residue. Emitting it makes the first
+        // residue larger than its own recompilation, which breaks the compile
+        // fixpoint even though both programs answer the same.
+        let program = CoreProgram {
+            declarations: vec![],
+            functions: vec![CoreFunction {
+                name: "Go".to_string(),
+                visibility: Visibility::Entry,
+                sentences: vec![CoreSentence {
+                    pattern: vec![],
+                    conditions: vec![],
+                    result: vec![CoreTerm {
+                        kind: CoreTermKind::Char('x'),
+                        span: span(),
+                    }],
+                    span: span(),
+                }],
+                span: span(),
+            }],
+        };
+        let report = SymbolicDriveReport {
+            residual: vec![CoreTerm {
+                kind: CoreTermKind::Char('x'),
+                span: span(),
+            }],
+            visited: vec![],
+            whistle_states: vec![],
+            whistle_inputs: vec![],
+            whistle_events: vec![],
+            configurations: vec![],
+            configuration_transitions: vec![],
+            split_functions: vec![SplitFunction {
+                name: "Split1".to_string(),
+                function: "Worker".to_string(),
+                canonical_input: vec![],
+                sentences: vec![CoreSentence {
+                    pattern: vec![],
+                    conditions: vec![],
+                    result: vec![CoreTerm {
+                        kind: CoreTermKind::Char('y'),
+                        span: span(),
+                    }],
+                    span: span(),
+                }],
+            }],
+            neighborhood_loops: 0,
+            steps: 1,
+        };
+        let residual = residualize_symbolic_program(&program, &report);
+        let text = format_program(&residual);
+        assert!(
+            !text.contains("Split1"),
+            "an unreachable split must not be emitted:\n{text}"
+        );
+        assert_eq!(text, "$ENTRY Go {\n  = 'x';\n}\n");
     }
 
     #[test]

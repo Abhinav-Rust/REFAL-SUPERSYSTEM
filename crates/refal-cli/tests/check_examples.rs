@@ -2948,6 +2948,66 @@ fn compile_command_compiles_the_compiler_itself() {
     );
 }
 
+/// **`compile` is a fixpoint on every example it accepts.**
+///
+/// The compiler's own source was the only fixpoint gate, so a residue that was
+/// larger than its own recompilation could survive everywhere else. It did:
+/// `prove-append-reach.ref` emitted an unreachable `Split1`, and compiling the
+/// residue removed it. The emitter now includes only splits reachable from the
+/// residue, and this sweep requires `compile(compile(P)) == compile(P)` for every
+/// accepted example, not just the compiler.
+#[test]
+fn compile_is_a_fixpoint_on_every_accepted_example() {
+    let mut names: Vec<String> = fs::read_dir(workspace_path("examples"))
+        .expect("read the examples directory")
+        .filter_map(|entry| {
+            let path = entry.ok()?.path();
+            let name = path.file_name()?.to_string_lossy().into_owned();
+            (name.ends_with(".ref") && name != "compiler.ref").then_some(name)
+        })
+        .collect();
+    names.sort();
+
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock is after Unix epoch")
+        .as_nanos();
+    let mut checked = 0usize;
+    for name in names {
+        let path = workspace_path(&format!("examples/{name}"));
+        let first = Command::new(refal_bin())
+            .args(["compile", &path])
+            .output()
+            .expect("run refal compile");
+        if !first.status.success() {
+            // The corpus deliberately contains rejected programs.
+            continue;
+        }
+        let generated = std::env::temp_dir().join(format!("refal-fixpoint-{name}-{unique}.ref"));
+        fs::write(&generated, &first.stdout).expect("write the first residue");
+        let second = Command::new(refal_bin())
+            .args(["compile", generated.to_str().expect("utf-8 path")])
+            .output()
+            .expect("compile the residue");
+        assert!(
+            second.status.success(),
+            "compiling the residue of {name} failed:\n{}",
+            String::from_utf8_lossy(&second.stderr)
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&first.stdout),
+            String::from_utf8_lossy(&second.stdout),
+            "{name}: compile is not a fixpoint on its own residue"
+        );
+        let _ = fs::remove_file(generated);
+        checked += 1;
+    }
+    assert!(
+        checked >= 78,
+        "the corpus has at least 78 accepted examples; only {checked} were checked"
+    );
+}
+
 #[test]
 fn compiler_ref_reaches_a_self_hosting_fixpoint() {
     // T-10: the compiler applied to itself. Rust compiles compiler.ref to C1,

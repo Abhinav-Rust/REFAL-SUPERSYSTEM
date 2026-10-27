@@ -129,6 +129,21 @@ the former measured gap. On `examples/compiler.ref` the unproven set moves from
 sequence variables, which the conservative mapping declines rather than
 approximating; the Tier 1 credit therefore stays withheld. No figure moves.
 
+### Done — the compile fixpoint holds on every accepted example (2026-10-27)
+
+A corpus-wide probe found one counterexample: `refal compile
+examples/prove-append-reach.ref` emitted an unreachable `Split1`, so the second
+compilation removed it and the bytes differed. The split was scaffolding left by
+a branch that did not survive, not part of the residue.
+
+Both residualizers now retain **only splits reachable from the residue**, closed
+transitively through split sentences. The new gate
+`compile_is_a_fixpoint_on_every_accepted_example` requires
+`compile(compile(P)) == compile(P)` on every example the compiler accepts, and
+the core has a unit gate that an unreachable split is not emitted. The L4 row's
+1.05 stays withheld: this raises the evidence from the compiler's own source to
+the whole accepted corpus, but still not to arbitrary programs.
+
 ### Measured — the self-compilation cost, decomposed (2026-10-16)
 
 The L2/L4 compiler-in-Refal row withholds 1.05 for "not yet fast on very large
@@ -3352,7 +3367,8 @@ Refal-authored compiler and a `Compile` that drives.
 
 ## NEXT ACTION
 
-> **2026-10-27 — the size-change graph is built and gated.** The pattern partition
+> **2026-10-27 — the size-change graph is built and gated, and the compile
+> fixpoint now holds on every accepted example.** The pattern partition
 > self-hosts exactly (78/78; 123,572 bytes on `compiler.ref`), and cross-position
 > termination is proved with a re-checked closure. The immediate lead is the
 > remaining Tier 1 mapping gap: extend size-change arcs through **bare `e.`

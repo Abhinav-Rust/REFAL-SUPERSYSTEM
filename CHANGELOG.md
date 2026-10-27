@@ -16,6 +16,18 @@
   credit remains withheld because most remaining failures flow through bare `e.`
   sequence variables that the conservative mapping declines.
 
+**`compile` is now a fixpoint on every accepted example.**
+
+- **Residualization emits only reachable generated splits.** An unreachable split
+  is scaffolding left by a vanished branch; emitting it made the first residue
+  larger than its own recompilation.
+- **New gate:** `compile_is_a_fixpoint_on_every_accepted_example` requires
+  `compile(compile(P)) == compile(P)` for every example the compiler accepts.
+  `prove-append-reach.ref` was the one counterexample and is now a witness.
+- **Both implementations fixed:** `refal-core`'s lowerer and the Refal-authored
+  emitter close the reachable-split set transitively. The L4 credit remains
+  withheld because arbitrary programs are still not proved.
+
 **The pattern partition now self-hosts: alpha-equivalent residual reuse is exact.**
 
 - **`RESIDUALIZE-DRIVEN-PATTERN` completes on `compiler.ref`** and emits the same

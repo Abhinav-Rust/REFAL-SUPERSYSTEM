@@ -2564,12 +2564,21 @@ DsRdSelfLoop {
 DsRdBuild2 {
   (e.Items) (e.Fn) (e.Residual) (e.Ctx) '1' = (PROG e.Items);
   (e.Items) (e.Fn) (e.Residual) (e.Ctx) =
+    <DsRdBuild3 (e.Items) (e.Fn) (e.Residual) (e.Ctx)
+      <DsRdReach (e.Residual) (e.Ctx)>>;
+}
+
+* `DsRdReach` has already closed over the splits the residue can actually
+* reach, so an unreachable split is scaffolding and is not emitted. Emitting it
+* makes the first residue larger than its own recompilation and breaks the
+* compile fixpoint even though both programs answer the same.
+DsRdBuild3 {
+  (e.Items) (e.Fn) (e.Residual) (e.Ctx) (e.Reach) =
     (PROG
       <DsRdDecls e.Items>
       (FUN (Ident e.Fn) (VIS ENTRY) <DsRdEntry (e.Items) (e.Residual)>)
-      <DsRdSplits (e.Ctx)>
-      <DsRdRetain (e.Items) (e.Fn) <DsRdReach (e.Residual) (e.Ctx)>
-                  <DsRdSplitNames (e.Ctx)>>);
+      <DsRdSplits (e.Reach) (e.Ctx)>
+      <DsRdRetain (e.Items) (e.Fn) (e.Reach) <DsRdSplitNames (e.Ctx)>>);
 }
 
 DsRdEntry {
@@ -2598,16 +2607,25 @@ DsRdDecls {
   t.Item e.Rest = <DsRdDecls e.Rest>;
 }
 
-* A case split is part of the residue, not scaffolding around it: the entry
-* calls `Split1`, so `Split1` has to be defined.
+* A reachable case split is part of the residue: the entry calls `Split1`, so
+* `Split1` has to be defined. A split no surviving branch reaches is not.
 DsRdSplits {
-  (e.Ctx) = <DsRdSplitsL <DsSplits (e.Ctx)>>;
+  (e.Reach) (e.Ctx) = <DsRdSplitsL (e.Reach) <DsSplits (e.Ctx)>>;
 }
 
 DsRdSplitsL {
-  () = ;
-  ((SP (e.Name) (e.F) (e.Can) (e.Sents)) e.Rest) =
-    (FUN (Ident e.Name) (VIS LOCAL) e.Sents) <DsRdSplitsL (e.Rest)>;
+  (e.Reach) () = ;
+  (e.Reach) ((SP (e.Name) (e.F) (e.Can) (e.Sents)) e.Rest),
+    <DsRdReachHas (e.Reach) (e.Name)> : '1' =
+      (FUN (Ident e.Name) (VIS LOCAL) e.Sents) <DsRdSplitsL (e.Reach) (e.Rest)>;
+  (e.Reach) (t.Split e.Rest) = <DsRdSplitsL (e.Reach) (e.Rest)>;
+}
+
+DsRdReachHas {
+  () (e.Name) = ;
+  ((N e.Reached) e.Rest) (e.Name),
+    <SameChars (<Upper e.Reached>) (<Upper e.Name>)> : '1' = '1';
+  (t.R e.Rest) (e.Name) = <DsRdReachHas (e.Rest) (e.Name)>;
 }
 
 DsRdSplitNames {
@@ -2625,7 +2643,44 @@ DsRdSplitNamesL {
 * it -- otherwise the residue does not check, and a residualizer that emits a
 * program the compiler rejects has emitted nothing.
 DsRdReach {
-  (e.Residual) (e.Ctx) = (<DsRdCalls (e.Residual)> <DsRdSplitCalls <DsSplits (e.Ctx)>>);
+  (e.Residual) (e.Ctx) =
+    <DsRdReachLoop (<DsRdCalls (e.Residual)>) <DsSplits (e.Ctx)>>;
+}
+
+* Close the reachable set over only the splits it names. A split that no
+* surviving branch calls contributes neither a definition nor its own calls.
+* A pass may make an earlier split reachable, so passes repeat until no new
+* split is discovered.
+DsRdReachLoop {
+  (e.Reach) (e.Splits) =
+    <DsRdReachLoop2 (e.Reach) (e.Splits) ()>;
+}
+
+DsRdReachLoop2 {
+  (e.Reach) (e.Splits) (e.Done) =
+    <DsRdReachLoop3 (e.Splits) (e.Done)
+      <DsRdReachPass (e.Reach) (e.Splits) (e.Done)>>;
+}
+
+DsRdReachLoop3 {
+  (e.Splits) (e.Done) ((e.Reach2) (e.Done2)),
+    <Compare <DsLen (e.Done2)> <DsLen (e.Done)>> : '0' = (e.Reach2);
+  (e.Splits) (e.Done) ((e.Reach2) (e.Done2)) =
+    <DsRdReachLoop2 (e.Reach2) (e.Splits) (e.Done2)>;
+}
+
+* One pass. `DsDone` is the set of split names already expanded, so the call
+* list grows only when a new split becomes reachable and the fixpoint test is
+* a property of names rather than of duplicate calls.
+DsRdReachPass {
+  (e.Reach) () (e.Done) = ((e.Reach) (e.Done));
+  (e.Reach) ((SP (e.Name) (e.F) (e.Can) (e.Sents)) e.Rest) (e.Done),
+    <DsRdReachHas (e.Reach) (e.Name)> : '1',
+    <DsRdReachHas (e.Done) (e.Name)> : =
+      <DsRdReachPass (e.Reach <DsRdSentCalls (e.Sents)>) (e.Rest) (e.Done (N e.Name))>;
+  (e.Reach) ((SP (e.Name) (e.F) (e.Can) (e.Sents)) e.Rest) (e.Done) =
+      <DsRdReachPass (e.Reach) (e.Rest) (e.Done)>;
+  (e.Reach) (t.Split e.Rest) (e.Done) = <DsRdReachPass (e.Reach) (e.Rest) (e.Done)>;
 }
 
 DsRdSplitCalls {
