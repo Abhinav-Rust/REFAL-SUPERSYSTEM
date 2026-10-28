@@ -66,6 +66,21 @@ into one system.
 
 </div>
 
+## Reading map
+
+Eight questions, in the order a reader usually asks them. The prose under each
+section below says only what its picture cannot.
+
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readingmap-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/readingmap-light.svg">
+  <img alt="Eight numbered destinations: what the project is, whether it runs, how complete it is, what is left, how to start, what it can do, why it exists, and where the questions are answered." src="docs/images/readingmap-light.svg" width="100%">
+</picture>
+
+</div>
+
 ## Start here
 
 <div align="center">

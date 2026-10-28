@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 470" width="1200" height="470" role="img" aria-labelledby="t d">
+  <title id="t">Reading map</title>
+  <desc id="d">Eight numbered destinations: what the project is, whether it runs, how complete it is, what is left, how to start, what it can do, why it exists, and where the questions are answered.</desc>
+  <rect x="0.5" y="0.5" width="1199" height="469" rx="16" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1"/>
+  <text x="40" y="52" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="3.2" fill="#0F766E">READING MAP</text>
+  <text x="40" y="90" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="-0.3" fill="#1F2328">Eight questions, and where each is answered</text>
+  <line x1="40" y1="112" x2="1160" y2="112" stroke="#D0D7DE" stroke-width="1"/>
+  <rect x="40" y="140" width="272" height="118" rx="14" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1.5"/>
+  <text x="60" y="174" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="700" text-anchor="start" fill="#0F766E">01</text>
+  <text x="60" y="206" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#1F2328">What is it?</text>
+  <text x="60" y="230" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#57606A">four layers over one</text>
+  <text x="60" y="246" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#57606A">expression space</text>
+  <rect x="328" y="140" width="272" height="118" rx="14" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1.5"/>
+  <text x="348" y="174" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="700" text-anchor="start" fill="#0F766E">02</text>
+  <text x="348" y="206" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#1F2328">Does it run?</text>
+  <text x="348" y="230" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#57606A">four results, reproducible in</text>
+  <text x="348" y="246" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#57606A">this checkout</text>
+  <rect x="616" y="140" width="272" height="118" rx="14" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1.5"/>
+  <text x="636" y="174" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="700" text-anchor="start" fill="#0F766E">03</text>
+  <text x="636" y="206" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#1F2328">How complete?</text>
+  <text x="636" y="230" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#57606A">one figure, one method, one</text>
+  <text x="636" y="246" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#57606A">table</text>
+  <rect x="904" y="140" width="272" height="118" rx="14" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1.5"/>
+  <text x="924" y="174" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="700" text-anchor="start" fill="#0F766E">04</text>
+  <text x="924" y="206" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#1F2328">What is left?</text>
+  <text x="924" y="230" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#57606A">six named gaps, each with its</text>
+  <text x="924" y="246" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#57606A">gate</text>
+  <rect x="40" y="274" width="272" height="118" rx="14" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1.5"/>
+  <text x="60" y="308" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="700" text-anchor="start" fill="#0F766E">05</text>
+  <text x="60" y="340" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#1F2328">How do I start?</text>
+  <text x="60" y="364" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#57606A">one toolchain, three commands</text>
+  <rect x="328" y="274" width="272" height="118" rx="14" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1.5"/>
+  <text x="348" y="308" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="700" text-anchor="start" fill="#0F766E">06</text>
+  <text x="348" y="340" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#1F2328">What can it do?</text>
+  <text x="348" y="364" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#57606A">twenty-four commands, one per</text>
+  <text x="348" y="380" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#57606A">capability</text>
+  <rect x="616" y="274" width="272" height="118" rx="14" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1.5"/>
+  <text x="636" y="308" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="700" text-anchor="start" fill="#0F766E">07</text>
+  <text x="636" y="340" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#1F2328">Why does it exist?</text>
+  <text x="636" y="364" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#57606A">Turchin's corpus, and what</text>
+  <text x="636" y="380" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#57606A">each layer reads</text>
+  <rect x="904" y="274" width="272" height="118" rx="14" fill="#F6FEFC" stroke="#CCE8E2" stroke-width="1.5"/>
+  <text x="924" y="308" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="700" text-anchor="start" fill="#0F766E">08</text>
+  <text x="924" y="340" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#1F2328">I have a question</text>
+  <text x="924" y="364" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#57606A">the answers this project is</text>
+  <text x="924" y="380" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#57606A">searched with</text>
+  <rect x="40" y="416" width="1120" height="44" rx="12" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1.5"/>
+  <text x="64" y="444" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#134E4A">Every section below opens with a picture; the prose under it says only what the picture cannot.</text>
+</svg>

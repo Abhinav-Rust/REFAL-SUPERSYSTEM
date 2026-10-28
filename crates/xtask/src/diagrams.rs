@@ -1812,6 +1812,88 @@ fn poster(p: &Palette) -> String {
 }
 
 // --------------------------------------------------------------------------
+// The reading map -- where to go in a long document
+// --------------------------------------------------------------------------
+//
+// A twenty-four-section README needs a way in that is not a list of links. The
+// eight destinations are the eight questions a reader arrives with, in the order
+// they usually arrive; the one-line answers are what the section actually
+// settles, so the map is a summary as well as an index.
+fn readingmap(p: &Palette) -> String {
+    let h = 470.0;
+    let mut out = header(
+        p,
+        "READING MAP",
+        "Eight questions, and where each is answered",
+        h,
+    );
+    let tiles: [(&str, &str, &str); 8] = [
+        ("01", "What is it?", "four layers over one expression space"),
+        (
+            "02",
+            "Does it run?",
+            "four results, reproducible in this checkout",
+        ),
+        ("03", "How complete?", "one figure, one method, one table"),
+        ("04", "What is left?", "six named gaps, each with its gate"),
+        ("05", "How do I start?", "one toolchain, three commands"),
+        (
+            "06",
+            "What can it do?",
+            "twenty-four commands, one per capability",
+        ),
+        (
+            "07",
+            "Why does it exist?",
+            "Turchin's corpus, and what each layer reads",
+        ),
+        (
+            "08",
+            "I have a question",
+            "the answers this project is searched with",
+        ),
+    ];
+    let (tw, th, gap) = (272.0_f64, 118.0_f64, 16.0_f64);
+    for (i, (number, question, answer)) in tiles.iter().enumerate() {
+        let column = i % 4;
+        let row = i / 4;
+        let x = 40.0 + column as f64 * (tw + gap);
+        let y = 140.0 + row as f64 * (th + gap);
+        out.push(rect(x, y, tw, th, p.cardbg, Some(p.cardbd), 14.0, 1.5));
+        out.push(text(
+            x + 20.0,
+            y + 34.0,
+            number,
+            11.5,
+            p.a1,
+            Txt::wfa("700", MONO, "start"),
+        ));
+        out.push(text(
+            x + 20.0,
+            y + 66.0,
+            question,
+            16.0,
+            p.ink,
+            Txt::w("600"),
+        ));
+        for (j, line) in wrap_lines(answer, 30).iter().take(3).enumerate() {
+            out.push(t(x + 20.0, y + 90.0 + j as f64 * 16.0, line, 12.0, p.muted));
+        }
+    }
+    out.extend(footer(
+        p,
+        416.0,
+        "Every section below opens with a picture; the prose under it says only what the picture cannot.",
+    ));
+    wrap(
+        h,
+        "Reading map",
+        "Eight numbered destinations: what the project is, whether it runs, how complete it is, what is left, how to start, what it can do, why it exists, and where the questions are answered.",
+        &out,
+    )
+}
+
+// --------------------------------------------------------------------------
 // The thesis -- four separate tools, or one engine over one expression space
 // --------------------------------------------------------------------------
 fn engine(p: &Palette) -> String {
@@ -2091,8 +2173,9 @@ pub fn run() {
         eprintln!("cannot create {}: {err}", outdir.display());
         std::process::exit(1);
     }
-    let diagrams: [Diagram; 17] = [
+    let diagrams: [Diagram; 18] = [
         ("poster", poster),
+        ("readingmap", readingmap),
         ("engine", engine),
         ("verification", verification),
         ("supercompilation", supercompilation),
