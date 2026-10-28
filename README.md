@@ -38,7 +38,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/glance-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/glance-light.svg">
-  <img alt="At a glance: four layers over one shared expression space; about 93.4% of the supersystem complete by one method; 100% Rust; a byte-identical self-hosting fixpoint at 12,599 bytes; and 21 of 25 in-scope conformance rows closed" src="docs/images/glance-light.svg" width="100%">
+  <img alt="At a glance: four layers over one shared expression space; about 93.4% of the supersystem complete by one method; 100% Rust; a byte-identical self-hosting fixpoint at 115,023 bytes; and 21 of 25 in-scope conformance rows closed" src="docs/images/glance-light.svg" width="100%">
 </picture>
 
 </div>
@@ -46,6 +46,23 @@
 <div align="center">
 
 **New here? Jump to —** [What it is](#what-this-is) · [The idea](#the-idea-in-one-picture) · [See it run](#see-it-work) · [How complete](#project-status) · [Try it](#start-here) · [FAQ](#frequently-asked-questions)
+
+</div>
+
+## One page
+
+Everything this repository claims is in the picture below. The four columns are
+the four layers; each names the crate that implements it and the command that
+exercises it; the band underneath is the self-application that turns four tools
+into one system.
+
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/poster-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/poster-light.svg">
+  <img alt="Four layer columns — L0 the Refal-5 machine (refal-runtime, refal run), L1 the reflection engine (refal-core, refal reflect), L2 the supercompiler core (refal-core, refal compile) and L3 the meta-prover (refal-core, refal prove) — above a self-application band in which the compiler's own source is compiled to generation 1 and compiled again to generation 2, the two compared byte for byte." src="docs/images/poster-light.svg" width="100%">
+</picture>
 
 </div>
 
@@ -74,7 +91,7 @@ mock-up. (`refal` below is `cargo run -p refal --`, or the built
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/demonstrations-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/demonstrations-light.svg">
-  <img alt="Four result cards: the self-hosting fixpoint at 111,600 bytes, the metasystem transition at 172 to 4 steps, the strict checker catching a proven defect, and the meta-prover proving associativity" src="docs/images/demonstrations-light.svg" width="100%">
+  <img alt="Four result cards: the self-hosting fixpoint at 115,023 bytes, the metasystem transition at 172 to 4 steps, the strict checker catching a proven defect, and the meta-prover proving associativity" src="docs/images/demonstrations-light.svg" width="100%">
 </picture>
 
 </div>
@@ -87,7 +104,7 @@ compiled again, and the two generations compared byte for byte:
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/fixpoint-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/fixpoint-light.svg">
-  <img alt="The compiler's own source is compiled to gen1.ref, then compiled again to gen2.ref; the two are identical byte for byte at 111,600 bytes." src="docs/images/fixpoint-light.svg" width="100%">
+  <img alt="The compiler's own source is compiled to gen1.ref, then compiled again to gen2.ref; the two are identical byte for byte at 115,023 bytes." src="docs/images/fixpoint-light.svg" width="100%">
 </picture>
 
 </div>
@@ -104,7 +121,7 @@ $ cmp gen1.ref gen2.ref && echo "fixpoint: gen1 == gen2, byte for byte"
 fixpoint: gen1 == gen2, byte for byte
 ```
 
-Both generations are **111,600 bytes**, identical. And this is a *supercompilation*,
+Both generations are **115,023 bytes**, identical. And this is a *supercompilation*,
 not a re-print: `Go` in the output is `<Split1 e.Input>`, and `Split1` is the
 compile-time dispatch over the token stream that the driver discovered.
 
@@ -165,10 +182,9 @@ Turchin's loop edge), which is the induction step a testing tool cannot give you
 
 ## What this is
 
-In 1991 Valentin Turchin wrote a technical report titled *A Supersystem of Language
-Refal*. Its argument was architectural: an interpreter, a compiler, a supercompiler
-and an automated theorem prover are not four tools, but **specialised
-configurations of one universal reflective engine**.
+In 1991 Valentin Turchin argued, in *A Supersystem of Language Refal*, that an
+interpreter, a compiler, a supercompiler and a theorem prover are not four tools
+but **four configurations of one reflective engine**.
 
 <div align="center">
 
@@ -193,11 +209,6 @@ files.
 </picture>
 
 </div>
-
-Each layer's *subject matter* is the layer below it. The machine runs programs;
-the reflection engine turns a running program into inspectable data; the
-supercompiler transforms that data into a better program; the meta-prover decides
-whether the transformation meant what it claimed.
 
 ## The idea, in one picture
 
@@ -250,8 +261,7 @@ The third panel is the point: what comes out is not a faster interpreter but a
 
 </div>
 
-Every layer is exercised by a command, and every command is backed by a gate. The
-green rows are built; the amber rows name their own gap.
+Green is built and gated; amber names its own gap.
 
 <div align="center">
 
@@ -318,8 +328,7 @@ Refal was never just a pattern-matching language to its author. It was a
 *metaalgorithmic* language — the concrete apparatus for a self-referential control
 relationship he spent his life generalising, from the 1968 paper *Metaalgorithmic
 Language* through *The Phenomenon of Science* and back into computing as
-supercompilation. Every layer of this repository is a reading of one part of that
-corpus.
+supercompilation.
 
 <div align="center">
 
@@ -385,9 +394,9 @@ operations at the centre of the language.
 | **Refal machine** | ✅ **Clause-complete against the reference's builtin sections**; no fixed call-depth limit; the projecting matcher (§2.2); the view field in all three shapes; Chapter 6 metacode in full, including §6.4's `unknown` values |
 | **Graph of states** | ✅ `drive → clean → residualise` verified against the interpreter over the corpus; case splitting on a wholly unknown argument; §4.3 cleaning and the §4.5 verdict; generalization by common computation history; **the compilation strategy is searched**, not fixed; **the partition is searchable** — `--split search` drives the sequence split and the constructor-entering one that folds a nested accumulator and keeps the cheaper residue, so neither choice can lose; **driving a residue is a fixpoint** |
 | **Tier 1 static analysis** | ✅ Complete for its published guarantee with zero false positives across the corpus: dead sentences, recognition-impossible reachability, builtin domain errors, and a format lattice that describes a bracket's contents recursively |
-| **Feasibility & termination** | ✅ `refal feasibility` decides each sentence's selectability with a **ground witness it re-checks**, and each function's termination by **size change over the call graph** under a ranking — one argument position, or a lexicographic pair of them — which is what settles a call that rebuilds its argument. **Mutual recursion included**, since only the strongly connected components matter. Sound, incomplete, certificate-carrying (§4.5; §5.8). Zero infeasible sentences across the 78 non-`bad-*` examples, and the `unproven` set is printed rather than left silent |
+| **Feasibility & termination** | ✅ `refal feasibility` decides each sentence's selectability with a **ground witness it re-checks**, and each function's termination by **size change over the call graph** under a ranking — one argument position, or a lexicographic pair of them — which is what settles a call that rebuilds its argument, and by a **maximised size-change closure** when a value moves between argument positions. **Mutual recursion included**, since only the strongly connected components matter. Sound, incomplete, certificate-carrying (§4.5; §5.8). Zero infeasible sentences across the 78 non-`bad-*` examples, and the `unproven` set is printed rather than left silent — **232** functions on the compiler's own source, every one of them naming the cycle that blocks it |
 | **Compiler written in Refal** | ✅ A real Refal-authored lexer, parser, checker and emitter over the full Classic grammar; the transforming half — `GRAPH`, `RESIDUALIZE`, `DRIVE`, `DRIVE-SYMBOLIC`, `RESIDUALIZE-DRIVEN` — byte-identical to its Rust counterpart over the corpus, **and the last of them is the compiler's default path** |
-| **Self-hosting** | ✅ C1 = C2 = C3 byte-identical over the full grammar at 12,599 bytes, every generation checked; `refal compile examples/compiler.ref` emits the driven residue, so the self-application is a supercompilation rather than a re-print |
+| **Self-hosting** | ✅ C1 = C2 = C3 byte-identical over the full grammar at 115,023 bytes, every generation checked; `refal compile examples/compiler.ref` emits the driven residue, so the self-application is a supercompilation rather than a re-print |
 | **Meta-prover** | 🔶 Layer 3, partial — `refal prove` drives a predicate to Turchin's single terminal node `'True'`; `refal prove --equiv` decides an **equation** between two reductions over free variables by folding a branch whose sides have reduced to a renaming of the claim. Associativity of `Append`, right identity and **the correctness of binary tree reversals** are proved; a false equation is refuted with its witness. The general relation, and a proof needing generalisation beyond the loop edge, are not yet accepted |
 | **Reflection service** | ✅ `refal reflect` freezes the entry configuration and returns it as terms, with addressable successors and an explicit completeness verdict |
 | **Function inversion** | ✅ `refal invert` drives the forward definition under an inverse configuration and emits the synthesised inverse; the round-trip gate runs `<Inverse <F x>> ≡ x` over the emitted program |
@@ -443,8 +452,8 @@ compiler's own number as the project's would misdescribe what this repository is
 | **L0 · Refal machine / runtime** | **13.65** | **13.65** | **0.00** | closed — a block sentence carrying a condition now runs on the work list exactly as a named call does, so a recursion through one no longer uses the host stack. The gate drives 100,000 such steps, which overflowed the stack before the fix |
 | **L1 · Reflection engine** | **9.00** | **9.00** | **0.00** | closed — the service is exposed as `refal reflect`, with four shape gates |
 | L2 · Graph of states / emission | 5.95 | 5.50 | 0.45 | **§4.4's other half (E-7)** — 0.45, a Tier-2 research item. **E-11 is closed**: the pattern partition is now **complete** — wherever the callee's own patterns cannot name the component it hands over to the sequence partition — so the merged `Rev` form folds under *both* partitions and the §4.5 verdict can no longer be claimed for a residue that is missing a branch. The search over both partitions is the **default**, and a corpus scan puts it strictly better on **8** examples (`accumulator-reverse` 37 → 9, `projection-bracket-callee` 24 → 2, …) and strictly worse on **none**. The constructor-entering partition also completes on the compiler's own source: alpha-equivalent residual reuse preserves nested brackets, calls and variable spelling on both implementations, gated byte for byte on 78 examples |
-| Tier 1 static verification | 10.50 | 9.50 | 1.00 | the decidable checks, **and a sound, incomplete, certificate-carrying feasibility and termination analysis** (`refal feasibility`, see below). A **size-change closure over caller/callee argument positions** now proves cycles that hand a value between positions — `a_cycle_that_hands_a_value_across_argument_positions_is_proved_by_size_change` is the minimal gate, and the certificate re-runs the closure. Size-change arcs also follow **bare `e.` tails** out of the bracket they came from, and nested brackets are strict projections. On the current compiler source **354** functions remain unproven — down from 364 before sequence-tail tracking, though the source itself gained five reachability helpers — so credit stays withheld. The remaining flows cross computed calls or genuinely grow. Also withheld: feasibility beyond the witness budget |
-| L2/L4 · Compiler implemented in Refal | 17.85 | 16.80 | 1.05 | not yet fast on very large inputs — now **measured**: on the compiler's own 176 KB source every Rust subcommand costs 0.21–0.36 s while `refal compile` costs **347 s**, entirely inside the Refal driver's default search (one measured drive 53.9 s). `cargo xtask perf` decomposes it, and the profile is 6.1 M calls led by `SameChars` 32% and `LookupL` 15% — linear scans over growing name lists. The pattern partition's `EmitTerms` failure is fixed and its self-hosting residual now completes; what remains withheld is the change of shape that makes the search fast |
+| Tier 1 static verification | 10.50 | 9.50 | 1.00 | the decidable checks, **and a sound, incomplete, certificate-carrying feasibility and termination analysis** (`refal feasibility`, see below). A **size-change closure over caller/callee argument positions** now proves cycles that hand a value between positions, and the closure is **maximised** — one graph survives per ordered pair of functions, so the search is a decision procedure rather than a budget (a third of the withheld proofs were an allocation cap, not a theorem). Size-change arcs follow **bare `e.` tails** out of the bracket they came from, treat nested brackets as strict projections, and treat a single term taken **out of** a bracket as strictly smaller. On the current compiler source **232** functions remain unproven — down from 354 — so credit stays withheld. All 232 now report the same shape, an idempotent graph with nothing shrinking, and the offenders are named: they pass a **computed** argument (`<Fst <Split (e.L)>>`), which no argument-position arc can see until the analysis carries a **result-size bound** per function. Also withheld: feasibility beyond the witness budget |
+| L2/L4 · Compiler implemented in Refal | 17.85 | 16.80 | 1.05 | not yet fast on very large inputs — now **measured**: on the compiler's own 175 KB source every Rust subcommand costs 0.21–0.36 s while `refal compile` costs **300 s**, entirely inside the Refal driver's default search. `refal run --profile` is the instrument, and it is new: **43,199,075 calls across 473 functions**, led by `SameChars` 23.1%, `Upper` 11.8%, `LookupL` 8.7%, `Compare` 6.5%, `DsNameIn` 5.6% and `EqName` 5.6% — **54.8% of the work is comparing names**, and `Upper` is a builtin that allocates a fresh string on every comparison. The profile also separates the two things that used to be conflated: the *machine* costs ~7 µs a call, and the *program* makes 43 million of them. What remains withheld is the change of shape that removes the scans — a bucketed name table — rather than a faster comparison |
 | L4 · Verified self-hosting fixpoint | 9.10 | 8.05 | 1.05 | the fixpoint now holds on the compiler's own source **and every accepted example** — `compile(compile(P)) == compile(P)`, after residualization stopped emitting unreachable generated splits. What is withheld is the proof over *arbitrary* programs rather than a fixed corpus |
 | **L3 · Meta-prover** | **13.00** | **11.40** | **1.60** | the entry, the driving, Turchin's `'True'` criterion, and the *relational* half are built and gated. What is withheld is the *general* relation (an arbitrary relation rather than equality) and a proof needing generalisation beyond the loop edge. Of SCP4's three named theorems, associativity of `Append` **and the tree reversal are proved**; the third, the **sorting equality**, is now *measured* rather than merely named — `examples/equiv-sorting.ref` writes one insertion sort with the recursion in opposite directions (`ISort` sorts the tail and inserts on the way back, `FSort` folds from the left), the fixture is checked to really sort, and the prover's `[]` branch is reflexive while the `s.X e.Rest` branch **never closes** at 2,000 steps or at 20,000. The claim is true and the prover cannot close it: what it needs is the *fold lemma*, an auxiliary generalisation neither definition states — which is exactly the withheld half, now pinned by a gate instead of asserted |
 | **L4 · Projections as artifacts** | **5.00** | **5.00** | **0.00** | closed — **all three projections are commands with gates.** The 1st is `refal metasystem`; the 2nd is `refal project2`, whose artifact **terminates** and agrees with `refal compile` on **78 of 78** (it once carried `(e.Source) = <Split1 (e.Source)>;`, an infinite self-loop, so it diverged on its first input; a branch whose drive folds back to the split being built is now emitted as a call to the *original* callee); and the 3rd is `refal project3`, which pins the **mode** and leaves the **interpreter** open, so the artifact is a **compiler generator** — applied to an interpreter it compiles programs. The gate **runs** both and requires the generator to reproduce the 2nd projection's compiler, then runs the target it emitted |
@@ -561,7 +570,7 @@ The ordered work list lives in
    site. The search over both partitions is the default: `accumulator-reverse`
    folds at residual-work 37 → 9, `identity` stays at 0, and a corpus scan puts it
    strictly better on **8** examples and strictly worse on **none**. The
-   compiler's own output is unchanged at **111,600 bytes**.
+   compiler's own output is unchanged at **115,023 bytes**.
 5. **§4.4's other half (E-7)**, **the compiler's speed on very large inputs**,
    **the self-hosting fixpoint over an arbitrary program**, and **metavariable
    stratification (E-17)**.
@@ -692,6 +701,11 @@ cargo run -p refal -- run examples/compiler.ref DRIVE-SYMBOLIC-INTERPRETIVE "$(c
 
 # An input too large for a command line reaches a program through a file.
 cargo run -p refal -- run examples/compiler.ref --input-file examples/compiler.ref
+
+# An input too large for a command line reaches a program through a file, and
+# `--profile` reports where the calls went: a per-function histogram on stderr,
+# so the program's own output on stdout is unchanged.
+cargo run -p refal -- run examples/compiler.ref GRAPH --input-file examples/compiler.ref --profile
 
 # Compare a source program with its lowered/reparsed execution
 cargo run -p refal -- differential examples/hello.ref
@@ -988,6 +1002,30 @@ by construction and supercompilation is a program that transforms programs. That
 what lets one engine here carry a self-hosting compiler, a reflection engine and a
 meta-prover; Prolog's nearest analogue is a meta-interpreter, whose search is a
 different mechanism from this project's graph of states.
+</details>
+
+<details>
+<summary><b>What is a graph of states?</b></summary>
+
+Turchin's model of a computation: a **configuration** is a function name together
+with its argument expression, and one reduction step takes a configuration to its
+successors. Draw every configuration a program can reach and every step between
+them and you have the **graph of states** — the object the supercompiler
+*cleans* (removes the walks no input can take), *generalises* (folds a walk back
+into an ancestor), and *emits* as a residual program. Compilation, in this
+repository, is nothing but the construction and reduction of that graph.
+</details>
+
+<details>
+<summary><b>Where can I read Turchin's original papers?</b></summary>
+
+[`docs/turchin/`](docs/turchin/) indexes the primary sources this repository is
+measured against — the 1980 Courant monograph *The Language REFAL: The Theory of
+Compilation and Metasystem Analysis*, *The Concept of a Supercompiler* (1986),
+*A Supersystem of Language Refal* (1991), the SCP4 outline (1999), and the
+philosophical works that frame them. `cargo xtask fetch-sources` downloads them;
+they are not committed. [`docs/TURCHIN-ECOSYSTEM-CONFORMANCE.md`](docs/TURCHIN-ECOSYSTEM-CONFORMANCE.md)
+maps every requirement to the passage that fixes it.
 </details>
 
 <details>

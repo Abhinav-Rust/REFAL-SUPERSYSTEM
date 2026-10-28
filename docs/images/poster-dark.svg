@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" width="1200" height="640" role="img" aria-labelledby="t d">
+  <title id="t">The whole repository in one picture</title>
+  <desc id="d">Four layer columns, L0 the Refal-5 machine, L1 the reflection engine, L2 the supercompiler core and L3 the meta-prover, each with the crate that implements it and the command that exercises it, above a self-application loop in which the compiler compiles its own source twice and the two generations must be identical.</desc>
+  <rect x="0.5" y="0.5" width="1199" height="639" rx="16" fill="#0D1117" stroke="#30363D" stroke-width="1"/>
+  <text x="40" y="52" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="3.2" fill="#0F766E">ONE PAGE</text>
+  <text x="40" y="90" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="-0.3" fill="#E6EDF3">The whole repository, in one picture</text>
+  <line x1="40" y1="112" x2="1160" y2="112" stroke="#30363D" stroke-width="1"/>
+  <rect x="40" y="140" width="272" height="236" rx="14" fill="#062925" stroke="#134E4A" stroke-width="1.5"/>
+  <text x="60" y="172" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="2.4" fill="#0F766E">L0</text>
+  <text x="60" y="200" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#E6EDF3">Refal-5 machine</text>
+  <text x="60" y="226" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#8B949E">runs a Refal program</text>
+  <line x1="60" y1="268" x2="292" y2="268" stroke="#134E4A" stroke-width="1"/>
+  <text x="60" y="292" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="12" font-weight="500" fill="#8B949E">refal-runtime</text>
+  <text x="60" y="316" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="12.5" font-weight="600" fill="#2DD4BF">refal run</text>
+  <circle cx="286.0" cy="310.0" r="5" fill="#2DD4BF"/>
+  <text x="60" y="352" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#8B949E">built and gated</text>
+  <g><line x1="315" y1="258" x2="319" y2="258" stroke="#0F766E" stroke-width="2"/><path d="M 319 254.25 L 325 258 L 319 261.75 Z" fill="#0F766E"/></g>
+  <rect x="328" y="140" width="272" height="236" rx="14" fill="#062925" stroke="#134E4A" stroke-width="1.5"/>
+  <text x="348" y="172" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="2.4" fill="#0F766E">L1</text>
+  <text x="348" y="200" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#E6EDF3">Reflection engine</text>
+  <text x="348" y="226" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#8B949E">turns the running program into</text>
+  <text x="348" y="242" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#8B949E">data</text>
+  <line x1="348" y1="268" x2="580" y2="268" stroke="#134E4A" stroke-width="1"/>
+  <text x="348" y="292" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="12" font-weight="500" fill="#8B949E">refal-core</text>
+  <text x="348" y="316" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="12.5" font-weight="600" fill="#2DD4BF">refal reflect</text>
+  <circle cx="574.0" cy="310.0" r="5" fill="#2DD4BF"/>
+  <text x="348" y="352" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#8B949E">built and gated</text>
+  <g><line x1="603" y1="258" x2="607" y2="258" stroke="#0F766E" stroke-width="2"/><path d="M 607 254.25 L 613 258 L 607 261.75 Z" fill="#0F766E"/></g>
+  <rect x="616" y="140" width="272" height="236" rx="14" fill="#062925" stroke="#134E4A" stroke-width="1.5"/>
+  <text x="636" y="172" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="2.4" fill="#0F766E">L2</text>
+  <text x="636" y="200" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#E6EDF3">Supercompiler core</text>
+  <text x="636" y="226" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#8B949E">turns that data into a better</text>
+  <text x="636" y="242" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#8B949E">program</text>
+  <line x1="636" y1="268" x2="868" y2="268" stroke="#134E4A" stroke-width="1"/>
+  <text x="636" y="292" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="12" font-weight="500" fill="#8B949E">refal-core</text>
+  <text x="636" y="316" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="12.5" font-weight="600" fill="#2DD4BF">refal compile</text>
+  <circle cx="862.0" cy="310.0" r="5" fill="#2DD4BF"/>
+  <text x="636" y="352" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#8B949E">built and gated</text>
+  <g><line x1="891" y1="258" x2="895" y2="258" stroke="#0F766E" stroke-width="2"/><path d="M 895 254.25 L 901 258 L 895 261.75 Z" fill="#0F766E"/></g>
+  <rect x="904" y="140" width="272" height="236" rx="14" fill="#2B1D06" stroke="#7C4A03" stroke-width="1.5"/>
+  <text x="924" y="172" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="2.4" fill="#0F766E">L3</text>
+  <text x="924" y="200" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#E6EDF3">Meta-prover</text>
+  <text x="924" y="226" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#8B949E">decides what the better</text>
+  <text x="924" y="242" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#8B949E">program means</text>
+  <line x1="924" y1="268" x2="1156" y2="268" stroke="#7C4A03" stroke-width="1"/>
+  <text x="924" y="292" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="12" font-weight="500" fill="#8B949E">refal-core</text>
+  <text x="924" y="316" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="12.5" font-weight="600" fill="#F59E0B">refal prove</text>
+  <circle cx="1150.0" cy="310.0" r="5" fill="#F59E0B"/>
+  <text x="924" y="352" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#8B949E">partial — names its gap</text>
+  <rect x="40" y="400" width="1120" height="160" rx="14" fill="#0B1B19" stroke="#134E4A" stroke-width="1.5"/>
+  <text x="60" y="430" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" letter-spacing="2.4" fill="#0F766E">L4 · SELF-APPLICATION</text>
+  <rect x="60" y="452" width="188" height="52" rx="10" fill="#0D1117" stroke="#30363D" stroke-width="1.5"/>
+  <text x="154" y="484" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="600" text-anchor="middle" fill="#E6EDF3">examples/compiler.ref</text>
+  <g><line x1="251" y1="478" x2="269" y2="478" stroke="#0F766E" stroke-width="2"/><path d="M 269 474.25 L 275 478 L 269 481.75 Z" fill="#0F766E"/></g>
+  <rect x="278" y="452" width="188" height="52" rx="10" fill="#062925" stroke="#134E4A" stroke-width="1.5"/>
+  <text x="372" y="484" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="600" text-anchor="middle" fill="#99F6E4">refal compile</text>
+  <g><line x1="469" y1="478" x2="487" y2="478" stroke="#0F766E" stroke-width="2"/><path d="M 487 474.25 L 493 478 L 487 481.75 Z" fill="#0F766E"/></g>
+  <rect x="496" y="452" width="188" height="52" rx="10" fill="#0D1117" stroke="#30363D" stroke-width="1.5"/>
+  <text x="590" y="484" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="600" text-anchor="middle" fill="#E6EDF3">generation 1</text>
+  <g><line x1="687" y1="478" x2="705" y2="478" stroke="#0F766E" stroke-width="2"/><path d="M 705 474.25 L 711 478 L 705 481.75 Z" fill="#0F766E"/></g>
+  <rect x="714" y="452" width="188" height="52" rx="10" fill="#062925" stroke="#134E4A" stroke-width="1.5"/>
+  <text x="808" y="484" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="600" text-anchor="middle" fill="#99F6E4">refal compile</text>
+  <g><line x1="905" y1="478" x2="923" y2="478" stroke="#0F766E" stroke-width="2"/><path d="M 923 474.25 L 929 478 L 923 481.75 Z" fill="#0F766E"/></g>
+  <rect x="932" y="452" width="188" height="52" rx="10" fill="#0D1117" stroke="#30363D" stroke-width="1.5"/>
+  <text x="1026" y="484" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11.5" font-weight="600" text-anchor="middle" fill="#E6EDF3">generation 2</text>
+  <text x="60" y="534" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8B949E">The two generations are compared byte for byte. Equal output is the claim; a supercompiler that merely re-prints its input would pass it trivially, so the emitted program is also run.</text>
+  <rect x="40" y="592" width="1120" height="44" rx="12" fill="#062925" stroke="#134E4A" stroke-width="1.5"/>
+  <text x="64" y="620" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#99F6E4">Every column is a crate and a command; every command is behind a test. The compiler in Refal lives in the corpus because it is the artifact under test, not the verifier.</text>
+</svg>

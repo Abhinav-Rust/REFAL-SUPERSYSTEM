@@ -27,6 +27,46 @@ fn run_file(path: &str, args: &[&str]) -> std::process::Output {
     command.output().expect("run refal binary")
 }
 
+/// `--profile` is the instrument the performance row turns on, so it is gated
+/// like any other claim.
+///
+/// Three properties, and each of them can fail on its own: the histogram goes to
+/// **stderr**, so a caller that redirects stdout still gets exactly the program's
+/// answer; the counts are real rather than a header; and the counting is off by
+/// default, so a run without the flag pays one `Option` test per call and nothing
+/// else. The last is why the flag is a flag rather than always-on instrumentation:
+/// a profile that changed what it measured would be worse than no profile.
+#[test]
+fn the_call_profile_says_where_the_calls_went_without_changing_the_output() {
+    let plain = run_file("examples/runtime-recursion.ref", &[]);
+    let profiled = run_file("examples/runtime-recursion.ref", &["--profile"]);
+    assert!(
+        plain.status.success(),
+        "{}",
+        String::from_utf8_lossy(&plain.stderr)
+    );
+    assert!(
+        profiled.status.success(),
+        "{}",
+        String::from_utf8_lossy(&profiled.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&plain.stdout),
+        String::from_utf8_lossy(&profiled.stdout),
+        "--profile must not change what the program prints"
+    );
+    assert!(
+        !String::from_utf8_lossy(&plain.stderr).contains("call profile:"),
+        "the profile must be off unless it is asked for"
+    );
+    let profile = String::from_utf8_lossy(&profiled.stderr);
+    assert!(profile.contains("call profile:"), "{profile}");
+    assert!(
+        profile.contains("Go"),
+        "the entry is called once and must appear in the histogram:\n{profile}"
+    );
+}
+
 fn differential_file(path: &str, args: &[&str]) -> std::process::Output {
     let mut command = Command::new(refal_bin());
     command.args(["differential", &workspace_path(path)]);
@@ -2945,6 +2985,26 @@ fn compile_command_compiles_the_compiler_itself() {
         compiled,
         driven_residue(&String::from_utf8_lossy(&expected.stdout)),
         "the Refal compiler's output differs from the Rust driver's residue"
+    );
+
+    // The published size is a figure like the completion percentage, so it is a
+    // gate rather than a number a reader has to trust. It had drifted once
+    // already -- the README said `111,600` while the compiler emitted 115,023,
+    // and the glance panel still said `12,599` from an earlier, smaller
+    // compiler slice, so the same measurement appeared twice with two answers.
+    // One figure, one measurement, checked here.
+    let readme = fs::read_to_string(workspace_path("README.md")).expect("read README.md");
+    let published = readme
+        .lines()
+        .find(|line| line.starts_with("Both generations are **"))
+        .expect("the README must publish the self-hosting output size");
+    let digits: String = published.chars().filter(char::is_ascii_digit).collect();
+    assert_eq!(
+        digits.parse::<usize>().ok(),
+        Some(compiled.len()),
+        "the published self-hosting output size must be the size this test measured \
+         ({} bytes):\n{published}",
+        compiled.len()
     );
 }
 

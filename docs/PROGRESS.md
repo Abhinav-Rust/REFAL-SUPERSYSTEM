@@ -49,9 +49,18 @@ See `README.md` §"What Theorem 5.1 does and does not forbid" and
 | | |
 |---|---|
 | Honest completion | **~93.4%** (supersystem completeness — one method, one table, in `README.md`) |
-| Tests | 428 (73 core + 186 CLI integration + 169 across the other four crates), 0 clippy, fmt clean |
+| Tests | 434 `#[test]` functions (185 CLI integration, 74 core, 175 across the other four crates); 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
+
+**The self-hosting output is 115,023 bytes, and it is a gate now.** The README
+published two figures for the same measurement — `12,599` in the glance panel, a
+number from an earlier and much smaller compiler slice, and `111,600` in the
+demonstrations and fixpoint panels, which was true when `compiler.ref` was 122 KB
+and is not true at 175 KB. `compile_command_compiles_the_compiler_itself` now
+measures the size it already had to compute and compares it with the sentence the
+README publishes it in, so the figure cannot drift again. Measured 2026-10-28:
+`refal compile examples/compiler.ref` emits **115,023 bytes** in **300 s**.
 
 **Verification state at this commit, stated precisely.** The Refal-authored
 differentials are green: the seed graph and residualization (58/58 each), the
@@ -83,7 +92,74 @@ partitions is the **compiler's default**: `RESIDUALIZE-DRIVEN`,
 closed**. All three modes are gated on the corpus, each against its Rust
 counterpart, byte for byte on 78 of 78 (2026-10-27).
 
+### Done — the size-change closure is maximised, and a term out of a bracket is strict (2026-10-28)
+
+The Tier 1 row's withheld credit is the unproven set on the compiler's own source.
+It was **354 functions**. Two defects in the analysis, both now closed, take it to
+**232** — a 34% reduction — with the certificate still re-checking.
+
+**The first was a budget, not a theorem.** `size_change_component` grew the closure
+by composing every pair of graphs and keeping every distinct result, under a cap of
+512. On the compiler's own source **125 functions** failed with "the closure
+exceeded 512 graphs" — a decline that looked like a proof obligation and was an
+allocation limit. The fix is the standard maximisation: a graph that carries every
+flow of another and is at least as strict on each can replace it, because
+size-change composition is monotone in the arc set. At most one graph then survives
+per ordered pair of functions, so the closure is bounded by the square of the
+largest component rather than by an arbitrary number. `SizeChangeGraph::dominates`
+is the predicate, it is unit-tested on both directions and on incomparable graphs,
+and the cap is now a guard at 20,000 rather than the normal stopping condition.
+
+**The second was a missing arc, and it is the commonest recursion in the corpus.**
+`size_change_graph` emitted an arc for a bracket-vs-bracket flow and for a bare
+`e.` tail out of a bracket, but **not** for a single-term variable passed where the
+pattern binds it inside a bracket:
+
+```refal
+Walk { (t.Head e.Rest) = <Step t.Head e.Rest>; }
+```
+
+`t.Head` is one term of the bracket the caller was given, so the flow is *strict* —
+and without the arc the graph for `Walk -> Step` had no strict edge at all, so the
+cycle closed as an idempotent graph with nothing shrinking. `bracket_holds` is the
+predicate and `a_single_term_variable_out_of_a_bracket_is_a_strict_flow` is the
+minimal gate; it is red before the change and green after.
+
+**What is still withheld, and it is now named exactly.** All 232 remaining failures
+report an idempotent graph with no strict self-loop, and the offenders are
+`DsInstCall2` (74 functions reach it), `DvMatchLit2` (59), `DsLoopAt` (23),
+`VarEmit` (18), `Sentences` (13), `SortN` (10) and eight smaller cycles. Their
+common shape is a **computed argument**: `SortN { (e.L) = <MergeN (<SortN <Fst
+<Split (e.L)>>>) ...>; }` passes the *result* of `<Fst <Split e.L>>`, which no
+argument-position arc can see because the value is not an argument of the call. To
+close them the analysis needs a **result-size bound** per function — `<Fst>` returns
+a proper component of its argument, `<Split>` returns a partition of it — so that a
+computed argument contributes an arc through the composition of those bounds. That
+is the next item, and it is stated here rather than guessed at.
+
+### Done — the machine can be asked where its calls went (2026-10-28)
+
+`refal run --profile` prints a per-function call histogram to **stderr**, so the
+program's own output on stdout is unchanged. It is the tool the performance row was
+missing: a Refal program's cost is its call counts times the cost of a call, and the
+second factor is a property of the machine while the first is a property of the
+*program*. Without the split, "the driver is slow" cannot be attributed.
+
+Two counting sites, and the choice of them is the correctness of the instrument. The
+work list advances a call's `sentence_index` **in place** on a failed match, so
+counting there would count sentence attempts rather than calls; the counter therefore
+fires at the three points that *begin* an invocation — the entry, a call term pushed
+onto the work list, and the recursive path when it is taken instead (`count_step` is
+what distinguishes it, so a work-list fallback is not counted twice).
+
+Measured on `examples/compiler.ref` (176 KB), one `RESIDUALIZE-DRIVEN`:
+**43,199,075 calls across 473 functions**, led by `SameChars` 23.1%, `Upper` 11.8%,
+`LookupL` 8.7%, `Compare` 6.5%, `DsNameIn` 5.6% and `EqName` 5.6% — **54.8% of the
+work is comparing names**, and `Upper` is a builtin that allocates a fresh string on
+every comparison. That is the shape of the speed item, measured rather than asserted.
+
 ### Done — alpha-equivalent residual reuse preserves the AST (2026-10-27)
+
 
 The compiler's `RESIDUALIZE-DRIVEN-PATTERN` failure is closed. The minimal
 reproducer is `examples/drive-alpha-rename.ref`: two calls are the same

@@ -1047,7 +1047,15 @@ const MAX_SIZE_CHANGE_POSITION: usize = 32;
 /// The closure budget for size-change graphs. Reaching it is an honest decline:
 /// the program is not called non-terminating, and the report says no proof was
 /// found within the budget.
-const MAX_SIZE_CHANGE_GRAPHS: usize = 512;
+///
+/// The budget is generous because the closure is **maximised** as it grows (see
+/// [`SizeChangeGraph::dominates`]): at most one graph survives per ordered pair
+/// of functions, so the reachable set is bounded by the square of the largest
+/// strongly connected component and the budget is a guard against a pathological
+/// component rather than the normal stopping condition. Before maximisation this
+/// budget was the *cause* of a third of the withheld proofs, which is why it is
+/// no longer tight.
+const MAX_SIZE_CHANGE_GRAPHS: usize = 20_000;
 
 /// One size-change graph: arcs from the caller's argument positions to the
 /// callee's. A `true` arc is strict.
@@ -1089,6 +1097,26 @@ impl SizeChangeGraph {
         self.arcs
             .iter()
             .any(|(&(from, to), &strict)| from == to && strict)
+    }
+
+    /// Whether `self` carries at least every flow `other` carries, and is at
+    /// least as strict on each.
+    ///
+    /// Size-change composition is monotone in the arc set, so a graph that
+    /// dominates another can replace it in the closure without losing a
+    /// possible counterexample: every composition the weaker graph could take
+    /// part in, the stronger one takes part in with no fewer arcs and no
+    /// non-strict arc where the weaker had a strict one. This is the standard
+    /// maximisation that keeps the closure finite — at most one graph per
+    /// ordered pair of functions — and it is what turns the closure from a
+    /// budget-limited search into a decision procedure.
+    fn dominates(&self, other: &Self) -> bool {
+        self.from == other.from
+            && self.to == other.to
+            && other
+                .arcs
+                .iter()
+                .all(|(key, strict)| self.arcs.get(key).is_some_and(|mine| *mine || !*strict))
     }
 }
 
@@ -1438,9 +1466,11 @@ impl CallGraph {
                     call.from, call.to, call.sentence
                 )
             })?;
-            if !graphs.contains(&graph) {
-                graphs.push(graph);
+            if graphs.iter().any(|known| known.dominates(&graph)) {
+                continue;
             }
+            graphs.retain(|known| !graph.dominates(known));
+            graphs.push(graph);
         }
         if graphs.is_empty() {
             return Err("the cycle has no call to build a size-change graph from".to_string());
@@ -1456,14 +1486,16 @@ impl CallGraph {
                 .collect();
             for graph in next {
                 let composed = current.compose(&graph);
-                if !graphs.contains(&composed) {
-                    if graphs.len() >= MAX_SIZE_CHANGE_GRAPHS {
-                        return Err(format!(
-                            "the size-change closure exceeded {MAX_SIZE_CHANGE_GRAPHS} graphs"
-                        ));
-                    }
-                    graphs.push(composed);
+                if graphs.iter().any(|known| known.dominates(&composed)) {
+                    continue;
                 }
+                graphs.retain(|known| !composed.dominates(known));
+                if graphs.len() >= MAX_SIZE_CHANGE_GRAPHS {
+                    return Err(format!(
+                        "the size-change closure exceeded {MAX_SIZE_CHANGE_GRAPHS} graphs"
+                    ));
+                }
+                graphs.push(composed);
             }
             cursor += 1;
         }
@@ -1471,7 +1503,7 @@ impl CallGraph {
         for graph in &graphs {
             if graph.is_idempotent() && !graph.has_strict_self_loop() {
                 return Err(format!(
-                    "the size-change closure contains an idempotent graph `{}` -> `{}` with no strict self-loop",
+                    "the size-change closure contains an idempotent graph `{}` -> `{}` with no strict self-loop, so this cycle has a call sequence in which no argument shrinks",
                     self.name(&graph.from),
                     self.name(&graph.to)
                 ));
@@ -1584,12 +1616,13 @@ fn termination_of(function: &Function, graph: &CallGraph) -> TerminationVerdict 
     // A fixed measure cannot express a value handed from one argument position
     // to another. Try the size-change closure before withholding the proof.
     let mut size_change = Vec::new();
+    let mut size_change_why: Option<String> = None;
     for &id in &cyclic {
         match graph.size_change_component(id) {
             Ok(component) => size_change.push(component),
-            Err(_) => {
+            Err(why) => {
                 size_change.clear();
-                break;
+                size_change_why.get_or_insert(why);
             }
         }
     }
@@ -1600,15 +1633,21 @@ fn termination_of(function: &Function, graph: &CallGraph) -> TerminationVerdict 
     }
 
     TerminationVerdict::Unproven {
-        reason: match closest {
-            Some((ranking, failure)) if failure.unbounded > 0 => format!(
-                "ranking {} came closest: {} call(s) inside a cycle have no bound, the first being {}",
-                ranking.label(),
-                failure.unbounded,
-                failure.first.unwrap_or_default()
-            ),
-            Some((_, failure)) => failure.reason,
-            None => "no measure applies".to_string(),
+        reason: {
+            let by_measure = match closest {
+                Some((ranking, failure)) if failure.unbounded > 0 => format!(
+                    "ranking {} came closest: {} call(s) inside a cycle have no bound, the first being {}",
+                    ranking.label(),
+                    failure.unbounded,
+                    failure.first.unwrap_or_default()
+                ),
+                Some((_, failure)) => failure.reason,
+                None => "no measure applies".to_string(),
+            };
+            match size_change_why {
+                Some(why) => format!("{by_measure}; size change: {why}"),
+                None => by_measure,
+            }
         },
     }
 }
@@ -1662,6 +1701,20 @@ fn size_change_graph(call: &RawCall) -> Option<SizeChangeGraph> {
             let (TermKind::Bracket(pattern_inner), TermKind::Bracket(argument_inner)) =
                 (&pattern.kind, &argument.kind)
             else {
+                // A single-term variable passed where the pattern binds it
+                // *inside* a bracket is a proper sub-term of that bracket: the
+                // caller was given the bracket, and the callee is given one term
+                // of its contents. Without this the commonest recursion in the
+                // corpus -- `Walk { (t.Head e.Rest) = <Step t.Head e.Rest>; }` --
+                // contributes no arc at all, and the cycle closes with no strict
+                // edge even though every step drops a term.
+                if let TermKind::Variable(variable) = &argument.kind
+                    && bracket_holds(pattern, &variable.name)
+                {
+                    arcs.entry((source, target))
+                        .and_modify(|strict| *strict = true)
+                        .or_insert(true);
+                }
                 continue;
             };
             match classify_containment(pattern_inner, argument_inner) {
@@ -1708,6 +1761,28 @@ fn classify_containment(pattern_inner: &[Term], argument_inner: &[Term]) -> Call
         }
     }
     CallClass::Unknown
+}
+
+/// Whether `term` is a bracket that binds `name` anywhere in its contents.
+///
+/// The answer is what makes a flow *strict*: a term reached through a bracket's
+/// contents is a proper part of the bracket, so the caller's measure is strictly
+/// larger than the callee's whatever the contents are.
+fn bracket_holds(term: &Term, name: &str) -> bool {
+    let TermKind::Bracket(inner) = &term.kind else {
+        return false;
+    };
+    holds_at_any_depth(inner, name)
+}
+
+fn holds_at_any_depth(terms: &[Term], name: &str) -> bool {
+    terms.iter().any(|term| match &term.kind {
+        TermKind::Variable(variable) => {
+            canonical_variable_index(&variable.name) == canonical_variable_index(name)
+        }
+        TermKind::Bracket(inner) => holds_at_any_depth(inner, name),
+        _ => false,
+    })
 }
 
 /// Whether `name` occurs inside a bracket's contents, at any depth.
@@ -2088,6 +2163,69 @@ mod tests {
             reason.contains("non-decreasing calls inside the cycle"),
             "{reason}"
         );
+        // And the size-change closure agrees, so a reader sees both independent
+        // analyses fail on the same cycle rather than one silence.
+        assert!(
+            reason.contains("no argument shrinks"),
+            "size change must also decline, and say why: {reason}"
+        );
+    }
+
+    #[test]
+    fn a_single_term_variable_out_of_a_bracket_is_a_strict_flow() {
+        // `s.A` is bound *inside* the pattern's bracket, so it is a proper
+        // sub-term of the argument the caller was given. Without that arc the
+        // graph for `F -> F` is empty, and an empty self-graph is idempotent
+        // with no strict self-loop -- so a program that plainly shrinks is
+        // reported unproven.
+        let source = "$ENTRY Go { = <F (A B C)>; }\n\
+                      F { (s.A e.Rest) = <F s.A>; }";
+        let program = parse(source);
+        let report = analyse(&program);
+        let f = report
+            .functions
+            .iter()
+            .find(|function| function.function == "F")
+            .expect("F");
+        assert!(
+            matches!(f.termination, TerminationVerdict::SizeChange { .. }),
+            "one term out of a bracket is strictly smaller than the bracket: {:?}",
+            f.termination
+        );
+        assert!(verify(&report, &program).is_empty());
+    }
+
+    #[test]
+    fn a_dominating_graph_replaces_the_graph_it_dominates() {
+        // The closure keeps one graph per ordered pair of functions, because a
+        // graph that carries every flow of another and is at least as strict on
+        // each can take part in every composition the other could. This is what
+        // makes the closure a decision procedure instead of a budget.
+        let graph = |arcs: &[(usize, usize, bool)]| SizeChangeGraph {
+            from: "F".to_string(),
+            to: "G".to_string(),
+            arcs: arcs
+                .iter()
+                .map(|&(from, to, strict)| ((from, to), strict))
+                .collect(),
+        };
+        let loose = graph(&[(1, 1, false)]);
+        let strict = graph(&[(1, 1, true)]);
+        let wider = graph(&[(1, 1, true), (2, 2, false)]);
+        assert!(strict.dominates(&loose));
+        assert!(
+            !loose.dominates(&strict),
+            "a loose arc cannot cover a strict one"
+        );
+        assert!(wider.dominates(&strict));
+        assert!(!strict.dominates(&wider), "a missing arc is not domination");
+        assert!(loose.dominates(&loose));
+        // Different endpoints are never comparable, whatever the arcs.
+        let elsewhere = SizeChangeGraph {
+            to: "H".to_string(),
+            ..wider.clone()
+        };
+        assert!(!elsewhere.dominates(&wider));
     }
 
     #[test]

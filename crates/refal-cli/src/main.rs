@@ -328,6 +328,7 @@ fn print_usage() {
     eprintln!("             [--input-file <path>]  pass a file's contents as one argument,");
     eprintln!("                                    which is how inputs too large for a");
     eprintln!("                                    command line reach the program");
+    eprintln!("             [--profile]  print a per-function call histogram to stderr");
 }
 
 fn lower_program(program: &refal_ast::Program, args: &[String]) {
@@ -1450,12 +1451,34 @@ fn execute_program(
     program: &refal_ast::Program,
     input_args: &[String],
 ) -> Result<Vec<String>, String> {
+    execute_program_profiled(program, input_args, false).map(|(outputs, _)| outputs)
+}
+
+/// Runs a program, optionally collecting a per-function call histogram.
+///
+/// The histogram goes to **stderr**, so `--profile` never changes what the
+/// program itself prints and a caller that redirects stdout still gets the
+/// program's answer. The profile is the only way to separate "the driver calls
+/// too many functions" from "a call is too expensive", and those two have
+/// different fixes.
+/// A program's output, plus its per-function call histogram when one was asked
+/// for.
+type ProgramRun = (Vec<String>, Vec<(String, u64)>);
+
+fn execute_program_profiled(
+    program: &refal_ast::Program,
+    input_args: &[String],
+    profile: bool,
+) -> Result<ProgramRun, String> {
     let input = args_to_values(input_args);
     let arguments = input_args
         .iter()
         .map(|arg| arg.chars().map(Value::Char).collect())
         .collect();
     let evaluator = Evaluator::with_arguments(program, arguments);
+    if profile {
+        evaluator.enable_call_profile();
+    }
     let result = evaluator
         .evaluate_entry(&input)
         .map_err(|error| error.to_string())?;
@@ -1467,7 +1490,20 @@ fn execute_program(
     if !result.is_empty() {
         outputs.push(render_values(&result));
     }
-    Ok(outputs)
+    let counts = evaluator.call_profile();
+    if profile {
+        let total: u64 = counts.iter().map(|(_, n)| n).sum();
+        eprintln!("call profile: {total} calls, {} functions", counts.len());
+        for (name, n) in counts.iter().take(20) {
+            let share = if total == 0 {
+                0.0
+            } else {
+                100.0 * *n as f64 / total as f64
+            };
+            eprintln!("  {n:>12}  {share:>5.1}%  {name}");
+        }
+    }
+    Ok((outputs, counts))
 }
 
 /// Run a program and report both its output and the reduction steps it took.
@@ -1891,8 +1927,14 @@ fn runtime_failure_class(error: &str) -> &'static str {
 }
 
 fn run_program(program: &refal_ast::Program, input_args: &[String]) {
-    let outputs = match execute_program(program, input_args) {
-        Ok(outputs) => outputs,
+    let profile = input_args.iter().any(|arg| arg == "--profile");
+    let input_args = input_args
+        .iter()
+        .filter(|arg| *arg != "--profile")
+        .cloned()
+        .collect::<Vec<_>>();
+    let outputs = match execute_program_profiled(program, &input_args, profile) {
+        Ok((outputs, _)) => outputs,
         Err(error) => {
             eprintln!("runtime error: {error}");
             process::exit(1);

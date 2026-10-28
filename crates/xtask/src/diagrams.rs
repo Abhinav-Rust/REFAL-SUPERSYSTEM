@@ -303,6 +303,22 @@ fn circle(cx: impl Into<Coord>, cy: impl Into<Coord>, r: impl Into<Coord>, fill:
     format!("  <circle cx=\"{cx}\" cy=\"{cy}\" r=\"{r}\" fill=\"{fill}\"/>")
 }
 
+/// A left-to-right connector: a short shaft and a filled head.
+///
+/// Used wherever two boxes are in sequence, so the direction of the pipeline is
+/// a property of the drawing rather than of the reader's guess.
+fn arrow(x1: f64, y: f64, x2: f64, stroke: &str) -> String {
+    let head = 6.0;
+    format!(
+        "  <g><line x1=\"{x1}\" y1=\"{y}\" x2=\"{}\" y2=\"{y}\" stroke=\"{stroke}\" stroke-width=\"2\"/><path d=\"M {} {} L {x2} {y} L {} {} Z\" fill=\"{stroke}\"/></g>",
+        x2 - head,
+        x2 - head,
+        y - head / 1.6,
+        x2 - head,
+        y + head / 1.6
+    )
+}
+
 fn header(p: &Palette, eyebrow: &str, title: &str, h: f64) -> Vec<String> {
     let w = 1200.0;
     let pad = 40.0;
@@ -948,7 +964,7 @@ fn glance(p: &Palette) -> String {
         (
             "SELF-HOSTING",
             "C1=C2=C3",
-            "byte-identical at 12,599 bytes",
+            "byte-identical at 115,023 bytes",
             "ok",
         ),
         (
@@ -1002,7 +1018,7 @@ fn glance(p: &Palette) -> String {
     wrap(
         h,
         "At a glance",
-        "Five tiles: four layers over one shared expression space; about 91.8% of the supersystem complete by one method; 100% Rust; a byte-identical self-hosting fixpoint at 12,599 bytes; and 19 of 25 in-scope conformance rows closed.",
+        "Five tiles: four layers over one shared expression space; about 93.4% of the supersystem complete by one method; 100% Rust; a byte-identical self-hosting fixpoint at 115,023 bytes; and 21 of 25 in-scope conformance rows closed.",
         &out,
     )
 }
@@ -1021,7 +1037,7 @@ fn demonstrations(p: &Palette) -> String {
     let cards = [
         (
             "SELF-HOSTING FIXPOINT",
-            "111,600 bytes",
+            "115,023 bytes",
             "gen1 == gen2, byte for byte",
             "ok",
             "Built",
@@ -1109,7 +1125,7 @@ fn demonstrations(p: &Palette) -> String {
     wrap(
         h,
         "See it work",
-        "Four result cards: the self-hosting fixpoint at 111,600 bytes, the metasystem transition at 172 to 4 steps, the strict checker catching a proven defect, and the meta-prover proving associativity.",
+        "Four result cards: the self-hosting fixpoint at 115,023 bytes, the metasystem transition at 172 to 4 steps, the strict checker catching a proven defect, and the meta-prover proving associativity.",
         &out,
     )
 }
@@ -1618,6 +1634,181 @@ fn supercompilation(p: &Palette) -> String {
 }
 
 // --------------------------------------------------------------------------
+// The poster -- the whole repository on one page
+// --------------------------------------------------------------------------
+//
+// This is the panel a reader meets before any prose, so it carries the four
+// layers, what each one consumes and produces, the crate and command that
+// realise it, and the self-application loop that closes the system. Everything
+// else in the README is a zoom into one column of this picture.
+fn poster(p: &Palette) -> String {
+    let h = 640.0;
+    let mut out = header(p, "ONE PAGE", "The whole repository, in one picture", h);
+
+    // Four columns, one per layer. Each states its job, the crate that
+    // implements it and the command that exercises it -- which is the whole
+    // claim of the project in the smallest form that is still checkable.
+    let columns: [(&str, &str, &str, &str, &str, &str); 4] = [
+        (
+            "L0",
+            "Refal-5 machine",
+            "runs a Refal program",
+            "refal-runtime",
+            "refal run",
+            "ok",
+        ),
+        (
+            "L1",
+            "Reflection engine",
+            "turns the running program into data",
+            "refal-core",
+            "refal reflect",
+            "ok",
+        ),
+        (
+            "L2",
+            "Supercompiler core",
+            "turns that data into a better program",
+            "refal-core",
+            "refal compile",
+            "ok",
+        ),
+        (
+            "L3",
+            "Meta-prover",
+            "decides what the better program means",
+            "refal-core",
+            "refal prove",
+            "part",
+        ),
+    ];
+    let (cw, gap) = (272.0_f64, 16.0_f64);
+    for (i, (layer, name, job, krate, command, status)) in columns.iter().enumerate() {
+        let x = 40.0 + i as f64 * (cw + gap);
+        let (fg, bg, bd) = tone(p, status);
+        out.push(rect(x, 140.0, cw, 236.0, bg, Some(bd), 14.0, 1.5));
+        out.push(text(
+            x + 20.0,
+            172.0,
+            layer,
+            13.0,
+            p.a1,
+            Txt::ws("700", "2.4"),
+        ));
+        out.push(text(x + 20.0, 200.0, name, 16.0, p.ink, Txt::w("600")));
+        for (j, ln) in wrap_lines(job, 30).iter().take(2).enumerate() {
+            out.push(t(x + 20.0, 226.0 + j as f64 * 16.0, ln, 12.5, p.muted));
+        }
+        out.push(line(x + 20.0, 268.0, x + cw - 20.0, 268.0, bd, 1.0));
+        out.push(text(
+            x + 20.0,
+            292.0,
+            krate,
+            12.0,
+            p.muted,
+            Txt::wf("500", MONO),
+        ));
+        out.push(text(
+            x + 20.0,
+            316.0,
+            command,
+            12.5,
+            fg,
+            Txt::wf("600", MONO),
+        ));
+        out.push(circle(Pf(x + cw - 26.0), Pf(310.0), 5.0, fg));
+        out.push(t(
+            x + 20.0,
+            352.0,
+            if *status == "ok" {
+                "built and gated"
+            } else {
+                "partial \u{2014} names its gap"
+            },
+            11.5,
+            p.muted,
+        ));
+        if i < 3 {
+            out.push(arrow(x + cw + 3.0, 258.0, x + cw + gap - 3.0, p.a1));
+        }
+    }
+
+    // The self-application loop. This is what makes the four columns one
+    // system rather than four tools: the compiler is a program in its own
+    // input language, so layer 2 can be pointed at layer 2.
+    out.push(rect(
+        40.0,
+        400.0,
+        1120.0,
+        160.0,
+        p.cardbg,
+        Some(p.cardbd),
+        14.0,
+        1.5,
+    ));
+    out.push(text(
+        60.0,
+        430.0,
+        "L4 \u{00b7} SELF-APPLICATION",
+        12.0,
+        p.a1,
+        Txt::ws("700", "2.4"),
+    ));
+    let boxes = [
+        "examples/compiler.ref",
+        "refal compile",
+        "generation 1",
+        "refal compile",
+        "generation 2",
+    ];
+    let (bw, bgap) = (188.0_f64, 30.0_f64);
+    for (i, label) in boxes.iter().enumerate() {
+        let x = 60.0 + i as f64 * (bw + bgap);
+        let is_command = label.starts_with("refal ");
+        out.push(rect(
+            x,
+            452.0,
+            bw,
+            52.0,
+            if is_command { p.fbg } else { p.bg },
+            Some(if is_command { p.fbd } else { p.border }),
+            10.0,
+            1.5,
+        ));
+        out.push(text(
+            x + bw / 2.0,
+            484.0,
+            label,
+            11.5,
+            if is_command { p.fink } else { p.ink },
+            Txt::wfa("600", MONO, "middle"),
+        ));
+        if i < 4 {
+            out.push(arrow(x + bw + 3.0, 478.0, x + bw + bgap - 3.0, p.a1));
+        }
+    }
+    out.push(t(
+        60.0,
+        534.0,
+        "The two generations are compared byte for byte. Equal output is the claim; a supercompiler that merely re-prints its input would pass it trivially, so the emitted program is also run.",
+        12.0,
+        p.muted,
+    ));
+
+    out.extend(footer(
+        p,
+        592.0,
+        "Every column is a crate and a command; every command is behind a test. The compiler in Refal lives in the corpus because it is the artifact under test, not the verifier.",
+    ));
+    wrap(
+        h,
+        "The whole repository in one picture",
+        "Four layer columns, L0 the Refal-5 machine, L1 the reflection engine, L2 the supercompiler core and L3 the meta-prover, each with the crate that implements it and the command that exercises it, above a self-application loop in which the compiler compiles its own source twice and the two generations must be identical.",
+        &out,
+    )
+}
+
+// --------------------------------------------------------------------------
 // The thesis -- four separate tools, or one engine over one expression space
 // --------------------------------------------------------------------------
 fn engine(p: &Palette) -> String {
@@ -1897,7 +2088,8 @@ pub fn run() {
         eprintln!("cannot create {}: {err}", outdir.display());
         std::process::exit(1);
     }
-    let diagrams: [Diagram; 16] = [
+    let diagrams: [Diagram; 17] = [
+        ("poster", poster),
         ("engine", engine),
         ("verification", verification),
         ("supercompilation", supercompilation),

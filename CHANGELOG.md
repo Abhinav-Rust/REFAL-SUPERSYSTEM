@@ -2,6 +2,60 @@
 
 ## Unreleased
 
+**The size-change closure is maximised, and a term out of a bracket is a strict flow.**
+
+- **The closure is now a decision procedure rather than a budget.**
+  `size_change_component` grew by composing every pair of graphs and keeping every
+  distinct result under a cap of 512, so **125 functions** on the compiler's own
+  source failed with "the closure exceeded 512 graphs" — an allocation limit
+  reported as a proof obligation. A graph that carries every flow of another and is
+  at least as strict on each now replaces it (`SizeChangeGraph::dominates`), so at
+  most one graph survives per ordered pair of functions and the closure is bounded
+  by the square of the largest component. The cap is a guard at 20,000.
+- **A single term taken out of a bracket is strictly smaller.** `Walk { (t.Head
+  e.Rest) = <Step t.Head e.Rest>; }` emitted no arc at all, because the argument is
+  a variable and the pattern position is a bracket. `bracket_holds` is the
+  predicate; `a_single_term_variable_out_of_a_bracket_is_a_strict_flow` is the gate,
+  red before the change and green after.
+- **Measured: unproven functions on `compiler.ref` fall from 354 to 232** — 34% —
+  with the certificate still re-checking (`# checked: every claim re-verified`). The
+  Tier 1 credit stays withheld: all 232 remaining failures are one shape, an
+  idempotent graph with no strict self-loop, and the offenders pass a **computed**
+  argument (`<Fst <Split (e.L)>>`) that no argument-position arc can see. The report
+  now names the offending cycle for each function instead of printing a bare
+  `unproven`.
+- **`a_dominating_graph_replaces_the_graph_it_dominates`** pins the maximisation
+  itself, in both directions and on incomparable graphs.
+
+**`refal run --profile` says where the calls went.**
+
+- A per-function call histogram on **stderr**, so the program's own output on stdout
+  is unchanged and a caller that redirects stdout still gets the program's answer.
+- Counting is off by default; a profile that changed what it measured would be worse
+  than no profile. The counter fires at the three points that *begin* an invocation
+  and never where the work list merely advances a call's `sentence_index`.
+- Measured on the compiler's own 175 KB source, one `RESIDUALIZE-DRIVEN`:
+  **43,199,075 calls across 473 functions**, of which **54.8% is comparing names**
+  (`SameChars` 23.1%, `Upper` 11.8%, `LookupL` 8.7%, `DsNameIn` 5.6%, `EqName`
+  5.6%). That is the shape of the speed row, measured rather than asserted.
+- Gate: `the_call_profile_says_where_the_calls_went_without_changing_the_output`.
+
+**The README opens with one page, and the published byte figure is a gate.**
+
+- **New generated panel `poster-{light,dark}.svg`**, under a new `## One page`
+  heading: four layer columns, each with the crate that implements it and the
+  command that exercises it, above the self-application band. Prose that the
+  poster, `engine` and `layers` panels already carried is removed.
+- **Two figures for one measurement, corrected.** The README published `12,599`
+  bytes in the glance panel (an earlier, much smaller compiler slice) and `111,600`
+  in the demonstrations and fixpoint panels (true at 122 KB, not at 175 KB). The
+  measured output is **115,023 bytes**, every occurrence now says so, and
+  `compile_command_compiles_the_compiler_itself` compares the sentence the README
+  publishes it in with the size it already had to compute — so it cannot drift
+  again. The fixpoint panel also said the source was 152 KB; it is 175 KB.
+- **Two FAQ entries** for the questions this project is actually searched with:
+  *What is a graph of states?* and *Where can I read Turchin's original papers?*
+
 **Termination now proves size change across argument positions.**
 
 - **A size-change closure over caller/callee positions** proves cycles where a

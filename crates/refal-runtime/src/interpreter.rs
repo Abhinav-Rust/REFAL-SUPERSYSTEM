@@ -264,6 +264,14 @@ pub struct Evaluator<'a> {
     steps: Cell<usize>,
     start_time: Instant,
     max_call_depth: usize,
+    /// Per-function invocation counts, collected only when a caller asks for
+    /// them.
+    ///
+    /// Off by default and off in every test: the counter is one `Option` test
+    /// per call, and a hash insert per call is a cost this machine can feel on
+    /// the compiler's own source. A profile that changed what it measured would
+    /// be worse than no profile.
+    call_counts: RefCell<Option<HashMap<String, u64>>>,
 }
 
 impl<'a> Evaluator<'a> {
@@ -313,11 +321,51 @@ impl<'a> Evaluator<'a> {
             steps: Cell::new(0),
             start_time: Instant::now(),
             max_call_depth,
+            call_counts: RefCell::new(None),
         }
     }
 
     pub fn captured_output(&self) -> Vec<Vec<Value>> {
         self.output.borrow().clone()
+    }
+
+    /// Starts counting invocations per function name.
+    ///
+    /// A Refal program's cost is its call counts times the cost of a call, and
+    /// the second factor is a property of the machine while the first is a
+    /// property of the *program*. Separating them is what makes a performance
+    /// claim checkable: `--profile` reports the first, and `cargo xtask perf`
+    /// reports the second.
+    pub fn enable_call_profile(&self) {
+        *self.call_counts.borrow_mut() = Some(HashMap::new());
+    }
+
+    /// Counts one invocation, if a profile is being collected.
+    ///
+    /// Every path that *begins* an invocation calls this exactly once, and no
+    /// path that merely continues one does: the work list advances a call's
+    /// `sentence_index` in place, so counting there would count a sentence
+    /// attempt rather than a call.
+    fn record_call(&self, name: &str) {
+        let mut counts = self.call_counts.borrow_mut();
+        if let Some(counts) = counts.as_mut() {
+            *counts.entry(name.to_owned()).or_insert(0) += 1;
+        }
+    }
+
+    /// Invocation counts per function, most frequent first.
+    ///
+    /// Empty unless [`Evaluator::enable_call_profile`] was called. Ties are
+    /// broken by name so two runs of the same program print the same order.
+    pub fn call_profile(&self) -> Vec<(String, u64)> {
+        let counts = self.call_counts.borrow();
+        let Some(counts) = counts.as_ref() else {
+            return Vec::new();
+        };
+        let mut entries: Vec<(String, u64)> =
+            counts.iter().map(|(name, n)| (name.clone(), *n)).collect();
+        entries.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
+        entries
     }
 
     /// Reduction steps taken since construction.
@@ -499,6 +547,7 @@ impl<'a> Evaluator<'a> {
             depth: 0,
             sentence_index: 0,
         }];
+        self.record_call(name);
         let mut returned: Option<Result<ViewField, EvalError>> = None;
 
         while let Some(task) = tasks.pop() {
@@ -518,6 +567,7 @@ impl<'a> Evaluator<'a> {
                             // the view field rather than a copy of it.
                             frame.pending = Some(PendingTerm::CallResult);
                             let call_depth = frame.depth + 1;
+                            self.record_call(&call_name);
                             tasks.push(WorkTask::Terms(frame));
                             tasks.push(WorkTask::Function {
                                 name: call_name,
@@ -941,6 +991,10 @@ impl<'a> Evaluator<'a> {
                 function: name.to_string(),
                 limit: self.max_call_depth,
             });
+        }
+
+        if count_step {
+            self.record_call(name);
         }
 
         let canonical = canonical_identifier(name);
