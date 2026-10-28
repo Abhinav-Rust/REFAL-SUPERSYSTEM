@@ -6859,15 +6859,26 @@ fn refal_authored_interpretive_drive_matches_the_rust_oracle() {
 /// grammar, §3 the sentence and program grammar, §4 comments.
 #[test]
 fn every_reference_clause_has_a_traceable_fixture() {
-    /// The clauses the Classic front end is in scope for. Hard-coded, so the
-    /// manifest cannot narrow its own contract.
+    /// The clauses the Classic front end is in scope for, from **two**
+    /// references. Hard-coded, so the manifest cannot narrow its own contract.
+    ///
+    /// The bare numbers are the syntax reference's sections -- the normative
+    /// grammar. The `PG` numbers are the Programming Guide's front-end sections,
+    /// which is Turchin's own longer treatment of the same language and states
+    /// rules the grammar does not: identifier equivalence, the order of
+    /// definitions, and where a comment may stand. A front end is not
+    /// conforming because it satisfies a grammar; it is conforming because it
+    /// satisfies the language the grammar and the guide together describe.
     const CLAUSES: &[&str] = &[
-        "1.1", "1.2", "1.2.1", "1.2.2", "1.2.3", "1.2.4", "1.3", "1.4", "2", "3", "4",
+        "1.1", "1.2", "1.2.1", "1.2.2", "1.2.3", "1.2.4", "1.3", "1.4", "2", "3", "4", "PG1.2",
+        "PG1.3", "PG1.4", "PG2.2",
     ];
     /// The clauses that state a rule with a forbidden half, and therefore need
-    /// a `reject` row. §1.2 alone is a category list rather than a rule.
+    /// a `reject` row. §1.2 alone is a category list rather than a rule, and so
+    /// is PG2.2: it says what `$ENTRY` means, not what is forbidden.
     const CLAUSES_WITH_A_FORBIDDEN_HALF: &[&str] = &[
-        "1.1", "1.2.1", "1.2.2", "1.2.3", "1.2.4", "1.3", "1.4", "2", "3", "4",
+        "1.1", "1.2.1", "1.2.2", "1.2.3", "1.2.4", "1.3", "1.4", "2", "3", "4", "PG1.2", "PG1.3",
+        "PG1.4",
     ];
 
     let manifest_path = workspace_path("examples/conformance.manifest");

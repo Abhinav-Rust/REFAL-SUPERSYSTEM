@@ -16,7 +16,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/status-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/status-light.svg">
-  <img alt="Status: about 93.4% of the supersystem — L0, L1 and the Refal-authored compiler are near complete, L2 is close, and L3 is partial" src="docs/images/status-light.svg" width="100%">
+  <img alt="Status: about 93.8% of the supersystem — L0, L1 and the Refal-authored compiler are near complete, L2 is close, and L3 is partial" src="docs/images/status-light.svg" width="100%">
 </picture>
 
 </div>
@@ -38,7 +38,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/glance-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/glance-light.svg">
-  <img alt="At a glance: four layers over one shared expression space; about 93.4% of the supersystem complete by one method; 100% Rust; a byte-identical self-hosting fixpoint at 115,023 bytes; and 21 of 25 in-scope conformance rows closed" src="docs/images/glance-light.svg" width="100%">
+  <img alt="At a glance: four layers over one shared expression space; about 93.8% of the supersystem complete by one method; 100% Rust; a byte-identical self-hosting fixpoint at 115,023 bytes; and 21 of 25 in-scope conformance rows closed" src="docs/images/glance-light.svg" width="100%">
 </picture>
 
 </div>
@@ -389,7 +389,7 @@ operations at the centre of the language.
 
 | Area | State |
 |---|---|
-| **Front end** | ✅ Lexer and parser over the documented Classic scope; **every clause of the syntax reference is bound to a fixture**, in both directions wherever a clause states a rule with a forbidden half |
+| **Front end** | ✅ Lexer and parser over the documented Classic scope; **every clause of both normative sources is bound to a fixture** — the syntax reference's grammar and the Programming Guide's longer treatment — in both directions wherever a clause states a rule with a forbidden half |
 | **Semantic checker** | ✅ Entry-point structure, duplicate detection, unresolved calls, calls in patterns, variable binding and kind consistency — each citing its clause |
 | **Refal machine** | ✅ **Clause-complete against the reference's builtin sections**; no fixed call-depth limit; the projecting matcher (§2.2); the view field in all three shapes; Chapter 6 metacode in full, including §6.4's `unknown` values |
 | **Graph of states** | ✅ `drive → clean → residualise` verified against the interpreter over the corpus; case splitting on a wholly unknown argument; §4.3 cleaning and the §4.5 verdict; generalization by common computation history; **the compilation strategy is searched**, not fixed; **the partition is searchable** — `--split search` drives the sequence split and the constructor-entering one that folds a nested accumulator and keeps the cheaper residue, so neither choice can lose; **driving a residue is a fixpoint** |
@@ -422,7 +422,7 @@ size-change graphs are re-closed. It never guesses the cases it cannot settle.
 
 ## Project status
 
-### Honest completion: ~93.4%
+### Honest completion: ~93.8%
 
 This figure measures **the whole supersystem** — all four layers — not the compiler
 alone. The compiler is finished; the supersystem is not, and publishing the
@@ -447,7 +447,7 @@ compiler's own number as the project's would misdescribe what this repository is
 
 | Workstream | Weight | Credit | Withheld | What is missing |
 |---|---:|---:|---:|---|
-| L0 · Bootstrap frontend | 5.95 | 5.60 | 0.35 | the corpus cites the *syntax* reference rather than the Programming Guide's longer treatment |
+| **L0 · Bootstrap frontend** | **5.95** | **5.95** | **0.00** | closed — the clause corpus now cites **both** normative sources: the syntax reference for the grammar, and the Programming Guide for the rules the grammar does not state — that `-` and `_` are interchangeable in an identifier and that its case after the first letter does not matter, that the order of definitions has no significance, and that a comment line may stand *inside* a definition between two of its sentences. Two rules the corpus asserted without a fixture now have one: `definition-order.ref` puts every caller before its callee, and `comment-inside-function.ref` stands a comment between two sentences of one function. The gate requires both clause sets, so neither reference can be dropped quietly |
 | L0 · Bootstrap semantics | 4.20 | 3.15 | 1.05 | exhaustiveness lives in Tier 1 rather than here |
 | **L0 · Refal machine / runtime** | **13.65** | **13.65** | **0.00** | closed — a block sentence carrying a condition now runs on the work list exactly as a named call does, so a recursion through one no longer uses the host stack. The gate drives 100,000 such steps, which overflowed the stack before the fix |
 | **L1 · Reflection engine** | **9.00** | **9.00** | **0.00** | closed — the service is exposed as `refal reflect`, with four shape gates |
@@ -459,7 +459,7 @@ compiler's own number as the project's would misdescribe what this repository is
 | **L4 · Projections as artifacts** | **5.00** | **5.00** | **0.00** | closed — **all three projections are commands with gates.** The 1st is `refal metasystem`; the 2nd is `refal project2`, whose artifact **terminates** and agrees with `refal compile` on **78 of 78** (it once carried `(e.Source) = <Split1 (e.Source)>;`, an infinite self-loop, so it diverged on its first input; a branch whose drive folds back to the split being built is now emitted as a call to the *original* callee); and the 3rd is `refal project3`, which pins the **mode** and leaves the **interpreter** open, so the artifact is a **compiler generator** — applied to an interpreter it compiles programs. The gate **runs** both and requires the generator to reproduce the 2nd projection's compiler, then runs the target it emitted |
 | **L2 · Function inversion** | **3.00** | **3.00** | **0.00** | closed — `refal invert` drives the forward definition and emits the synthesised inverse, round-tripped in a gate |
 | **Conformance / release evidence** | **2.80** | **2.80** | **0.00** | closed — the file-backed input/output clauses (`c1.4`, `c1.6`, `c1.7`) are bound to a runnable fixture, not only to the runtime's own test: `examples/builtin-file-io-conformance.ref` opens a file by a **relative** name, and the conformance harness runs every `run` row in a temporary directory it owns and removes, so a committed program can carry a path after all |
-| **Total** | **100.00** | **~93.4** | **~6.6** | |
+| **Total** | **100.00** | **~93.8** | **~6.2** | |
 
 </details>
 
@@ -972,7 +972,7 @@ without garbage collection.
 <summary><b>Is it usable today?</b></summary>
 
 The **compiler is finished and gated**; the *supersystem* is being completed and
-is at about **93.4%**. `refal compile`, `refal run`, `refal check`, `refal reflect`,
+is at about **93.8%**. `refal compile`, `refal run`, `refal check`, `refal reflect`,
 `refal prove`, `refal invert`, `refal project2` and `refal project3` all work and are
 exercised by tests. What remains is named row by row in
 [What is left](#what-is-left).

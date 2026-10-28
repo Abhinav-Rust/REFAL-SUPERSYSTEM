@@ -12,12 +12,25 @@ evidence. A row below says Complete only where a test proves it.
 **And every row is traceable to the clause it implements.** `examples/conformance.manifest`
 is the clause-by-clause corpus — `clause|fixture|mode`, where the mode is `accept` or
 `reject` — and `every_reference_clause_has_a_traceable_fixture` is what makes it a corpus
-rather than a list: it requires the clause set to match the clauses of the reference the
+rather than a list: it requires the clause set to match the clauses of the references the
 Classic front end is in scope for, requires every cited fixture to exist, requires a
 `reject` row for every clause whose rule has a forbidden half, requires the two modes to be
 disjoint, and then runs every row and requires the declared outcome, including a diagnostic
 on stderr for each rejection. A lexer that accepts everything passes every `accept` row,
 which is why the negative half is a required part of the contract rather than a bonus.
+
+**Two references are cited, because they say different things about one language.** The
+syntax reference is the normative **grammar** — what a program looks like. The Programming
+Guide is Turchin's own longer **treatment** of the same language, and it states rules the
+grammar does not: that `-` and `_` are interchangeable in an identifier and that its case
+after the first letter does not matter, that the order in which definitions enter the
+program has no significance, and that a comment line may stand *inside* a definition
+between two of its sentences. A front end is not conforming because it satisfies a grammar;
+it is conforming because it satisfies the language the grammar and the guide together
+describe. Both sets are cited in the manifest, both are required by the gate, and the two
+rules the corpus previously asserted without a fixture now have one:
+`definition-order.ref` places every caller before its callee, and
+`comment-inside-function.ref` puts a comment between two sentences of one function.
 
 **The builtin library has its own corpus**, because this one is about what the front
 end accepts: `examples/builtin-conformance.manifest` binds every clause of the

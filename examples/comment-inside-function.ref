@@ -1,0 +1,13 @@
+* Comment lines may appear between and inside function definitions
+* (Programming Guide 1.4), so a comment may stand between two sentences of
+* one function without ending it.
+$ENTRY Go {
+  = <F 'a'>;
+}
+
+F {
+* The first sentence matches the empty expression.
+  = 'empty';
+* The second takes the first symbol and recurses on the rest.
+  s.H e.T = s.H <F e.T>;
+}

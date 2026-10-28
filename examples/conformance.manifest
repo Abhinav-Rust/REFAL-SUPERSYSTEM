@@ -4,8 +4,13 @@
 # it: `clause|fixture|mode`, where the mode is `accept` (the compiler must
 # accept the fixture) or `reject` (it must refuse it, with a diagnostic).
 #
-# The reference is the Refal-5 syntax reference, cited section by section:
+# Two references are cited, because they state different things about the same
+# language. The Refal-5 syntax reference is the normative grammar:
 #   http://www.refal.net/refer_r5.html
+# The Refal-5 Programming Guide and Reference Manual is Turchin's own longer
+# treatment of it, and it states rules the grammar does not -- identifier
+# equivalence, the order of definitions, and where a comment may stand:
+#   http://www.refal.net/english/doc/turchin/ref5_eng/html/
 #
 # Clauses 1.1-1.4 are lexical, 2 is the expression grammar, 3 is the sentence
 # and program grammar, and 4 is comments. A clause that states a rule is covered
@@ -101,3 +106,50 @@
 4|classic-syntax.ref|accept
 4|conformance-block-comment.ref|accept
 4|bad-unterminated-block-comment.ref|reject
+
+# === The Programming Guide, cited section by section =======================
+#
+# The grammar above says what a program looks like; the guide says what the
+# language *means* by it, and a front end that satisfies the grammar and ignores
+# the guide is not a conforming Refal-5. The guide's front-end sections are cited
+# with the same discipline as the grammar's: every rule with a forbidden half
+# carries a `reject` row, so a checker that accepts everything fails here.
+
+# --- PG1.2 Symbols: identifiers, characters and macrodigits. An identifier
+#           starts with a capital letter, is at most 15 characters long, and
+#           treats `-`/`_` and upper/lower case as equivalent; a character
+#           string is quoted and a doubled quote embeds the delimiter; a
+#           macrodigit is a non-negative whole number.
+PG1.2|identifier-equivalence.ref|accept
+PG1.2|quote-escape.ref|accept
+PG1.2|metacode-macrodigit.ref|accept
+PG1.2|bad-lowercase-identifier.ref|reject
+PG1.2|bad-long-identifier.ref|reject
+PG1.2|bad-signed-macrodigit.ref|reject
+PG1.2|bad-empty-character-literal.ref|reject
+
+# --- PG1.3 A free variable is a type sign, a dot and an index; the index is an
+#           identifier or a whole number; and all entries of one variable must
+#           take the same value.
+PG1.3|shorthand-variables.ref|accept
+PG1.3|variable-index-equivalence.ref|accept
+PG1.3|bad-missing-variable-name.ref|reject
+PG1.3|bad-variable-kind-conflict.ref|reject
+
+# --- PG1.4 A program is a list of function definitions, external references and
+#           comment lines; a definition is a name and a block of sentences
+#           separated by semicolons; a sentence is `left-side = right-side`; the
+#           order of definitions has no significance; and a comment line starts
+#           with `*` and may stand inside a definition.
+PG1.4|hello.ref|accept
+PG1.4|multiple-entry.ref|accept
+PG1.4|definition-order.ref|accept
+PG1.4|comment-inside-function.ref|accept
+PG1.4|bad-missing-equals.ref|reject
+PG1.4|bad-unclosed-block.ref|reject
+PG1.4|bad-top-level-sentence.ref|reject
+
+# --- PG2.2 `$ENTRY` marks a function as an entry function, the only kind a
+#           module exports.
+PG2.2|multiple-entry.ref|accept
+PG2.2|extern.ref|accept

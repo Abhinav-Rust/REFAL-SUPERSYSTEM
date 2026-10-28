@@ -1,0 +1,19 @@
+* The order in which function definitions enter the program has no
+* significance (Programming Guide 1.4), so a caller may precede its callee.
+$ENTRY Go {
+  = <Outer 'k'>;
+}
+
+* Outer is defined before Inner, and Inner before Leaf: every reference is
+* forward. A front end that resolved names in one pass would refuse this.
+Outer {
+  s.X = <Inner s.X>;
+}
+
+Inner {
+  s.X = <Leaf s.X>;
+}
+
+Leaf {
+  s.X = s.X;
+}

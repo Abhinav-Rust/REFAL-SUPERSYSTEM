@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+**The front-end corpus cites the Programming Guide, and the row closes.**
+
+- **Two references, not one.** The syntax reference is the normative grammar; the
+  Programming Guide is Turchin's own longer treatment of the same language and
+  states rules the grammar does not. `examples/conformance.manifest` now cites
+  the guide's front-end sections `PG1.2`, `PG1.3`, `PG1.4` and `PG2.2` beside the
+  grammar's, and `every_reference_clause_has_a_traceable_fixture` requires both
+  sets — so neither can be dropped quietly, and a `reject` row is still required
+  for every guide clause whose rule has a forbidden half.
+- **Two rules the corpus asserted but never tested now have fixtures.**
+  `definition-order.ref` places every caller *before* its callee, which the guide
+  states and a one-pass name resolver would refuse; `comment-inside-function.ref`
+  stands a comment between two sentences of one definition, which the guide
+  allows and a lexer that treats `*` as a sentence terminator would break.
+- **The `L0 · Bootstrap frontend` row goes 5.60 → 5.95 of 5.95.** The published
+  figure moves `~93.4% → ~93.8%`, and the withheld credit `~6.6 → ~6.2`.
+
 **The size-change closure is maximised, and a term out of a bracket is a strict flow.**
 
 - **The closure is now a decision procedure rather than a budget.**

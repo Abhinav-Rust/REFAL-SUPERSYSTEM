@@ -48,7 +48,7 @@ See `README.md` §"What Theorem 5.1 does and does not forbid" and
 
 | | |
 |---|---|
-| Honest completion | **~93.4%** (supersystem completeness — one method, one table, in `README.md`) |
+| Honest completion | **~93.8%** (supersystem completeness — one method, one table, in `README.md`) |
 | Tests | 434 `#[test]` functions (185 CLI integration, 74 core, 175 across the other four crates); 0 clippy, fmt clean |
 | Last commit | this commit |
 | Working tree | clean |
@@ -91,6 +91,53 @@ partitions is the **compiler's default**: `RESIDUALIZE-DRIVEN`,
 `RESIDUALIZE-DRIVEN n`, `Compile` and `residualize-driven` all search, so **E-11 is
 closed**. All three modes are gated on the corpus, each against its Rust
 counterpart, byte for byte on 78 of 78 (2026-10-27).
+
+### Done — the front-end corpus cites both normative sources, and the row closes (2026-10-28)
+
+The `L0 · Bootstrap frontend` row withheld 0.35 for one reason: the clause corpus
+cited the *syntax* reference and not the Programming Guide's longer treatment of
+the same language. That is now closed, and closing it found two rules the corpus
+had been asserting without a fixture.
+
+**Two references, and they are not redundant.** The syntax reference is the
+normative **grammar** — what a program looks like. The guide is Turchin's own
+**treatment** of the same language, and it states rules the grammar does not:
+
+- an identifier starts with a capital letter, its case after the first letter does
+  not matter, `-` and `_` are interchangeable, and it is at most 15 characters;
+- a character string is quoted, and a doubled quote embeds the delimiter;
+- a macrodigit is a non-negative whole number;
+- a free variable is a type sign, a dot and an index, the index is an identifier or
+  a whole number, and all entries of one variable take the same value;
+- **the order in which definitions enter the program has no significance**;
+- a definition is a name and a block of sentences separated by semicolons, a
+  sentence is `left-side = right-side`, and **a comment line may stand inside a
+  definition**;
+- `$ENTRY` marks the functions a module exports.
+
+`examples/conformance.manifest` now cites the guide's front-end sections
+`PG1.2`, `PG1.3`, `PG1.4` and `PG2.2` beside the grammar's `1.1 … 4`, and
+`every_reference_clause_has_a_traceable_fixture` requires **both** sets. The gate
+still requires a `reject` row for every clause whose rule has a forbidden half,
+which is why `PG2.2` is the one guide clause without one: it says what `$ENTRY`
+means, not what is forbidden.
+
+**The two fixtures that were missing.** Both rules were implemented and neither
+was tested, which is the shape this file keeps recording — a claim with no gate
+behind it:
+
+- `definition-order.ref` defines `Go` before `Outer` before `Inner` before
+  `Leaf`, so every reference is forward. A front end that resolved names in one
+  pass would refuse a legal program, and nothing in the corpus would have said so.
+- `comment-inside-function.ref` stands a comment line between the two sentences of
+  one function. A lexer that treated `*` as a sentence terminator would end the
+  block early and report a syntax error on the second sentence.
+
+Both are `accept` rows and both are also run, not merely checked: `refal run`
+returns `k` and `aempty`.
+
+**The figure moves `~93.4% → ~93.8%`.** The row goes `5.60 → 5.95` of `5.95`, the
+table sums to **93.80**, and the withheld credit goes `6.55 → 6.20`.
 
 ### Done — the size-change closure is maximised, and a term out of a bracket is strict (2026-10-28)
 

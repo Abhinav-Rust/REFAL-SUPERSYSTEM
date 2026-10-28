@@ -748,7 +748,7 @@ fn accounting(p: &Palette) -> String {
         h,
     );
     let rows: [(&str, f64, f64); 12] = [
-        ("L0 \u{00b7} frontend", 5.95, 5.60),
+        ("L0 \u{00b7} frontend", 5.95, 5.95),
         ("L0 \u{00b7} semantics", 4.20, 3.15),
         ("L0 \u{00b7} machine / runtime", 13.65, 13.65),
         ("L1 \u{00b7} reflection engine", 9.00, 9.00),
@@ -777,7 +777,10 @@ fn accounting(p: &Palette) -> String {
             7.0,
             0.0,
         ));
-        let filled = track_w * credit / 100.0;
+        // The bar is the credit as a fraction of the row's **own weight**, not
+        // of 100: a row worth 3.00 that is fully earned must look full, and
+        // drawing it against 100 made every bar in the panel a stub.
+        let filled = track_w * credit / weight;
         out.push(rect(
             track_x,
             y - 8.0,
@@ -800,7 +803,7 @@ fn accounting(p: &Palette) -> String {
     out.extend(footer(
         p,
         396.0,
-        "One number, one method: ~93.4 of 100, from one table. A row carries zero credit until a gate behind it is green.",
+        "One number, one method: ~93.8 of 100, from one table. A row carries zero credit until a gate behind it is green.",
     ));
     wrap(
         h,
@@ -951,7 +954,7 @@ fn glance(p: &Palette) -> String {
         ),
         (
             "COMPLETION",
-            "~93.4%",
+            "~93.8%",
             "of the supersystem, one method, one table",
             "part",
         ),
@@ -1138,7 +1141,7 @@ fn roadmap(p: &Palette) -> String {
     let mut out = header(
         p,
         "WHAT IS LEFT",
-        "Four rows stand between ~93.4% and 100% \u{2014} each with a named gap",
+        "Four ecosystem rows are partial \u{2014} each with a named gap",
         h,
     );
     let rows = [
