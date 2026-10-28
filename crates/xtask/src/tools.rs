@@ -482,6 +482,34 @@ pub fn perf() -> i32 {
     );
     println!();
 
+    // The call profile is the other half of the measurement: wall time says
+    // *that* a stage is slow, and the histogram says *what it is doing*. It is
+    // printed here rather than left to a reader because the README publishes a
+    // call count, and a published number that no command reproduces is a claim.
+    println!("== where the calls go (refal run --profile) ==");
+    let profiled = Command::new(&bin)
+        .args([
+            "run",
+            "examples/compiler.ref",
+            "RESIDUALIZE-DRIVEN-COMPILATIVE",
+            "--input-file",
+            &source,
+            "--profile",
+        ])
+        .current_dir(&root)
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .output();
+    match profiled {
+        Ok(output) => {
+            for line in String::from_utf8_lossy(&output.stderr).lines() {
+                println!("   {line}");
+            }
+        }
+        Err(error) => println!("   could not profile: {error}"),
+    }
+    println!();
+
     println!("== what this task does not measure ==");
     println!("   the runtime's linearity in the input's length. The README publishes a");
     println!("   figure for it, measured before the view field was reworked, and this");
