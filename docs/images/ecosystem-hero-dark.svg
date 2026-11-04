@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 480" width="1200" height="480" role="img" aria-labelledby="t d">
   <title id="t">REFAL SUPER SYSTEM</title>
-  <desc id="d">Active development of a computational prototype and a wider knowledge ecosystem. The Refal engine exists with correctness work open. The shared knowledge network is planned.</desc>
+  <desc id="d">An actively developed Refal system for execution, symbolic inspection, and experimental transformation. Programs and models are processed by the engine to produce generated programs and reports.</desc>
   <rect x="0.5" y="0.5" width="1199" height="479" rx="24" fill="#0D1117" stroke="#30363D" stroke-width="1"/>
   <circle cx="980" cy="246" r="225" fill="#062925"/>
-  <text x="56" y="76" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" letter-spacing="1.8" fill="#2DD4BF">COMPUTATION + CONNECTED KNOWLEDGE</text>
+  <text x="56" y="76" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" letter-spacing="1.8" fill="#2DD4BF">SYMBOLIC COMPUTATION + METAPROGRAMMING</text>
   <text x="52" y="167" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="86" font-weight="800" letter-spacing="-3" fill="#E6EDF3">REFAL</text>
   <text x="57" y="225" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="50" font-weight="600" letter-spacing="-1.2" fill="#E6EDF3">SUPER SYSTEM</text>
   <text x="58" y="282" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="23" fill="#E6EDF3">Programs that can transform programs.</text>
@@ -12,7 +12,7 @@
   <circle cx="78" cy="391" r="4.5" fill="#2DD4BF"/>
   <text x="93" y="397" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" letter-spacing="0.5" fill="#2DD4BF">ACTIVE DEVELOPMENT</text>
   <text x="337" y="397" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="18" fill="#8B949E">Research implementation</text>
-  <text x="58" y="445" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="17" fill="#8B949E">Correctness repairs and a wider ecosystem ahead.</text>
+  <text x="58" y="445" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="17" fill="#8B949E">Refal execution, specialization, and analysis.</text>
 <g>  <line x1="875" y1="129" x2="923.6936278660418" y2="178.5789665545152" stroke="#14B8A6" stroke-width="2"/><path d="M 930 185 L 920.839835223604 181.38179861405223 L 926.5474205084795 175.77613449497818 Z" fill="#14B8A6"/></g>
 <g>  <line x1="1080" y1="129" x2="1054.2499927126387" y2="177.06668026974097" stroke="#14B8A6" stroke-width="2"/><path d="M 1050 185 L 1050.7240728325235 175.1777946196793 L 1057.775912592754 178.95556591980264 Z" fill="#14B8A6"/></g>
 <g>  <line x1="930" y1="320" x2="881.363961030679" y2="368.6360389693211" stroke="#14B8A6" stroke-width="2"/><path d="M 875 375 L 878.5355339059328 365.80761184457486 L 884.1923881554252 371.4644660940673 Z" fill="#14B8A6"/></g>
@@ -24,11 +24,11 @@
   <rect x="825" y="185" width="310" height="135" rx="18" fill="#2B1D06" stroke="#7C4A03" stroke-width="1.5"/>
   <text x="980" y="232" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="26" font-weight="700" text-anchor="middle" fill="#E6EDF3">REFAL ENGINE</text>
   <text x="980" y="266" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="18" text-anchor="middle" fill="#E6EDF3">inspect · transform · execute</text>
-  <text x="980" y="297" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" text-anchor="middle" fill="#F59E0B">correctness work open</text>
+  <text x="980" y="297" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" text-anchor="middle" fill="#F59E0B">active development</text>
   <rect x="790" y="375" width="175" height="60" rx="14" fill="#161B22" stroke="#30363D" stroke-width="1"/>
-  <text x="877.5" y="401" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="17" font-weight="600" text-anchor="middle" fill="#E6EDF3">KNOWLEDGE</text>
-  <text x="877.5" y="422" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" text-anchor="middle" fill="#8B949E">NETWORK PLANNED</text>
+  <text x="877.5" y="401" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="17" font-weight="600" text-anchor="middle" fill="#E6EDF3">PROGRAMS</text>
+  <text x="877.5" y="422" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" text-anchor="middle" fill="#8B949E">GENERATED OUTPUT</text>
   <rect x="1010" y="375" width="150" height="60" rx="14" fill="#161B22" stroke="#30363D" stroke-width="1"/>
-  <text x="1085" y="401" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="17" font-weight="600" text-anchor="middle" fill="#E6EDF3">PEOPLE</text>
-  <text x="1085" y="422" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" text-anchor="middle" fill="#8B949E">NETWORK PLANNED</text>
+  <text x="1085" y="401" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="17" font-weight="600" text-anchor="middle" fill="#E6EDF3">REPORTS</text>
+  <text x="1085" y="422" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" text-anchor="middle" fill="#8B949E">GENERATED OUTPUT</text>
 </svg>

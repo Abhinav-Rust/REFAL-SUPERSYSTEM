@@ -7310,6 +7310,28 @@ fn every_builtin_clause_has_a_traceable_fixture() {
     );
 }
 
+/// Shared input variables retain their identities on both sides of a claim.
+#[test]
+fn equivalence_keeps_independent_arguments_distinct() {
+    let path = "docs/audits/2026-11-04/equivalence-counterexample.ref";
+    let concrete = run_file(path, &["a", "b"]);
+    assert!(concrete.status.success());
+    assert_eq!(String::from_utf8_lossy(&concrete.stdout), "a\nb\n");
+
+    let output = prove_equivalence_file(path, "Left", "Right");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("equivalence: Left = Right"), "{stdout}");
+    assert!(!stdout.contains("verdict: proved"), "{stdout}");
+    assert!(
+        !output.status.success(),
+        "an unresolved equation is not a proof"
+    );
+
+    let identity = prove_equivalence_file(path, "Left", "Left");
+    assert!(identity.status.success());
+    assert!(String::from_utf8_lossy(&identity.stdout).contains("verdict: proved"));
+}
+
 /// The relational half of the prover (E-12, E-13): an equation between two
 /// reductions over free variables, proved by folding.
 ///

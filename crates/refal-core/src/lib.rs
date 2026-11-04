@@ -6704,8 +6704,27 @@ impl<'a> EquivalenceProver<'a> {
         // call one bracket deeper than the claim's own head.
         normalise_sides(&mut left_terms, &mut right_terms);
 
-        if sequences_alpha_equal(&left_terms, &right_terms) {
+        // Both sides use the same free-variable environment. Reflexivity must
+        // preserve those identities; renaming is reserved for comparing an
+        // entire equation with an ancestor under one shared substitution.
+        if same_term_sequence(&left_terms, &right_terms) {
             leaves.push(EquivalenceLeaf::Reflexive { depth });
+            return Ok(());
+        }
+        if is_ground(&left_terms) && is_ground(&right_terms) {
+            leaves.push(EquivalenceLeaf::Refuted {
+                left: format_term_sequence(&left_terms),
+                right: format_term_sequence(&right_terms),
+            });
+            return Ok(());
+        }
+        // Unequal terminal expressions do not represent a recursive
+        // computation. Splitting X in an equation X = Y and folding every
+        // resulting substitution to X = Y would assume the claim itself.
+        // Keep such symbolic equalities open; induction requires a residual
+        // call, while equal terminal expressions close by reflexivity above.
+        if !has_residual_call(&left_terms) && !has_residual_call(&right_terms) {
+            leaves.push(EquivalenceLeaf::Stuck { depth });
             return Ok(());
         }
         // The induction hypothesis may only be applied where the terms are known
@@ -6737,14 +6756,6 @@ impl<'a> EquivalenceProver<'a> {
                 }
             }
         }
-        if is_ground(&left_terms) && is_ground(&right_terms) {
-            leaves.push(EquivalenceLeaf::Refuted {
-                left: format_term_sequence(&left_terms),
-                right: format_term_sequence(&right_terms),
-            });
-            return Ok(());
-        }
-
         // The pair as an aligned conjunction of sub-goals.
         //
         // A Refal expression is a word in the free monoid over terms, so two
@@ -7355,6 +7366,14 @@ fn same_term_kind(left: &CoreTermKind, right: &CoreTermKind) -> bool {
     }
 }
 
+fn has_residual_call(terms: &[CoreTerm]) -> bool {
+    terms.iter().any(|term| match &term.kind {
+        CoreTermKind::Call { .. } => true,
+        CoreTermKind::Bracket(inner) => has_residual_call(inner),
+        _ => false,
+    })
+}
+
 fn same_term_sequence(left: &[CoreTerm], right: &[CoreTerm]) -> bool {
     left.len() == right.len()
         && left
@@ -7385,13 +7404,6 @@ fn normalise_sides(left: &mut Vec<CoreTerm>, right: &mut Vec<CoreTerm>) {
             break;
         }
     }
-}
-
-/// Whether two term sequences are equal up to a consistent renaming of variables.
-fn sequences_alpha_equal(left: &[CoreTerm], right: &[CoreTerm]) -> bool {
-    let mut forward = HashMap::new();
-    let mut backward = HashMap::new();
-    sequences_alpha_equal_with(left, right, &mut forward, &mut backward)
 }
 
 /// Whether two *pairs* of sequences are equal under one shared renaming.
@@ -11730,6 +11742,52 @@ mod tests {
                     )],
                 ),
             ],
+        }
+    }
+
+    #[test]
+    fn equivalence_preserves_distinct_free_arguments() {
+        for kind in [
+            VariableKind::Symbol,
+            VariableKind::Term,
+            VariableKind::Expression,
+        ] {
+            let x = core_var(kind, "X");
+            let y = core_var(kind, "Y");
+            let pattern = vec![core_bracket(vec![x.clone()]), core_bracket(vec![y.clone()])];
+            for (left, right) in [
+                (vec![x.clone()], vec![y.clone()]),
+                (
+                    vec![core_bracket(vec![core_char('a'), x.clone()])],
+                    vec![core_bracket(vec![core_char('a'), y.clone()])],
+                ),
+                (vec![x.clone(), x.clone()], vec![x.clone(), y.clone()]),
+            ] {
+                let program = CoreProgram {
+                    declarations: vec![],
+                    functions: vec![
+                        core_function(
+                            "Left",
+                            Visibility::Local,
+                            vec![core_sentence(pattern.clone(), left)],
+                        ),
+                        core_function(
+                            "Right",
+                            Visibility::Local,
+                            vec![core_sentence(pattern.clone(), right)],
+                        ),
+                    ],
+                };
+                for budget in [0, 64] {
+                    let report = prove_equivalence(&program, "Left", "Right", budget)
+                        .expect("both claims use the same argument pattern");
+                    assert_ne!(
+                        report.verdict,
+                        ProofVerdict::Proved,
+                        "X and Y may contain different values ({kind:?}, budget {budget}): {report:?}"
+                    );
+                }
+            }
         }
     }
 

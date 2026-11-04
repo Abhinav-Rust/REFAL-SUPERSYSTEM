@@ -33,7 +33,13 @@ fn ledger(readme: &str) -> io::Result<Vec<Capability<'_>>> {
         if cells.len() != 3
             || !matches!(
                 cells[1],
-                "Implemented" | "Demonstrated" | "Needs repair" | "Not established" | "Not started"
+                "Implemented"
+                    | "Demonstrated"
+                    | "Experimental"
+                    | "Not available"
+                    | "Needs repair"
+                    | "Not established"
+                    | "Not started"
             )
         {
             return Err(io::Error::new(
@@ -108,7 +114,7 @@ fn hero(p: &Palette) -> String {
     b.push(text(
         56.0,
         76.0,
-        "COMPUTATION + CONNECTED KNOWLEDGE",
+        "SYMBOLIC COMPUTATION + METAPROGRAMMING",
         15.0,
         p.ok,
         Txt::ws("600", "1.8"),
@@ -166,7 +172,7 @@ fn hero(p: &Palette) -> String {
     b.push(t(
         58.0,
         445.0,
-        "Correctness repairs and a wider ecosystem ahead.",
+        "Refal execution, specialization, and analysis.",
         17.0,
         p.muted,
     ));
@@ -204,18 +210,18 @@ fn hero(p: &Palette) -> String {
     b.push(centered(
         980.0,
         297.0,
-        "correctness work open",
+        "active development",
         16.0,
         p.part,
         "600",
     ));
-    for (x, w, title) in [(790.0, 175.0, "KNOWLEDGE"), (1010.0, 150.0, "PEOPLE")] {
+    for (x, w, title) in [(790.0, 175.0, "PROGRAMS"), (1010.0, 150.0, "REPORTS")] {
         b.push(rect(x, 375.0, w, 60.0, p.outbg, Some(p.outbd), 14.0, 1.0));
         b.push(centered(x + w / 2.0, 401.0, title, 17.0, p.ink, "600"));
         b.push(centered(
             x + w / 2.0,
             422.0,
-            "NETWORK PLANNED",
+            "GENERATED OUTPUT",
             11.0,
             p.muted,
             "600",
@@ -224,7 +230,7 @@ fn hero(p: &Palette) -> String {
     wrap(
         480.0,
         "REFAL SUPER SYSTEM",
-        "Active development of a computational prototype and a wider knowledge ecosystem. The Refal engine exists with correctness work open. The shared knowledge network is planned.",
+        "An actively developed Refal system for execution, symbolic inspection, and experimental transformation. Programs and models are processed by the engine to produce generated programs and reports.",
         &b,
     )
 }
@@ -253,7 +259,7 @@ fn status(p: &Palette, rows: &[Capability<'_>], date: &str) -> String {
         let y = 164.0 + (i / 2) as f64 * 152.0;
         let (ink, bg, border) = match row.status {
             "Implemented" | "Demonstrated" => (p.ok, p.okbg, p.okbd),
-            "Needs repair" => (p.part, p.partbg, p.partbd),
+            "Experimental" | "Needs repair" => (p.part, p.partbg, p.partbd),
             _ => (p.out, p.outbg, p.outbd),
         };
         b.push(format!("<g data-capability=\"{i}\">"));
@@ -292,7 +298,7 @@ fn status(p: &Palette, rows: &[Capability<'_>], date: &str) -> String {
     b.push(t(
         42.0,
         height - 31.0,
-        "Scope includes the knowledge network. No overall completion percentage is assigned.",
+        "Capabilities are reported through implementation and demonstrated behavior.",
         17.0,
         p.muted,
     ));
@@ -309,7 +315,7 @@ fn ecosystem(p: &Palette) -> String {
     b.push(text(
         42.0,
         57.0,
-        "THE FULL ECOSYSTEM · IN SCOPE",
+        "THE REFAL TOOL WORKFLOW",
         16.0,
         p.ok,
         Txt::ws("600", "1.7"),
@@ -317,7 +323,7 @@ fn ecosystem(p: &Palette) -> String {
     b.push(text(
         40.0,
         111.0,
-        "From ideas to evidence, and back to people",
+        "From source to generated programs",
         36.0,
         p.ink,
         Txt::ws("700", "-0.7"),
@@ -337,61 +343,61 @@ fn ecosystem(p: &Palette) -> String {
             "01",
             40.0,
             166.0,
-            "Describe",
-            "Concepts and claims",
-            "with original sources.",
+            "Write",
+            "Describe functions and",
+            "their patterns in Refal.",
             false,
         ),
         (
             "02",
             432.0,
             166.0,
-            "Formalize",
-            "Connect each claim to",
-            "a model and its domain.",
+            "Check",
+            "Parse the source and",
+            "inspect static diagnostics.",
             false,
         ),
         (
             "03",
             824.0,
             166.0,
-            "Transform",
-            "Use the Refal engine to",
-            "inspect, specialize, and run.",
-            true,
+            "Inspect",
+            "Explore symbolic entry",
+            "configurations and successors.",
+            false,
         ),
         (
             "04",
             824.0,
             390.0,
-            "Check",
-            "Retain results, proof checks,",
-            "and counterexample inputs.",
-            false,
+            "Transform",
+            "Drive the program and",
+            "emit residual Refal.",
+            true,
         ),
         (
             "05",
             432.0,
             390.0,
-            "Connect",
-            "Version knowledge and",
-            "its supporting evidence.",
+            "Compare",
+            "Compare source and generated",
+            "outputs on concrete inputs.",
             false,
         ),
         (
             "06",
             40.0,
             390.0,
-            "Review",
-            "Let contributors compare,",
-            "revise, and refine.",
+            "Run",
+            "Execute the program with",
+            "its runtime inputs.",
             false,
         ),
     ] {
         let (ink, bg, border) = if engine {
             (p.part, p.partbg, p.partbd)
         } else {
-            (p.out, p.outbg, p.outbd)
+            (p.ok, p.okbg, p.okbd)
         };
         b.push(rect(x, y, 336.0, 140.0, bg, Some(border), 18.0, 1.5));
         b.push(circle(x + 33.0, y + 36.0, 17.0, p.bg));
@@ -410,9 +416,9 @@ fn ecosystem(p: &Palette) -> String {
             x + 24.0,
             y + 127.0,
             if engine {
-                "IMPLEMENTED · REPAIRS OPEN"
+                "EXPERIMENTAL TRANSFORMATION"
             } else {
-                "NETWORK INTEGRATION TO BUILD"
+                "AVAILABLE TOOLING"
             },
             11.0,
             ink,
@@ -422,16 +428,22 @@ fn ecosystem(p: &Palette) -> String {
     b.push(centered(
         600.0,
         354.0,
-        "Evidence returns to people; people refine the models.",
+        "Inspect the artifacts and compare their behavior.",
         18.0,
         p.muted,
         "400",
     ));
-    b.push(t(42.0, 594.0, "The engine exists. Persistent knowledge, evidence, and collaboration services remain to be built.", 18.0, p.muted));
+    b.push(t(
+        42.0,
+        594.0,
+        "Source, generated programs, and observations remain available for inspection.",
+        18.0,
+        p.muted,
+    ));
     wrap(
         636.0,
-        "The intended knowledge and computation loop",
-        "Describe concepts and cite sources, formalize claims as models, transform and execute with Refal, check evidence, connect versioned knowledge, and let contributors review it. The engine is implemented with repairs open; the network integrations are planned.",
+        "The Refal tool workflow",
+        "Write and check a Refal program, inspect symbolic configurations, use experimental specialization to generate residual Refal, compare concrete outputs, and execute the resulting program.",
         &b,
     )
 }

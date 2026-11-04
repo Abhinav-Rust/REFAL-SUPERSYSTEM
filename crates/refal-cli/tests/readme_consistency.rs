@@ -1,8 +1,7 @@
 //! Keep the homepage's visible claims aligned with its text ledger.
 //!
-//! Earlier gates kept an unsupported completion percentage consistent across
-//! assets. The current contract checks scope, per-capability status, and both
-//! accessible visual themes without assigning a percentage to unfinished work.
+//! Check per-capability status and accessible visual themes against the same
+//! published ledger.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -66,12 +65,12 @@ fn the_published_scope_includes_the_knowledge_network() {
     let network = rows
         .iter()
         .find(|(name, _, _)| *name == "Knowledge network")
-        .expect("the user's full ecosystem includes the knowledge network");
+        .expect("the capability ledger includes the knowledge network");
     assert!(!network.1.to_lowercase().contains("out of scope"));
     assert!(!network.1.to_lowercase().contains("excluded"));
     assert!(
-        readme.contains("docs/audits/2026-11-04/ASSESSMENT.md"),
-        "the current assessment must be reachable"
+        readme.contains("docs/VERIFICATION-CONTRACT.md"),
+        "the verification documentation must be reachable"
     );
     assert!(rows.iter().all(|(name, status, detail)| !name.is_empty()
         && !status.is_empty()

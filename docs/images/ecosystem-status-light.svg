@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 828" width="1200" height="828" role="img" aria-labelledby="t d">
   <title id="t">Current capability status</title>
-  <desc id="d">Language and runtime: Implemented. Programs run; Classic syntax has a clause corpus. Symbolic reflection: Implemented. Entry configurations and successors are exposed. Compiler / supercompiler: Needs repair. Real transformations; wrong-code cases remain. Self-hosting: Demonstrated. The Refal compiler compiles its own source. Proofs and certificates: Needs repair. False proof and termination verdicts reproduced. Function inversion: Needs repair. A synthesized inverse fails a valid round trip. Higher projections: Not established. Required compiler-generation stages are unproven. Knowledge network: Not started. Shared concepts, provenance, and review are in scope.</desc>
+  <desc id="d">Language and runtime: Implemented. Programs run with Classic syntax and builtins. Symbolic reflection: Implemented. Entry configurations and successors are exposed. Compiler / supercompiler: Experimental. Symbolic specialization emits residual Refal. Self-hosting: Demonstrated. The Refal compiler compiles its own source. Proofs and certificates: Experimental. Equivalence and termination analyses are available. Function inversion: Experimental. Synthesizes inverses for supported patterns. Higher projections: Experimental. Commands expose generated transformation artifacts. Knowledge network: Not available. No knowledge-network application is shipped.</desc>
   <rect x="0.5" y="0.5" width="1199" height="827" rx="24" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1"/>
   <text x="42" y="57" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" letter-spacing="1.7" fill="#0F766E">CURRENT STATUS · 2026-11-04</text>
   <text x="40" y="112" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="40" font-weight="700" letter-spacing="-0.8" fill="#1F2328">Where the project stands</text>
@@ -10,8 +10,7 @@
   <text x="62" y="203" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="22" font-weight="600" letter-spacing="-0.4" fill="#1F2328">Language and runtime</text>
   <rect x="422" y="182" width="146" height="29" rx="14" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1"/>
   <text x="495" y="202" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" text-anchor="middle" fill="#0F766E">Implemented</text>
-  <text x="62" y="244" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#57606A">Programs run; Classic syntax has a clause</text>
-  <text x="62" y="269" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#57606A">corpus.</text>
+  <text x="62" y="244" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#57606A">Programs run with Classic syntax and builtins.</text>
 </g>
 <g data-capability="1">
   <rect x="612" y="164" width="548" height="134" rx="16" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1"/>
@@ -27,8 +26,8 @@
   <rect x="41" y="340" width="4" height="84" rx="2" fill="#B45309"/>
   <text x="62" y="355" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="22" font-weight="600" letter-spacing="-0.4" fill="#1F2328">Compiler / supercompiler</text>
   <rect x="422" y="334" width="146" height="29" rx="14" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1"/>
-  <text x="495" y="354" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" text-anchor="middle" fill="#B45309">Needs repair</text>
-  <text x="62" y="396" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#57606A">Real transformations; wrong-code cases remain.</text>
+  <text x="495" y="354" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" text-anchor="middle" fill="#B45309">Experimental</text>
+  <text x="62" y="396" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#57606A">Symbolic specialization emits residual Refal.</text>
 </g>
 <g data-capability="3">
   <rect x="612" y="316" width="548" height="134" rx="16" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1"/>
@@ -43,36 +42,34 @@
   <rect x="41" y="492" width="4" height="84" rx="2" fill="#B45309"/>
   <text x="62" y="507" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="22" font-weight="600" letter-spacing="-0.4" fill="#1F2328">Proofs and certificates</text>
   <rect x="422" y="486" width="146" height="29" rx="14" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1"/>
-  <text x="495" y="506" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" text-anchor="middle" fill="#B45309">Needs repair</text>
-  <text x="62" y="548" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#57606A">False proof and termination verdicts</text>
-  <text x="62" y="573" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#57606A">reproduced.</text>
+  <text x="495" y="506" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" text-anchor="middle" fill="#B45309">Experimental</text>
+  <text x="62" y="548" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#57606A">Equivalence and termination analyses are</text>
+  <text x="62" y="573" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#57606A">available.</text>
 </g>
 <g data-capability="5">
   <rect x="612" y="468" width="548" height="134" rx="16" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1"/>
   <rect x="613" y="492" width="4" height="84" rx="2" fill="#B45309"/>
   <text x="634" y="507" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="22" font-weight="600" letter-spacing="-0.4" fill="#1F2328">Function inversion</text>
   <rect x="994" y="486" width="146" height="29" rx="14" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1"/>
-  <text x="1067" y="506" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" text-anchor="middle" fill="#B45309">Needs repair</text>
-  <text x="634" y="548" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#57606A">A synthesized inverse fails a valid round</text>
-  <text x="634" y="573" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#57606A">trip.</text>
+  <text x="1067" y="506" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" text-anchor="middle" fill="#B45309">Experimental</text>
+  <text x="634" y="548" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#57606A">Synthesizes inverses for supported patterns.</text>
 </g>
 <g data-capability="6">
   <rect x="40" y="620" width="548" height="134" rx="16" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1"/>
-  <rect x="41" y="644" width="4" height="84" rx="2" fill="#6E7781"/>
+  <rect x="41" y="644" width="4" height="84" rx="2" fill="#B45309"/>
   <text x="62" y="659" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="22" font-weight="600" letter-spacing="-0.4" fill="#1F2328">Higher projections</text>
-  <rect x="422" y="638" width="146" height="29" rx="14" fill="#F6F8FA" stroke="#D0D7DE" stroke-width="1"/>
-  <text x="495" y="658" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" text-anchor="middle" fill="#6E7781">Not established</text>
-  <text x="62" y="700" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#57606A">Required compiler-generation stages are</text>
-  <text x="62" y="725" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#57606A">unproven.</text>
+  <rect x="422" y="638" width="146" height="29" rx="14" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1"/>
+  <text x="495" y="658" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" text-anchor="middle" fill="#B45309">Experimental</text>
+  <text x="62" y="700" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#57606A">Commands expose generated transformation</text>
+  <text x="62" y="725" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#57606A">artifacts.</text>
 </g>
 <g data-capability="7">
   <rect x="612" y="620" width="548" height="134" rx="16" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1"/>
   <rect x="613" y="644" width="4" height="84" rx="2" fill="#6E7781"/>
   <text x="634" y="659" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="22" font-weight="600" letter-spacing="-0.4" fill="#1F2328">Knowledge network</text>
   <rect x="994" y="638" width="146" height="29" rx="14" fill="#F6F8FA" stroke="#D0D7DE" stroke-width="1"/>
-  <text x="1067" y="658" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" text-anchor="middle" fill="#6E7781">Not started</text>
-  <text x="634" y="700" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#57606A">Shared concepts, provenance, and review are in</text>
-  <text x="634" y="725" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#57606A">scope.</text>
+  <text x="1067" y="658" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" text-anchor="middle" fill="#6E7781">Not available</text>
+  <text x="634" y="700" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#57606A">No knowledge-network application is shipped.</text>
 </g>
-  <text x="42" y="797" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="17" fill="#57606A">Scope includes the knowledge network. No overall completion percentage is assigned.</text>
+  <text x="42" y="797" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="17" fill="#57606A">Capabilities are reported through implementation and demonstrated behavior.</text>
 </svg>

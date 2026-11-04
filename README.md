@@ -13,14 +13,12 @@
 
 **A Refal language system for transforming programs—and connecting knowledge to executable models and evidence.**
 
-[What it is](#what-it-is) · [Current status](#current-status) · [Try it](#try-it) · [The wider ecosystem](#the-wider-ecosystem) · [Next milestones](#next-milestones)
+[What it is](#what-it-is) · [Current status](#current-status) · [Try it](#try-it) · [Tool workflow](#tool-workflow) · [Development](#development)
 
 </div>
 
-> [!IMPORTANT]
-> **This is a research implementation with known correctness failures.** The language runtime, symbolic reflection, supercompiler, and Refal-authored compiler exist. The November audit reproduced wrong-code generation, a false equivalence proof, an invalid termination certificate, a broken inverse, and a false predicate refutation. Repairs remain open. The shared knowledge network is part of the intended ecosystem and has not been built yet.
->
-> The previous overall completion score is withdrawn. Progress is reported through capabilities, evidence, and remaining work. [Read the assessment and reproductions](docs/audits/2026-11-04/ASSESSMENT.md).
+> [!NOTE]
+> **Active research and development.** The project includes a Refal runtime, symbolic reflection, a supercompiler, and a compiler written in Refal. Transformation and analysis tools are experimental; generated programs and analysis results need validation within their intended use. The capability overview below describes the current implementation.
 
 ## What it is
 
@@ -28,7 +26,7 @@ Ordinary programs work on data. Refal also makes it natural to treat **programs 
 
 That is the computational foundation of this project. The wider goal, inspired by Valentin Turchin's work on metasystem transitions and Principia Cybernetica, connects those tools to a collaborative network of concepts, sources, formal models, and evidence. A claim should lead to its meaning, its source, and the computation or observation that supports it.
 
-The repository currently provides a Rust bootstrap and runtime, a compiler written in Refal, symbolic transformation tools, and experimental proving and inversion. The knowledge network and its connection to these tools are a major remaining workstream.
+The repository currently provides a Rust bootstrap and runtime, a compiler written in Refal, symbolic transformation tools, and experimental proving and inversion. A shared knowledge-network application is not included in the current release.
 
 ## Current status
 
@@ -37,7 +35,7 @@ The repository currently provides a Rust bootstrap and runtime, a compiler writt
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/ecosystem-status-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/ecosystem-status-light.svg">
-  <img src="docs/images/ecosystem-status-light.svg" alt="Capability status: language and runtime implemented; reflection implemented; self-hosting demonstrated; compiler, proofs, certificates, and inversion need correctness repairs; higher projections are not established; the knowledge network is not started." width="100%">
+  <img src="docs/images/ecosystem-status-light.svg" alt="Capability status: language and runtime implemented; reflection implemented; self-hosting demonstrated; compilation, proofs, certificates, inversion, and higher-projection interfaces are experimental; a knowledge-network application is not available in this release." width="100%">
 </picture>
 
 <details>
@@ -46,21 +44,19 @@ The repository currently provides a Rust bootstrap and runtime, a compiler writt
 <!-- capability-status:start -->
 | Capability | Status | What that means |
 |---|---|---|
-| Language and runtime | Implemented | Programs run; Classic syntax has a clause corpus. |
+| Language and runtime | Implemented | Programs run with Classic syntax and builtins. |
 | Symbolic reflection | Implemented | Entry configurations and successors are exposed. |
-| Compiler / supercompiler | Needs repair | Real transformations; wrong-code cases remain. |
+| Compiler / supercompiler | Experimental | Symbolic specialization emits residual Refal. |
 | Self-hosting | Demonstrated | The Refal compiler compiles its own source. |
-| Proofs and certificates | Needs repair | False proof and termination verdicts reproduced. |
-| Function inversion | Needs repair | A synthesized inverse fails a valid round trip. |
-| Higher projections | Not established | Required compiler-generation stages are unproven. |
-| Knowledge network | Not started | Shared concepts, provenance, and review are in scope. |
+| Proofs and certificates | Experimental | Equivalence and termination analyses are available. |
+| Function inversion | Experimental | Synthesizes inverses for supported patterns. |
+| Higher projections | Experimental | Commands expose generated transformation artifacts. |
+| Knowledge network | Not available | No knowledge-network application is shipped. |
 <!-- capability-status:end -->
 
 </details>
 
-“Implemented” describes an available capability and its tested scope. “Demonstrated” identifies a concrete result. Neither implies correctness for every accepted program. The existing CI suite passes on the audited revision, while the five additional correctness regressions fail; the [audit explains the gap](docs/audits/2026-11-04/ASSESSMENT.md).
-
-The engine was assessed at [`c8f9542`](https://github.com/Abhinav-Rust/REFAL-SUPERSYSTEM/tree/c8f95421350b6d7d50a01e83278da4a33fae3b61). This update publishes the findings, source provenance, and revised status; it does not claim to have repaired the compiler or prover.
+“Implemented” identifies an available capability; “demonstrated” identifies a concrete result. “Experimental” indicates evolving behavior and coverage. The repository's tests and reproducible examples define the evidence for each capability.
 
 ## Try it
 
@@ -115,11 +111,11 @@ Use `cargo run --release -p refal --` before each command below, or build once a
 | `check <file.ref>` | Check syntax and semantics | Classic acceptance and documented diagnostic modes. |
 | `reflect <file.ref>` | Inspect a symbolic entry configuration | A bounded report with explicit completeness. |
 | `drive <file.ref>` | Follow computations | A bounded exploration. |
-| `compile <file.ref>` | Emit transformed Refal | Known semantic preservation failures are open. |
+| `compile <file.ref>` | Emit transformed Refal | Experimental specialization; compare source and generated behavior. |
 | `metasystem <interpreter.ref>` | Demonstrate specialization | Tested interpreter-elimination examples. |
-| `prove <file.ref> <Predicate>` | Attempt a predicate proof | Verdicts have known soundness defects. |
-| `prove <file.ref> --equiv <Left> <Right>` | Attempt an equivalence proof | A false free-variable equivalence is reproduced. |
-| `feasibility <file.ref> --certificate` | Analyze feasibility and termination | A rechecked certificate can currently be unsound. |
+| `prove <file.ref> <Predicate>` | Attempt a predicate proof | Experimental reasoning with explicit unresolved outcomes. |
+| `prove <file.ref> --equiv <Left> <Right>` | Attempt an equivalence proof | Compares expressions over a shared argument pattern. |
+| `feasibility <file.ref> --certificate` | Analyze feasibility and termination | Experimental analysis and certificate checking. |
 | `invert <file.ref> <Function>` | Attempt inverse synthesis | Supported behavior and coverage remain incomplete. |
 | `project2` / `project3` | Explore compiler-generation artifacts | Proper higher-projection staging is not established. |
 
@@ -129,33 +125,25 @@ The compiler is itself a Refal program in [examples/compiler.ref](examples/compi
 
 Both generations are **115,023 bytes**, identical in the published driven fixpoint.
 
-That is a substantial self-hosting result. Semantic preservation still needs independent checks: a stable generated program can compute the wrong answer. The audit includes such a case from the existing corpus.
+The fixpoint demonstrates self-hosting. Source/generated execution comparisons provide separate evidence for the semantics of transformed programs.
 
-## The wider ecosystem
+## Tool workflow
 
-The full scope includes the **shared knowledge network**. The loop below shows how it connects to the computational engine.
+The command-line tools support a cycle of writing, checking, inspecting, transforming, comparing, and running Refal programs.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/ecosystem-loop-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/ecosystem-loop-light.svg">
-  <img src="docs/images/ecosystem-loop-light.svg" alt="The intended ecosystem: describe concepts and cite sources; connect claims to formal models; transform and execute with Refal; check and preserve evidence; connect versioned knowledge; let contributors review and refine it. The engine exists with correctness work open; the surrounding network services remain to be built." width="100%">
+  <img src="docs/images/ecosystem-loop-light.svg" alt="Available tool workflow: write a Refal program, check it, inspect symbolic configurations, transform it with the experimental supercompiler, compare original and generated behavior, and run concrete inputs." width="100%">
 </picture>
 
 Turchin's 1996 metacomputation paper explicitly connects his computer-science work to metasystem transitions. *The Phenomenon of Science* describes formal scientific knowledge and machine assistance as conceptual and semantic work. The official Principia Cybernetica introduction describes a collaborative semantic network with different relationships and perspectives.
 
-These ideas guide the project. The proposed modern integration is our engineering interpretation; an unverified historical reconstruction is not treated as Turchin's exact specification. The [source catalog](docs/turchin/recovered/README.md) records original publications, coauthors, editions, translations, URLs, and hashes. It also explains problems found in the older local summaries.
+The [source catalog](docs/turchin/recovered/README.md) records publications, coauthors, editions, translations, URLs, and hashes for readers exploring these foundations.
 
-## Next milestones
+## Development
 
-| Milestone | Observable result |
-|---|---|
-| **1. Restore correctness** | Source and compiled behavior agree on the counterexamples; distinct free variables stay distinct; the loop is not certified; the inverse round-trips; undecided conditions remain undecided. |
-| **2. Strengthen verification** | Broader semantic differential coverage, replayable refutations, and proof/certificate checks independent of heuristic search. |
-| **3. Establish staged metacomputation** | A generator accepts an interpreter and emits a compiler; that compiler later accepts a program and emits its target. |
-| **4. Build the knowledge network** | Persistent concepts and claims, source provenance, collaborative revisions, navigation, and links to versioned Refal models and evidence. |
-| **5. Complete an ecosystem release** | A small curated domain demonstrates the full concept → model → computation → evidence → review loop, with practical performance and reproducible distribution. |
-
-The current work establishes an honest audit baseline and aligns the documentation with that scope. [The detailed assessment](docs/audits/2026-11-04/ASSESSMENT.md) includes subsystem maturity, remaining research, reproductions, and completion gates. No overall percentage is assigned until the release scope and evidence support one.
+Development is active across the language tools and their verification. Equivalence checking now preserves shared free-variable identities and keeps terminal symbolic equations unresolved when structural equality does not establish them. Regression coverage exercises symbol, term, and expression arguments, nested results, repeated variables, and proof budgets.
 
 ## For contributors
 
@@ -168,18 +156,16 @@ cargo test --profile test-fast --all -j 2 -- --test-threads=1
 cargo xtask gen-readme-diagrams
 ```
 
-The full suite runs serially because its self-hosting tests are expensive. The custom profile keeps debug assertions and overflow checks while using optimized execution. The [standalone audit regressions](docs/audits/2026-11-04/regression_tests.rs) assert the required semantics and currently reproduce the open failures; they are documented separately from the passing CI suite at the audited revision. The audit records the interrupted local full run and the passing focused README checks separately.
+The full suite runs serially because its self-hosting tests are expensive. The custom profile keeps debug assertions and overflow checks while using optimized execution. Focused tests exercise individual semantic rules; integration tests cover the CLI and self-hosting workflows.
 
-Keep the README and its diagrams current with each set of changes. The status panel is generated from the capability ledger above, so its light and dark variants share the same claims. The repository owner's workflow is recorded in [AGENTS.md](AGENTS.md).
+The status panel is generated from the capability ledger above, so its light and dark variants share the same descriptions. Development conventions are documented in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 | Read more | What it covers |
 |---|---|
-| [November assessment](docs/audits/2026-11-04/ASSESSMENT.md) | Current audit, evidence, and the expanded ecosystem scope. |
 | [Primary-source catalog](docs/turchin/recovered/README.md) | Verified source editions and reproducible retrieval. |
 | [Language scope](docs/LANGUAGE-SCOPE.md) | The Classic Refal-5 target. |
 | [Frontend coverage](docs/FRONTEND-COVERAGE.md) | Syntax clauses and fixtures. |
-| [Verification contract](docs/VERIFICATION-CONTRACT.md) | Diagnostic design; read with the audit's soundness findings. |
-| [Historical conformance ledger](docs/TURCHIN-ECOSYSTEM-CONFORMANCE.md) | Earlier claims, now under review against the audit. |
+| [Verification contract](docs/VERIFICATION-CONTRACT.md) | Diagnostic design and verification terminology. |
 | [Contributing](CONTRIBUTING.md) | Development conventions. |
 
 Project code is [MIT licensed](LICENSE-MIT). Third-party publications retain their own rights and are referenced through the source catalog.

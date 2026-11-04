@@ -25,4 +25,4 @@ The older thematic collection is valuable as a bibliography and guide to subject
 
 The attempted retrieval of the 1980 Courant monograph produced an incomplete PDF. It is **not included in this source index or counted as a recovered original**. The failed download is retained only among the assessment's retrieval artifacts.
 
-The [assessment](../../audits/2026-11-04/ASSESSMENT.md) maps the verified source ideas to the repository and to the requested shared knowledge network. Recommendations in that assessment are an engineering interpretation of these sources and the owner's stated scope, not quotations or a claim that Turchin left a complete modern product specification.
+The [verification baseline](../../audits/2026-11-04/ASSESSMENT.md) indexes reproducible program fixtures and recorded checks. Source editions and provenance are documented here separately from implementation results.

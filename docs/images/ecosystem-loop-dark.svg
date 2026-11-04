@@ -1,57 +1,57 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 636" width="1200" height="636" role="img" aria-labelledby="t d">
-  <title id="t">The intended knowledge and computation loop</title>
-  <desc id="d">Describe concepts and cite sources, formalize claims as models, transform and execute with Refal, check evidence, connect versioned knowledge, and let contributors review it. The engine is implemented with repairs open; the network integrations are planned.</desc>
+  <title id="t">The Refal tool workflow</title>
+  <desc id="d">Write and check a Refal program, inspect symbolic configurations, use experimental specialization to generate residual Refal, compare concrete outputs, and execute the resulting program.</desc>
   <rect x="0.5" y="0.5" width="1199" height="635" rx="24" fill="#0D1117" stroke="#30363D" stroke-width="1"/>
-  <text x="42" y="57" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" letter-spacing="1.7" fill="#2DD4BF">THE FULL ECOSYSTEM · IN SCOPE</text>
-  <text x="40" y="111" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="36" font-weight="700" letter-spacing="-0.7" fill="#E6EDF3">From ideas to evidence, and back to people</text>
+  <text x="42" y="57" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" letter-spacing="1.7" fill="#2DD4BF">THE REFAL TOOL WORKFLOW</text>
+  <text x="40" y="111" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="36" font-weight="700" letter-spacing="-0.7" fill="#E6EDF3">From source to generated programs</text>
 <g>  <line x1="376" y1="236" x2="423" y2="236" stroke="#14B8A6" stroke-width="2"/><path d="M 432 236 L 423 240 L 423 232 Z" fill="#14B8A6"/></g>
 <g>  <line x1="768" y1="236" x2="815" y2="236" stroke="#14B8A6" stroke-width="2"/><path d="M 824 236 L 815 240 L 815 232 Z" fill="#14B8A6"/></g>
 <g>  <line x1="992" y1="306" x2="992" y2="381" stroke="#14B8A6" stroke-width="2"/><path d="M 992 390 L 988 381 L 996 381 Z" fill="#14B8A6"/></g>
 <g>  <line x1="824" y1="460" x2="777" y2="460" stroke="#14B8A6" stroke-width="2"/><path d="M 768 460 L 777 456 L 777 464 Z" fill="#14B8A6"/></g>
 <g>  <line x1="432" y1="460" x2="385" y2="460" stroke="#14B8A6" stroke-width="2"/><path d="M 376 460 L 385 456 L 385 464 Z" fill="#14B8A6"/></g>
 <g>  <line x1="208" y1="390" x2="208" y2="315" stroke="#14B8A6" stroke-width="2"/><path d="M 208 306 L 212 315 L 204 315 Z" fill="#14B8A6"/></g>
-  <rect x="40" y="166" width="336" height="140" rx="18" fill="#161B22" stroke="#30363D" stroke-width="1.5"/>
+  <rect x="40" y="166" width="336" height="140" rx="18" fill="#062925" stroke="#134E4A" stroke-width="1.5"/>
   <circle cx="73" cy="202" r="17" fill="#0D1117"/>
-  <text x="73" y="207" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#8B949E">01</text>
-  <text x="102" y="212" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="30" font-weight="600" letter-spacing="-0.6" fill="#E6EDF3">Describe</text>
-  <text x="64" y="246" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#E6EDF3">Concepts and claims</text>
-  <text x="64" y="271" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#E6EDF3">with original sources.</text>
-  <text x="64" y="293" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" letter-spacing="0.6" fill="#8B949E">NETWORK INTEGRATION TO BUILD</text>
-  <rect x="432" y="166" width="336" height="140" rx="18" fill="#161B22" stroke="#30363D" stroke-width="1.5"/>
+  <text x="73" y="207" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#2DD4BF">01</text>
+  <text x="102" y="212" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="30" font-weight="600" letter-spacing="-0.6" fill="#E6EDF3">Write</text>
+  <text x="64" y="246" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#E6EDF3">Describe functions and</text>
+  <text x="64" y="271" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#E6EDF3">their patterns in Refal.</text>
+  <text x="64" y="293" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" letter-spacing="0.6" fill="#2DD4BF">AVAILABLE TOOLING</text>
+  <rect x="432" y="166" width="336" height="140" rx="18" fill="#062925" stroke="#134E4A" stroke-width="1.5"/>
   <circle cx="465" cy="202" r="17" fill="#0D1117"/>
-  <text x="465" y="207" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#8B949E">02</text>
-  <text x="494" y="212" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="30" font-weight="600" letter-spacing="-0.6" fill="#E6EDF3">Formalize</text>
-  <text x="456" y="246" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#E6EDF3">Connect each claim to</text>
-  <text x="456" y="271" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#E6EDF3">a model and its domain.</text>
-  <text x="456" y="293" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" letter-spacing="0.6" fill="#8B949E">NETWORK INTEGRATION TO BUILD</text>
-  <rect x="824" y="166" width="336" height="140" rx="18" fill="#2B1D06" stroke="#7C4A03" stroke-width="1.5"/>
+  <text x="465" y="207" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#2DD4BF">02</text>
+  <text x="494" y="212" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="30" font-weight="600" letter-spacing="-0.6" fill="#E6EDF3">Check</text>
+  <text x="456" y="246" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#E6EDF3">Parse the source and</text>
+  <text x="456" y="271" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#E6EDF3">inspect static diagnostics.</text>
+  <text x="456" y="293" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" letter-spacing="0.6" fill="#2DD4BF">AVAILABLE TOOLING</text>
+  <rect x="824" y="166" width="336" height="140" rx="18" fill="#062925" stroke="#134E4A" stroke-width="1.5"/>
   <circle cx="857" cy="202" r="17" fill="#0D1117"/>
-  <text x="857" y="207" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#F59E0B">03</text>
-  <text x="886" y="212" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="30" font-weight="600" letter-spacing="-0.6" fill="#E6EDF3">Transform</text>
-  <text x="848" y="246" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#E6EDF3">Use the Refal engine to</text>
-  <text x="848" y="271" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#E6EDF3">inspect, specialize, and run.</text>
-  <text x="848" y="293" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" letter-spacing="0.6" fill="#F59E0B">IMPLEMENTED · REPAIRS OPEN</text>
-  <rect x="824" y="390" width="336" height="140" rx="18" fill="#161B22" stroke="#30363D" stroke-width="1.5"/>
+  <text x="857" y="207" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#2DD4BF">03</text>
+  <text x="886" y="212" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="30" font-weight="600" letter-spacing="-0.6" fill="#E6EDF3">Inspect</text>
+  <text x="848" y="246" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#E6EDF3">Explore symbolic entry</text>
+  <text x="848" y="271" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#E6EDF3">configurations and successors.</text>
+  <text x="848" y="293" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" letter-spacing="0.6" fill="#2DD4BF">AVAILABLE TOOLING</text>
+  <rect x="824" y="390" width="336" height="140" rx="18" fill="#2B1D06" stroke="#7C4A03" stroke-width="1.5"/>
   <circle cx="857" cy="426" r="17" fill="#0D1117"/>
-  <text x="857" y="431" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#8B949E">04</text>
-  <text x="886" y="436" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="30" font-weight="600" letter-spacing="-0.6" fill="#E6EDF3">Check</text>
-  <text x="848" y="470" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#E6EDF3">Retain results, proof checks,</text>
-  <text x="848" y="495" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#E6EDF3">and counterexample inputs.</text>
-  <text x="848" y="517" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" letter-spacing="0.6" fill="#8B949E">NETWORK INTEGRATION TO BUILD</text>
-  <rect x="432" y="390" width="336" height="140" rx="18" fill="#161B22" stroke="#30363D" stroke-width="1.5"/>
+  <text x="857" y="431" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#F59E0B">04</text>
+  <text x="886" y="436" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="30" font-weight="600" letter-spacing="-0.6" fill="#E6EDF3">Transform</text>
+  <text x="848" y="470" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#E6EDF3">Drive the program and</text>
+  <text x="848" y="495" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#E6EDF3">emit residual Refal.</text>
+  <text x="848" y="517" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" letter-spacing="0.6" fill="#F59E0B">EXPERIMENTAL TRANSFORMATION</text>
+  <rect x="432" y="390" width="336" height="140" rx="18" fill="#062925" stroke="#134E4A" stroke-width="1.5"/>
   <circle cx="465" cy="426" r="17" fill="#0D1117"/>
-  <text x="465" y="431" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#8B949E">05</text>
-  <text x="494" y="436" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="30" font-weight="600" letter-spacing="-0.6" fill="#E6EDF3">Connect</text>
-  <text x="456" y="470" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#E6EDF3">Version knowledge and</text>
-  <text x="456" y="495" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#E6EDF3">its supporting evidence.</text>
-  <text x="456" y="517" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" letter-spacing="0.6" fill="#8B949E">NETWORK INTEGRATION TO BUILD</text>
-  <rect x="40" y="390" width="336" height="140" rx="18" fill="#161B22" stroke="#30363D" stroke-width="1.5"/>
+  <text x="465" y="431" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#2DD4BF">05</text>
+  <text x="494" y="436" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="30" font-weight="600" letter-spacing="-0.6" fill="#E6EDF3">Compare</text>
+  <text x="456" y="470" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#E6EDF3">Compare source and generated</text>
+  <text x="456" y="495" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#E6EDF3">outputs on concrete inputs.</text>
+  <text x="456" y="517" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" letter-spacing="0.6" fill="#2DD4BF">AVAILABLE TOOLING</text>
+  <rect x="40" y="390" width="336" height="140" rx="18" fill="#062925" stroke="#134E4A" stroke-width="1.5"/>
   <circle cx="73" cy="426" r="17" fill="#0D1117"/>
-  <text x="73" y="431" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#8B949E">06</text>
-  <text x="102" y="436" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="30" font-weight="600" letter-spacing="-0.6" fill="#E6EDF3">Review</text>
-  <text x="64" y="470" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#E6EDF3">Let contributors compare,</text>
-  <text x="64" y="495" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#E6EDF3">revise, and refine.</text>
-  <text x="64" y="517" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" letter-spacing="0.6" fill="#8B949E">NETWORK INTEGRATION TO BUILD</text>
-  <text x="600" y="354" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="18" text-anchor="middle" fill="#8B949E">Evidence returns to people; people refine the models.</text>
-  <text x="42" y="594" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="18" fill="#8B949E">The engine exists. Persistent knowledge, evidence, and collaboration services remain to be built.</text>
+  <text x="73" y="431" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#2DD4BF">06</text>
+  <text x="102" y="436" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="30" font-weight="600" letter-spacing="-0.6" fill="#E6EDF3">Run</text>
+  <text x="64" y="470" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#E6EDF3">Execute the program with</text>
+  <text x="64" y="495" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#E6EDF3">its runtime inputs.</text>
+  <text x="64" y="517" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" letter-spacing="0.6" fill="#2DD4BF">AVAILABLE TOOLING</text>
+  <text x="600" y="354" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="18" text-anchor="middle" fill="#8B949E">Inspect the artifacts and compare their behavior.</text>
+  <text x="42" y="594" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="18" fill="#8B949E">Source, generated programs, and observations remain available for inspection.</text>
 </svg>

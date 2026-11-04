@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+**Equivalence checking preserves shared free-variable identities.**
+
+- Reflexivity compares both sides in the same variable environment. Distinct
+  arguments remain distinct, including inside brackets and repeated results.
+- Unequal terminal symbolic expressions remain unresolved; recursive folding
+  applies only while a residual computation remains.
+- Regression coverage includes all three variable kinds, proof budgets, concrete
+  CLI outputs, and positive recursive proofs. The README and generated status
+  panels describe the available tools and their current experimental boundaries.
+
 **The front-end corpus cites the Programming Guide, and the row closes.**
 
 - **Two references, not one.** The syntax reference is the normative grammar; the
