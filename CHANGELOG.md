@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+**Symbolic conditions preserve constraints and pending computations.**
+
+- Both compiler paths compare repeated bindings without overwriting them.
+  Unresolved equality stays pending, including comparisons through brackets.
+- Pending calls and blocks retain their evaluation order and effects. Their
+  result arity remains unknown until evaluation finishes.
+- Block conditions evaluate their results and continue the enclosing condition
+  chain. Emission retains the source when a residual call to its entry would
+  create a cycle through the replacement entry.
+- Potentially ambiguous expression splits remain residual, preserving runtime
+  split order and condition backtracking. Source/generated execution gates
+  cover the append law, real fallbacks, repeated bindings, printed effects, and
+  small driving budgets.
+- Exhausted predicate searches report `incomplete` even before reaching a
+  terminal. Partial-domain equivalence coverage includes a concrete execution
+  witness and keeps unresolved outcomes distinct from proofs.
+
 **Inverse synthesis reconstructs the source input pattern.**
 
 - Inverse bodies preserve original field order, repetitions, literals, and

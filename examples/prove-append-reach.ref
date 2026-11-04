@@ -1,40 +1,15 @@
-/* The corpus's own first theorem, and the boundary of what the prover reaches.
+/* Associativity of recursive Append, expressed through a shared condition
+   binding. SCP4 (1999, section 4) uses associativity as a theorem example.
 
-   SCP4 1999 4 names *associativity of `Append`* as the first of its theorem-shaped
-   examples, and Turchin's criterion (1986 6) says what proving one consists of:
-   "If a predicate function P(x) is supercompiled and its configuration graph
-   reduces to the single terminal node 'True', this constitutes an automated
-   mathematical proof that P(x) holds for all inputs x."
+   A condition value must finish evaluating before it can be matched. Different
+   symbolic expressions do not establish unequal results, and a possible match
+   must not be discarded in favor of the False fallback. Unresolved equality or
+   expression-split choices remain pending during specialization and proof.
 
-   `Law` states associativity the way the corpus states its theorems: as a program,
-   an equation between two reductions, `'True'` when the sides agree and `'False'`
-   as the fall-through. `Append` is the genuine recursive function the law is
-   about -- its first sentence binds a head and recurses, its second is the empty
-   base case.
-
-   **What `refal prove` does with this, and why it is the honest result.** The
-   prover reports `refuted ('F' 'a' 'l' 's' 'e')` over a *closed* walk. It does not
-   prove associativity, and the reason is structural rather than a bug: the claim
-   quantifies over three *free* lists, and `<Append <Append e.X e.Y> e.Z>` does not
-   reduce to a ground value while `e.X`, `e.Y` and `e.Z` are unknown. The driver
-   can only decide the equality by matching two unevaluated terms, which they are
-   not, so every path falls through to `'False'` and the walk closes there.
-
-   Proving it needs **induction over the structure of a list** -- generalisation
-   and folding, Turchin's 1980 4.6, which is the machinery SCP4 has and this
-   driver does not yet. The fixture is kept, and kept named for what it does,
-   because a prover whose reach is published is worth more than one whose reach is
-   implied: this file is the measurement of where the `'True'` criterion stops.
-
-   NOTE ON A TRAP THIS FILE PAID FOR. The first version of this fixture wrote
-   `Append` as `{ e.Rest = e.Rest; s.Head e.Tail e.Rest = ...; }` -- base case
-   first. `e.Rest` alone matches every argument, so the recursive sentence was
-   unreachable, `Append` was a typed identity, and the law "proved" because both
-   sides reduced identically. `strict_mode_has_no_false_positives_on_the_corpus`
-   caught it: strict mode proves sentence 2 unreachable. The proof was an artifact
-   of a degenerate program, which is the same class of defect PROGRESS.md records
-   as "a test passing for the wrong reason". The base case goes last, and the
-   recursive sentence is the one that fires. */
+   Execution comparisons retain True for the source and both compiler paths.
+   Predicate checks cover small budgets and require that an unresolved case
+   cannot become a false refutation. The recursive Append sentence precedes
+   the base case so that non-empty symbol sequences exercise recursion. */
 
 $EXTERN Prout;
 
@@ -42,8 +17,7 @@ $ENTRY Go {
   e.Input = <Prout <Law e.Input>>;
 }
 
-/* The associativity of `Append`, asserted as the equation itself. See the header
-   for what the prover does with it and why. */
+/* Both computations must satisfy the same condition binding. */
 Law {
   e.X e.Y e.Z,
     <Append <Append e.X e.Y> e.Z> : e.Both,

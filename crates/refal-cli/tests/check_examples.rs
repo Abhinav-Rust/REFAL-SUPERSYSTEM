@@ -1,8 +1,8 @@
 use std::{
     env, fs,
     path::PathBuf,
-    process::{self, Command},
-    time::{SystemTime, UNIX_EPOCH},
+    process::{self, Command, Stdio},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 fn refal_bin() -> &'static str {
@@ -523,26 +523,11 @@ fn the_prover_reports_a_proof_for_a_predicate_whose_only_terminal_is_true() {
 
 #[test]
 fn the_prover_never_refutes_a_claim_its_budget_cut_short() {
-    // The soundness gate for the prover, and the defect the first version had.
-    //
-    // `examples/prove-append-reach.ref` states associativity of `Append` as an
-    // equation, which the prover does not prove (see that file's header: the claim
-    // quantifies over three free lists and needs induction). What matters here is
-    // *how* it fails to prove it. Under a tight budget the driver enters `Law`,
-    // cannot decide the condition symbolically, and falls through to the `'False'`
-    // sentence -- a real reduction producing a real ground terminal, structurally
-    // indistinguishable from a counterexample.
-    //
-    // A prover that reported that node as a counterexample would announce
-    // `refuted` for a claim whose verdict then depends on the step budget rather
-    // than on the claim. Measured on the earlier version of this fixture, that
-    // was the behaviour: `refuted ('F' 'a' 'l' 's' 'e')` at budgets of one to
-    // five steps, `proved` at a larger one. No earlier gate noticed, because every
-    // earlier gate ran at a budget that closed the walk.
-    //
-    // So: no budget below closure may refute. A truncated walk says `incomplete`,
-    // and a counterexample the *closed* walk reaches is still reported -- which is
-    // what `the_prover_never_reports_a_refutation_as_a_proof` pins.
+    // The append law remains unresolved because its symbolic conditions retain
+    // pending computations. Exhausted budgets must report incomplete even when
+    // no terminal was reached; a finished search can instead report open.
+    // Neither outcome is a refutation. Concrete false predicates remain covered
+    // by `the_prover_never_reports_a_refutation_as_a_proof`.
     let full = prove_file(
         "examples/prove-append-reach.ref",
         "Law",
@@ -561,7 +546,7 @@ fn the_prover_never_refutes_a_claim_its_budget_cut_short() {
         .unwrap_or_default()
         .to_string();
 
-    for budget in ["1", "2", "3", "4", "5", "6", "7"] {
+    for budget in ["0", "1", "2", "3", "4", "5", "6", "7"] {
         let output = prove_file(
             "examples/prove-append-reach.ref",
             "Law",
@@ -5218,6 +5203,274 @@ fn driving_applies_a_block_in_condition_position_instead_of_matching_it() {
     );
 }
 
+fn run_condition_fixture(
+    path: &std::path::Path,
+    input: &str,
+    label: &str,
+    source: &str,
+) -> process::Output {
+    let mut child = Command::new(refal_bin())
+        .arg("run")
+        .arg(path)
+        .arg(input)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("execute the condition fixture");
+    let started = Instant::now();
+    while child
+        .try_wait()
+        .expect("poll the condition fixture")
+        .is_none()
+    {
+        if started.elapsed() > Duration::from_secs(20) {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("{label} did not terminate on {input:?}:\n{source}");
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    child.wait_with_output().expect("read the condition result")
+}
+
+fn assert_symbolic_condition_execution(source: &str, cases: &[(&str, &str)]) {
+    let source_path = scratch_source("refal-symbolic-condition", source);
+    let mut paths = vec![("source", source_path.clone())];
+    for (label, command, flags) in [
+        ("Rust driver", "residualize-driven", &[][..]),
+        (
+            "Rust driver, zero steps",
+            "residualize-driven",
+            &["--steps", "0"][..],
+        ),
+        (
+            "Rust driver, one step",
+            "residualize-driven",
+            &["--steps", "1"][..],
+        ),
+        (
+            "Rust driver, five steps",
+            "residualize-driven",
+            &["--steps", "5"][..],
+        ),
+        ("Refal compiler", "compile", &[][..]),
+    ] {
+        let output = Command::new(refal_bin())
+            .arg(command)
+            .arg(&source_path)
+            .args(flags)
+            .output()
+            .expect("generate the condition fixture");
+        assert!(
+            output.status.success(),
+            "{label}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let stdout = String::from_utf8(output.stdout).expect("UTF-8 residue");
+        let residue = if command == "residualize-driven" {
+            driven_residue(&stdout)
+        } else {
+            stdout
+        };
+        paths.push((label, scratch_source("refal-condition-residue", &residue)));
+    }
+    for (input, expected) in cases {
+        for (label, path) in &paths {
+            let output = run_condition_fixture(path, input, label, source);
+            assert!(
+                output.status.success(),
+                "{label} on {input:?}: {}\n{source}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(
+                String::from_utf8_lossy(&output.stdout),
+                *expected,
+                "{label} on {input:?}:\n{source}"
+            );
+        }
+    }
+    for (_, path) in paths {
+        fs::remove_file(path).expect("remove the condition fixture");
+    }
+}
+
+#[test]
+fn symbolic_conditions_recheck_expression_bindings_against_ground_values() {
+    assert_symbolic_condition_execution(
+        "$EXTERN Prout;
+         $ENTRY Go { (e.Input) = <Prout <Test e.Input>>; }
+         Test {
+           e.Input, e.Input : e.Both, 'a' : e.Both = 'Same';
+           e.Input = 'Other';
+         }",
+        &[
+            ("", "Other\n"),
+            ("a", "Same\n"),
+            ("b", "Other\n"),
+            ("ab", "Other\n"),
+        ],
+    );
+}
+
+#[test]
+fn symbolic_conditions_compare_free_values_without_rebinding() {
+    for kind in ["e", "s", "t"] {
+        let source = format!(
+            "$EXTERN Prout;
+             $ENTRY Go {{ (s.Left s.Right) = <Prout <Test s.Left s.Right>>; }}
+             Test {{
+               s.Left s.Right, s.Left : {kind}.Both, s.Right : {kind}.Both = 'Same';
+               s.Left s.Right = 'Other';
+             }}"
+        );
+        assert_symbolic_condition_execution(
+            &source,
+            &[("aa", "Same\n"), ("ab", "Other\n"), ("bb", "Same\n")],
+        );
+    }
+    assert_symbolic_condition_execution(
+        "$EXTERN Prout;
+         $ENTRY Go { (e.Input) = <Prout <Test (e.Input) ('a')>>; }
+         Test {
+           t.Left t.Right, t.Left : t.Both, t.Right : t.Both = 'Same';
+           t.Left t.Right = 'Other';
+         }",
+        &[("", "Other\n"), ("a", "Same\n"), ("b", "Other\n")],
+    );
+}
+
+#[test]
+fn symbolic_conditions_evaluate_pending_calls_before_matching() {
+    for condition in [
+        "<Prout e.Input> : e.Any",
+        "(<Prout e.Input>) : (e.Any)",
+        "<Prout e.Input> : { e.Any = 'Unused'; }",
+        "(<Prout e.Input>) : { (e.Any) = 'Unused'; }",
+        "<Drop <Prout e.Input>> : e.Any",
+        "e.Input : { e.Any, <Prout e.Any> : = ; e.Any = ; }",
+    ] {
+        let source = format!(
+            "$EXTERN Prout;
+             $ENTRY Go {{ (e.Input) = <Prout <Test e.Input>>; }}
+             Test {{ e.Input, {condition} = 'Done'; }}
+             Drop {{ e.Ignored = ; }}"
+        );
+        assert_symbolic_condition_execution(&source, &[("a", "a\nDone\n"), ("", "\nDone\n")]);
+    }
+}
+
+#[test]
+fn symbolic_conditions_preserve_append_law_and_proof_budgets() {
+    let source = fs::read_to_string(workspace_path("examples/prove-append-reach.ref"))
+        .expect("read the original append law");
+    assert_symbolic_condition_execution(
+        &source,
+        &[("", "True\n"), ("a", "True\n"), ("abc", "True\n")],
+    );
+    for budget in [0, 1, 5, 2_000] {
+        let output = prove_file(
+            "examples/prove-append-reach.ref",
+            "Law",
+            &["--steps", &budget.to_string()],
+        );
+        let report = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            report.contains("verdict:"),
+            "the prover must report a verdict: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(!report.contains("verdict: refuted"), "{budget}: {report}");
+    }
+}
+
+#[test]
+fn symbolic_conditions_preserve_expression_split_backtracking() {
+    for sentence in [
+        "e.Left e.Right, e.Right : 'a' = 'Found';",
+        "e.Input, e.Input : e.Left e.Right, e.Right : 'a' = 'Found';",
+    ] {
+        let source = format!(
+            "$EXTERN Prout;
+             $ENTRY Go {{ (e.Input) = <Prout <Pick e.Input>>; }}
+             Pick {{ {sentence} e.Input = 'Missing'; }}"
+        );
+        assert_symbolic_condition_execution(
+            &source,
+            &[
+                ("a", "Found\n"),
+                ("ba", "Found\n"),
+                ("ab", "Missing\n"),
+                ("", "Missing\n"),
+            ],
+        );
+    }
+    assert_symbolic_condition_execution(
+        "$EXTERN Prout;
+         $ENTRY Go { e.Input = <Prout <Pick 'xx'>>; }
+         Pick { e.Prefix 'x' e.Suffix = (e.Prefix) (e.Suffix); }",
+        &[("", "()(x)\n")],
+    );
+}
+
+#[test]
+fn symbolic_conditions_finish_blocks_and_continue_the_condition_chain() {
+    assert_symbolic_condition_execution(
+        "$EXTERN Prout;
+         $ENTRY Go { (e.Input) = <Prout <Test e.Input>>; }
+         Test {
+           e.Input, e.Input : { e.Value = e.Value; }, e.Input : 'a' = 'Same';
+           e.Input = 'Other';
+         }",
+        &[("a", "Same\n"), ("b", "Other\n"), ("", "Other\n")],
+    );
+    assert_symbolic_condition_execution(
+        "$EXTERN Prout;
+         $ENTRY Go { e.Input = <Prout <Test e.Input>>; }
+         Test {
+           e.Input, 'a' : { e.Value = <Prout 'block'>; }, 'x' : 'y' = 'Wrong';
+           e.Input = 'Done';
+         }",
+        &[("", "block\nDone\n")],
+    );
+}
+
+#[test]
+fn symbolic_conditions_remain_executable_with_small_refal_driving_budgets() {
+    let source = "$EXTERN Prout;
+        $ENTRY Go { (e.Input) = <Prout <Test e.Input>>; }
+        Test {
+          e.Input, e.Input : e.Both, 'a' : e.Both = 'Same';
+          e.Input = 'Other';
+        }";
+    for budget in ["0", "1", "5"] {
+        let emitted = run_file(
+            "examples/compiler.ref",
+            &["RESIDUALIZE-DRIVEN", budget, source],
+        );
+        assert!(
+            emitted.status.success(),
+            "{}",
+            String::from_utf8_lossy(&emitted.stderr)
+        );
+        let residue = driven_residue(&String::from_utf8_lossy(&emitted.stdout));
+        let path = scratch_source("refal-condition-budget", &residue);
+        for (input, expected) in [("", "Other\n"), ("a", "Same\n"), ("b", "Other\n")] {
+            let output = run_condition_fixture(&path, input, budget, source);
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(
+                String::from_utf8_lossy(&output.stdout),
+                expected,
+                "budget {budget} on {input:?}"
+            );
+        }
+        fs::remove_file(path).expect("remove budget fixture");
+    }
+}
+
 /// `Mu` dispatches on a function name carried as data, so walking call terms
 /// cannot see what it will call. A residue that drops the definition fails at
 /// run time where the original succeeded.
@@ -7520,31 +7773,58 @@ fn the_prover_proves_the_tree_reversal() {
     );
 }
 
-/// A soundness gate for the equivalence prover (E-12/E-13): a claim the program
-/// does **not** satisfy must never be reported `proved`.
-///
-/// `examples/equiv-partial-domain.ref` states `Rev(Rev(T)) = T` for a `Rev` whose
-/// domain is not closed under its own field bindings -- `Rev((Node Foo Foo))`
-/// has no sentence. Before 2026-10-07 the prover folded the induction hypothesis
-/// at the field variable `e.L` and reported `proved`; `pair_is_in_domain` now
-/// lets the hypothesis be applied only at an *exhaustive* split's variables or
-/// the claim's own, and the verdict is `open`.
+/// A claim outside a function's domain must remain unresolved. The concrete
+/// witness distinguishes a failed recursive call from a returned value; the
+/// symbolic search may finish open or exhaust its budget without proving it.
 #[test]
 fn the_prover_never_proves_a_claim_that_is_false_outside_the_domain() {
+    let source = fs::read_to_string(workspace_path("examples/equiv-partial-domain.ref"))
+        .expect("read the partial-domain fixture");
+    for (function, succeeds) in [("Rev-Left", false), ("Rev-Right", true)] {
+        let witness = source.replace("<Rev e.Input>", &format!("<{function} (Node Foo Foo)>"));
+        assert_ne!(witness, source, "the witness must replace the entry call");
+        let path = scratch_source("refal-partial-domain-witness", &witness);
+        let output = Command::new(refal_bin())
+            .arg("run")
+            .arg(&path)
+            .output()
+            .expect("execute the domain witness");
+        fs::remove_file(path).expect("remove the domain witness");
+        assert_eq!(
+            output.status.success(),
+            succeeds,
+            "{function}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        if succeeds {
+            assert_eq!(String::from_utf8_lossy(&output.stdout), "(NodeFooFoo)\n");
+        } else {
+            assert!(
+                String::from_utf8_lossy(&output.stderr)
+                    .contains("no sentence matched in function `Rev`")
+            );
+        }
+    }
     let output =
         prove_equivalence_file("examples/equiv-partial-domain.ref", "Rev-Left", "Rev-Right");
     let stdout = String::from_utf8_lossy(&output.stdout);
+    let summary = stdout
+        .lines()
+        .filter(|line| !line.starts_with("    "))
+        .collect::<Vec<_>>()
+        .join("\n");
     assert!(
         !stdout.contains("verdict: proved"),
-        "a claim the program does not satisfy must not be proved:\n{stdout}"
+        "a claim the program does not satisfy must not be proved:\n{summary}"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "the unestablished claim must have an unresolved exit status:\n{summary}"
     );
     assert!(
-        stdout.contains("  complete: yes"),
-        "the walk must still close rather than be truncated:\n{stdout}"
-    );
-    assert!(
-        stdout.contains("verdict: open"),
-        "the honest verdict is open -- not proved, and no reachable counterexample:\n{stdout}"
+        stdout.contains("verdict: open") || stdout.contains("verdict: incomplete"),
+        "an unresolved domain obligation must remain explicit:\n{summary}"
     );
 }
 

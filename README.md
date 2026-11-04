@@ -123,7 +123,7 @@ Use `cargo run --release -p refal --` before each command below, or build once a
 
 The compiler is itself a Refal program in [examples/compiler.ref](examples/compiler.ref). Tests run generated compiler generations and check a byte-stable result. A separate gate checks that driving actually transforms the compiler's dispatch.
 
-Both generations are **115,023 bytes**, identical in the published driven fixpoint.
+Both generations are **116,715 bytes**, identical in the published driven fixpoint.
 
 The fixpoint demonstrates self-hosting. Source/generated execution comparisons provide separate evidence for the semantics of transformed programs.
 
@@ -148,6 +148,7 @@ Development is active across the language tools and their verification.
 - **Equivalence checking** preserves shared free-variable identities and keeps terminal symbolic equations unresolved when structural equality does not establish them. Coverage includes all three variable kinds, nested results, repeated variables, and proof budgets.
 - **Termination analysis** retains distinct call paths throughout size-change composition. Certificate checks reconstruct those paths from the source, with coverage for decreasing recursion, non-decreasing alternatives, and mutual recursion.
 - **Function inversion** reconstructs source input patterns, preserving their order, repeated bindings, literals, and brackets. Round-trip tests cover repeated output values and fresh variable names; unsupported reconstruction cases return an explicit error.
+- **Symbolic conditions** preserve existing bindings and retain unresolved equality and expression-split choices. Both compiler paths keep pending calls in evaluation order. Execution comparisons cover the append-law example, condition fallbacks, nested values, and observable effects. Exhausted predicate searches report `incomplete`, including runs with no terminal values.
 
 ## For contributors
 

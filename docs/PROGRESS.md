@@ -22,6 +22,16 @@ Inverse synthesis reconstructs the original source input pattern from the output
 
 Supported reconstruction includes shape-only base cases and output prefixes followed by a self-call on one expression variable. Conditional sentences, unsupported output computations, and erased input bindings are declined explicitly. Round-trip coverage includes all three variable kinds, field order, repeated input and output, literals, brackets, empty inputs, and base-case bindings. The forward exploration retains its separate budget/completeness report.
 
+## Symbolic conditions
+
+The Rust driver and Refal-authored compiler use three-valued equality for existing bindings. Equal symbolic values satisfy a repeated binding; unequal ground values fail it; unresolved comparisons remain pending. Matching considers symbolic bindings referenced inside the current pattern, including nested brackets.
+
+Calls and blocks must finish before their values can select a condition or enter another call. Pending computations may return zero or several terms. Potential choices between unbound expression variables remain residual so runtime matching can preserve split order and backtrack through conditions.
+
+Block conditions evaluate the selected sentence's result before continuing the outer condition chain. Both emitters retain the source program if a residual call would target a replacement entry and create a cycle.
+
+Source/generated execution comparisons cover the append-law example, all three variable kinds, nested values, condition fallbacks, expression-split backtracking, printed effects, and small driving budgets. Exhausted predicate searches report `incomplete`, including runs with no terminal values. Predicate tests reject false refutations of the append law, and partial-domain equivalence coverage includes a concrete execution witness. These are bounded regression guarantees; compilation and proving remain experimental.
+
 ## Verification
 
 Use focused semantic tests for individual changes and the serial integration suite for the complete toolchain. The current revision's CI status is available through the README badge. Historical verification artifacts are indexed in the [baseline record](audits/2026-11-04/ASSESSMENT.md).

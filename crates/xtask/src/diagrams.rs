@@ -969,7 +969,7 @@ fn glance(p: &Palette) -> String {
         (
             "SELF-HOSTING",
             "C1=C2=C3",
-            "byte-identical at 115,023 bytes",
+            "byte-identical at 116,715 bytes",
             "ok",
         ),
         (
@@ -1023,7 +1023,7 @@ fn glance(p: &Palette) -> String {
     wrap(
         h,
         "At a glance",
-        "Five tiles: four layers over one shared expression space; about 93.4% of the supersystem complete by one method; 100% Rust; a byte-identical self-hosting fixpoint at 115,023 bytes; and 21 of 25 in-scope conformance rows closed.",
+        "Five tiles: four layers over one shared expression space; about 93.4% of the supersystem complete by one method; 100% Rust; a byte-identical self-hosting fixpoint at 116,715 bytes; and 21 of 25 in-scope conformance rows closed.",
         &out,
     )
 }
@@ -1042,7 +1042,7 @@ fn demonstrations(p: &Palette) -> String {
     let cards = [
         (
             "SELF-HOSTING FIXPOINT",
-            "115,023 bytes",
+            "116,715 bytes",
             "gen1 == gen2, byte for byte",
             "ok",
             "Built",
@@ -1130,7 +1130,7 @@ fn demonstrations(p: &Palette) -> String {
     wrap(
         h,
         "See it work",
-        "Four result cards: the self-hosting fixpoint at 115,023 bytes, the metasystem transition at 172 to 4 steps, the strict checker catching a proven defect, and the meta-prover proving associativity.",
+        "Four result cards: the self-hosting fixpoint at 116,715 bytes, the metasystem transition at 172 to 4 steps, the strict checker catching a proven defect, and the meta-prover proving associativity.",
         &out,
     )
 }

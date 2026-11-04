@@ -1745,6 +1745,11 @@ impl<'a> DriveContext<'a> {
         if self.steps >= self.max_steps {
             return Ok(SymbolicInvoke::Residual);
         }
+        // Refal evaluates arguments before dispatch. Substituting a pending
+        // call into a callee could discard, duplicate, or reorder its effects.
+        if has_pending_computation(input) {
+            return Ok(SymbolicInvoke::Residual);
+        }
         self.record_call(function, input);
         // `Prout` is deliberately *not* folded away here. It is a side effect:
         // `<Prout e.X>` prints and returns the empty expression. Folding it to
@@ -2452,6 +2457,7 @@ impl<'a> DriveContext<'a> {
             if match_ground_pattern(&sentence.pattern, value, &mut nested)
                 && self.match_ground_conditions(&sentence.conditions, &mut nested)?
             {
+                self.instantiate(&sentence.result, &nested)?;
                 return Ok(true);
             }
         }
@@ -2473,6 +2479,11 @@ impl<'a> DriveContext<'a> {
                 // the next sentence is tried.
                 SymbolicInvoke::Fails => return Ok(SymbolicMatch::No),
             };
+            // Reduced means that instantiation made progress; its value may
+            // still contain calls. Even a fresh e-variable must wait for them.
+            if has_pending_computation(&value) {
+                return Ok(SymbolicMatch::Unknown);
+            }
             if let Some(sentences) = block_pattern(&condition.pattern) {
                 match self.match_symbolic_block_condition(&value, sentences, bindings)? {
                     SymbolicMatch::Yes => continue,
@@ -2494,29 +2505,15 @@ impl<'a> DriveContext<'a> {
         sentences: &[CoreSentence],
         bindings: &HashMap<String, Vec<CoreTerm>>,
     ) -> Result<SymbolicMatch, DriveError> {
-        let mut saw_unknown = false;
-        for sentence in sentences {
-            let mut nested = bindings.clone();
-            match match_symbolic_pattern(&sentence.pattern, value, &mut nested) {
-                SymbolicMatch::No => continue,
-                SymbolicMatch::Unknown => {
-                    saw_unknown = true;
-                    continue;
+        Ok(
+            match self.invoke_block_symbolic(value, sentences, bindings)? {
+                SymbolicInvoke::Reduced(result) if !has_pending_computation(&result) => {
+                    SymbolicMatch::Yes
                 }
-                SymbolicMatch::Yes => {
-                    match self.match_symbolic_conditions(&sentence.conditions, &mut nested)? {
-                        SymbolicMatch::Yes => return Ok(SymbolicMatch::Yes),
-                        SymbolicMatch::No => continue,
-                        SymbolicMatch::Unknown => saw_unknown = true,
-                    }
-                }
-            }
-        }
-        Ok(if saw_unknown {
-            SymbolicMatch::Unknown
-        } else {
-            SymbolicMatch::No
-        })
+                SymbolicInvoke::Fails => SymbolicMatch::No,
+                _ => SymbolicMatch::Unknown,
+            },
+        )
     }
 
     fn instantiate_block(
@@ -2551,10 +2548,22 @@ impl<'a> DriveContext<'a> {
                 return Ok(SymbolicInvoke::Residual);
             }
         };
+        self.invoke_block_symbolic(&value, sentences, bindings)
+    }
+
+    fn invoke_block_symbolic(
+        &mut self,
+        value: &[CoreTerm],
+        sentences: &[CoreSentence],
+        bindings: &HashMap<String, Vec<CoreTerm>>,
+    ) -> Result<SymbolicInvoke, DriveError> {
+        if has_pending_computation(value) {
+            return Ok(SymbolicInvoke::Residual);
+        }
         let mut unknown_before = false;
         for sentence in sentences {
             let mut nested_bindings = bindings.clone();
-            match match_symbolic_pattern(&sentence.pattern, &value, &mut nested_bindings) {
+            match match_symbolic_pattern(&sentence.pattern, value, &mut nested_bindings) {
                 SymbolicMatch::No => {}
                 SymbolicMatch::Unknown => unknown_before = true,
                 SymbolicMatch::Yes => {
@@ -2576,7 +2585,11 @@ impl<'a> DriveContext<'a> {
                 }
             }
         }
-        Ok(SymbolicInvoke::Residual)
+        Ok(if unknown_before {
+            SymbolicInvoke::Residual
+        } else {
+            SymbolicInvoke::Fails
+        })
     }
 
     fn instantiate_symbolic(
@@ -2688,22 +2701,74 @@ fn match_symbolic_pattern(
     input: &[CoreTerm],
     bindings: &mut HashMap<String, Vec<CoreTerm>>,
 ) -> SymbolicMatch {
-    if pattern.len() == 1
-        && let CoreTermKind::Variable {
-            kind: VariableKind::Expression,
-            name,
-        } = &pattern[0].kind
-        && input.len() == 1
-        && matches!(input[0].kind, CoreTermKind::Variable { .. })
-    {
-        bindings.insert(name.to_ascii_lowercase(), input.to_vec());
-        return SymbolicMatch::Yes;
+    // The runtime can revisit expression splits when a later condition fails.
+    // This matcher returns one environment, so it cannot commit to a choice
+    // between distinct, still-unbound expression variables.
+    if pattern_has_ambiguous_splits(pattern, bindings) {
+        let mut candidate = bindings.clone();
+        return match match_shape_pattern(pattern, input, &mut candidate) {
+            SymbolicMatch::No => SymbolicMatch::No,
+            _ => SymbolicMatch::Unknown,
+        };
     }
-    if input.iter().any(contains_undecided_term) {
+    if input.iter().any(contains_undecided_term) || pattern_has_undecided_binding(pattern, bindings)
+    {
         return match_shape_pattern(pattern, input, bindings);
     }
-    if match_ground_pattern(pattern, input, bindings) {
+    let mut candidate = bindings.clone();
+    if match_ground_pattern(pattern, input, &mut candidate) {
+        *bindings = candidate;
         SymbolicMatch::Yes
+    } else {
+        SymbolicMatch::No
+    }
+}
+
+fn pattern_has_ambiguous_splits(
+    pattern: &[CoreTerm],
+    bindings: &HashMap<String, Vec<CoreTerm>>,
+) -> bool {
+    let mut expression_name: Option<&str> = None;
+    for term in pattern {
+        match &term.kind {
+            CoreTermKind::Variable {
+                kind: VariableKind::Expression,
+                name,
+            } if !bindings.contains_key(&name.to_ascii_lowercase()) => {
+                if expression_name.is_some_and(|first| !first.eq_ignore_ascii_case(name)) {
+                    return true;
+                }
+                expression_name = Some(name);
+            }
+            CoreTermKind::Bracket(inner) if pattern_has_ambiguous_splits(inner, bindings) => {
+                return true;
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
+fn pattern_has_undecided_binding(
+    pattern: &[CoreTerm],
+    bindings: &HashMap<String, Vec<CoreTerm>>,
+) -> bool {
+    pattern.iter().any(|term| match &term.kind {
+        CoreTermKind::Variable { name, .. } => bindings
+            .get(&name.to_ascii_lowercase())
+            .is_some_and(|value| value.iter().any(contains_undecided_term)),
+        CoreTermKind::Bracket(inner) => pattern_has_undecided_binding(inner, bindings),
+        _ => false,
+    })
+}
+
+/// Different symbolic expressions may become equal after substitution. Only
+/// unequal ground values establish a failed equality constraint here.
+fn symbolic_values_equal(left: &[CoreTerm], right: &[CoreTerm]) -> SymbolicMatch {
+    if term_sequences_same_kind(left, right) {
+        SymbolicMatch::Yes
+    } else if left.iter().chain(right).any(contains_undecided_term) {
+        SymbolicMatch::Unknown
     } else {
         SymbolicMatch::No
     }
@@ -2724,16 +2789,11 @@ fn match_shape_pattern(
         if pattern_index == pattern.len() {
             return if input_index == input.len() {
                 (SymbolicMatch::Yes, Some(bindings.clone()))
-            } else if input[input_index..]
-                .iter()
-                .any(|term| !is_expression_variable(term))
-            {
+            } else if term_sequence_arity(&input[input_index..]).0 > 0 {
                 // The pattern is exhausted and the input definitely still has
                 // a term, so the match fails whatever the remaining variables
-                // turn out to be. Only an `e.`-variable can denote nothing, so
-                // only a tail made entirely of them leaves the answer open --
-                // `[]` against `[e.X]` is undecided, but `[]` against
-                // `[(e.B)]` is a definite no.
+                // turn out to be. An e-variable or pending computation can
+                // denote nothing; a bracket always contributes one term.
                 (SymbolicMatch::No, None)
             } else {
                 (SymbolicMatch::Unknown, None)
@@ -2766,34 +2826,29 @@ fn match_shape_pattern(
         if let CoreTermKind::Variable { kind, name } = &pattern_term.kind {
             let key = name.to_ascii_lowercase();
             if *kind == VariableKind::Expression {
-                let mut saw_unknown = false;
                 for end in (input_index..=input.len()).rev() {
                     let slice = input[input_index..end].to_vec();
-                    // Compared by **kind**, not by the derived equality: a
-                    // `CoreTerm`'s `PartialEq` includes its source span, so `==`
-                    // reports two occurrences of the same subterm as different
-                    // and a repeated variable never matches. See
-                    // `match_ground_pattern`, which carried the same defect.
-                    if let Some(previous) = bindings.get(&key)
-                        && !term_sequences_same_kind(previous, &slice)
-                    {
+                    let equality = bindings.get(&key).map_or(SymbolicMatch::Yes, |previous| {
+                        symbolic_values_equal(previous, &slice)
+                    });
+                    if equality == SymbolicMatch::No {
                         continue;
                     }
                     let mut candidate = bindings.clone();
-                    candidate.insert(key.clone(), slice);
+                    candidate.entry(key.clone()).or_insert(slice);
                     let (result, result_bindings) =
                         match_at(pattern, input, pattern_index + 1, end, &candidate);
-                    match result {
-                        SymbolicMatch::Yes => return (result, result_bindings),
-                        SymbolicMatch::Unknown => saw_unknown = true,
-                        SymbolicMatch::No => {}
+                    match (equality, result) {
+                        (_, SymbolicMatch::No) => {}
+                        (SymbolicMatch::Yes, SymbolicMatch::Yes) => {
+                            return (SymbolicMatch::Yes, result_bindings);
+                        }
+                        // An earlier possible split determines the bindings.
+                        // Selecting a later one would bypass that decision.
+                        _ => return (SymbolicMatch::Unknown, None),
                     }
                 }
-                return if saw_unknown {
-                    (SymbolicMatch::Unknown, None)
-                } else {
-                    (SymbolicMatch::No, None)
-                };
+                return (SymbolicMatch::No, None);
             }
 
             let Some(input_term) = input.get(input_index) else {
@@ -2804,13 +2859,16 @@ fn match_shape_pattern(
                 Some(false) => return (SymbolicMatch::No, None),
                 None => return (SymbolicMatch::Unknown, None),
             }
-            if let Some(previous) = bindings.get(&key)
-                && !term_sequences_same_kind(previous, std::slice::from_ref(input_term))
-            {
-                return (SymbolicMatch::No, None);
+            if let Some(previous) = bindings.get(&key) {
+                match symbolic_values_equal(previous, std::slice::from_ref(input_term)) {
+                    SymbolicMatch::Yes => {}
+                    other => return (other, None),
+                }
             }
             let mut candidate = bindings.clone();
-            candidate.insert(key, vec![input_term.clone()]);
+            candidate
+                .entry(key)
+                .or_insert_with(|| vec![input_term.clone()]);
             return match_at(
                 pattern,
                 input,
@@ -2957,11 +3015,9 @@ fn match_symbolic_term(
 
 /// The range of term counts a term sequence can stand for.
 ///
-/// The lower bound counts the terms that must stand for at least one input
-/// term -- everything but a top-level `e.` variable, which can denote nothing.
-/// The upper bound is `None` when the sequence contains an `e.` variable (it
-/// can absorb an unbounded tail) and `Some(sequence.len())` otherwise, because
-/// then each term stands for exactly one input term.
+/// Expression variables and pending calls or blocks may produce zero or many
+/// terms. Other terms contribute exactly one, including brackets with pending
+/// contents. An open upper bound is represented by `None`.
 ///
 /// The test is used as a **sound** rejection: when a pattern's range and an
 /// input's range do not overlap, no binding of the symbolic variables can make
@@ -2973,7 +3029,7 @@ fn term_sequence_arity(sequence: &[CoreTerm]) -> (usize, Option<usize>) {
     let mut min_len = 0usize;
     let mut unbounded = false;
     for term in sequence {
-        if is_expression_variable(term) {
+        if has_variable_arity(term) {
             unbounded = true;
         } else {
             min_len += 1;
@@ -2989,8 +3045,15 @@ fn term_sequence_arity(sequence: &[CoreTerm]) -> (usize, Option<usize>) {
     )
 }
 
-/// Whether a term is an expression variable, the only kind that can denote
-/// nothing at all.
+fn has_variable_arity(term: &CoreTerm) -> bool {
+    is_expression_variable(term)
+        || matches!(
+            term.kind,
+            CoreTermKind::Call { .. } | CoreTermKind::Block { .. }
+        )
+}
+
+/// Whether a term is an expression variable.
 fn is_expression_variable(term: &CoreTerm) -> bool {
     matches!(
         term.kind,
@@ -3059,7 +3122,21 @@ fn term_has_variable(term: &CoreTerm) -> bool {
 /// input to the shape-aware matcher instead leaves the decision open, and an
 /// open decision keeps the call residual rather than guessing a branch.
 fn contains_undecided_term(term: &CoreTerm) -> bool {
-    matches!(term.kind, CoreTermKind::Call { .. }) || contains_symbolic_variable(term)
+    match &term.kind {
+        CoreTermKind::Variable { .. } | CoreTermKind::Call { .. } | CoreTermKind::Block { .. } => {
+            true
+        }
+        CoreTermKind::Bracket(inner) => inner.iter().any(contains_undecided_term),
+        _ => false,
+    }
+}
+
+fn has_pending_computation(terms: &[CoreTerm]) -> bool {
+    terms.iter().any(|term| match &term.kind {
+        CoreTermKind::Call { .. } | CoreTermKind::Block { .. } => true,
+        CoreTermKind::Bracket(inner) => has_pending_computation(inner),
+        _ => false,
+    })
 }
 
 fn contains_symbolic_variable(term: &CoreTerm) -> bool {
@@ -4120,6 +4197,27 @@ pub fn residualize_symbolic_program_with_pattern(
                     .any(|name| name.eq_ignore_ascii_case(&function.name))
             }),
     );
+    // A retained call still means the original entry, not the replacement
+    // entry above. In particular, a split built just as the budget runs out
+    // may call back into it. Reusing the name would turn that call into a
+    // cycle through the new entry, so retain the source program in this case.
+    let mut calls = Vec::new();
+    for function in &functions {
+        for sentence in &function.sentences {
+            collect_call_names(&sentence.pattern, &mut calls);
+            for condition in &sentence.conditions {
+                collect_call_names(&condition.result, &mut calls);
+                collect_call_names(&condition.pattern, &mut calls);
+            }
+            collect_call_names(&sentence.result, &mut calls);
+        }
+    }
+    if calls
+        .iter()
+        .any(|callee| callee.eq_ignore_ascii_case(&entry_name))
+    {
+        return program.clone();
+    }
     CoreProgram {
         declarations: program.declarations.clone(),
         functions,
@@ -6050,9 +6148,8 @@ pub enum ProofVerdict {
     /// A terminal node other than `'True'` was reached. The claim is false, and
     /// `witness` is the counterexample the graph reached.
     Refuted { witness: String },
-    /// The claim holds for the cases driven but the graph did not close: the
-    /// walk ran out of budget, so the terminal nodes seen are a subset of the
-    /// real ones and no proof may be claimed.
+    /// The search exhausted its budget. Reached terminal nodes are only partial
+    /// observations, so neither a proof nor a refutation is established.
     Incomplete { steps: usize },
     /// No terminal node was reached at all -- the graph is still open, or the
     /// predicate's sentence selection was never decided.
@@ -6133,37 +6230,12 @@ pub fn prove_predicate(
     let complete = report.steps < max_steps;
 
     let terminals = collect_terminals(graph, &report, &terms);
-    // An unfinished walk can never refute a claim, and that rule is the whole
-    // soundness of this function.
-    //
-    // The argument is a measurement, not a preference. On
-    // `examples/prove-append-reach.ref` -- associativity of `Append`, which this
-    // driver does not prove -- a closed walk reports `refuted` because the claim
-    // quantifies over free lists and the equation cannot be decided. At a budget
-    // of one to five steps the *same* reduction happens, but the walk has not
-    // closed: it entered `Law`, could not decide the condition symbolically, and
-    // fell through to the last sentence, whose result is `'False'`. The `'False'`
-    // is a real reduction and a ground terminal, so a prover that reported it
-    // would announce `refuted ('F' 'a' 'l' 's' 'e')` at a budget where a larger
-    // one reaches a *different* pair of nodes. The published verdict would be a
-    // function of the step budget rather than of the claim, which is the one
-    // property a prover may not have. Measured before the fix: a claim reported
-    // `refuted` at budgets one through five and a different verdict at the full
-    // budget, on the identical claim.
-    //
-    // So `Refuted` requires a *closed* walk. A `'False'` a closed walk reaches is
-    // a genuine counterexample and is reported with its witness; a `'False'` an
-    // unfinished walk reaches is the driver's inability to decide, and the honest
-    // name for that is `Incomplete` -- the fix is a bigger budget, and the verdict
-    // says so. Refutation remains reachable, so the prover still gives its more
-    // interesting answer; it merely stops manufacturing one.
+    // Budget exhaustion takes precedence over terminal observations. Pending
+    // conditions can leave a truncated search with no terminal at all; it is
+    // still incomplete. A finished search with no terminal remains open.
     let verdict = if !complete {
-        if terminals.is_empty() {
-            ProofVerdict::Open
-        } else {
-            ProofVerdict::Incomplete {
-                steps: report.steps,
-            }
+        ProofVerdict::Incomplete {
+            steps: report.steps,
         }
     } else if let Some(refutation) = terminals.iter().find(|terminal| !terminal.is_true) {
         ProofVerdict::Refuted {
@@ -8199,11 +8271,7 @@ fn strip_trailing_call<'a>(
 ///
 /// Variables are permitted, because a pattern's job is to *bind* them.
 fn is_shape(terms: &[CoreTerm]) -> bool {
-    terms.iter().all(|term| match &term.kind {
-        CoreTermKind::Call { .. } | CoreTermKind::Block { .. } => false,
-        CoreTermKind::Bracket(inner) => is_shape(inner),
-        _ => true,
-    })
+    !has_pending_computation(terms)
 }
 
 /// The name an inverse program carries: `F` becomes `F-Inverse`.
@@ -8648,13 +8716,11 @@ mod tests {
             !report.complete,
             "a walk that spent its budget is not complete"
         );
-        assert!(
-            matches!(
-                report.verdict,
-                ProofVerdict::Incomplete { .. } | ProofVerdict::Open
-            ),
-            "and it must not be reported as proved: {:?}",
-            report.verdict
+        assert!(report.terminals.is_empty());
+        assert_eq!(
+            report.verdict,
+            ProofVerdict::Incomplete { steps: 0 },
+            "budget exhaustion must be explicit even before a terminal is reached"
         );
     }
 
@@ -10966,6 +11032,100 @@ mod tests {
     }
 
     #[test]
+    fn symbolic_matching_preserves_and_checks_existing_bindings() {
+        for kind in [
+            VariableKind::Symbol,
+            VariableKind::Term,
+            VariableKind::Expression,
+        ] {
+            let symbolic = vec![core_var(kind, "Left")];
+            let other = vec![core_var(kind, "Right")];
+            let ground = vec![core_char('a')];
+            for (previous, input, expected) in [
+                (symbolic.clone(), symbolic.clone(), SymbolicMatch::Yes),
+                (symbolic.clone(), other, SymbolicMatch::Unknown),
+                (symbolic.clone(), ground.clone(), SymbolicMatch::Unknown),
+                (ground.clone(), symbolic, SymbolicMatch::Unknown),
+                (ground.clone(), ground.clone(), SymbolicMatch::Yes),
+                (ground, vec![core_char('b')], SymbolicMatch::No),
+            ] {
+                let mut bindings = HashMap::from([("kept".to_string(), previous)]);
+                let original = bindings.clone();
+                assert_eq!(
+                    match_symbolic_pattern(&[core_var(kind, "Kept")], &input, &mut bindings),
+                    expected,
+                    "{kind:?}: {original:?} compared with {input:?}"
+                );
+                assert_eq!(bindings, original, "a repeated variable is a constraint");
+            }
+        }
+    }
+
+    #[test]
+    fn symbolic_matching_checks_bindings_inside_brackets() {
+        let pattern = vec![core_bracket(vec![core_var(VariableKind::Term, "Kept")])];
+        let input = vec![core_bracket(vec![core_bracket(vec![core_char('a')])])];
+        let mut bindings = HashMap::from([(
+            "kept".to_string(),
+            vec![core_bracket(vec![core_var(
+                VariableKind::Expression,
+                "Free",
+            )])],
+        )]);
+        let original = bindings.clone();
+        assert_eq!(
+            match_symbolic_pattern(&pattern, &input, &mut bindings),
+            SymbolicMatch::Unknown
+        );
+        assert_eq!(bindings, original);
+    }
+
+    #[test]
+    fn an_undecided_expression_split_prevents_selecting_a_later_binding() {
+        let pattern = vec![
+            core_var(VariableKind::Expression, "Prefix"),
+            core_char('x'),
+            core_var(VariableKind::Expression, "Suffix"),
+        ];
+        let input = vec![core_char('x'), core_var(VariableKind::Symbol, "Free")];
+        let mut bindings = HashMap::new();
+        assert_eq!(
+            match_symbolic_pattern(&pattern, &input, &mut bindings),
+            SymbolicMatch::Unknown
+        );
+        assert!(bindings.is_empty());
+    }
+
+    #[test]
+    fn pending_computations_have_unknown_arity_even_inside_brackets() {
+        let pending = [
+            core_call("Pending", vec![]),
+            core_term(CoreTermKind::Block {
+                argument: vec![],
+                sentences: vec![core_sentence(vec![], vec![])],
+            }),
+        ];
+        for term in pending {
+            for (pattern, input) in [
+                (vec![], vec![term.clone()]),
+                (vec![core_char('a')], vec![core_char('a'), term.clone()]),
+                (vec![core_char('a')], vec![term.clone(), term.clone()]),
+                (vec![core_bracket(vec![])], vec![core_bracket(vec![term])]),
+            ] {
+                let mut bindings = HashMap::new();
+                assert_eq!(
+                    match_symbolic_pattern(&pattern, &input, &mut bindings),
+                    SymbolicMatch::Unknown,
+                    "{} against {}",
+                    format_term_sequence(&pattern),
+                    format_term_sequence(&input)
+                );
+                assert!(bindings.is_empty());
+            }
+        }
+    }
+
+    #[test]
     fn an_unevaluated_call_is_undecided_rather_than_a_definite_term() {
         // A call the driver has not contracted is a thunk: it may contract to a
         // symbol, a bracket, or anything else. Matching it as though it were a
@@ -10990,8 +11150,8 @@ mod tests {
             );
         }
 
-        // An `e.` variable still binds it: a call does contract to exactly one
-        // term, whatever that term turns out to be.
+        // An e-variable can bind an arbitrary expression. Invocation and
+        // condition evaluation must still wait for any pending computation.
         let mut bindings = HashMap::new();
         assert_eq!(
             match_symbolic_pattern(

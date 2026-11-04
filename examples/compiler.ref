@@ -1613,7 +1613,7 @@ DvCondsBlk3 {
 }
 
 * A block in condition position is an anonymous function applied to the value:
-* the condition holds exactly when one of the block's sentences matches. The
+* the condition holds when a matched sentence finishes evaluating. The
 * bindings a block makes stay inside it, which is why the block is tested
 * against the enclosing bindings but never writes back to them.
 DvBlkTest {
@@ -1623,19 +1623,24 @@ DvBlkTest {
 DvBlkTestL {
   (e.Ctx) (e.B) (e.Val) () = (NO (e.Ctx));
   (e.Ctx) (e.B) (e.Val) ((SENT (e.Pat) (e.Conds) (e.Res)) e.More) =
-    <DvBlkTest2 <DvMatch (e.Pat) (e.Val) (e.B)> (e.Ctx) (e.B) (e.Val) (e.Conds) (e.More)>;
+    <DvBlkTest2 <DvMatch (e.Pat) (e.Val) (e.B)> (e.Ctx) (e.B) (e.Val) (e.Conds) (e.Res) (e.More)>;
 }
 
 DvBlkTest2 {
-  (OK (e.B2)) (e.Ctx) (e.B) (e.Val) (e.Conds) (e.More) =
-    <DvBlkTest3 <DvConds (e.Ctx) (e.B2) (e.Conds)> (e.B) (e.Val) (e.More)>;
-  (NO) (e.Ctx) (e.B) (e.Val) (e.Conds) (e.More) =
+  (OK (e.B2)) (e.Ctx) (e.B) (e.Val) (e.Conds) (e.Res) (e.More) =
+    <DvBlkTest3 <DvConds (e.Ctx) (e.B2) (e.Conds)> (e.B) (e.Val) (e.Res) (e.More)>;
+  (NO) (e.Ctx) (e.B) (e.Val) (e.Conds) (e.Res) (e.More) =
     <DvBlkTestL (e.Ctx) (e.B) (e.Val) (e.More)>;
 }
 
 DvBlkTest3 {
-  (OK (e.B3) (e.Ctx)) (e.B) (e.Val) (e.More) = (OK (e.Ctx));
-  (NO (e.Ctx)) (e.B) (e.Val) (e.More) = <DvBlkTestL (e.Ctx) (e.B) (e.Val) (e.More)>;
+  (OK (e.B3) (e.Ctx)) (e.B) (e.Val) (e.Res) (e.More) = <DvBlkTest4 <DvInst (e.Ctx) (e.B3) (e.Res)>>;
+  (NO (e.Ctx)) (e.B) (e.Val) (e.Res) (e.More) = <DvBlkTestL (e.Ctx) (e.B) (e.Val) (e.More)>;
+}
+
+DvBlkTest4 {
+  (OK (e.Out) (e.Ctx)) = (OK (e.Ctx));
+  t.Error = t.Error;
 }
 
 * ---- instantiation
@@ -1713,8 +1718,7 @@ DvInstBlk3 {
   (e.Err) (e.B) (e.Rest) = (e.Err);
 }
 
-* A block in RESULT position is different from one in condition position: this
-* one's matched sentence result is instantiated and its value returned.
+* A block in result position also returns its evaluated value to the caller.
 DvBlkRun {
   (e.Ctx) (e.B) (e.Val) (e.Sents) = <DvBlkRunL (e.Ctx) (e.B) (e.Val) (e.Sents)>;
 }
@@ -2574,11 +2578,33 @@ DsRdBuild2 {
 * compile fixpoint even though both programs answer the same.
 DsRdBuild3 {
   (e.Items) (e.Fn) (e.Residual) (e.Ctx) (e.Reach) =
-    (PROG
+    <DsRdFinish (e.Items) (e.Fn) (PROG
       <DsRdDecls e.Items>
       (FUN (Ident e.Fn) (VIS ENTRY) <DsRdEntry (e.Items) (e.Residual)>)
       <DsRdSplits (e.Reach) (e.Ctx)>
-      <DsRdRetain (e.Items) (e.Fn) (e.Reach) <DsRdSplitNames (e.Ctx)>>);
+      <DsRdRetain (e.Items) (e.Fn) (e.Reach) <DsRdSplitNames (e.Ctx)>>)>;
+}
+
+* A retained call to the original entry must not target its replacement.
+* Keep the source program if emission would create that cycle, including
+* when a split was built just as the driving budget ran out.
+DsRdFinish {
+  (e.Items) (e.Fn) (PROG e.Out), <DsRdRootCall (e.Out) (e.Fn)> : '1' = (PROG e.Items);
+  (e.Items) (e.Fn) (PROG e.Out) = (PROG e.Out);
+}
+
+DsRdRootCall {
+  () (e.Fn) = ;
+  ((FUN (Ident e.N) (e.V) e.Sents) e.Rest) (e.Fn),
+    <DsRdCallIn (<DsRdFunCalls (e.Sents)>) (e.Fn)> : '1' = '1';
+  (t.Item e.Rest) (e.Fn) = <DsRdRootCall (e.Rest) (e.Fn)>;
+}
+
+DsRdCallIn {
+  () (e.Fn) = ;
+  ((N e.Callee) e.Rest) (e.Fn),
+    <SameChars (<Upper e.Callee>) (<Upper e.Fn>)> : '1' = '1';
+  (t.N e.Rest) (e.Fn) = <DsRdCallIn (e.Rest) (e.Fn)>;
 }
 
 DsRdEntry {
@@ -3052,6 +3078,8 @@ DsPushCompleted {
 * ---- invocation
 
 DsInvoke {
+* Arguments must finish before dispatch, even when a callee would ignore them.
+  (e.Ctx) (e.Fn) (e.In), <DsAnyPending (e.In)> : '1' = (RES (e.Ctx));
   (e.Ctx) (e.Fn) (e.In) = <DsInvoke0 (e.Ctx) (e.Fn) (e.In)>;
 }
 
@@ -3308,11 +3336,57 @@ DsHasTrL {
 * ---- the three-valued matcher
 
 DsMatchSym {
-  ((VAR 'e' e.N)) ((VAR s.K e.M)) (e.B) =
-    (YES (e.B (VE (<Canon e.N>) ((VAR s.K e.M)))));
+  (e.Pat) (e.In) (e.B), <DsPatAmbig (e.Pat) (e.B)> : '1' =
+    <DsMatchAmbig <DsMatchShape (e.Pat) (e.In) (e.B)>>;
   (e.Pat) (e.In) (e.B), <DsAnyUndecided (e.In)> : '1' =
     <DsMatchShape (e.Pat) (e.In) (e.B)>;
+  (e.Pat) (e.In) (e.B), <DsPatUndecided (e.Pat) (e.B)> : '1' =
+    <DsMatchShape (e.Pat) (e.In) (e.B)>;
   (e.Pat) (e.In) (e.B) = <DsMatchGround (e.Pat) (e.In) (e.B)>;
+}
+
+* The runtime can retry expression splits after a condition fails. This
+* matcher returns one environment, so an ambiguous choice must stay pending.
+DsMatchAmbig {
+  (NO) = (NO);
+  t.Result = (UNK);
+}
+
+DsPatAmbig {
+  (e.Pat) (e.B) = <DsAmbigL (e.Pat) (e.B) (NONE)>;
+}
+
+DsAmbigL {
+  () (e.B) t.First = ;
+  ((VAR 'e' e.N) e.Rest) (e.B) t.First, <DvLookup (e.B) (<Canon e.N>)> : (NONE) =
+    <DsAmbigVar t.First (<Canon e.N>) (e.Rest) (e.B)>;
+  ((BR e.Pat) e.Rest) (e.B) t.First, <DsPatAmbig (e.Pat) (e.B)> : '1' = '1';
+  (t.P e.Rest) (e.B) t.First = <DsAmbigL (e.Rest) (e.B) t.First>;
+}
+
+DsAmbigVar {
+  (NONE) (e.N) (e.Rest) (e.B) = <DsAmbigL (e.Rest) (e.B) (SOME e.N)>;
+  (SOME e.First) (e.N) (e.Rest) (e.B), <SameChars (e.First) (e.N)> : '1' =
+    <DsAmbigL (e.Rest) (e.B) (SOME e.First)>;
+  t.First (e.N) (e.Rest) (e.B) = '1';
+}
+
+* Only bindings referenced by this pattern affect dispatch, including those
+* inside brackets. A ground input can still face a symbolic equality constraint.
+DsPatUndecided {
+  () (e.B) = ;
+  ((VAR s.K e.N) e.Rest) (e.B),
+    <DvLookup (e.B) (<Canon e.N>)> : (SOME (e.Old)), <DsAnyUndecided (e.Old)> : '1' = '1';
+  ((BR e.Pat) e.Rest) (e.B), <DsPatUndecided (e.Pat) (e.B)> : '1' = '1';
+  (t.P e.Rest) (e.B) = <DsPatUndecided (e.Rest) (e.B)>;
+}
+
+* Structural equality establishes YES. Unequal symbolic values may become
+* equal after substitution; only unequal ground values establish NO.
+DsValueEq {
+  (e.Left) (e.Right), <DsSameKind (e.Left) (e.Right)> : '1' = (YES);
+  (e.Left) (e.Right), <DsAnyUndecided (e.Left e.Right)> : '1' = (UNK);
+  (e.Left) (e.Right) = (NO);
 }
 
 DsMatchGround {
@@ -3339,22 +3413,22 @@ DsMSAt {
   (t.P e.Pr) (e.Ir) (e.B) = <DsMSLit t.P (e.Pr) (e.Ir) (e.B)>;
 }
 
-* The least number of terms a sequence must stand for: an `e.` variable may
-* denote nothing, every other term stands for exactly one. The sequence arrives
-* bracketed, so its first term is matched as `(VAR 'e' e.N)` -- one bracket, not
-* two; an extra pair here counts every `e.` variable as a term and makes the
-* arity test fire on inputs that can match.
+* Expression variables and pending computations may produce zero or many terms.
+* Brackets always contribute one term, even when their contents are pending.
 DsMinLen {
   () = 0;
   ((VAR 'e' e.N) e.Rest) = <DsMinLen (e.Rest)>;
+  ((CALL e.X) e.Rest) = <DsMinLen (e.Rest)>;
+  ((BLK e.X) e.Rest) = <DsMinLen (e.Rest)>;
   (t.X e.Rest) = <Add 1 <DsMinLen (e.Rest)>>;
 }
 
-* Whether a sequence contains a top-level `e.` variable, i.e. can stand for an
-* unbounded number of terms.
+* Whether a sequence can stand for an unbounded number of terms.
 DsOpen {
   () = ;
   ((VAR 'e' e.N) e.Rest) = '1';
+  ((CALL e.X) e.Rest) = '1';
+  ((BLK e.X) e.Rest) = '1';
   (t.X e.Rest) = <DsOpen (e.Rest)>;
 }
 
@@ -3374,9 +3448,8 @@ DsArityBad {
   (e.Pat) (e.Ir) = ;
 }
 
-* An exhausted pattern with input left over is a definite no unless the tail is
-* entirely `e.`-variables, because only they can denote nothing. `[]` against
-* `[e.X]` is undecided; `[]` against `[(e.B)]` is a definite no.
+* An exhausted pattern fails if the remaining input must contain a term.
+* Expression variables and pending computations can instead produce nothing.
 DsMSEnd {
   () (e.B) = (YES (e.B));
   (e.Ir) (e.B), <DsAnyNonExpr (e.Ir)> : '1' = (NO);
@@ -3386,6 +3459,8 @@ DsMSEnd {
 DsAnyNonExpr {
   () = ;
   ((VAR 'e' e.N) e.Rest) = <DsAnyNonExpr (e.Rest)>;
+  ((CALL e.X) e.Rest) = <DsAnyNonExpr (e.Rest)>;
+  ((BLK e.X) e.Rest) = <DsAnyNonExpr (e.Rest)>;
   (t.X e.Rest) = '1';
 }
 
@@ -3394,34 +3469,31 @@ DsAnyNonExpr {
 * shortest-first because the ground matcher wants that, so this reverses it.
 DsMSExpr {
   (e.N) (e.Pr) (e.Ir) (e.B) =
-    <DsMSExprL (e.N) (e.Pr) <DvRev (<DvSplits (e.Ir)>)> (e.B) '0'>;
+    <DsMSExprL (e.N) (e.Pr) <DvRev (<DvSplits (e.Ir)>)> (e.B)>;
 }
 
 DsMSExprL {
-  (e.N) (e.Pr) () (e.B) s.U = <DsMSExprDone s.U>;
-  (e.N) (e.Pr) (((e.Slice) (e.Suf)) e.More) (e.B) s.U,
-    <DvLookup (e.B) (<Canon e.N>)> : (SOME (e.Old)), <SameChars (e.Old) (e.Slice)> : '1' =
-      <DsMSExprStep <DsMSAt (e.Pr) (e.Suf) (e.B)>
-                    (e.N) (e.Pr) (e.More) (e.B) s.U>;
-  (e.N) (e.Pr) (((e.Slice) (e.Suf)) e.More) (e.B) s.U,
+  (e.N) (e.Pr) () (e.B) = (NO);
+  (e.N) (e.Pr) (((e.Slice) (e.Suf)) e.More) (e.B),
     <DvLookup (e.B) (<Canon e.N>)> : (SOME (e.Old)) =
-      <DsMSExprL (e.N) (e.Pr) (e.More) (e.B) s.U>;
-  (e.N) (e.Pr) (((e.Slice) (e.Suf)) e.More) (e.B) s.U =
-      <DsMSExprStep <DsMSAt (e.Pr) (e.Suf) (e.B (VE (<Canon e.N>) (e.Slice)))>
-                    (e.N) (e.Pr) (e.More) (e.B) s.U>;
+      <DsMSExprBound <DsValueEq (e.Old) (e.Slice)> (e.N) (e.Pr) (e.Suf) (e.More) (e.B)>;
+  (e.N) (e.Pr) (((e.Slice) (e.Suf)) e.More) (e.B) =
+      <DsMSExprStep (YES) <DsMSAt (e.Pr) (e.Suf) (e.B (VE (<Canon e.N>) (e.Slice)))>
+                    (e.N) (e.Pr) (e.More) (e.B)>;
 }
 
+DsMSExprBound {
+  (NO) (e.N) (e.Pr) (e.Suf) (e.More) (e.B) = <DsMSExprL (e.N) (e.Pr) (e.More) (e.B)>;
+  t.Equality (e.N) (e.Pr) (e.Suf) (e.More) (e.B) =
+    <DsMSExprStep t.Equality <DsMSAt (e.Pr) (e.Suf) (e.B)> (e.N) (e.Pr) (e.More) (e.B)>;
+}
+
+* A possible earlier split prevents selecting a later binding. A definitely
+* failing suffix can still rule out the candidate, whatever its equality does.
 DsMSExprStep {
-  (YES (e.B2)) (e.N) (e.Pr) (e.More) (e.B) s.U = (YES (e.B2));
-  (UNK) (e.N) (e.Pr) (e.More) (e.B) s.U =
-    <DsMSExprL (e.N) (e.Pr) (e.More) (e.B) '1'>;
-  (NO) (e.N) (e.Pr) (e.More) (e.B) s.U =
-    <DsMSExprL (e.N) (e.Pr) (e.More) (e.B) s.U>;
-}
-
-DsMSExprDone {
-  '1' = (UNK);
-  s.U = (NO);
+  t.Equality (NO) (e.N) (e.Pr) (e.More) (e.B) = <DsMSExprL (e.N) (e.Pr) (e.More) (e.B)>;
+  (YES) (YES (e.B2)) (e.N) (e.Pr) (e.More) (e.B) = (YES (e.B2));
+  t.Equality t.Result (e.N) (e.Pr) (e.More) (e.B) = (UNK);
 }
 
 DsMSVar {
@@ -3434,12 +3506,15 @@ DsMSVar {
 
 DsMSVarBind {
   s.K (e.N) (e.Pr) (e.Ir) t.I (e.B),
-    <DvLookup (e.B) (<Canon e.N>)> : (SOME (e.Old)), <SameChars (e.Old) (t.I)> : '1' =
-      <DsMSAt (e.Pr) (e.Ir) (e.B)>;
-  s.K (e.N) (e.Pr) (e.Ir) t.I (e.B),
-    <DvLookup (e.B) (<Canon e.N>)> : (SOME (e.Old)) = (NO);
+    <DvLookup (e.B) (<Canon e.N>)> : (SOME (e.Old)) =
+      <DsMSVarKnown <DsValueEq (e.Old) (t.I)> (e.Pr) (e.Ir) (e.B)>;
   s.K (e.N) (e.Pr) (e.Ir) t.I (e.B) =
       <DsMSAt (e.Pr) (e.Ir) (e.B (VE (<Canon e.N>) (t.I)))>;
+}
+
+DsMSVarKnown {
+  (YES) (e.Pr) (e.Ir) (e.B) = <DsMSAt (e.Pr) (e.Ir) (e.B)>;
+  t.Result (e.Pr) (e.Ir) (e.B) = t.Result;
 }
 
 DsMSLit {
@@ -3488,8 +3563,6 @@ DsVarAccepts {
   't' t.X = (NONE);
 }
 
-* Whether the input contains any symbolic variable, which is what decides
-* between the shape matcher and the ground one.
 * Whether the input contains a term driving cannot see through -- a symbolic
 * variable, or a call it has not evaluated. Both are terms whose value, and even
 * whose kind, are not yet known, so both must route to the shape matcher: a
@@ -3503,8 +3576,24 @@ DsAnyUndecided {
 }
 
 DsHasUndecided {
+  (VAR s.K e.N) = '1';
   (CALL e.Rest) = '1';
-  t.X = <DsContainsSym t.X>;
+  (BLK e.Rest) = '1';
+  (BR e.X) = <DsAnyUndecided (e.X)>;
+  t.X = ;
+}
+
+DsAnyPending {
+  () = ;
+  (t.X e.Rest), <DsHasPending t.X> : '1' = '1';
+  (t.X e.Rest) = <DsAnyPending (e.Rest)>;
+}
+
+DsHasPending {
+  (CALL e.X) = '1';
+  (BLK e.X) = '1';
+  (BR e.X) = <DsAnyPending (e.X)>;
+  t.X = ;
 }
 
 DsAnySymVar {
@@ -3556,6 +3645,7 @@ DsCondsVal {
 }
 
 DsCondsVal2 {
+  (RED (e.Val) (e.Ctx)) (e.B) (e.CPat) (e.More), <DsAnyPending (e.Val)> : '1' = (MU (e.Ctx));
   (RED (e.Val) (e.Ctx)) (e.B) (e.CPat) (e.More) =
     <DsCondsVal3 <DsMatchSym (e.CPat) (e.Val) (e.B)> (e.Ctx) (e.B) (e.More)>;
   (RES (e.Ctx)) (e.B) (e.CPat) (e.More) = (MU (e.Ctx));
@@ -3579,46 +3669,22 @@ DsCondsBlk {
 }
 
 DsCondsBlkA {
+  (RED (e.Val) (e.Ctx)) (e.B) (e.Sents) (e.More), <DsAnyPending (e.Val)> : '1' = (MU (e.Ctx));
   (RED (e.Val) (e.Ctx)) (e.B) (e.Sents) (e.More) =
-    <DsBlkCond (e.Ctx) (e.B) (e.Val) (e.Sents) (e.More)>;
+    <DsCondsBlkRet <DsBlkSym (e.Ctx) (e.B) (e.Val) (e.Sents)> (e.B) (e.More)>;
   (RES (e.Ctx)) (e.B) (e.Sents) (e.More) = (MU (e.Ctx));
   (FAILS (e.Ctx)) (e.B) (e.Sents) (e.More) = (MN (e.Ctx));
   (ERR) (e.B) (e.Sents) (e.More) = (ERR);
 }
 
-DsBlkCond {
-  (e.Ctx) (e.B) (e.Val) (e.Sents) (e.More) =
-    <DsBlkCondL (e.Ctx) (e.B) (e.Val) (e.Sents) (e.More) '0'>;
-}
-
-DsBlkCondL {
-  (e.Ctx) (e.B) (e.Val) () (e.More) s.U = <DsBlkCondDone s.U (e.Ctx)>;
-  (e.Ctx) (e.B) (e.Val) ((SENT (e.Pat) (e.Conds) (e.Res)) e.Rest) (e.More) s.U =
-    <DsBlkCond2 <DsMatchSym (e.Pat) (e.Val) (e.B)>
-                (e.Ctx) (e.B) (e.Val) (e.Conds) (e.Rest) (e.More) s.U>;
-}
-
-DsBlkCond2 {
-  (NO) (e.Ctx) (e.B) (e.Val) (e.Conds) (e.Rest) (e.More) s.U =
-    <DsBlkCondL (e.Ctx) (e.B) (e.Val) (e.Rest) (e.More) s.U>;
-  (UNK) (e.Ctx) (e.B) (e.Val) (e.Conds) (e.Rest) (e.More) s.U =
-    <DsBlkCondL (e.Ctx) (e.B) (e.Val) (e.Rest) (e.More) '1'>;
-  (YES (e.B2)) (e.Ctx) (e.B) (e.Val) (e.Conds) (e.Rest) (e.More) s.U =
-    <DsBlkCond3 <DsMatchConds (e.Ctx) (e.B2) (e.Conds)> (e.B) (e.Val) (e.Rest) (e.More) s.U>;
-}
-
-DsBlkCond3 {
-  (MY (e.B3) (e.Ctx)) (e.B) (e.Val) (e.Rest) (e.More) s.U = (MY (e.B) (e.Ctx));
-  (MN (e.Ctx)) (e.B) (e.Val) (e.Rest) (e.More) s.U =
-    <DsBlkCondL (e.Ctx) (e.B) (e.Val) (e.Rest) (e.More) s.U>;
-  (MU (e.Ctx)) (e.B) (e.Val) (e.Rest) (e.More) s.U =
-    <DsBlkCondL (e.Ctx) (e.B) (e.Val) (e.Rest) (e.More) '1'>;
-  (ERR) (e.B) (e.Val) (e.Rest) (e.More) s.U = (ERR);
-}
-
-DsBlkCondDone {
-  '1' (e.Ctx) = (MU (e.Ctx));
-  s.U (e.Ctx) = (MN (e.Ctx));
+* Discard a block's value only after its computation finishes, then continue
+* the outer condition chain with the enclosing bindings.
+DsCondsBlkRet {
+  (RED (e.Out) (e.Ctx)) (e.B) (e.More), <DsAnyPending (e.Out)> : '1' = (MU (e.Ctx));
+  (RED (e.Out) (e.Ctx)) (e.B) (e.More) = <DsMatchConds (e.Ctx) (e.B) (e.More)>;
+  (RES (e.Ctx)) (e.B) (e.More) = (MU (e.Ctx));
+  (FAILS (e.Ctx)) (e.B) (e.More) = (MN (e.Ctx));
+  (ERR) (e.B) (e.More) = (ERR);
 }
 
 * ---- instantiation
@@ -3707,18 +3773,12 @@ DsInstBlk3 {
 }
 
 DsBlkSym {
-  (e.Ctx) (e.B) (e.Arg) (e.Sents) =
-    <DsBlkSymA <DsInstantiate (e.Ctx) (e.B) (e.Arg)> (e.B) (e.Sents)>;
-}
-
-DsBlkSymA {
-  (RED (e.Val) (e.Ctx)) (e.B) (e.Sents) = <DsBlkSymB (e.Ctx) (e.B) (e.Val) (e.Sents) '0'>;
-  (RES (e.Ctx)) (e.B) (e.Sents) = (RES (e.Ctx));
-  (FAILS (e.Ctx)) (e.B) (e.Sents) = (RES (e.Ctx));
-  (ERR) (e.B) (e.Sents) = (ERR);
+  (e.Ctx) (e.B) (e.Val) (e.Sents), <DsAnyPending (e.Val)> : '1' = (RES (e.Ctx));
+  (e.Ctx) (e.B) (e.Val) (e.Sents) = <DsBlkSymB (e.Ctx) (e.B) (e.Val) (e.Sents) '0'>;
 }
 
 DsBlkSymB {
+  (e.Ctx) (e.B) (e.Val) () '0' = (FAILS (e.Ctx));
   (e.Ctx) (e.B) (e.Val) () s.U = (RES (e.Ctx));
   (e.Ctx) (e.B) (e.Val) ((SENT (e.Pat) (e.Conds) (e.Res)) e.More) s.U =
     <DsBlkSymC <DsMatchSym (e.Pat) (e.Val) (e.B)>
