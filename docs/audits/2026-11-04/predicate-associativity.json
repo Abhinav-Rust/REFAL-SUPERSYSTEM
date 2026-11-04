@@ -1,0 +1,13 @@
+{
+  "command": [
+    "<repository>/target/test-fast/refal",
+    "prove",
+    "examples/prove-append-reach.ref",
+    "Law",
+    "--steps",
+    "2000"
+  ],
+  "exit_code": 1,
+  "stdout": "proof: Law\n  steps: 10\n  complete: yes\n  configurations: 9\n  terminals: 1\n    other 'F' 'a' 'l' 's' 'e'\n  verdict: refuted ('F' 'a' 'l' 's' 'e')\n",
+  "stderr": ""
+}

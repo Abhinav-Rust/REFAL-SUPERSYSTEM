@@ -1,0 +1,7 @@
+* The second sentence repeats the exact same configuration forever on ('b').
+* A terminating first sentence must not hide this non-decreasing self-loop.
+$ENTRY Go { = <Loop ('b')>; }
+Loop {
+  ('a' e.Rest) = <Loop (e.Rest)>;
+  (e.Rest) = <Loop (e.Rest)>;
+}

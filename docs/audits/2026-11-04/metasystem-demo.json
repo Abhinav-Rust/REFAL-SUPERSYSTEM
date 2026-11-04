@@ -1,0 +1,11 @@
+{
+  "command": [
+    "<repository>/target/test-fast/refal",
+    "metasystem",
+    "examples/metasystem-unroll.ref"
+  ],
+  "exit_code": 0,
+  "elapsed_seconds": 0.012,
+  "stdout": "metasystem: transition observed\ninterpreter: examples/metasystem-unroll.ref\ndriving steps: 14\nresidual interpreter calls: 0 (source: 7)\nsteps interpreted -> residual: 172 -> 4\nimprovement: 98%\ninputs agreed: 4\nresidual:\n$ENTRY Go {\n  e.Input = 'a' e.Input 'a' e.Input 'a' e.Input;\n}\n",
+  "stderr": ""
+}

@@ -1,0 +1,13 @@
+{
+  "command": [
+    "<repository>/target/test-fast/refal",
+    "drive",
+    "<repository>/docs/audits/2026-11-04/termination-counterexample.ref",
+    "--steps",
+    "12"
+  ],
+  "exit_code": 1,
+  "elapsed_seconds": 0.006,
+  "stdout": "",
+  "stderr": "drive error: drive step limit 12 exceeded\n"
+}

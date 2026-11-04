@@ -1,0 +1,11 @@
+{
+  "command": [
+    "<repository>/target/test-fast/refal",
+    "reflect",
+    "examples/identity.ref"
+  ],
+  "exit_code": 0,
+  "elapsed_seconds": 0.005,
+  "stdout": "reflection\n  entry: e.Input\n  steps: 1\n  complete: yes\n  configurations: 1\n  C0 Go [e.Input] -> (none)\n",
+  "stderr": ""
+}

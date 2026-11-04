@@ -1,0 +1,175 @@
+   Compiling refal-ast v0.10.0 (<repository>/crates/refal-ast)
+   Compiling xtask v0.10.0 (<repository>/crates/xtask)
+   Compiling refal-syntax v0.10.0 (<repository>/crates/refal-syntax)
+   Compiling refal-runtime v0.10.0 (<repository>/crates/refal-runtime)
+   Compiling refal-core v0.10.0 (<repository>/crates/refal-core)
+   Compiling refal-semantics v0.10.0 (<repository>/crates/refal-semantics)
+   Compiling refal v0.10.0 (<repository>/crates/refal-cli)
+    Finished `test-fast` profile [optimized] target(s) in 1m 55s
+     Running unittests src/main.rs (target/test-fast/deps/refal-e3a69d44969c7c3f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/check_examples.rs (target/test-fast/deps/check_examples-33564d547084b662)
+
+running 185 tests
+test a_cleaned_residue_still_checks_and_runs_like_the_source ... ok
+test a_deny_flag_promotes_an_opt_in_lint_to_a_failure ... ok
+test a_narrow_entry_is_not_split ... ok
+test a_neighborhood_is_reported_for_each_configuration ... ok
+test a_non_tail_recursion_folds_whether_or_not_the_bracket_case_is_named ... ok
+test a_proven_infeasible_sentence_fails_the_command ... ok
+test a_reflection_walk_cut_off_by_its_budget_says_so ... ok
+test a_repeated_variable_matches_by_value_not_by_source_position ... ok
+test a_residue_keeps_every_definition_when_it_still_dispatches_dynamically ... ok
+test a_residue_retains_the_user_functions_it_still_calls ... ok
+test a_run_time_dispatch_stops_cleaning_and_says_so ... ok
+test a_synthesised_inverse_round_trips_through_the_forward_function ... ok
+test accepts_juxtaposed_one_character_variables ... ok
+test accepts_positive_examples ... ok
+test accepts_realfun_and_the_macrodigit_operand_convention ... ok
+test accepts_several_exported_entry_functions ... ok
+test an_explicit_allow_flag_suppresses_a_lint ... ok
+test an_interpretive_residue_still_checks_and_runs_like_the_source ... ok
+test an_open_bracket_is_never_refuted_by_a_narrow_one ... ok
+test an_s_variable_is_never_refuted_by_a_literal_kind ... ok
+test an_unknown_predicate_is_a_usage_error_not_a_verdict ... ok
+test bootstrap_stages_lexer_then_core_emitter_for_supported_subset ... ok
+test bracket_contents_are_refuted_but_the_language_is_unchanged ... ok
+test classic_mode_reports_lints_without_failing_the_build ... ok
+test cleaning_never_leaves_a_function_without_sentences ... ok
+test cleaning_removes_a_sentence_no_call_site_can_select ... ok
+test compares_original_and_lowered_runtime_outputs_across_the_supported_corpus ... ok
+test compile_command_compiles_the_compiler_itself ... ok
+test compile_command_uses_the_refal_authored_compiler ... ok
+test compile_is_a_fixpoint_on_every_accepted_example ... ok
+test compiled_programs_are_deployable_and_output_equivalent_across_the_corpus ... ok
+test compiler_ref_reaches_a_self_hosting_fixpoint ... ok
+test does_not_whistle_on_distinct_inputs_at_one_source_state ... ok
+test drives_a_symbolic_identity_to_a_residual_expression_variable ... ok
+test drives_an_interpreter_into_the_program_it_was_interpreting ... ok
+test drives_recursive_ground_program_to_reversed_output ... ok
+test drives_through_a_macrodigit_constant_in_a_metacoded_program ... ok
+test driving_a_closed_entry_collapses_a_recursive_program ... ok
+test driving_a_residue_is_a_fixpoint ... ok
+test driving_applies_a_block_in_condition_position_instead_of_matching_it ... ok
+test driving_never_folds_a_side_effecting_builtin_away ... ok
+test driving_splits_a_wholly_unknown_argument_into_decidable_cases ... ok
+test embeds_a_quote_by_doubling_it ... ok
+test emits_a_checked_reachable_core_refal_graph ... ok
+test emits_an_explicit_generalized_residual_graph ... ok
+test emits_driven_recursive_residual_with_whistle_evidence ... ok
+test emits_valid_refal_for_a_symbolic_identity_residual ... ok
+test every_builtin_clause_has_a_traceable_fixture ... ok
+test every_certificate_on_the_corpus_re_checks ... ok
+test every_reference_clause_has_a_traceable_fixture ... ok
+test every_shape_an_expression_can_have_lands_in_exactly_one_branch ... ok
+test executes_a_block_in_condition_position_end_to_end ... ok
+test executes_refal_authored_body_compiler_subset_end_to_end ... ok
+test executes_refal_authored_body_compiler_with_compact_definitions_end_to_end ... ok
+test executes_refal_authored_body_compiler_with_condition_end_to_end ... ok
+test executes_refal_authored_body_compiler_with_definition_separator_end_to_end ... ok
+test executes_refal_authored_body_compiler_with_exported_definition_end_to_end ... ok
+test executes_refal_authored_body_compiler_with_external_declaration_aliases_end_to_end ... ok
+test executes_refal_authored_body_compiler_with_external_declaration_end_to_end ... ok
+test executes_refal_authored_body_compiler_with_nested_block_end_to_end ... ok
+test executes_refal_authored_call_compiler_subset_end_to_end ... ok
+test executes_refal_authored_call_literal_compiler_subset_end_to_end ... ok
+test executes_refal_authored_checker_end_to_end ... ok
+test executes_refal_authored_checker_subset_end_to_end ... ok
+test executes_refal_authored_compiler_subset_end_to_end ... ok
+test executes_refal_authored_core_emitter_subset_end_to_end ... ok
+test executes_refal_authored_general_compiler_subset_end_to_end ... ok
+test executes_refal_authored_lexer_end_to_end ... ok
+test executes_refal_authored_lexer_subset_end_to_end ... ok
+test executes_refal_authored_literal_compiler_subset_end_to_end ... ok
+test executes_refal_authored_parser_end_to_end ... ok
+test executes_refal_authored_parser_subset_end_to_end ... ok
+test executes_refal_authored_sentence_body_compiler_subset_end_to_end ... ok
+test executes_refal_authored_two_literal_compiler_subset_end_to_end ... ok
+test exposes_explicit_symbolic_configurations_and_transitions ... ok
+test feasibility_proves_what_it_can_and_names_what_it_cannot ... ok
+test folds_identifier_case_for_data_as_well_as_function_names ... ok
+test folds_variable_index_case ... ok
+test formats_reaches_a_fixpoint_on_mutual_recursion ... ok
+test formats_reports_argument_and_result_shapes ... ok
+test freezes_and_inspects_the_entry_configuration_as_data ... ok
+test lowered_output_round_trips_through_the_checker ... ok
+test lowers_checked_source_to_normalized_core_refal ... ok
+test no_lint_flag_can_silence_a_spec_violation ... ok
+test partitions_an_ambiguous_symbolic_call_instead_of_leaving_it_whole ... ok
+test prints_a_deterministic_seed_graph ... ok
+test prints_deterministic_tier_one_graph_analysis ... ok
+test prints_help_without_requiring_input_file ... ok
+test proves_byte_identical_lowering_across_the_valid_corpus ... ok
+test real_arithmetic_errors_are_named_and_never_silent ... ok
+test refal_authored_checker_accepts_valid_examples ... ok
+test refal_authored_checker_rejects_negative_fixtures ... ok
+test refal_authored_compiler_handles_blocks ... ok
+test refal_authored_compiler_handles_shorthand_block_comments_and_reals ... ok
+test refal_authored_core_emitter_matches_rust_lower_for_supported_subset ... ok
+test refal_authored_driver_matches_refal_drive ... ok
+test refal_authored_emitter_matches_lower_across_the_whole_corpus ... ok
+test refal_authored_emitter_matches_lower_on_edge_cases ... ok
+test refal_authored_emitter_matches_rust_lower_byte_for_byte ... ok
+test refal_authored_interpretive_drive_matches_the_rust_oracle ... ok
+test refal_authored_lexer_lexes_its_own_source ... ok
+test refal_authored_parser_parses_the_refal_lexer ... ok
+test refal_authored_residualization_matches_residualize_graph ... ok
+test refal_authored_residualize_driven_matches_the_rust_oracle ... ok
+test refal_authored_seed_graph_matches_the_rust_oracle ... ok
+test refal_authored_symbolic_driver_matches_refal_drive_symbolic ... ok
+test refal_authored_token_parser_matches_rust_lower_for_supported_subset ... ok
+test refal_authored_transformer_matches_a_rust_reference ... ok
+test reflection_names_the_entry_of_a_program_that_records_no_configuration ... ok
+test refuses_to_claim_a_transition_the_residue_did_not_earn ... ok
+test refutes_a_call_whose_literal_is_of_the_wrong_kind ... ok
+test rejects_a_character_string_spanning_a_line_break ... ok
+test rejects_a_signed_macrodigit ... ok
+test rejects_an_unknown_lint_name ... ok
+test rejects_negative_examples ... ok
+test rejects_the_traceable_negative_and_non_runnable_corpus ... ok
+test reports_a_program_without_a_go_entry_point ... ok
+test reports_declared_but_unimplemented_external_during_check ... ok
+test reports_line_and_column_for_condition_unbound_variable ... ok
+test reports_line_and_column_for_duplicate_extern_error ... ok
+test reports_line_and_column_for_duplicate_function_error ... ok
+test reports_line_and_column_for_empty_function_error ... ok
+test reports_line_and_column_for_lex_error ... ok
+test reports_line_and_column_for_malformed_real_number ... ok
+test reports_line_and_column_for_pattern_call_error ... ok
+test reports_line_and_column_for_semantic_error ... ok
+test reports_line_and_column_for_variable_kind_conflict ... ok
+test reports_pattern_overlap_for_recursive_fixture ... ok
+test reports_runtime_error_for_invalid_builtin_arguments ... ok
+test reports_time_as_a_numeric_macrodigit ... ok
+test reports_traceable_parser_diagnostics_for_malformed_grammar ... ok
+test reports_usage_for_missing_input_file ... ok
+test requires_the_go_entry_point_to_be_exported ... ok
+test residual_agrees_with_the_interpreter_on_every_input_tried ... ok
+test residualization_is_total_when_the_budget_runs_out ... ok
+test runs_program_and_prints_prout_output ... ok
+test runs_program_with_command_line_input_and_prints_result ... ok
+test runs_real_number_arithmetic_end_to_end ... ok
+test runs_realfun_macrodigit_arithmetic_and_dgall_order_end_to_end ... ok
+test runs_runtime_conformance_examples ... ok
+test strict_mode_fails_on_statically_proven_defects ... ok
+test strict_mode_has_no_false_positives_on_the_corpus ... ok
+test strict_mode_reports_open_expression_complexity_without_failing ... ok
+test supercompiles_a_differing_recursive_input_without_a_whistle ... ok
+test supercompiles_recursive_symbolic_program_with_a_whistle ... ok
+test the_call_profile_says_where_the_calls_went_without_changing_the_output ... ok
+test the_certificate_re_checks_itself ... ok
+test the_compiled_path_is_not_the_lowered_path ... ok
+test the_corpus_gate_exercises_the_cleaning_pass ... ok
+test the_driven_compiler_is_a_fixpoint_of_the_driver ... ok
+test the_driven_compiler_resolves_a_block_at_compile_time ... ok
+test the_driven_residue_on_a_bracket_pattern_callee_is_bounded ... ok
+test the_generator_emits_target_code_that_runs ... ok
+test the_inverter_synthesises_an_inverse_whose_patterns_are_the_forward_outputs ... ok
+test the_partition_emits_the_complement_branch_and_the_callee_disappears ... ok
+test the_partition_search_is_ported_to_the_refal_authored_driver ... ok
+test the_pattern_partition_folds_a_nested_accumulator ... ok
+test the_pattern_partition_is_ported_to_the_refal_authored_driver ...

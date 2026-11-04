@@ -1,0 +1,5 @@
+{
+  "exit_code": 0,
+  "stdout": "invert: Encode\n  steps: 5\n  complete: yes\n  configurations: 2\n  output shapes: 0\n  inverse function: Encode-Inverse\n  verdict: synthesised\n--- inverse program ---\n$EXTERN Prout;\n\n$ENTRY Encode-Inverse {\n  'N' 'i' 'l' =;\n  'C' 'o' 'n' 's' s.A s.A e.Rest = s.A s.A <Encode-Inverse e.Rest>;\n}\n",
+  "stderr": ""
+}

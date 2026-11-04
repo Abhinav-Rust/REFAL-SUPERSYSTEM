@@ -1,0 +1,62 @@
+[
+  {
+    "local_collection_path": "VT- CS+PW/philosophy_and_cybernetics/1977_The_Phenomenon_of_Science_A_Cybernetic_Approach_to_Human_Evolution.html",
+    "sha256": "2a8aefab438bfa778b2a6fb4fee7c43a9590527ca4a4f261e37f87cf4d80c360",
+    "edition_status": "Unverified local HTML exposition; not authenticated as a primary text",
+    "observed_headings": [
+      "The Phenomenon of Science: A Cybernetic Approach to Human Evolution",
+      "Table of Contents",
+      "Preface to the English Edition",
+      "Introduction: Cybernetics and the Evolutionary Approach",
+      "Chapter 1: From Molecule to Man",
+      "Chapter 2: Primary Mechanisms of Movement",
+      "Chapter 3: Irritability",
+      "Chapter 4: The Simple Reflex",
+      "Chapter 5: The Complex Reflex",
+      "Chapter 6: Learning",
+      "Chapter 7: The Pictorial World Picture",
+      "Chapter 8: Human Thinking",
+      "Chapter 9: The Thinking Machine",
+      "Chapter 10: The World of Knowledge",
+      "Chapter 11: The Metasystem Transition",
+      "Chapter 12: Science as a Metasystem",
+      "Chapter 13: The Integration of Higher Systems",
+      "Chapter 14: Conclusion: The Meaning of Evolution"
+    ]
+  },
+  {
+    "local_collection_path": "VT- CS+PW/computer_science/1996_A_Self-Applicable_Supercompiler_Dagstuhl.html",
+    "sha256": "e4a655f30cabd2e147a28ca6b84eef5690968df905b7cae0d60d83f36790816b",
+    "edition_status": "Unverified local HTML exposition; not authenticated as a primary text",
+    "observed_headings": [
+      "A Self-Applicable Supercompiler",
+      "Dagstuhl Seminar on Partial Evaluation (Springer LNCS 1110)",
+      "Abstract",
+      "1. The Dagstuhl Milestone",
+      "2. Why Self-Application Failed in Early Supercompilers",
+      "3. Key Innovations Enabling Successful Self-Application",
+      "1. Separation of Data and Control (Binding-Time Stratification)",
+      "2. Bounded Homeomorphic Whistles",
+      "3. Two-Stage Folding",
+      "4. Empirical Results: Futamura's 2nd Projection",
+      "5. Conclusions & Impact",
+      "References"
+    ]
+  },
+  {
+    "local_collection_path": "VT- CS+PW/computer_science/1991_A_Supersystem_of_Language_Refal.html",
+    "sha256": "0c0acbfa176b40b4d3869ea82731a372af40c48fa5f776a9bf1aacfa0776450a",
+    "edition_status": "Unverified local HTML exposition; not authenticated as a primary text",
+    "observed_headings": [
+      "A Supersystem of Language Refal",
+      "CCNY Computer Science Technical Report",
+      "Abstract",
+      "1. The Vision of a Unified Metasystem Environment",
+      "2. System Components and Layered Architecture",
+      "3. The Protocol of Interaction: Freezers and Thawing",
+      "4. Toward Self-Application and Automated Bootstrapping",
+      "5. Historical Legacy",
+      "References"
+    ]
+  }
+]

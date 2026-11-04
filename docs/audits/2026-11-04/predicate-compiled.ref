@@ -1,0 +1,5 @@
+$EXTERN Prout;
+
+$ENTRY Go {
+  e.Input = <Prout 'F' 'a' 'l' 's' 'e'>;
+}

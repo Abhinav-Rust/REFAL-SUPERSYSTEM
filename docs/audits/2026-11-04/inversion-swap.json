@@ -1,0 +1,13 @@
+{
+  "command": [
+    "<repository>/target/test-fast/refal",
+    "invert",
+    "<repository>/docs/audits/2026-11-04/inversion-counterexample.ref",
+    "SwapPairs",
+    "--strategy",
+    "interpretive"
+  ],
+  "exit_code": 0,
+  "stdout": "invert: SwapPairs\n  steps: 49\n  complete: yes\n  configurations: 1\n  output shapes: 0\n  inverse function: SwapPai-Inverse\n  verdict: synthesised\n--- inverse program ---\n$EXTERN Prout;\n\n$ENTRY SwapPai-Inverse {\n  'N' 'i' 'l' =;\n}\n",
+  "stderr": ""
+}

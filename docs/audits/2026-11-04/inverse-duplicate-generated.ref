@@ -1,0 +1,6 @@
+$EXTERN Prout;
+
+$ENTRY Encode-Inverse {
+  'N' 'i' 'l' =;
+  'C' 'o' 'n' 's' s.A s.A e.Rest = s.A s.A <Encode-Inverse e.Rest>;
+}

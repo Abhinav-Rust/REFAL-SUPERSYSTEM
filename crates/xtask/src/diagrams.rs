@@ -15,6 +15,8 @@
 
 use std::path::PathBuf;
 
+mod current;
+
 pub const FONT: &str = "ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif";
 pub const MONO: &str =
     "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace";
@@ -2203,5 +2205,9 @@ pub fn run() {
             }
             println!("wrote docs/images/{name}-{theme}.svg");
         }
+    }
+    if let Err(err) = current::write(&outdir) {
+        eprintln!("cannot generate current README diagrams: {err}");
+        std::process::exit(1);
     }
 }

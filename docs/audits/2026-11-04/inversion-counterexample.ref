@@ -1,0 +1,7 @@
+* This bijection swaps two symbols inside each input pair.
+$EXTERN Prout;
+$ENTRY Go { (e.Input) = <Prout <SwapPairs e.Input>>; }
+SwapPairs {
+  = 'Nil';
+  (s.A s.B) e.Rest = 'Cons' s.B s.A <SwapPairs e.Rest>;
+}

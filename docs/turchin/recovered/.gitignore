@@ -1,0 +1,7 @@
+# Downloaded third-party publications and extracted text are a local cache.
+# Version the catalog, provenance, and downloader.
+/*.pdf
+/*.html
+/*.tex
+/text/
+/__pycache__/

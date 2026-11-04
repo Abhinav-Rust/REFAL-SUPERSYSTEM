@@ -1,0 +1,8 @@
+    Checking refal-ast v0.10.0 (<repository>/crates/refal-ast)
+    Checking xtask v0.10.0 (<repository>/crates/xtask)
+    Checking refal-syntax v0.10.0 (<repository>/crates/refal-syntax)
+    Checking refal-semantics v0.10.0 (<repository>/crates/refal-semantics)
+    Checking refal-runtime v0.10.0 (<repository>/crates/refal-runtime)
+    Checking refal-core v0.10.0 (<repository>/crates/refal-core)
+    Checking refal v0.10.0 (<repository>/crates/refal-cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 23.06s

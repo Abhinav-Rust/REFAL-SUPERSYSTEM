@@ -9,7 +9,7 @@
 - [ ] `cargo fmt --check` is clean
 - [ ] `cargo clippy --all-targets -- -D warnings` is clean
 - [ ] The test that demonstrates the change is added or updated
-- [ ] `README.md` and `docs/PROGRESS.md` are updated if a claim or the completion figure moved
+- [ ] `README.md`, its diagrams, and `docs/PROGRESS.md` reflect any changed capability, evidence, or remaining work
 
 ## Notes for the reviewer
 

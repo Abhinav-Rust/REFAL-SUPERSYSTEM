@@ -1,0 +1,15 @@
+* An injective encoder: each input symbol is written twice after a tag.
+$EXTERN Prout;
+$ENTRY Original-Go { (e.Input) = <Prout <Encode e.Input>>; }
+Encode {
+  = 'Nil';
+  s.A e.Rest = 'Cons' s.A s.A <Encode e.Rest>;
+}
+
+
+Encode-Inverse {
+  'N' 'i' 'l' =;
+  'C' 'o' 'n' 's' s.A s.A e.Rest = s.A s.A <Encode-Inverse e.Rest>;
+}
+
+$ENTRY Go { = <Prout <Encode-Inverse <Encode 'ab'>>>; }

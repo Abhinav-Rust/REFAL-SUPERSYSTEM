@@ -1,0 +1,185 @@
+[
+  {
+    "file": "1977_The_Phenomenon_of_Science.pdf",
+    "title": "The Phenomenon of Science: A Cybernetic Approach to Human Evolution",
+    "authors": [
+      "Valentin F. Turchin"
+    ],
+    "url": "https://pespmc1.vub.ac.be/POS/TurPOS.pdf",
+    "kind": "pdf",
+    "retrieved_utc": "2026-11-04T10:34:48.219849+00:00",
+    "resolved_url": "https://pespmc1.vub.ac.be/POS/TurPOS.pdf",
+    "http_status": 200,
+    "content_type": "application/pdf",
+    "bytes": 1349108,
+    "sha256": "c7176dc2708b731549459fb79540af75ddbe95a0077a8714808306c536306e17",
+    "pages": 261,
+    "publication_year": 1977,
+    "language": "en",
+    "edition_note": "Electronic edition hosted by Principia Cybernetica; PDF page numbers are not assumed to match a print edition.",
+    "text_extraction": "pdftotext -layout; may contain extraction errors"
+  },
+  {
+    "file": "1989_The_Cybernetic_Manifesto.html",
+    "title": "The Cybernetic Manifesto",
+    "authors": [
+      "Valentin Turchin",
+      "Cliff Joslyn"
+    ],
+    "url": "https://pespmc1.vub.ac.be/MANIFESTO.html",
+    "kind": "html",
+    "retrieved_utc": "2026-11-04T10:34:45.022367+00:00",
+    "resolved_url": "https://pespmc1.vub.ac.be/MANIFESTO.html",
+    "http_status": 200,
+    "content_type": "text/html",
+    "bytes": 20419,
+    "sha256": "decad953c66506ac9c0bbd2dda8fcbb2f70fda12d8252e49bc2f598decc466fb",
+    "publication_year": 1989,
+    "language": "en",
+    "edition_note": "Author/coauthor page dated October 1989; the downloaded HTML also contains site navigation and later reader comments."
+  },
+  {
+    "file": "1996_Metacomputation_Metasystem_Transitions_plus_Supercompilation.pdf",
+    "title": "Metacomputation: Metasystem Transitions plus Supercompilation",
+    "authors": [
+      "Valentin F. Turchin"
+    ],
+    "url": "http://refal.botik.ru/library/Turchin-Metacomputation_Metasystem_transitions_plus_supercompilation_(LNCS_vol_1110,_1996,_pp_481-509).pdf",
+    "kind": "pdf",
+    "retrieved_utc": "2026-11-04T10:34:45.804608+00:00",
+    "resolved_url": "http://refal.botik.ru/library/Turchin-Metacomputation_Metasystem_transitions_plus_supercompilation_(LNCS_vol_1110,_1996,_pp_481-509).pdf",
+    "http_status": 200,
+    "content_type": "application/pdf",
+    "bytes": 468275,
+    "sha256": "ef7c50bc84adb19afbbc574f1d9a8ec65961c3a62332142790608f995c6d3f9d",
+    "pages": 34,
+    "publication_year": 1996,
+    "language": "en",
+    "edition_note": "Full paper from the Refal Botik research library; PDF pagination differs from the LNCS volume pagination.",
+    "text_extraction": "pdftotext -layout; may contain extraction errors"
+  },
+  {
+    "file": "1996_A_Self_Applicable_Supercompiler.pdf",
+    "title": "A Self-Applicable Supercompiler",
+    "authors": [
+      "Andrei P. Nemytykh",
+      "Victoria A. Pinchuk",
+      "Valentin F. Turchin"
+    ],
+    "url": "http://refal.botik.ru/library/Nemytykh-Pinchuk-Turchin_A_Self-Applicable_Supercompiler_(LNCS_vol_1110,_1996,_pp_322-337).pdf",
+    "kind": "pdf",
+    "retrieved_utc": "2026-11-04T10:34:46.588395+00:00",
+    "resolved_url": "http://refal.botik.ru/library/Nemytykh-Pinchuk-Turchin_A_Self-Applicable_Supercompiler_(LNCS_vol_1110,_1996,_pp_322-337).pdf",
+    "http_status": 200,
+    "content_type": "application/pdf",
+    "bytes": 213778,
+    "sha256": "833486832c3d88e960e59aba8685499586b594b3866da01c51f126538e9d3126",
+    "pages": 20,
+    "publication_year": 1996,
+    "language": "en",
+    "edition_note": "Full coauthored paper from the Refal Botik research library; PDF pagination differs from the LNCS volume pagination.",
+    "text_extraction": "pdftotext -layout; may contain extraction errors"
+  },
+  {
+    "file": "1995_Metavariables_Their_Implementation_and_Use_in_Program_Transformation.pdf",
+    "title": "Metavariables: Their Implementation and Use in Program Transformation",
+    "authors": [
+      "Valentin F. Turchin",
+      "Andrei P. Nemytykh"
+    ],
+    "url": "http://refal.botik.ru/library/Turchin-Nemytykh-Metavariables_their_Implementation_and_Use_in_Program_Transformation_(City%20College%20of%20the%20City%20University%20of%20New%20York__N_TR%2095-012__1995).pdf",
+    "kind": "pdf",
+    "retrieved_utc": "2026-11-04T10:34:48.043411+00:00",
+    "resolved_url": "http://refal.botik.ru/library/Turchin-Nemytykh-Metavariables_their_Implementation_and_Use_in_Program_Transformation_(City%20College%20of%20the%20City%20University%20of%20New%20York__N_TR%2095-012__1995).pdf",
+    "http_status": 200,
+    "content_type": "application/pdf",
+    "bytes": 2574567,
+    "sha256": "ce2ffe21a3d04652f5e16bd97c53c6adb37a31b8184c38505d316893f241b907",
+    "pages": 34,
+    "publication_year": 1995,
+    "language": "en",
+    "edition_note": "Image scan of CCNY technical report TR 95-012. Title and both authors checked visually on PDF page 1; pdftotext yields no searchable body text.",
+    "text_extraction": "unavailable: image scan; no OCR performed"
+  },
+  {
+    "file": "1993_Introduction_to_Principia_Cybernetica.html",
+    "title": "Introduction to Principia Cybernetica (created 1993, revised 2003)",
+    "authors": [
+      "Francis Heylighen",
+      "Cliff Joslyn",
+      "Valentin Turchin"
+    ],
+    "url": "https://pespmc1.vub.ac.be/INTRO.html",
+    "kind": "html",
+    "retrieved_utc": "2026-11-04T10:41:34.766406+00:00",
+    "resolved_url": "https://pespmc1.vub.ac.be/INTRO.html",
+    "http_status": 200,
+    "content_type": "text/html",
+    "bytes": 9795,
+    "sha256": "82b6b95c8d75bcb067a00f661275645ee1c31d354bf8b7176c550b1a2157bf98",
+    "created_date": "1993-08-01",
+    "revised_date": "2003-01-09",
+    "language": "en",
+    "edition_note": "Official coauthored Principia Cybernetica introduction; distinguishes the initial creation date from this revised edition."
+  },
+  {
+    "file": "1999_A_Dialogue_on_Metasystem_Transition.pdf",
+    "title": "A Dialogue on Metasystem Transition",
+    "authors": [
+      "Valentin F. Turchin"
+    ],
+    "url": "https://pespmc1.vub.ac.be/Papers/Turchin/dialog.pdf",
+    "kind": "pdf",
+    "retrieved_utc": "2026-11-04T10:41:36.223415+00:00",
+    "resolved_url": "https://pespmc1.vub.ac.be/Papers/Turchin/dialog.pdf",
+    "http_status": 200,
+    "content_type": "application/pdf",
+    "bytes": 343572,
+    "sha256": "e1654e0ab6ab84bb59b1ae193c55458959da1974d4cc004330041e4b78da1b96",
+    "pages": 69,
+    "original_publication_year": 1995,
+    "version_date": "1999-07-12",
+    "language": "en",
+    "edition_note": "The PCP introduction references the dialogue as 1995, but this downloaded PDF's title page is dated July 12, 1999; its filename follows the downloaded version.",
+    "text_extraction": "pdftotext -layout; may contain extraction errors"
+  },
+  {
+    "file": "1993_On_Cybernetic_Epistemology_Russian_translation.pdf",
+    "title": "On Cybernetic Epistemology",
+    "authors": [
+      "Valentin F. Turchin"
+    ],
+    "url": "http://refal.net/origins/epystmlg/epystmlg.pdf",
+    "kind": "pdf",
+    "retrieved_utc": "2026-11-04T10:41:35.212501+00:00",
+    "resolved_url": "http://refal.net/origins/epystmlg/epystmlg.pdf",
+    "http_status": 200,
+    "content_type": "application/pdf",
+    "bytes": 332268,
+    "sha256": "5ef1d62e9b41d523185a32343a3a149d073c56fb604bcbab4389e81d7c9d781e",
+    "pages": 24,
+    "original_publication_year": 1993,
+    "language": "ru",
+    "translator": "Mikhail Burtsev",
+    "edition_note": "Russian translation, not the original English article. Page 1 credits the translator and cites Systems Research 10(1), 1993, pp. 3-28. Translation date not established.",
+    "text_extraction": "pdftotext -layout; may contain extraction errors"
+  },
+  {
+    "file": "1993_On_Cybernetic_Epistemology_English.tex",
+    "title": "On Cybernetic Epistemology",
+    "authors": [
+      "Valentin F. Turchin"
+    ],
+    "url": "https://pespmc1.vub.ac.be/Papers/Turchin/Cybernetic_Epistemology.tex",
+    "kind": "tex",
+    "publication_year": 1993,
+    "language": "en",
+    "edition_note": "Original English TeX source hosted by Principia Cybernetica. Header cites Systems Research 10(1), 1993, pp. 3-28. The author biography links the same filename via the former FTP archive. Stored as text without executing TeX.",
+    "retrieved_utc": "2026-11-04T10:50:27.165636+00:00",
+    "resolved_url": "https://pespmc1.vub.ac.be/Papers/Turchin/Cybernetic_Epistemology.tex",
+    "http_status": 200,
+    "content_type": "text/x-tex",
+    "bytes": 82852,
+    "sha256": "af5e0d56384269c14da99f471311025ce64f2a8cea8235d2897aeb149d9de1cf"
+  }
+]

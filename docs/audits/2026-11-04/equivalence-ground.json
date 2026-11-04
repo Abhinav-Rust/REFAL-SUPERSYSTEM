@@ -1,0 +1,12 @@
+{
+  "command": [
+    "<repository>/target/test-fast/refal",
+    "run",
+    "<repository>/docs/audits/2026-11-04/equivalence-counterexample.ref",
+    "a",
+    "b"
+  ],
+  "exit_code": 0,
+  "stdout": "a\nb\n",
+  "stderr": ""
+}

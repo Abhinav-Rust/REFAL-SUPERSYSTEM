@@ -1,0 +1,9 @@
+{
+  "command": "cargo test --profile test-fast --all -j 2 -- --test-threads=1",
+  "exit_code": -15,
+  "elapsed_seconds": 4250.59,
+  "status": "interrupted",
+  "reason": "The long baseline run was stopped to publish the completed audit and README with focused validation. The exact audited revision already has a passing GitHub CI run.",
+  "completed_tests_observed": 157,
+  "log": "cargo-test-output.txt"
+}

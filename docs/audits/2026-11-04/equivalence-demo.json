@@ -1,0 +1,13 @@
+{
+  "command": [
+    "<repository>/target/test-fast/refal",
+    "prove",
+    "examples/equiv-append-assoc.ref",
+    "--equiv",
+    "Assoc-Left",
+    "Assoc-Right"
+  ],
+  "exit_code": 0,
+  "stdout": "equivalence: Assoc-Left = Assoc-Right\n  steps: 34\n  complete: yes\n  leaves: 3\n    reflexive (depth 1)\n    folded (depth 1, ancestor 0)\n    folded (depth 1, ancestor 0)\n  verdict: proved\n",
+  "stderr": ""
+}

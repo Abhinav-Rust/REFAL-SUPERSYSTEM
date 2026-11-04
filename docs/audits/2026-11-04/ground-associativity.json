@@ -1,0 +1,13 @@
+{
+  "command": [
+    "<repository>/target/test-fast/refal",
+    "run",
+    "examples/prove-append-reach.ref",
+    "a",
+    "b",
+    "c"
+  ],
+  "exit_code": 0,
+  "stdout": "True\n",
+  "stderr": ""
+}

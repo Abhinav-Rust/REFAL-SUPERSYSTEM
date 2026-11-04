@@ -1,0 +1,6 @@
+# Download/cache artifacts and local build outputs are reproducible inputs.
+/online/
+/_work/
+/__pycache__/
+/regression_tests
+/*.log

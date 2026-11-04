@@ -1,0 +1,4 @@
+{
+  "exit_code": 101,
+  "expected_result": "Five assertions of required correctness fail on the audited commit."
+}

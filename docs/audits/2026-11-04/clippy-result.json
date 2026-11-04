@@ -1,0 +1,18 @@
+{
+  "command": [
+    "cargo",
+    "clippy",
+    "--all-targets",
+    "-j",
+    "2",
+    "--target-dir",
+    "<temporary-target>",
+    "--",
+    "-D",
+    "warnings"
+  ],
+  "exit_code": 0,
+  "elapsed_seconds": 23.211,
+  "log": "clippy-output.txt",
+  "scope": "Audit publication, including the updated diagram generator and README consistency tests"
+}

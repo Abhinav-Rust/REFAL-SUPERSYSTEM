@@ -1,5 +1,8 @@
 # Implementation Plan — A Refal-5 Compiler Built to Turchin's Design
 
+> [!IMPORTANT]
+> **Current audit — 2026-11-04:** The completion percentages and closed milestones below record an earlier assessment and are under review. The [current assessment](audits/2026-11-04/ASSESSMENT.md) reproduces correctness failures in compilation, proofs, termination certification, and inversion. The full project scope now includes the collaborative knowledge network. Historical source claims also require reconciliation with the [verified source catalog](turchin/recovered/README.md). Use the [main README](../README.md) for current capability status.
+
 **Status: APPROVED 2026-08-05 — Phase 0 in progress**
 Maintainer: Abhinav Sharma
 

@@ -1,0 +1,17 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--profile",
+    "test-fast",
+    "-p",
+    "refal",
+    "--test",
+    "readme_consistency",
+    "--",
+    "--test-threads=1"
+  ],
+  "exit_code": 0,
+  "elapsed_seconds": 1.733,
+  "log": "readme-check-output.txt"
+}

@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 480" width="1200" height="480" role="img" aria-labelledby="t d">
+  <title id="t">REFAL SUPER SYSTEM</title>
+  <desc id="d">Active development of a computational prototype and a wider knowledge ecosystem. The Refal engine exists with correctness work open. The shared knowledge network is planned.</desc>
+  <rect x="0.5" y="0.5" width="1199" height="479" rx="24" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1"/>
+  <circle cx="980" cy="246" r="225" fill="#F0FDFA"/>
+  <text x="56" y="76" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" letter-spacing="1.8" fill="#0F766E">COMPUTATION + CONNECTED KNOWLEDGE</text>
+  <text x="52" y="167" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="86" font-weight="800" letter-spacing="-3" fill="#1F2328">REFAL</text>
+  <text x="57" y="225" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="50" font-weight="600" letter-spacing="-1.2" fill="#1F2328">SUPER SYSTEM</text>
+  <text x="58" y="282" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="23" fill="#1F2328">Programs that can transform programs.</text>
+  <text x="58" y="317" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="20" fill="#57606A">An ecosystem for knowledge, models, and evidence.</text>
+  <rect x="58" y="370" width="254" height="43" rx="21" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1"/>
+  <circle cx="78" cy="391" r="4.5" fill="#0F766E"/>
+  <text x="93" y="397" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" letter-spacing="0.5" fill="#0F766E">ACTIVE DEVELOPMENT</text>
+  <text x="337" y="397" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="18" fill="#57606A">Research implementation</text>
+  <text x="58" y="445" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="17" fill="#57606A">Correctness repairs and a wider ecosystem ahead.</text>
+<g>  <line x1="875" y1="129" x2="923.6936278660418" y2="178.5789665545152" stroke="#0D9488" stroke-width="2"/><path d="M 930 185 L 920.839835223604 181.38179861405223 L 926.5474205084795 175.77613449497818 Z" fill="#0D9488"/></g>
+<g>  <line x1="1080" y1="129" x2="1054.2499927126387" y2="177.06668026974097" stroke="#0D9488" stroke-width="2"/><path d="M 1050 185 L 1050.7240728325235 175.1777946196793 L 1057.775912592754 178.95556591980264 Z" fill="#0D9488"/></g>
+<g>  <line x1="930" y1="320" x2="881.363961030679" y2="368.6360389693211" stroke="#0D9488" stroke-width="2"/><path d="M 875 375 L 878.5355339059328 365.80761184457486 L 884.1923881554252 371.4644660940673 Z" fill="#0D9488"/></g>
+<g>  <line x1="1050" y1="320" x2="1080.1681205702616" y2="367.40704661041104" stroke="#0D9488" stroke-width="2"/><path d="M 1085 375 L 1076.7934746193332 369.5545485791837 L 1083.54276652119 365.2595446416384 Z" fill="#0D9488"/></g>
+  <rect x="790" y="67" width="170" height="62" rx="14" fill="#FFFFFF" stroke="#99F6E4" stroke-width="1.5"/>
+  <text x="875" y="105" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="17" font-weight="600" text-anchor="middle" fill="#1F2328">PROGRAMS</text>
+  <rect x="1000" y="67" width="160" height="62" rx="14" fill="#FFFFFF" stroke="#99F6E4" stroke-width="1.5"/>
+  <text x="1080" y="105" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="17" font-weight="600" text-anchor="middle" fill="#1F2328">MODELS</text>
+  <rect x="825" y="185" width="310" height="135" rx="18" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1.5"/>
+  <text x="980" y="232" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="26" font-weight="700" text-anchor="middle" fill="#1F2328">REFAL ENGINE</text>
+  <text x="980" y="266" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="18" text-anchor="middle" fill="#1F2328">inspect · transform · execute</text>
+  <text x="980" y="297" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" text-anchor="middle" fill="#B45309">correctness work open</text>
+  <rect x="790" y="375" width="175" height="60" rx="14" fill="#F6F8FA" stroke="#D0D7DE" stroke-width="1"/>
+  <text x="877.5" y="401" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="17" font-weight="600" text-anchor="middle" fill="#1F2328">KNOWLEDGE</text>
+  <text x="877.5" y="422" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" text-anchor="middle" fill="#57606A">NETWORK PLANNED</text>
+  <rect x="1010" y="375" width="150" height="60" rx="14" fill="#F6F8FA" stroke="#D0D7DE" stroke-width="1"/>
+  <text x="1085" y="401" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="17" font-weight="600" text-anchor="middle" fill="#1F2328">PEOPLE</text>
+  <text x="1085" y="422" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" text-anchor="middle" fill="#57606A">NETWORK PLANNED</text>
+</svg>

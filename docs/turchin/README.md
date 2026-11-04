@@ -1,5 +1,8 @@
 # Turchin Primary Sources
 
+> [!IMPORTANT]
+> **Source reconciliation — 2026-11-04:** The inventory and completeness claims below are historical; this audit has not independently verified every item. The [recovered-source catalog](recovered/README.md) records the originals retrieved and checked during the current audit, including editions, translations, hashes, and a reproducible downloader. The [assessment](../audits/2026-11-04/ASSESSMENT.md) explains discrepancies in the reconstructed local collection. The project's scope includes the collaborative knowledge network as well as the computational engine.
+
 This compiler is built to Valentin Turchin's own design. This directory indexes the primary
 sources that design is drawn from, so that any claim in this repository can be checked against
 the original text.

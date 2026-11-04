@@ -1,0 +1,7 @@
+* Left and Right have identical input patterns but return different arguments.
+$EXTERN Prout;
+$ENTRY Go {
+  (e.X) (e.Y) = <Prout <Left (e.X) (e.Y)>> <Prout <Right (e.X) (e.Y)>>;
+}
+Left { (e.X) (e.Y) = e.X; }
+Right { (e.X) (e.Y) = e.Y; }

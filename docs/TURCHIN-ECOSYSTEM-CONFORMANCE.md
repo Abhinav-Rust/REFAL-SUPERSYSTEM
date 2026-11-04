@@ -1,5 +1,8 @@
 # The Turchin Ecosystem — Vision-to-Implementation Conformance
 
+> [!IMPORTANT]
+> **Historical assessment; superseded for current status on 2026-11-04.** The completion judgments and knowledge-network exclusions below are under review. The intended ecosystem includes that network. The local collection contains reconstructed summaries; its entries must not all be treated as authenticated primary texts. The [current audit](audits/2026-11-04/ASSESSMENT.md) distinguishes verified sources, demonstrated capabilities, reproduced correctness failures, and remaining work. Consult the [verified source catalog](turchin/recovered/README.md) and [current README](../README.md).
+
 This document answers one question: **what does "100% complete" mean for this
 repository, when the standard is not a compiler that passes its own tests but a
 compiler that fulfils the ecosystem its author specified?**

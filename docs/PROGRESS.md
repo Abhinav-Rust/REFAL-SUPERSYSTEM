@@ -1,3 +1,29 @@
+# Project progress and handoff
+
+**Status reviewed: 2026-11-04.** The [current assessment](audits/2026-11-04/ASSESSMENT.md) supersedes the former overall completion score. The [main README](../README.md) publishes the capability ledger and visual overview; [AGENTS.md](../AGENTS.md) records the owner's current workflow.
+
+## Current scope and workflow
+
+- The full ecosystem includes the Refal computational engine and a collaborative knowledge network inspired by Principia Cybernetica.
+- Commit authorized changes directly to `main`, push them, and verify the local and remote revisions agree. Keep the README and its diagrams accurate alongside each set of changes.
+- Report implemented behavior, demonstrated results, known failures, and remaining work separately. An overall completion percentage is not currently justified.
+- Check historical and architectural claims against primary sources with recorded provenance. Use the [recovered-source catalog](turchin/recovered/README.md); the older thematic HTML collection contains reconstructed summaries.
+
+## Current state and next implementation milestone
+
+The engine is a substantial research implementation. Runtime and symbolic reflection work, and self-hosting and interpreter elimination have concrete demonstrations. Five audit regressions reproduce wrong-code generation, false equivalence, an invalid termination certificate, a broken inverse, and a false predicate refutation. Proper higher-projection staging remains unestablished. The knowledge network has not been built.
+
+This publication contains the audit, reproducible counterexamples, source provenance, and updated README/diagram tooling. **It does not repair the compiler or prover.** Verification commands and their actual results are recorded in the assessment.
+
+The next implementation milestone is to repair the five demonstrated failures while preserving the required-behavior assertions in [regression_tests.rs](audits/2026-11-04/regression_tests.rs), then strengthen semantic differential coverage and independent proof/certificate checks. The assessment supplies the remaining staged-metacomputation and knowledge-network completion gates. Work on those milestones should follow the owner's task instructions.
+
+## Historical record — superseded on 2026-11-04
+
+The following record is retained for traceability. Its completion percentages, scope exclusions, verification claims, and `NEXT ACTION` entries describe earlier work; they are not the current status or task assignment. The scope and workflow above take precedence.
+
+<details>
+<summary>Previous progress record</summary>
+
 # Maintainer — standing orders and live state
 
 **This file is the handoff mechanism.** Any session working on this repository
@@ -4505,3 +4531,5 @@ in 7 minutes with the CLI suite at 6.3. Keep gating with
 the machine usable, and a red suite that is red for a known environmental reason
 still has to be explained, or it will be misread as a regression the next time it
 is seen.
+
+</details>

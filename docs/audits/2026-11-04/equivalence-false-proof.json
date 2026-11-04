@@ -1,0 +1,13 @@
+{
+  "command": [
+    "<repository>/target/test-fast/refal",
+    "prove",
+    "<repository>/docs/audits/2026-11-04/equivalence-counterexample.ref",
+    "--equiv",
+    "Left",
+    "Right"
+  ],
+  "exit_code": 0,
+  "stdout": "equivalence: Left = Right\n  steps: 0\n  complete: yes\n  leaves: 1\n    reflexive (depth 0)\n  verdict: proved\n",
+  "stderr": ""
+}

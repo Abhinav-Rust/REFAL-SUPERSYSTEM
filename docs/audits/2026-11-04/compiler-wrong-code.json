@@ -1,0 +1,11 @@
+{
+  "command": [
+    "<repository>/target/test-fast/refal",
+    "differential",
+    "examples/prove-append-reach.ref",
+    "--compiled"
+  ],
+  "exit_code": 1,
+  "stdout": "",
+  "stderr": "differential mismatch\noriginal:    [\"True\"]\ntransformed: [\"False\"]\n"
+}
