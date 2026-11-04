@@ -7944,8 +7944,8 @@ fn the_second_projection_emits_a_compiler_that_decides_its_branches() {
 /// compiled away.
 #[test]
 fn the_supercompiler_derives_a_compiler_that_runs() {
-    // Span-insensitive completed-residual reuse changes the drive: 67
-    // configurations at the old 200-step cut-off, 105 and closure at 305.
+    // Preserving symbolic constraints and pending evaluation closes this
+    // projection in 75 steps. Retain the budget and executable-artifact gates.
     let output = Command::new(refal_bin())
         .args([
             "project2",
@@ -7962,8 +7962,8 @@ fn the_supercompiler_derives_a_compiler_that_runs() {
         "a closed projection exits zero:\n{stdout}"
     );
     assert!(
-        stdout.contains("driving steps: 305"),
-        "alpha-equivalent residual reuse changes the measured closure to 305 steps:\n{stdout}"
+        stdout.contains("driving steps: 75"),
+        "the symbolic-condition repair closes the measured walk in 75 steps:\n{stdout}"
     );
     assert!(
         stdout.contains("walk: closed"),

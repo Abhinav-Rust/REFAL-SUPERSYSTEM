@@ -149,6 +149,7 @@ Development is active across the language tools and their verification.
 - **Termination analysis** retains distinct call paths throughout size-change composition. Certificate checks reconstruct those paths from the source, with coverage for decreasing recursion, non-decreasing alternatives, and mutual recursion.
 - **Function inversion** reconstructs source input patterns, preserving their order, repeated bindings, literals, and brackets. Round-trip tests cover repeated output values and fresh variable names; unsupported reconstruction cases return an explicit error.
 - **Symbolic conditions** preserve existing bindings and retain unresolved equality and expression-split choices. Both compiler paths keep pending calls in evaluation order. Execution comparisons cover the append-law example, condition fallbacks, nested values, and observable effects. Exhausted predicate searches report `incomplete`, including runs with no terminal values.
+- **Generated compiler checks** measure a closed `project2` walk for the `Dispatch` fixture at 75 driving steps. The emitted Refal is validated and compiles four representative examples identically to `refal compile`.
 
 ## For contributors
 
