@@ -143,7 +143,10 @@ The [source catalog](docs/turchin/recovered/README.md) records publications, coa
 
 ## Development
 
-Development is active across the language tools and their verification. Equivalence checking now preserves shared free-variable identities and keeps terminal symbolic equations unresolved when structural equality does not establish them. Regression coverage exercises symbol, term, and expression arguments, nested results, repeated variables, and proof budgets.
+Development is active across the language tools and their verification.
+
+- **Equivalence checking** preserves shared free-variable identities and keeps terminal symbolic equations unresolved when structural equality does not establish them. Coverage includes all three variable kinds, nested results, repeated variables, and proof budgets.
+- **Termination analysis** retains distinct call paths throughout size-change composition. Certificate checks reconstruct those paths from the source, with coverage for decreasing recursion, non-decreasing alternatives, and mutual recursion.
 
 ## For contributors
 

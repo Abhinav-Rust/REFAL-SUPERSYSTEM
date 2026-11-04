@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+**Termination analysis retains distinct call paths.**
+
+- Size-change composition preserves all distinct graphs, including paths with
+  the same endpoints and different descent information. A work queue extends
+  each discovered path by every compatible original call.
+- The closure budget yields an unproven result when exhausted. Certificate
+  verification reconstructs the closure from the source.
+- Regressions cover alternative recursive branches, sentence order, mutual
+  recursion, and a forged certificate alongside existing positive proofs.
+
 **Equivalence checking preserves shared free-variable identities.**
 
 - Reflexivity compares both sides in the same variable environment. Distinct

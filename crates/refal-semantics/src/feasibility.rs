@@ -37,7 +37,7 @@
 //! idempotent graph. A flow it cannot map soundly declines the proof rather than
 //! guessing.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use refal_ast::{
     Function, Item, Program, Sentence, Symbol, Term, TermKind, VariableKind, canonical_identifier,
@@ -1048,18 +1048,14 @@ const MAX_SIZE_CHANGE_POSITION: usize = 32;
 /// the program is not called non-terminating, and the report says no proof was
 /// found within the budget.
 ///
-/// The budget is generous because the closure is **maximised** as it grows (see
-/// [`SizeChangeGraph::dominates`]): at most one graph survives per ordered pair
-/// of functions, so the reachable set is bounded by the square of the largest
-/// strongly connected component and the budget is a guard against a pathological
-/// component rather than the normal stopping condition. Before maximisation this
-/// budget was the *cause* of a third of the withheld proofs, which is why it is
-/// no longer tight.
+/// Distinct graphs are distinct possible call paths, even when they have the
+/// same endpoints. The exact closure can therefore contain many graphs per
+/// function pair. Only identical graphs are merged.
 const MAX_SIZE_CHANGE_GRAPHS: usize = 20_000;
 
 /// One size-change graph: arcs from the caller's argument positions to the
 /// callee's. A `true` arc is strict.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct SizeChangeGraph {
     from: String,
     to: String,
@@ -1097,26 +1093,6 @@ impl SizeChangeGraph {
         self.arcs
             .iter()
             .any(|(&(from, to), &strict)| from == to && strict)
-    }
-
-    /// Whether `self` carries at least every flow `other` carries, and is at
-    /// least as strict on each.
-    ///
-    /// Size-change composition is monotone in the arc set, so a graph that
-    /// dominates another can replace it in the closure without losing a
-    /// possible counterexample: every composition the weaker graph could take
-    /// part in, the stronger one takes part in with no fewer arcs and no
-    /// non-strict arc where the weaker had a strict one. This is the standard
-    /// maximisation that keeps the closure finite — at most one graph per
-    /// ordered pair of functions — and it is what turns the closure from a
-    /// budget-limited search into a decision procedure.
-    fn dominates(&self, other: &Self) -> bool {
-        self.from == other.from
-            && self.to == other.to
-            && other
-                .arcs
-                .iter()
-                .all(|(key, strict)| self.arcs.get(key).is_some_and(|mine| *mine || !*strict))
     }
 }
 
@@ -1457,7 +1433,9 @@ impl CallGraph {
     /// shown not to grow gets no arc: absent means unknown, and a growing value
     /// ends its thread rather than carrying one. No arc is ever guessed.
     fn size_change_component(&self, id: usize) -> Result<Component, String> {
-        let mut graphs: Vec<SizeChangeGraph> = Vec::new();
+        let mut seen = BTreeSet::new();
+        let mut pending = VecDeque::new();
+        let mut calls_by_source: BTreeMap<String, Vec<SizeChangeGraph>> = BTreeMap::new();
         for &index in &self.internal[id] {
             let call = &self.calls[index];
             let graph = size_change_graph(call).ok_or_else(|| {
@@ -1466,47 +1444,47 @@ impl CallGraph {
                     call.from, call.to, call.sentence
                 )
             })?;
-            if graphs.iter().any(|known| known.dominates(&graph)) {
+            if !seen.insert(graph.clone()) {
                 continue;
             }
-            graphs.retain(|known| !graph.dominates(known));
-            graphs.push(graph);
+            if seen.len() > MAX_SIZE_CHANGE_GRAPHS {
+                return Err(format!(
+                    "the size-change closure exceeded {MAX_SIZE_CHANGE_GRAPHS} graphs"
+                ));
+            }
+            pending.push_back(graph.clone());
+            calls_by_source
+                .entry(graph.from.clone())
+                .or_default()
+                .push(graph);
         }
-        if graphs.is_empty() {
+        if pending.is_empty() {
             return Err("the cycle has no call to build a size-change graph from".to_string());
         }
 
-        let mut cursor = 0usize;
-        while cursor < graphs.len() {
-            let current = graphs[cursor].clone();
-            let next: Vec<SizeChangeGraph> = graphs
-                .iter()
-                .filter(|graph| graph.from == current.to)
-                .cloned()
-                .collect();
-            for graph in next {
-                let composed = current.compose(&graph);
-                if graphs.iter().any(|known| known.dominates(&composed)) {
+        // Every finite path is a shorter path followed by one original call.
+        // Extending each queued graph by all compatible calls therefore closes
+        // the set under composition without mutating the set being iterated.
+        while let Some(current) = pending.pop_front() {
+            if current.is_idempotent() && !current.has_strict_self_loop() {
+                return Err(format!(
+                    "the size-change closure contains an idempotent graph `{}` -> `{}` with no strict self-loop, so this cycle has a call sequence in which no argument shrinks",
+                    self.name(&current.from),
+                    self.name(&current.to)
+                ));
+            }
+            for call in calls_by_source.get(&current.to).into_iter().flatten() {
+                let composed = current.compose(call);
+                if seen.contains(&composed) {
                     continue;
                 }
-                graphs.retain(|known| !composed.dominates(known));
-                if graphs.len() >= MAX_SIZE_CHANGE_GRAPHS {
+                if seen.len() >= MAX_SIZE_CHANGE_GRAPHS {
                     return Err(format!(
                         "the size-change closure exceeded {MAX_SIZE_CHANGE_GRAPHS} graphs"
                     ));
                 }
-                graphs.push(composed);
-            }
-            cursor += 1;
-        }
-
-        for graph in &graphs {
-            if graph.is_idempotent() && !graph.has_strict_self_loop() {
-                return Err(format!(
-                    "the size-change closure contains an idempotent graph `{}` -> `{}` with no strict self-loop, so this cycle has a call sequence in which no argument shrinks",
-                    self.name(&graph.from),
-                    self.name(&graph.to)
-                ));
+                seen.insert(composed.clone());
+                pending.push_back(composed);
             }
         }
 
@@ -2079,6 +2057,61 @@ mod tests {
     }
 
     #[test]
+    fn termination_keeps_every_possible_call_path() {
+        for source in [
+            include_str!("../../../docs/audits/2026-11-04/termination-counterexample.ref"),
+            // Reordering the alternatives must not change the termination rule.
+            "$ENTRY Go { = <Loop ('b')>; }\n\
+             Loop { (e.Rest) = <Loop (e.Rest)>;\n\
+                    ('a' e.Rest) = <Loop (e.Rest)>; }",
+            // A growing alternative has no non-increasing arc at all.
+            "$ENTRY Go { = <Loop ('b')>; }\n\
+             Loop { ('a' e.Rest) = <Loop (e.Rest)>;\n\
+                    (e.Rest) = <Loop ('b' e.Rest)>; }",
+            // The non-decreasing path may span several functions.
+            "$ENTRY Go { = <Loop ('b')>; }\n\
+             Loop { ('a' e.Rest) = <Step (e.Rest)>;\n\
+                    (e.Rest) = <Step (e.Rest)>; }\n\
+             Step { (e.Rest) = <Return (e.Rest)>; }\n\
+             Return { (e.Rest) = <Loop (e.Rest)>; }",
+        ] {
+            for function in ["Loop", "Go"] {
+                let result = termination(source, function);
+                assert!(
+                    matches!(result, TerminationVerdict::Unproven { .. }),
+                    "{function} reaches a non-decreasing path: {result:?}\n{source}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_forged_size_change_certificate_cannot_hide_a_nondecreasing_path() {
+        let program = parse(include_str!(
+            "../../../docs/audits/2026-11-04/termination-counterexample.ref"
+        ));
+        let mut report = analyse(&program);
+        let function = report
+            .functions
+            .iter_mut()
+            .find(|function| function.function == "Loop")
+            .expect("Loop");
+        function.termination = TerminationVerdict::SizeChange {
+            components: vec![Component {
+                members: vec!["Loop".to_string()],
+                strict: Vec::new(),
+            }],
+        };
+        let failures = verify(&report, &program);
+        assert!(
+            failures
+                .iter()
+                .any(|reason| reason.contains("no strict self-loop")),
+            "the verifier must reconstruct the non-decreasing alternative: {failures:?}"
+        );
+    }
+
+    #[test]
     fn a_descent_whose_complement_is_all_expression_variables_is_unproven() {
         // `e.Y` can bind nothing, so `e.X` may be the whole argument: no descent.
         let source = "$ENTRY Go { = <F 'a'>; }\nF { e.X e.Y = <F e.X>; }";
@@ -2193,39 +2226,6 @@ mod tests {
             f.termination
         );
         assert!(verify(&report, &program).is_empty());
-    }
-
-    #[test]
-    fn a_dominating_graph_replaces_the_graph_it_dominates() {
-        // The closure keeps one graph per ordered pair of functions, because a
-        // graph that carries every flow of another and is at least as strict on
-        // each can take part in every composition the other could. This is what
-        // makes the closure a decision procedure instead of a budget.
-        let graph = |arcs: &[(usize, usize, bool)]| SizeChangeGraph {
-            from: "F".to_string(),
-            to: "G".to_string(),
-            arcs: arcs
-                .iter()
-                .map(|&(from, to, strict)| ((from, to), strict))
-                .collect(),
-        };
-        let loose = graph(&[(1, 1, false)]);
-        let strict = graph(&[(1, 1, true)]);
-        let wider = graph(&[(1, 1, true), (2, 2, false)]);
-        assert!(strict.dominates(&loose));
-        assert!(
-            !loose.dominates(&strict),
-            "a loose arc cannot cover a strict one"
-        );
-        assert!(wider.dominates(&strict));
-        assert!(!strict.dominates(&wider), "a missing arc is not domination");
-        assert!(loose.dominates(&loose));
-        // Different endpoints are never comparable, whatever the arcs.
-        let elsewhere = SizeChangeGraph {
-            to: "H".to_string(),
-            ..wider.clone()
-        };
-        assert!(!elsewhere.dominates(&wider));
     }
 
     #[test]

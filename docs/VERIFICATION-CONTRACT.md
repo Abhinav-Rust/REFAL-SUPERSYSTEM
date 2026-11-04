@@ -246,6 +246,14 @@ is `unknown` *between* components is harmless — it is not on a cycle — which
 what keeps an entry point that calls a function with a fresh literal argument
 from being reported as non-terminating.
 
+**Size-change composition also follows values across different argument
+positions.** Every distinct call-path graph is retained, including alternatives
+with the same endpoints. Each discovered path is extended by every compatible
+original call. A completed closure supports a termination result only when
+every idempotent graph has a strict self-loop. If the graph budget is reached,
+the result remains `unproven`. Certificate verification reconstructs this
+closure from the source.
+
 **A defect an earlier step found, in its own predecessor.** The first version of
 the termination analysis collected only **self**-calls, so mutual recursion was
 invisible to it: `F { s.H e.T = <G e.T>; } G { e.X = <F e.X>; }` was reported

@@ -8665,6 +8665,26 @@ fn the_certificate_re_checks_itself() {
 }
 
 #[test]
+fn a_termination_certificate_keeps_nondecreasing_alternatives() {
+    let output = feasibility_file(
+        "docs/audits/2026-11-04/termination-counterexample.ref",
+        &["--certificate"],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{stdout}");
+    assert!(
+        stdout.contains("# checked: every claim re-verified"),
+        "{stdout}"
+    );
+    for function in ["Loop", "Go"] {
+        assert!(
+            !stdout.contains(&format!("terminates {function} ")),
+            "{function} reaches a non-decreasing call path:\n{stdout}"
+        );
+    }
+}
+
+#[test]
 fn every_certificate_on_the_corpus_re_checks() {
     // The soundness gate, end to end: whatever the analysis claims about a real
     // program, its own checker must accept. This is the property the row turns
