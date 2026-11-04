@@ -672,8 +672,8 @@ fn invert_program(program: &refal_ast::Program, args: &[String]) {
         refal_core::format_inversion_report(&report, &program_text)
     );
     // The exit status carries the outcome, so a script can gate on it: 0 when the
-    // inverse was synthesised over a closed walk, 2 when the budget truncated it
-    // and the artifact covers only the cases driven.
+    // inverse candidate was synthesised and the walk closed, 2 when the forward
+    // exploration exhausted its budget.
     if !report.complete {
         process::exit(2);
     }

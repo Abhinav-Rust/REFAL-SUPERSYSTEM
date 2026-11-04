@@ -16,6 +16,12 @@ Size-change analysis retains every distinct call-path graph and processes each d
 
 Regression coverage includes non-decreasing and growing alternatives, sentence order, mutual recursion, and rejection of a forged certificate. Existing tests retain positive structural and positional descent examples.
 
+## Function inversion
+
+Inverse synthesis reconstructs the original source input pattern from the output's bindings and the decoded recursive argument. Repeated output occurrences constrain a value without duplicating its reconstructed input. The generated remainder variable has a fresh name.
+
+Supported reconstruction includes shape-only base cases and output prefixes followed by a self-call on one expression variable. Conditional sentences, unsupported output computations, and erased input bindings are declined explicitly. Round-trip coverage includes all three variable kinds, field order, repeated input and output, literals, brackets, empty inputs, and base-case bindings. The forward exploration retains its separate budget/completeness report.
+
 ## Verification
 
 Use focused semantic tests for individual changes and the serial integration suite for the complete toolchain. The current revision's CI status is available through the README badge. Historical verification artifacts are indexed in the [baseline record](audits/2026-11-04/ASSESSMENT.md).

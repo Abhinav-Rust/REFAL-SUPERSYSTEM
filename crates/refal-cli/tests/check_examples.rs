@@ -717,6 +717,59 @@ fn a_synthesised_inverse_round_trips_through_the_forward_function() {
     }
 }
 
+#[test]
+fn a_synthesised_inverse_recovers_inputs_from_repeated_output_variables() {
+    let path = "docs/audits/2026-11-04/inverse-duplicate-counterexample.ref";
+    let synthesis = invert_file(path, "Encode", &["--strategy", "interpretive"]);
+    let stdout = String::from_utf8_lossy(&synthesis.stdout);
+    assert!(synthesis.status.success(), "{stdout}");
+    let artifact = stdout
+        .split_once("--- inverse program ---\n")
+        .expect("inverse artifact")
+        .1
+        .replace("$EXTERN Prout;", "")
+        .replace("$ENTRY Encode-Inverse", "Encode-Inverse");
+    let forward = fs::read_to_string(workspace_path(path))
+        .expect("forward source")
+        .replace("$ENTRY Go {", "$ENTRY Original-Go {");
+    let harness = format!(
+        "{forward}\n{artifact}\n\
+         $ENTRY Go {{ (e.Input) = <Prout <Encode-Inverse <Encode e.Input>>>; }}"
+    );
+    for input in ["", "a", "ab", "aaa", "abba", "Nil Cons"] {
+        let round_trip = run_source_text(&harness, &["unused", input]);
+        assert!(
+            round_trip.status.success(),
+            "{input:?}: {}",
+            String::from_utf8_lossy(&round_trip.stderr)
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&round_trip.stdout),
+            format!("{input}\n")
+        );
+    }
+}
+
+#[test]
+fn inverse_synthesis_declines_an_encoder_that_erases_input_bindings() {
+    let path = scratch_source(
+        "inverse-erased-binding",
+        "$ENTRY Go { = <Drop 'a'>; } Drop { s.Value = 'N'; }",
+    );
+    let output = Command::new(refal_bin())
+        .args(["invert", path.to_str().expect("path"), "Drop"])
+        .output()
+        .expect("invert");
+    fs::remove_file(path).expect("remove fixture");
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("output erases an input binding"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("--- inverse program ---"));
+}
+
 /// Writes a source string to a scratch file under the repo's target directory and
 /// runs the named entry against `args` (the first of which is the `.ref` path the
 /// CLI insists on).

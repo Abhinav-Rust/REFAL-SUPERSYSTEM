@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+**Inverse synthesis reconstructs the source input pattern.**
+
+- Inverse bodies preserve original field order, repetitions, literals, and
+  brackets. Repeated output variables constrain their values; the recursive
+  argument is replaced by the inverse call, with a fresh remainder binding.
+- Base cases retain source variable identities. Every source sentence must
+  support reconstruction; erased input bindings and unsupported computations
+  return an error. Forward-exploration budget reporting remains separate.
+- Core and CLI round trips cover repeated encodings, nested fields, empty
+  inputs, base cases, and variable-name collisions.
+
 **Termination analysis retains distinct call paths.**
 
 - Size-change composition preserves all distinct graphs, including paths with

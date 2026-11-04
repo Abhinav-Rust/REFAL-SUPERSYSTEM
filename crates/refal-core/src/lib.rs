@@ -7799,16 +7799,15 @@ fn substitute_terms(
 // as a program (`InvertedProgram`) rather than a verdict.
 // ---------------------------------------------------------------------------
 
-/// The inverse of a function, synthesised by driving.
+/// An inverse candidate and the bounded exploration of its forward function.
 ///
-/// `program` is the emitted inverse: a checked Core Refal program whose entry is
-/// the synthesised function, residualised from the driven forward configuration.
-/// It is the *artifact* the 1990 paper promises -- not a description of one.
+/// Synthesis reverses supported source patterns and preserves their bindings.
+/// Concrete round trips provide separate evidence for the emitted artifact.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InversionReport {
     /// The forward function the inverse was synthesised from.
     pub forward: String,
-    /// The synthesised inverse program, checked as Refal like any residue.
+    /// The synthesised inverse program.
     pub program: CoreProgram,
     /// The driven configurations behind the synthesis, as reflection reports them.
     pub configurations: Vec<FrozenConfiguration>,
@@ -8024,17 +8023,9 @@ pub fn format_projection_report(report: &ProjectionReport, program_text: &str) -
     out
 }
 
-/// Synthesise the inverse of `function` by driving its forward definition.
-///
-/// The input is a *free* configuration: the whole point of inversion is that the
-/// input is what is unknown and the output is what pins it down. The driver
-/// partitions the free input, the split functions carry the output shapes, and
-/// the residue is the inverse program.
-///
-/// The inverse is claimed as an artifact only when the walk closed. A truncated
-/// walk leaves a residue that is still a legal program but covers only the cases
-/// driven -- the mirror image of the prover's `Incomplete`, and refused for the
-/// same reason: a partial inverse print is a wrong answer, not a smaller one.
+/// Explore a free forward configuration and reverse supported input/output
+/// patterns into an inverse candidate. The report remains incomplete when the
+/// forward exploration exhausts its budget.
 pub fn invert_function(
     program: &CoreProgram,
     graph: &StateGraph,
@@ -8052,12 +8043,10 @@ pub fn invert_function(
 
 /// [`invert_function`] at a chosen point on the compilation axis.
 ///
-/// The inversion of a function with a data-dependent recursion (a run-length
-/// decoder is the canonical case: the forward encoder's tail is *rebuilt* at
-/// every step, so the compilative whistle has no recurring configuration to
-/// fire on) needs the interpretive end. It loops back when a first-order
-/// neighborhood recurs, which Turchin proved finite, so the walk closes and the
-/// inverse is emitted. See [`drive_symbolic_proof_entry_with_strategy`].
+/// The strategy controls the forward exploration. Synthesis supports shape-only
+/// outputs and a matchable output prefix followed by a self-call on one
+/// expression variable. Output patterns must bind every reconstructed input
+/// variable. See [`drive_symbolic_proof_entry_with_strategy`].
 pub fn invert_function_with_strategy(
     program: &CoreProgram,
     graph: &StateGraph,
@@ -8074,7 +8063,7 @@ pub fn invert_function_with_strategy(
     let terminals = collect_terminals(&entry_graph, &report, &input);
     let configurations = reflection_of(&entry_graph, &report, &input);
 
-    let residual_program = synthesize_inverse_program(program, graph, &report, function);
+    let residual_program = synthesize_inverse_program(program, function)?;
 
     Ok(InversionReport {
         forward: function.to_string(),
@@ -8086,194 +8075,124 @@ pub fn invert_function_with_strategy(
     })
 }
 
-/// The emitted inverse as a Core Refal program.
+/// Reverse supported source input/output patterns into an inverse program.
 ///
-/// This is a *synthesis*, not a re-print, and the distinction is the whole point
-/// of the row. Residualizing the driven graph the way the compiler does would
-/// re-emit the forward function's own sentences -- the forward program, not its
-/// inverse -- because residualization reconstructs a function from the states it
-/// was driven through.
-///
-/// An inverse is instead read off each reached configuration as a *pair*: the
-/// configuration is `(state, input)`, the state's result is the output that input
-/// produces, and reversing the pair is a sentence of the inverse. So the inverse
-/// function's patterns are the forward function's output shapes and its bodies
-/// are the inputs that generate them -- which is exactly the constructive
-/// synthesis Gluck and Turchin describe: "the output expression is disassembled
-/// pattern-by-pattern, and the corresponding input expression is synthesized
-/// constructively".
-///
-/// Case splitting is what makes the pairs *shapes* rather than examples. The
-/// driver partitions the free input into `[]`, `s.H e.T` and `(e.B) e.T`, so a
-/// configuration's input is a pattern and its state's result is the output that
-/// pattern yields, not one sample of it.
+/// Source patterns preserve variable identities, literals, order, and brackets.
+/// The symbolic walk supplies exploration evidence; its fresh configuration
+/// variables are not bindings in the emitted inverse. Every source sentence
+/// must support reconstruction, so an unsupported case cannot silently leave a
+/// base-case-only artifact.
 fn synthesize_inverse_program(
     program: &CoreProgram,
-    graph: &StateGraph,
-    report: &SymbolicDriveReport,
     function: &str,
-) -> CoreProgram {
+) -> Result<CoreProgram, DriveError> {
     let inverse = inverse_name(function);
-    let span = program
+    let forward = program
         .functions
         .iter()
         .find(|candidate| candidate.name.eq_ignore_ascii_case(function))
-        .map(|candidate| candidate.span)
-        .unwrap_or(Span { start: 0, end: 0 });
-
-    let mut sentences = Vec::new();
-
-    // Ground configurations first: a configuration whose sentence result is a
-    // complete output reverses cleanly, one sentence per output shape.
-    for configuration in &report.configurations {
-        let Some(state) = graph.states.get(configuration.state.0) else {
-            continue;
+        .ok_or_else(|| DriveError::NoMatchingSentence {
+            function: function.to_string(),
+        })?;
+    let mut sentences: Vec<CoreSentence> = Vec::new();
+    for sentence in &forward.sentences {
+        if !sentence.conditions.is_empty() {
+            return Err(DriveError::Unsupported {
+                feature: "inverse synthesis for conditional sentences",
+            });
+        }
+        let (pattern, result) = if is_shape(&sentence.result) {
+            (sentence.result.clone(), sentence.pattern.clone())
+        } else {
+            let Some((prefix, args)) = strip_trailing_call(&sentence.result, function) else {
+                return Err(DriveError::Unsupported {
+                    feature: "inverse synthesis for this output computation",
+                });
+            };
+            let [
+                CoreTerm {
+                    kind:
+                        CoreTermKind::Variable {
+                            kind: VariableKind::Expression,
+                            name: tail,
+                        },
+                    ..
+                },
+            ] = args
+            else {
+                return Err(DriveError::Unsupported {
+                    feature: "inverse synthesis for a recursive argument other than one expression variable",
+                });
+            };
+            if prefix.is_empty() || !is_shape(prefix) {
+                return Err(DriveError::Unsupported {
+                    feature: "inverse synthesis without a matchable output prefix",
+                });
+            }
+            let mut names = Vec::new();
+            collect_free_variables(prefix, &mut names);
+            if names.contains(&tail.to_ascii_lowercase()) {
+                return Err(DriveError::Unsupported {
+                    feature: "inverse synthesis with the recursive argument in the output prefix",
+                });
+            }
+            let mut remainder_name = "Rest".to_string();
+            let mut serial = 0usize;
+            while names.contains(&remainder_name.to_ascii_lowercase()) {
+                serial += 1;
+                remainder_name = format!("Rest{serial}");
+            }
+            let remainder = variable_term(VariableKind::Expression, &remainder_name);
+            let mut pattern = prefix.to_vec();
+            pattern.push(remainder.clone());
+            let call = call_term(&inverse, &[remainder]);
+            let result = substitute_variable(&sentence.pattern, tail, &[call]);
+            (pattern, result)
         };
-        if !state.function.eq_ignore_ascii_case(function) {
+        let mut bound = Vec::new();
+        let mut needed = Vec::new();
+        collect_free_variables(&pattern, &mut bound);
+        collect_free_variables(&result, &mut needed);
+        if needed.iter().any(|name| !bound.contains(name)) {
+            return Err(DriveError::Unsupported {
+                feature: "inverse synthesis when output erases an input binding",
+            });
+        }
+        if sentences.iter().any(|kept| {
+            same_term_sequence(&kept.pattern, &pattern) && same_term_sequence(&kept.result, &result)
+        }) {
             continue;
         }
-        if !is_invertible_result(&state.result) {
-            continue;
-        }
-        sentences.push(CoreSentence {
-            pattern: state.result.clone(),
-            conditions: Vec::new(),
-            result: configuration.input.clone(),
-            span: state.span,
-        });
-    }
-
-    // Recurring configurations next: a configuration whose result ends in a call
-    // to the function being inverted is an *output prefix followed by the rest*.
-    // That is the sentence an inverse needs, and it is what makes the synthesis
-    // total rather than base-case-only: `Wrap { s.A e.R = 'Cons' <Wrap e.R>; }`
-    // reverses to `Wrap-Inverse { 'Cons' e.Rest = s.A <Wrap-Inverse e.Rest>; }`,
-    // which is the recursion carrying the synthesised input.
-    for configuration in &report.configurations {
-        let Some(state) = graph.states.get(configuration.state.0) else {
-            continue;
-        };
-        if !state.function.eq_ignore_ascii_case(function) {
-            continue;
-        }
-        let Some(prefix) = strip_trailing_call(&state.result, function) else {
-            continue;
-        };
-        // A prefix may carry variables: `'Cons' s.A <Wrap e.R>` leaves the
-        // prefix `'Cons' s.A`, and in the inverse that variable is *bound by the
-        // pattern* rather than read from the forward side -- an inverse
-        // reconstructs its input from the output, and a variable in the output
-        // is exactly the part of the input the output preserves. Only a call or
-        // a block disqualifies a prefix, because neither is a shape to match.
-        if prefix.is_empty() || !is_shape(&prefix) {
-            continue;
-        }
-        // The inverse reconstructs its input from what the output *preserved*.
-        // Everything in the prefix that is a variable is a variable the pattern
-        // binds, and it is part of the input; the recursion carries the rest.
-        // The forward configuration's own pattern variables (`s.H1 e.T1`) are
-        // deliberately *not* used: they are not bound in the inverse's sentence,
-        // and a synthesized program that names them does not check.
-        let remainder = CoreTerm {
-            kind: CoreTermKind::Variable {
-                kind: VariableKind::Expression,
-                name: "Rest".to_string(),
-            },
-            span: Span { start: 0, end: 0 },
-        };
-        let mut pattern = prefix.clone();
-        pattern.push(remainder.clone());
-        let mut result = prefix
-            .iter()
-            .filter_map(|term| match &term.kind {
-                CoreTermKind::Variable { kind, name } => Some(CoreTerm {
-                    kind: CoreTermKind::Variable {
-                        kind: *kind,
-                        name: name.clone(),
-                    },
-                    span: term.span,
-                }),
-                _ => None,
-            })
-            .collect::<Vec<_>>();
-        result.push(CoreTerm {
-            kind: CoreTermKind::Call {
-                name: inverse.clone(),
-                args: vec![remainder],
-            },
-            span: Span { start: 0, end: 0 },
-        });
         sentences.push(CoreSentence {
             pattern,
             conditions: Vec::new(),
             result,
-            span: state.span,
+            span: sentence.span,
         });
     }
-
-    let mut unique: Vec<CoreSentence> = Vec::new();
-    for sentence in sentences {
-        if unique
-            .iter()
-            .any(|kept| kept.pattern == sentence.pattern && kept.result == sentence.result)
-        {
-            continue;
-        }
-        unique.push(sentence);
-    }
-    if unique.is_empty() {
-        // Nothing was synthesised. Emitting the forward definition under the
-        // inverse name would be a program that checks and means the wrong thing,
-        // so the inverse is left as the identity of the forward call: the honest
-        // reading is that this walk found no output shape to reverse, and the
-        // `complete` flag on the report is what says whether to trust it.
-        unique.push(CoreSentence {
-            pattern: vec![input_expression_variable()],
-            conditions: Vec::new(),
-            result: vec![CoreTerm {
-                kind: CoreTermKind::Call {
-                    name: function.to_string(),
-                    args: vec![input_expression_variable()],
-                },
-                span: Span { start: 0, end: 0 },
-            }],
-            span,
-        });
-    }
-    CoreProgram {
+    Ok(CoreProgram {
         declarations: program.declarations.clone(),
         functions: vec![CoreFunction {
             name: inverse,
             visibility: Visibility::Entry,
-            sentences: unique,
-            span,
+            sentences,
+            span: forward.span,
         }],
-    }
+    })
 }
 
-/// The output prefix a result leaves before a trailing call to `function`.
-///
-/// `'Cons' <Wrap e.R>` yields `'Cons'`; a result that is only a call yields
-/// nothing, because it carries no output of its own to match. This is what turns
-/// a driven configuration into an inverse sentence: the prefix is the pattern,
-/// and the input is what the sentence returns.
-fn strip_trailing_call(terms: &[CoreTerm], function: &str) -> Option<Vec<CoreTerm>> {
+/// The output prefix and recursive input before a trailing call to `function`.
+fn strip_trailing_call<'a>(
+    terms: &'a [CoreTerm],
+    function: &str,
+) -> Option<(&'a [CoreTerm], &'a [CoreTerm])> {
     let (last, prefix) = terms.split_last()?;
     match &last.kind {
-        CoreTermKind::Call { name, .. } if name.eq_ignore_ascii_case(function) => {
-            Some(prefix.to_vec())
+        CoreTermKind::Call { name, args } if name.eq_ignore_ascii_case(function) => {
+            Some((prefix, args))
         }
         _ => None,
     }
-}
-
-/// Whether a term sequence names an output the inverse can key on.
-///
-/// A result that is still a call has not been evaluated, so it names no output.
-/// A variable is *allowed* here -- see the call site -- but an empty sequence is
-/// not a shape.
-fn is_invertible_result(terms: &[CoreTerm]) -> bool {
-    !terms.is_empty() && is_shape(terms)
 }
 
 /// Whether a term sequence can serve as a pattern: no calls, no blocks.
@@ -8331,7 +8250,7 @@ pub fn format_inversion_report(report: &InversionReport, program_text: &str) -> 
         if report.complete {
             "synthesised"
         } else {
-            "incomplete (budget spent; the inverse covers only the cases driven)"
+            "incomplete (forward exploration exhausted its budget)"
         }
     ));
     output.push_str("--- inverse program ---\n");
@@ -9139,6 +9058,165 @@ mod tests {
     }
 
     #[test]
+    fn inverse_synthesis_reconstructs_the_input_pattern() {
+        let a = core_var(VariableKind::Symbol, "A");
+        let b = core_var(VariableKind::Symbol, "B");
+        let rest = core_var(VariableKind::Expression, "Tail");
+        let fields = core_var(VariableKind::Expression, "Fields");
+        let named_rest = core_var(VariableKind::Symbol, "Rest");
+        let item = core_var(VariableKind::Term, "Item");
+        for (label, mut pattern, output, sample) in [
+            (
+                "repeated output",
+                vec![a.clone()],
+                vec![a.clone(), a.clone()],
+                vec![core_char('a')],
+            ),
+            (
+                "reordered fields",
+                vec![a.clone(), b.clone()],
+                vec![b.clone(), a.clone()],
+                vec![core_char('a'), core_char('b')],
+            ),
+            (
+                "repeated input",
+                vec![a.clone(), a.clone()],
+                vec![a.clone()],
+                vec![core_char('a'), core_char('a')],
+            ),
+            (
+                "input brackets",
+                vec![core_bracket(vec![a.clone()])],
+                vec![a.clone()],
+                vec![core_bracket(vec![core_char('a')])],
+            ),
+            (
+                "output brackets",
+                vec![a.clone()],
+                vec![core_bracket(vec![a.clone(), a.clone()])],
+                vec![core_char('a')],
+            ),
+            (
+                "input literals",
+                vec![core_char('!'), a.clone()],
+                vec![a.clone()],
+                vec![core_char('!'), core_char('a')],
+            ),
+            (
+                "expression fields",
+                vec![core_bracket(vec![fields.clone()])],
+                vec![core_bracket(vec![fields.clone(), fields])],
+                vec![core_bracket(vec![core_char('a'), core_char('b')])],
+            ),
+            (
+                "fresh remainder name",
+                vec![named_rest.clone()],
+                vec![named_rest.clone(), named_rest],
+                vec![core_char('a')],
+            ),
+            (
+                "term fields",
+                vec![item.clone()],
+                vec![item.clone(), item],
+                vec![core_bracket(vec![core_char('a')])],
+            ),
+        ] {
+            pattern.push(rest.clone());
+            let mut result = vec![core_char('C')];
+            result.extend(output);
+            result.push(core_call("Encode", vec![rest.clone()]));
+            let program = CoreProgram {
+                declarations: Vec::new(),
+                functions: vec![core_function(
+                    "Encode",
+                    Visibility::Entry,
+                    vec![
+                        core_sentence(Vec::new(), vec![core_char('N')]),
+                        core_sentence(pattern, result),
+                    ],
+                )],
+            };
+            let forward = build_seed_graph(&program);
+            let inversion = invert_function_with_strategy(
+                &program,
+                &forward,
+                "Encode",
+                10_000,
+                DriveStrategy::Interpretive,
+            )
+            .unwrap_or_else(|error| panic!("{label}: {error}"));
+            assert!(inversion.complete, "{label}: the walk must close");
+            let inverse = build_seed_graph(&inversion.program);
+            for input in [
+                Vec::new(),
+                sample.clone(),
+                [sample.clone(), sample].concat(),
+            ] {
+                let encoded = drive_ground(&forward, &input, 100).expect("encode");
+                let decoded = drive_ground(&inverse, &encoded.output, 100)
+                    .unwrap_or_else(|error| panic!("{label}: {error}"));
+                assert!(
+                    same_term_sequence(&decoded.output, &input),
+                    "{label}: {} became {}",
+                    format_term_sequence(&input),
+                    format_term_sequence(&decoded.output)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn inverse_synthesis_recovers_base_case_bindings() {
+        let value = core_var(VariableKind::Symbol, "Value");
+        let program = CoreProgram {
+            declarations: Vec::new(),
+            functions: vec![core_function(
+                "Pack",
+                Visibility::Entry,
+                vec![core_sentence(
+                    vec![core_bracket(vec![value.clone()])],
+                    vec![value.clone(), value],
+                )],
+            )],
+        };
+        let forward = build_seed_graph(&program);
+        let report = invert_function_with_strategy(
+            &program,
+            &forward,
+            "Pack",
+            100,
+            DriveStrategy::Interpretive,
+        )
+        .expect("a base case preserves its bound value");
+        assert!(report.complete);
+        let input = vec![core_bracket(vec![core_char('a')])];
+        let encoded = drive_ground(&forward, &input, 100).expect("encode");
+        let decoded =
+            drive_ground(&build_seed_graph(&report.program), &encoded.output, 100).expect("decode");
+        assert!(same_term_sequence(&decoded.output, &input));
+    }
+
+    #[test]
+    fn inverse_synthesis_rejects_erased_input_bindings() {
+        let mut program = cons_spine_encoder();
+        program.functions[0].sentences[1].result.remove(4);
+        let error = invert_function_with_strategy(
+            &program,
+            &build_seed_graph(&program),
+            "Wrap",
+            10_000,
+            DriveStrategy::Interpretive,
+        )
+        .expect_err("an output tag alone cannot recover the consumed symbol");
+        assert!(matches!(
+            error,
+            DriveError::Unsupported {
+                feature: "inverse synthesis when output erases an input binding"
+            }
+        ));
+    }
+
+    #[test]
     fn the_inverse_name_respects_the_identifier_length_limit() {
         // Refal caps identifiers at 15 characters, and the emitter refuses a
         // longer one at the last step of a synthesis that had already succeeded.
@@ -9150,11 +9228,7 @@ mod tests {
     }
 
     #[test]
-    fn an_inversion_that_saw_no_output_shape_says_so_rather_than_inventing_one() {
-        // The failure mode of a synthesizer is a program that checks and means
-        // the wrong thing. When the walk found no ground output to reverse, the
-        // report is incomplete and the artifact is the honest forward call rather
-        // than a plausible-looking inverse.
+    fn an_inversion_whose_forward_exploration_hits_its_budget_stays_incomplete() {
         let program = cons_spine_encoder();
         let graph = clean_unreachable_states(&build_seed_graph(&program));
         let report =

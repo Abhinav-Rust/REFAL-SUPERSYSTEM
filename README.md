@@ -147,6 +147,7 @@ Development is active across the language tools and their verification.
 
 - **Equivalence checking** preserves shared free-variable identities and keeps terminal symbolic equations unresolved when structural equality does not establish them. Coverage includes all three variable kinds, nested results, repeated variables, and proof budgets.
 - **Termination analysis** retains distinct call paths throughout size-change composition. Certificate checks reconstruct those paths from the source, with coverage for decreasing recursion, non-decreasing alternatives, and mutual recursion.
+- **Function inversion** reconstructs source input patterns, preserving their order, repeated bindings, literals, and brackets. Round-trip tests cover repeated output values and fresh variable names; unsupported reconstruction cases return an explicit error.
 
 ## For contributors
 
